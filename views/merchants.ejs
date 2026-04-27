@@ -1,0 +1,37 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant portal</p>
+    <h1>Find a Vaniday merchant</h1>
+    <p>Search by merchant name, service category, or location.</p>
+</section>
+
+<section class="section compact">
+    <form class="search-bar" action="/merchants" method="GET">
+        <input type="search" name="search" value="<%= search %>" placeholder="Search merchants, category, or location">
+        <button class="button primary" type="submit">Search</button>
+    </form>
+
+    <% if (merchants.length === 0) { %>
+        <div class="notice">
+            No merchants found. Try searching for beauty, spa, barber, or a location.
+        </div>
+    <% } %>
+
+    <div class="merchant-list">
+        <% merchants.forEach((merchant) => { %>
+            <article class="merchant-row">
+                <div>
+                    <p class="tag"><%= merchant.category %></p>
+                    <h2><%= merchant.name %></h2>
+                    <p class="muted"><%= merchant.location %> · Rating <%= merchant.rating %></p>
+                    <p><%= merchant.description %></p>
+                    <p class="promotion"><%= merchant.promotion %></p>
+                </div>
+                <a class="button secondary" href="/merchants/<%= merchant.id %>">View merchant</a>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>
