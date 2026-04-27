@@ -7,9 +7,25 @@
         <p><%= merchant.description %></p>
         <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
     </div>
-    <div class="promo-panel">
-        <p class="eyebrow">Current promotion</p>
-        <strong><%= merchant.promotion %></strong>
+    <div class="merchant-side-panels">
+        <div class="promo-panel">
+            <p class="eyebrow">Current promotion</p>
+            <strong><%= merchant.promotion %></strong>
+        </div>
+
+        <div class="promo-panel qr-panel">
+            <p class="eyebrow">QR booking</p>
+            <h2>Scan to book</h2>
+            <img
+                class="qr-code"
+                src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=<%= encodedBookingUrl %>"
+                alt="QR code for <%= merchant.name %> booking page"
+            >
+            <p class="muted">
+                Customers can scan this code to open the booking page instantly without installing an app.
+            </p>
+            <a class="text-link qr-link" href="<%= bookingUrl %>"><%= bookingUrl %></a>
+        </div>
     </div>
 </section>
 

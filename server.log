@@ -1,0 +1,6 @@
+
+> start
+> node app.js
+
+◇ injected env (4) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Server is running on http://localhost:3000

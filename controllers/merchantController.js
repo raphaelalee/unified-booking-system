@@ -5,13 +5,17 @@ function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
 }
 
-function renderMerchantDetail(res, merchant, options = {}) {
+function renderMerchantDetail(req, res, merchant, options = {}) {
+    const bookingUrl = `${req.protocol}://${req.get('host')}/merchants/${merchant.id}`;
+
     return res.status(options.status || 200).render('merchant-detail', {
         title: merchant.name,
         merchant,
         errors: options.errors || [],
         form: options.form || {},
-        todayDate: getTodayInputValue()
+        todayDate: getTodayInputValue(),
+        bookingUrl,
+        encodedBookingUrl: encodeURIComponent(bookingUrl)
     });
 }
 
@@ -85,7 +89,7 @@ function showMerchant(req, res) {
         });
     }
 
-    return renderMerchantDetail(res, merchant);
+    return renderMerchantDetail(req, res, merchant);
 }
 
 function createBooking(req, res) {
@@ -101,7 +105,7 @@ function createBooking(req, res) {
     const validation = validateBooking(merchant, req.body);
 
     if (validation.errors.length > 0) {
-        return renderMerchantDetail(res, merchant, {
+        return renderMerchantDetail(req, res, merchant, {
             status: 400,
             errors: validation.errors,
             form: req.body

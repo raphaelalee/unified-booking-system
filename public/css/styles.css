@@ -289,6 +289,26 @@ h3 {
         white;
 }
 
+.merchant-side-panels,
+.qr-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.qr-code {
+    width: 180px;
+    height: 180px;
+    max-width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+}
+
+.qr-link {
+    overflow-wrap: anywhere;
+}
+
 .student-scope {
     border: 1px solid var(--line);
     border-radius: 8px;
