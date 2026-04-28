@@ -4,6 +4,10 @@
     const serviceSearch = typeof search !== 'undefined' ? search : '';
     const serviceMerchants = typeof merchants !== 'undefined' ? merchants : [];
     const serviceFavouriteIds = typeof favouriteIds !== 'undefined' ? favouriteIds : [];
+    const merchantTokenById = serviceMerchants.reduce((tokens, merchant) => {
+        tokens[merchant.id] = merchant.qrToken;
+        return tokens;
+    }, {});
     const fallbackCatalog = [
         {
             id: 101,
@@ -13,6 +17,9 @@
             slots: ['10:00 AM', '2:00 PM', '5:00 PM'],
             merchantId: 1,
             merchantName: 'Vaniday Beauty Studio',
+            merchantQrToken: 'vaniday-beauty-studio-orchard',
+            serviceBookingPath: '/booking/1/vaniday-beauty-studio-orchard?serviceId=101',
+            serviceBookingUrl: '/booking/1/vaniday-beauty-studio-orchard?serviceId=101',
             merchantLocation: 'Orchard',
             merchantCategory: 'Beauty & Wellness'
         },
@@ -24,6 +31,9 @@
             slots: ['11:00 AM', '3:30 PM'],
             merchantId: 1,
             merchantName: 'Vaniday Beauty Studio',
+            merchantQrToken: 'vaniday-beauty-studio-orchard',
+            serviceBookingPath: '/booking/1/vaniday-beauty-studio-orchard?serviceId=102',
+            serviceBookingUrl: '/booking/1/vaniday-beauty-studio-orchard?serviceId=102',
             merchantLocation: 'Orchard',
             merchantCategory: 'Beauty & Wellness'
         },
@@ -35,6 +45,9 @@
             slots: ['9:30 AM', '1:00 PM', '6:00 PM'],
             merchantId: 2,
             merchantName: 'FreshGlow Spa',
+            merchantQrToken: 'freshglow-spa-tampines',
+            serviceBookingPath: '/booking/2/freshglow-spa-tampines?serviceId=201',
+            serviceBookingUrl: '/booking/2/freshglow-spa-tampines?serviceId=201',
             merchantLocation: 'Tampines',
             merchantCategory: 'Spa'
         },
@@ -46,6 +59,9 @@
             slots: ['10:00 AM', '1:30 PM', '7:00 PM'],
             merchantId: 3,
             merchantName: 'Urban Groom Barbers',
+            merchantQrToken: 'urban-groom-barbers-woodlands',
+            serviceBookingPath: '/booking/3/urban-groom-barbers-woodlands?serviceId=301',
+            serviceBookingUrl: '/booking/3/urban-groom-barbers-woodlands?serviceId=301',
             merchantLocation: 'Woodlands',
             merchantCategory: 'Barber'
         }
@@ -114,6 +130,13 @@
     <% } else { %>
         <div class="service-catalog-grid">
             <% filteredServices.forEach((service) => { %>
+                <%
+                    const merchantQrToken = service.merchantQrToken || merchantTokenById[service.merchantId];
+                    const serviceBookingPath = merchantQrToken
+                        ? service.serviceBookingPath || `/booking/${service.merchantId}/${merchantQrToken}?serviceId=${service.id}`
+                        : `/merchants/${service.merchantId}/qr`;
+                    const serviceBookingUrl = service.serviceBookingUrl || serviceBookingPath;
+                %>
                 <article class="service-catalog-card">
                     <div>
                         <p class="tag"><%= service.merchantCategory %></p>
@@ -123,14 +146,14 @@
                         <p class="muted">Available: <%= service.slots.join(', ') %></p>
                     </div>
                     <div class="service-card-actions">
-                        <a class="service-qr-link" href="/booking/<%= service.merchantId %>" aria-label="Open QR booking page for <%= service.name %>">
+                        <a class="service-qr-link" href="<%= serviceBookingPath %>" aria-label="Open QR booking page for <%= service.name %>">
                             <img
                                 class="service-qr-code"
-                                src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=<%= encodeURIComponent('/booking/' + service.merchantId) %>"
+                                src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=<%= encodeURIComponent(serviceBookingUrl) %>"
                                 alt="QR code for <%= service.name %> booking page"
                             >
                         </a>
-                        <a class="button secondary" href="/booking/<%= service.merchantId %>">Book this</a>
+                        <a class="button secondary" href="<%= serviceBookingPath %>">Book this</a>
                     </div>
                 </article>
             <% }) %>

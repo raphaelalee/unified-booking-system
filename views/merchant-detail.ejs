@@ -96,7 +96,7 @@
 
             <label>
                 Service
-                <select name="serviceId">
+                <select name="serviceId" class="js-service-select">
                     <option value="">Select a service</option>
                     <% detailServices.forEach((service) => { %>
                         <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
@@ -113,12 +113,12 @@
 
             <label>
                 Time slot
-                <select name="bookingTime">
+                <select name="bookingTime" class="js-time-select">
                     <option value="">Select a time</option>
                     <% detailServices.forEach((service) => { %>
-                        <optgroup label="<%= service.name %>">
+                        <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
                             <% service.slots.forEach((slot) => { %>
-                                <option value="<%= slot %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
+                                <option value="<%= slot %>" data-service-id="<%= service.id %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
                                     <%= slot %>
                                 </option>
                             <% }) %>

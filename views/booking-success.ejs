@@ -9,7 +9,7 @@
     </p>
     <div class="hero-actions">
         <a class="button primary" href="/payment?amount=<%= service.price %>&service=<%= encodeURIComponent(service.name) %>&merchant=<%= encodeURIComponent(merchant.name) %>">Proceed to payment</a>
-        <a class="button secondary" href="/booking/<%= merchant.id %>">Create another booking</a>
+        <a class="button secondary" href="/booking/<%= merchant.id %>/<%= merchant.qrToken %>">Create another booking</a>
     </div>
 </section>
 

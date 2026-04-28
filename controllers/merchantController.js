@@ -6,8 +6,70 @@ function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
 }
 
-function getBookingUrl(req, merchant) {
-    return `${req.protocol}://${req.get('host')}/booking/${merchant.id}`;
+function getBookingPath(merchant, service = null) {
+    const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
+    return `/booking/${merchant.id}/${merchant.qrToken}${serviceQuery}`;
+}
+
+function getBookingUrl(req, merchant, service = null) {
+    return `${req.protocol}://${req.get('host')}${getBookingPath(merchant, service)}`;
+}
+
+function getSelectedService(merchant, serviceId) {
+    return serviceId ? Merchant.findService(merchant.id, serviceId) : null;
+}
+
+function getBookingServices(merchant, selectedService = null) {
+    const services = Array.isArray(merchant.services) && merchant.services.length > 0
+        ? merchant.services
+        : [];
+
+    return selectedService ? [selectedService] : services;
+}
+
+function renderBookingPage(req, res, merchant, options = {}) {
+    const requestedServiceId = options.form?.serviceId || req.query.serviceId;
+    const selectedService = getSelectedService(merchant, requestedServiceId);
+
+    if (requestedServiceId && !selectedService) {
+        return res.status(404).render('error', {
+            title: 'Service Not Found',
+            message: 'This service does not belong to the selected merchant.'
+        });
+    }
+
+    const form = {
+        ...(options.form || {}),
+        ...(selectedService ? { serviceId: selectedService.id } : {})
+    };
+    const scopedServices = getBookingServices(merchant, selectedService);
+    const bookingUrl = getBookingUrl(req, merchant, selectedService);
+
+    return res.status(options.status || 200).render('booking', {
+        title: `Book ${merchant.name}`,
+        merchant,
+        scopedServices,
+        errors: options.errors || [],
+        form,
+        selectedServiceId: selectedService ? selectedService.id : null,
+        bookingPath: getBookingPath(merchant, selectedService),
+        bookingUrl,
+        encodedBookingUrl: encodeURIComponent(bookingUrl),
+        todayDate: getTodayInputValue()
+    });
+}
+
+function rejectInvalidQrToken(req, res, merchant) {
+    if (!req.params.qrToken || Merchant.hasValidQrToken(merchant, req.params.qrToken)) {
+        return false;
+    }
+
+    res.status(404).render('error', {
+        title: 'Invalid Booking QR',
+        message: 'This QR booking link does not belong to the selected merchant.'
+    });
+
+    return true;
 }
 
 function renderMerchantDetail(req, res, merchant, options = {}) {
@@ -131,15 +193,15 @@ function showBookingPage(req, res) {
         });
     }
 
-    return res.render('booking', {
-        title: `Book ${merchant.name}`,
-        merchant,
-        errors: [],
-        form: {},
-        todayDate: getTodayInputValue(),
-        bookingUrl: getBookingUrl(req, merchant),
-        encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
-    });
+    if (rejectInvalidQrToken(req, res, merchant)) {
+        return null;
+    }
+
+    if (!req.params.qrToken) {
+        return res.redirect(getBookingPath(merchant, getSelectedService(merchant, req.query.serviceId)));
+    }
+
+    return renderBookingPage(req, res, merchant);
 }
 
 function saveQrBooking(req, res) {
@@ -152,21 +214,28 @@ function saveQrBooking(req, res) {
         });
     }
 
-    const validation = validateBooking(merchant, req.body);
+    if (rejectInvalidQrToken(req, res, merchant)) {
+        return null;
+    }
 
-    if (validation.errors.length > 0) {
-        return res.status(400).render('booking', {
-            title: `Book ${merchant.name}`,
-            merchant,
-            errors: validation.errors,
-            form: req.body,
-            todayDate: getTodayInputValue(),
-            bookingUrl: getBookingUrl(req, merchant),
-            encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
+    if (!req.params.qrToken) {
+        return res.status(400).render('error', {
+            title: 'Invalid Booking QR',
+            message: 'Booking requests must use this merchant-specific QR booking link.'
         });
     }
 
-    Booking.createInDatabase({
+    const validation = validateBooking(merchant, req.body);
+
+    if (validation.errors.length > 0) {
+        return renderBookingPage(req, res, merchant, {
+            status: 400,
+            errors: validation.errors,
+            form: req.body
+        });
+    }
+
+    const bookingData = {
         merchantId: merchant.id,
         merchantName: merchant.name,
         serviceId: validation.service.id,
@@ -176,26 +245,43 @@ function saveQrBooking(req, res) {
         phone: validation.phone,
         bookingDate: req.body.bookingDate,
         bookingTime: req.body.bookingTime
-    }, (error) => {
-        if (error) {
-            console.error(error);
-            return res.status(500).render('booking', {
-                title: `Book ${merchant.name}`,
-                merchant,
-                errors: ['Booking could not be saved. Please try again.'],
-                form: req.body,
-                todayDate: getTodayInputValue(),
-                bookingUrl: getBookingUrl(req, merchant),
-                encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
+    };
+
+    Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (lookupError, exists) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return renderBookingPage(req, res, merchant, {
+                status: 500,
+                errors: ['Booking availability could not be checked. Please try again.'],
+                form: req.body
             });
         }
 
-        return res.render('booking-success', {
-            title: 'Booking Confirmed',
-            merchant,
-            service: validation.service,
-            bookingDate: req.body.bookingDate,
-            bookingTime: req.body.bookingTime
+        if (exists) {
+            return renderBookingPage(req, res, merchant, {
+                status: 400,
+                errors: ['This slot is already booked. Please choose another time.'],
+                form: req.body
+            });
+        }
+
+        return Booking.createInDatabase(bookingData, (error) => {
+            if (error) {
+                console.error(error);
+                return renderBookingPage(req, res, merchant, {
+                    status: 500,
+                    errors: ['Booking could not be saved. Please try again.'],
+                    form: req.body
+                });
+            }
+
+            return res.render('booking-success', {
+                title: 'Booking Confirmed',
+                merchant,
+                service: validation.service,
+                bookingDate: req.body.bookingDate,
+                bookingTime: req.body.bookingTime
+            });
         });
     });
 }
@@ -252,6 +338,7 @@ function addToCart(req, res) {
         id: Date.now(),
         merchantId: merchant.id,
         merchantName: merchant.name,
+        merchantQrToken: merchant.qrToken,
         serviceId: service.id,
         serviceName: service.name,
         duration: service.duration,
@@ -288,7 +375,18 @@ function addProductToCart(req, res) {
 }
 
 function showCart(req, res) {
-    const cart = req.session.cart || [];
+    const cart = (req.session.cart || []).map((item) => {
+        if (!item.merchantId || item.merchantQrToken) {
+            return item;
+        }
+
+        const merchant = Merchant.findById(item.merchantId);
+
+        return {
+            ...item,
+            merchantQrToken: merchant ? merchant.qrToken : null
+        };
+    });
     const total = cart.reduce((sum, item) => sum + Number(item.price), 0);
 
     return res.render('cart', {

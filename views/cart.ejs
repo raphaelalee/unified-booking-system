@@ -20,6 +20,9 @@
         <div class="cart-layout">
             <div class="cart-list">
                 <% cart.forEach((item) => { %>
+                    <%
+                        const bookingPath = `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}`;
+                    %>
                     <article class="cart-item">
                         <div>
                             <p class="eyebrow"><%= item.type || 'Service' %> &middot; <%= item.merchantName %></p>
@@ -29,7 +32,7 @@
                         </div>
                         <div class="cart-item-actions">
                             <% if (item.merchantId) { %>
-                                <a class="button secondary" href="/booking/<%= item.merchantId %>">Book now</a>
+                                <a class="button secondary" href="<%= bookingPath %>">Book now</a>
                             <% } else { %>
                                 <a class="button secondary" href="/payment?amount=<%= item.price %>&service=<%= encodeURIComponent(item.serviceName) %>&merchant=<%= encodeURIComponent(item.merchantName) %>">Pay now</a>
                             <% } %>

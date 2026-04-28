@@ -28,6 +28,28 @@ function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
     });
 }
 
+function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookingTime, callback) {
+    const sql = `
+        SELECT id
+        FROM bookings
+        WHERE merchant_id = ?
+            AND service_id = ?
+            AND booking_date = ?
+            AND booking_time = ?
+            AND status <> 'Cancelled'
+        LIMIT 1
+    `;
+
+    db.query(sql, [merchantId, serviceId, bookingDate, bookingTime], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results.length > 0);
+    });
+}
+
 function createInDatabase(bookingData, callback) {
     const sql = `
         INSERT INTO bookings
@@ -55,5 +77,6 @@ module.exports = {
     create,
     createInDatabase,
     getAll,
-    hasExistingBooking
+    hasExistingBooking,
+    hasExistingBookingInDatabase
 };

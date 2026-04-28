@@ -45,6 +45,8 @@ app.post('/cart/product/:productId', merchantController.addProductToCart);
 app.post('/cart/remove/:itemId', merchantController.removeFromCart);
 app.post('/merchants/:merchantId/favourite', merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', merchantController.showMerchantQr);
+app.get('/booking/:merchantId/:qrToken', merchantController.showBookingPage);
+app.post('/booking/:merchantId/:qrToken', merchantController.saveQrBooking);
 app.get('/booking/:merchantId', merchantController.showBookingPage);
 app.post('/booking/:merchantId', merchantController.saveQrBooking);
 app.get('/merchants/:id', merchantController.showMerchant);
@@ -67,6 +69,9 @@ app.get('/services', (req, res) => {
             ...service,
             merchantId: merchant.id,
             merchantName: merchant.name,
+            merchantQrToken: merchant.qrToken,
+            serviceBookingPath: `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`,
+            serviceBookingUrl: `${req.protocol}://${req.get('host')}/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`,
             merchantLocation: merchant.location,
             merchantCategory: merchant.category
         }));

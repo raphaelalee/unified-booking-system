@@ -13,7 +13,7 @@ function withServices(merchant) {
 
     return {
         ...merchant,
-        services: fallbackServices
+        services: fallbackServices.map((service) => ({ ...service }))
     };
 }
 
@@ -23,6 +23,7 @@ const merchants = [
         name: 'Vaniday Beauty Studio',
         category: 'Beauty & Wellness',
         location: 'Orchard',
+        qrToken: 'vaniday-beauty-studio-orchard',
         rating: '4.8',
         promotion: '20% off first booking',
         description: 'Hair styling, facials, and beauty treatments from trusted Vaniday merchants.',
@@ -38,6 +39,7 @@ const merchants = [
         name: 'FreshGlow Spa',
         category: 'Spa',
         location: 'Tampines',
+        qrToken: 'freshglow-spa-tampines',
         rating: '4.6',
         promotion: 'Free add-on massage for bookings above $80',
         description: 'Relaxing spa services with simple online booking and clear appointment slots.',
@@ -51,6 +53,7 @@ const merchants = [
         name: 'Urban Groom Barbers',
         category: 'Barber',
         location: 'Woodlands',
+        qrToken: 'urban-groom-barbers-woodlands',
         rating: '4.7',
         promotion: '$5 student discount',
         description: 'Fast grooming services for walk-in style retail merchants using digital booking.',
@@ -102,8 +105,13 @@ function findService(merchantId, serviceId) {
     return merchant.services.find((service) => service.id === Number(serviceId)) || null;
 }
 
+function hasValidQrToken(merchant, qrToken) {
+    return Boolean(merchant && merchant.qrToken && merchant.qrToken === qrToken);
+}
+
 module.exports = {
     getAll,
     findById,
-    findService
+    findService,
+    hasValidQrToken
 };

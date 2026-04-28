@@ -1,9 +1,16 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const bookingServices = Array.isArray(merchant.services) && merchant.services.length > 0
-        ? merchant.services
+    const allBookingServices = typeof scopedServices !== 'undefined' && Array.isArray(scopedServices) && scopedServices.length > 0
+        ? scopedServices
+        : Array.isArray(merchant.services) && merchant.services.length > 0
+            ? merchant.services
         : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
+    const requestedServiceId = String((form && form.serviceId) || (typeof selectedServiceId !== 'undefined' && selectedServiceId ? selectedServiceId : ''));
+    const selectedBookingService = requestedServiceId
+        ? allBookingServices.find((service) => String(service.id) === requestedServiceId)
+        : null;
+    const bookingServices = selectedBookingService ? [selectedBookingService] : allBookingServices;
 %>
 
 <section class="booking-hero">
@@ -13,7 +20,7 @@
     <div class="booking-meta">
         <span><%= merchant.location %></span>
         <span>Rating <%= merchant.rating %></span>
-        <span><%= bookingServices.length %> services</span>
+        <span><%= bookingServices.length %> service<%= bookingServices.length === 1 ? '' : 's' %></span>
     </div>
 </section>
 
@@ -53,7 +60,7 @@
             </div>
         <% } %>
 
-        <form action="/booking/<%= merchant.id %>" method="POST" class="booking-form">
+        <form action="<%= typeof bookingPath !== 'undefined' ? bookingPath : '/booking/' + merchant.id + '/' + merchant.qrToken %>" method="POST" class="booking-form">
             <div class="form-row">
                 <label>
                     Full name
@@ -72,10 +79,10 @@
 
             <label>
                 Service
-                <select name="serviceId">
+                <select name="serviceId" class="js-service-select">
                     <option value="">Select a service</option>
                     <% bookingServices.forEach((service) => { %>
-                        <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
+                        <option value="<%= service.id %>" <%= requestedServiceId === String(service.id) ? 'selected' : '' %>>
                             <%= service.name %> - $<%= service.price %>
                         </option>
                     <% }) %>
@@ -90,12 +97,12 @@
 
                 <label>
                     Time slot
-                    <select name="bookingTime">
+                    <select name="bookingTime" class="js-time-select">
                         <option value="">Select a time</option>
                         <% bookingServices.forEach((service) => { %>
-                            <optgroup label="<%= service.name %>">
+                            <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
                                 <% service.slots.forEach((slot) => { %>
-                                    <option value="<%= slot %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
+                                    <option value="<%= slot %>" data-service-id="<%= service.id %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
                                         <%= slot %>
                                     </option>
                                 <% }) %>
