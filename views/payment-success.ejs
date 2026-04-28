@@ -1,0 +1,16 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Payment successful</p>
+    <h1>Your payment is confirmed.</h1>
+    <p>
+        Payment of <strong>$<%= Number(amount).toFixed(2) %></strong> for
+        <strong><%= serviceName %></strong> at <strong><%= merchantName %></strong> has been recorded.
+    </p>
+    <div class="hero-actions">
+        <a class="button primary" href="/services">Book another service</a>
+        <a class="button secondary" href="/products">Shop products</a>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

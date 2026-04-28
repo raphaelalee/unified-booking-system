@@ -1,5 +1,26 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const productList = typeof products !== 'undefined' && products.length > 0
+        ? products
+        : [
+            { id: 'skin-serum', name: 'Hydrating Glow Serum', category: 'Skincare', price: 38, description: 'Best after facial treatments' },
+            { id: 'hair-mask', name: 'Repair Hair Mask', category: 'Haircare', price: 32, description: 'For coloured or dry hair' },
+            { id: 'body-oil', name: 'Calming Body Oil', category: 'Bodycare', price: 28, description: 'Spa-inspired daily care' },
+            { id: 'lip-tint', name: 'Soft Rose Lip Tint', category: 'Makeup', price: 18, description: 'Lightweight everyday colour' },
+            { id: 'cream-cleanser', name: 'Gentle Cream Cleanser', category: 'Skincare', price: 24, description: 'For daily cleansing after facials' },
+            { id: 'room-mist', name: 'Botanical Room Mist', category: 'Wellness', price: 22, description: 'Calm spa scent for home' }
+        ];
+    const productImages = {
+        'skin-serum': 'product-skin',
+        'hair-mask': 'product-hair',
+        'body-oil': 'product-body',
+        'lip-tint': 'product-lip',
+        'cream-cleanser': 'product-cleanser',
+        'room-mist': 'product-fragrance'
+    };
+%>
+
 <section class="page-title">
     <p class="eyebrow">Products</p>
     <h1>Salon favourites for your aftercare routine.</h1>
@@ -8,49 +29,25 @@
 
 <section class="section compact">
     <div class="product-grid">
-        <article class="product-card">
-            <div class="product-image product-skin"></div>
-            <p class="tag">Skincare</p>
-            <h2>Hydrating Glow Serum</h2>
-            <p class="muted">$38 &middot; Best after facial treatments</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
-        <article class="product-card">
-            <div class="product-image product-hair"></div>
-            <p class="tag">Haircare</p>
-            <h2>Repair Hair Mask</h2>
-            <p class="muted">$32 &middot; For coloured or dry hair</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
-        <article class="product-card">
-            <div class="product-image product-body"></div>
-            <p class="tag">Bodycare</p>
-            <h2>Calming Body Oil</h2>
-            <p class="muted">$28 &middot; Spa-inspired daily care</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
-        <article class="product-card">
-            <div class="product-image product-lip"></div>
-            <p class="tag">Makeup</p>
-            <h2>Soft Rose Lip Tint</h2>
-            <p class="muted">$18 &middot; Lightweight everyday colour</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
-        <article class="product-card">
-            <div class="product-image product-cleanser"></div>
-            <p class="tag">Skincare</p>
-            <h2>Gentle Cream Cleanser</h2>
-            <p class="muted">$24 &middot; For daily cleansing after facials</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
-        <article class="product-card">
-            <div class="product-image product-fragrance"></div>
-            <p class="tag">Wellness</p>
-            <h2>Botanical Room Mist</h2>
-            <p class="muted">$22 &middot; Calm spa scent for home</p>
-            <a class="button secondary" href="/cart">View cart</a>
-        </article>
+        <% productList.forEach((product) => { %>
+            <article class="product-card">
+                <div class="product-image <%= productImages[product.id] %>"></div>
+                <p class="tag"><%= product.category %></p>
+                <h2><%= product.name %></h2>
+                <p class="muted">$<%= product.price %> &middot; <%= product.description %></p>
+                <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
+                    <input type="hidden" name="productId" value="<%= product.id %>">
+                    <input type="hidden" name="productName" value="<%= product.name %>">
+                    <input type="hidden" name="productCategory" value="<%= product.category %>">
+                    <input type="hidden" name="productDescription" value="<%= product.description %>">
+                    <input type="hidden" name="productPrice" value="<%= product.price %>">
+                    <button class="button secondary full" type="submit">Add to cart</button>
+                </form>
+            </article>
+        <% }) %>
     </div>
 </section>
+
+<script src="/js/product-cart.js"></script>
 
 <%- include('partials/footer') %>

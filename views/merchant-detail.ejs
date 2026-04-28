@@ -1,5 +1,11 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const detailServices = Array.isArray(merchant.services) && merchant.services.length > 0
+        ? merchant.services
+        : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
+%>
+
 <section class="page-title split">
     <div>
         <p class="eyebrow"><%= merchant.category %></p>
@@ -8,7 +14,7 @@
         <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
         <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
             <button class="heart-button large <%= isFavourite ? 'active' : '' %>" type="submit">
-                <%= isFavourite ? '♥ Saved merchant' : '♡ Save merchant' %>
+                <%- isFavourite ? '&hearts; Saved merchant' : '&#9825; Save merchant' %>
             </button>
         </form>
     </div>
@@ -45,7 +51,7 @@
         </div>
 
         <div class="service-list">
-            <% merchant.services.forEach((service) => { %>
+            <% detailServices.forEach((service) => { %>
                 <article class="service-card">
                     <div>
                         <h3><%= service.name %></h3>
@@ -92,7 +98,7 @@
                 Service
                 <select name="serviceId">
                     <option value="">Select a service</option>
-                    <% merchant.services.forEach((service) => { %>
+                    <% detailServices.forEach((service) => { %>
                         <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
                             <%= service.name %> - $<%= service.price %>
                         </option>
@@ -109,7 +115,7 @@
                 Time slot
                 <select name="bookingTime">
                     <option value="">Select a time</option>
-                    <% merchant.services.forEach((service) => { %>
+                    <% detailServices.forEach((service) => { %>
                         <optgroup label="<%= service.name %>">
                             <% service.slots.forEach((slot) => { %>
                                 <option value="<%= slot %>" <%= form.bookingTime === slot ? 'selected' : '' %>>

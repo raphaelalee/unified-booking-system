@@ -20,17 +20,17 @@
 
             <label>
                 Full name
-                <input type="text" name="name" placeholder="Enter your name">
+                <input type="text" name="name" value="<%= form.name || '' %>" placeholder="Enter your name">
             </label>
 
             <label>
                 Email
-                <input type="email" name="email" placeholder="name@example.com">
+                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
             </label>
 
             <label>
                 Handphone number
-                <input type="tel" name="phone" placeholder="81234567" maxlength="8">
+                <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
             </label>
 
             <label>

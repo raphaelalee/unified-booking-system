@@ -1,0 +1,56 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Payment</p>
+    <h1>Complete your payment.</h1>
+    <p>Pay securely for your Vaniday booking or product order.</p>
+</section>
+
+<section class="section compact">
+    <div class="login-layout">
+        <form class="login-form" action="/payment" method="POST">
+            <input type="hidden" name="amount" value="<%= amount %>">
+            <input type="hidden" name="merchantName" value="<%= merchantName %>">
+            <input type="hidden" name="serviceName" value="<%= serviceName %>">
+
+            <div>
+                <p class="eyebrow">Card payment</p>
+                <h2>$<%= Number(amount).toFixed(2) %></h2>
+                <p class="muted"><%= serviceName %> &middot; <%= merchantName %></p>
+            </div>
+
+            <label>
+                Cardholder name
+                <input type="text" name="cardholderName" placeholder="Mary Tan">
+            </label>
+
+            <label>
+                Card number
+                <input type="text" name="cardNumber" placeholder="4242 4242 4242 4242" maxlength="19">
+            </label>
+
+            <div class="form-row">
+                <label>
+                    Expiry
+                    <input type="text" name="expiry" placeholder="MM/YY" maxlength="5">
+                </label>
+                <label>
+                    CVV
+                    <input type="password" name="cvv" placeholder="123" maxlength="3">
+                </label>
+            </div>
+
+            <button class="button primary full" type="submit">Pay $<%= Number(amount).toFixed(2) %></button>
+        </form>
+
+        <aside class="login-benefits">
+            <p class="eyebrow">Payment summary</p>
+            <h2><%= merchantName %></h2>
+            <p><%= serviceName %></p>
+            <p class="promotion">$<%= Number(amount).toFixed(2) %> total</p>
+            <p class="muted">Prototype payment only. No real card charge is made.</p>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

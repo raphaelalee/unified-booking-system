@@ -7,7 +7,10 @@
         <strong><%= service.name %></strong> at <strong><%= merchant.name %></strong>
         on <strong><%= bookingDate %></strong> at <strong><%= bookingTime %></strong>.
     </p>
-    <a class="button primary" href="/booking/<%= merchant.id %>">Create another booking</a>
+    <div class="hero-actions">
+        <a class="button primary" href="/payment?amount=<%= service.price %>&service=<%= encodeURIComponent(service.name) %>&merchant=<%= encodeURIComponent(merchant.name) %>">Proceed to payment</a>
+        <a class="button secondary" href="/booking/<%= merchant.id %>">Create another booking</a>
+    </div>
 </section>
 
 <%- include('partials/footer') %>

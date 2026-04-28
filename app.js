@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const merchantController = require('./controllers/merchantController');
 const Merchant = require('./models/Merchant');
+const Product = require('./models/Product');
 require('dotenv').config();
 
 const app = express();
@@ -39,6 +40,8 @@ app.post('/signup', merchantController.signupUser);
 app.post('/logout', merchantController.logoutUser);
 app.get('/cart', merchantController.showCart);
 app.post('/cart/add/:merchantId', merchantController.addToCart);
+app.get('/cart/product/:productId', merchantController.addProductToCart);
+app.post('/cart/product/:productId', merchantController.addProductToCart);
 app.post('/cart/remove/:itemId', merchantController.removeFromCart);
 app.post('/merchants/:merchantId/favourite', merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', merchantController.showMerchantQr);
@@ -56,18 +59,37 @@ app.get('/contact', (req, res) => {
 });
 
 app.get('/services', (req, res) => {
+    const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
+    const allMerchants = Merchant.getAll();
+    const serviceCatalog = allMerchants.flatMap((merchant) => {
+        return merchant.services.map((service) => ({
+            ...service,
+            merchantId: merchant.id,
+            merchantName: merchant.name,
+            merchantLocation: merchant.location,
+            merchantCategory: merchant.category
+        }));
+    });
 
     res.render('services', {
         title: 'Services',
-        merchants: Merchant.getAll(),
-        favouriteIds
+        merchants: Merchant.getAll(search),
+        favouriteIds,
+        serviceCatalog,
+        search
     });
 });
 
 app.get('/products', (req, res) => {
-    res.render('products', { title: 'Products' });
+    res.render('products', {
+        title: 'Products',
+        products: Product.getAll()
+    });
 });
+
+app.get('/payment', merchantController.showPayment);
+app.post('/payment', merchantController.confirmPayment);
 
 app.get('/cashback', (req, res) => {
     res.render('cashback', { title: 'Cashback' });

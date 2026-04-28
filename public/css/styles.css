@@ -498,6 +498,51 @@ h3 {
     align-items: center;
 }
 
+.service-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.service-catalog-card {
+    min-height: 260px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 250, 245, 0.95);
+    box-shadow: var(--shadow);
+}
+
+.service-card-actions {
+    display: grid;
+    gap: 14px;
+}
+
+.service-qr-link {
+    width: fit-content;
+    display: inline-flex;
+    border-radius: 8px;
+}
+
+.service-qr-link:hover .service-qr-code,
+.service-qr-link:focus-visible .service-qr-code {
+    border-color: var(--clay);
+    box-shadow: 0 0 0 4px rgba(166, 82, 37, 0.14);
+}
+
+.service-qr-code {
+    width: 96px;
+    height: 96px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+    background: white;
+}
+
 .merchant-title-row,
 .card-footer {
     display: flex;
@@ -569,6 +614,143 @@ h3 {
     display: grid;
     gap: 10px;
     justify-items: end;
+}
+
+.cart-item-copy {
+    min-width: 0;
+}
+
+.line-total {
+    margin: 12px 0 0;
+    color: var(--ink);
+    font-weight: 800;
+}
+
+.cart-quantity-controls {
+    display: grid;
+    grid-template-columns: 42px 72px 42px;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fffaf5;
+}
+
+.quantity-button,
+.quantity-input {
+    height: 42px;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 800;
+    text-align: center;
+}
+
+.quantity-button {
+    cursor: pointer;
+}
+
+.quantity-button:hover {
+    background: #f5e3d7;
+}
+
+.quantity-input {
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    -moz-appearance: textfield;
+}
+
+.quantity-input::-webkit-outer-spin-button,
+.quantity-input::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
+.cart-summary-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.fulfilment-options {
+    display: grid;
+    gap: 10px;
+}
+
+.fulfilment-choice {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.58);
+    cursor: pointer;
+}
+
+.fulfilment-choice.active {
+    border-color: var(--clay);
+    background: #fff6ef;
+}
+
+.fulfilment-choice input {
+    accent-color: var(--clay);
+}
+
+.fulfilment-choice small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.pickup-field,
+.delivery-field {
+    display: grid;
+    gap: 8px;
+    color: var(--ink);
+    font-weight: 800;
+}
+
+.pickup-field select,
+.delivery-field input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fffaf5;
+    color: var(--ink);
+    font: inherit;
+    padding: 14px 16px;
+}
+
+.is-hidden {
+    display: none;
+}
+
+.cart-totals {
+    display: grid;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+}
+
+.cart-totals p {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    color: var(--muted);
+}
+
+.cart-totals strong {
+    color: var(--ink);
+}
+
+.cart-total-line {
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-size: 1.18rem;
 }
 
 .text-button {
@@ -1108,6 +1290,95 @@ select:focus {
     font-weight: 800;
 }
 
+.booking-hero {
+    width: min(1120px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 72px 0 28px;
+}
+
+.booking-hero h1 {
+    max-width: 760px;
+    margin-bottom: 18px;
+    color: var(--ink);
+    font-size: clamp(2.4rem, 5vw, 4.4rem);
+    line-height: 1.05;
+}
+
+.booking-hero p {
+    max-width: 720px;
+}
+
+.booking-meta {
+    margin-top: 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.booking-meta span {
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: var(--sage-soft);
+    color: #41593b;
+    font-weight: 800;
+}
+
+.booking-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 34px;
+    align-items: start;
+}
+
+.booking-services-panel,
+.booking-form-panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 250, 245, 0.95);
+    box-shadow: var(--shadow);
+}
+
+.booking-services-panel {
+    padding: 26px;
+}
+
+.booking-form-panel {
+    padding: 28px;
+    position: sticky;
+    top: 112px;
+    display: grid;
+    gap: 20px;
+}
+
+.booking-service-card {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--sage);
+    border-radius: 8px;
+    background: #fffdf9;
+}
+
+.service-price {
+    min-width: 72px;
+    min-height: 72px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #f4d9ca;
+    color: var(--clay-dark);
+    font-weight: 900;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
 .notice {
     margin-top: 22px;
     padding: 16px;
@@ -1180,8 +1451,10 @@ select:focus {
     .feature-grid,
     .content-grid,
     .product-grid,
+    .service-catalog-grid,
     .page-title.split,
     .two-column,
+    .booking-layout,
     .cart-layout,
     .profile-dashboard,
     .login-layout,
@@ -1221,9 +1494,18 @@ select:focus {
     }
 
     .service-card,
-    .cart-item {
+    .cart-item,
+    .booking-service-card {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .booking-form-panel {
+        position: static;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
     }
 
     .cart-item-actions {
@@ -1249,6 +1531,7 @@ select:focus {
 
     .section,
     .page-title,
+    .booking-hero,
     .notice {
         width: min(100% - 32px, 1120px);
     }

@@ -1,5 +1,6 @@
 const Merchant = require('../models/Merchant');
 const Booking = require('../models/Booking');
+const Product = require('../models/Product');
 
 function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
@@ -135,7 +136,9 @@ function showBookingPage(req, res) {
         merchant,
         errors: [],
         form: {},
-        todayDate: getTodayInputValue()
+        todayDate: getTodayInputValue(),
+        bookingUrl: getBookingUrl(req, merchant),
+        encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
     });
 }
 
@@ -157,7 +160,9 @@ function saveQrBooking(req, res) {
             merchant,
             errors: validation.errors,
             form: req.body,
-            todayDate: getTodayInputValue()
+            todayDate: getTodayInputValue(),
+            bookingUrl: getBookingUrl(req, merchant),
+            encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
         });
     }
 
@@ -179,7 +184,9 @@ function saveQrBooking(req, res) {
                 merchant,
                 errors: ['Booking could not be saved. Please try again.'],
                 form: req.body,
-                todayDate: getTodayInputValue()
+                todayDate: getTodayInputValue(),
+                bookingUrl: getBookingUrl(req, merchant),
+                encodedBookingUrl: encodeURIComponent(getBookingUrl(req, merchant))
             });
         }
 
@@ -252,6 +259,31 @@ function addToCart(req, res) {
     });
 
     req.session.success = `${service.name} was added to your cart.`;
+    return res.redirect('/cart');
+}
+
+function addProductToCart(req, res) {
+    const product = Product.findById(req.params.productId);
+
+    if (!product) {
+        return res.status(404).render('error', {
+            title: 'Product Not Found',
+            message: 'The product you selected could not be found.'
+        });
+    }
+
+    req.session.cart = req.session.cart || [];
+    req.session.cart.push({
+        id: Date.now(),
+        type: 'Product',
+        merchantId: null,
+        merchantName: product.category,
+        serviceId: product.id,
+        serviceName: product.name,
+        duration: product.description,
+        price: product.price
+    });
+
     return res.redirect('/cart');
 }
 
@@ -389,11 +421,14 @@ function showSignup(req, res) {
     }
 
     const error = req.session.signupError;
+    const form = req.session.signupForm || {};
     req.session.signupError = null;
+    req.session.signupForm = null;
 
     return res.render('signup', {
         title: 'Sign Up',
-        error
+        error,
+        form
     });
 }
 
@@ -406,11 +441,13 @@ function signupUser(req, res) {
 
     if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[689]\d{7}$/.test(phone)) {
         req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
+        req.session.signupForm = { name, email, phone };
         return res.redirect('/signup');
     }
 
     if (password.length < 4 || password !== confirmPassword) {
         req.session.signupError = 'Password must be at least 4 characters and match the confirmation.';
+        req.session.signupForm = { name, email, phone };
         return res.redirect('/signup');
     }
 
@@ -428,6 +465,28 @@ function logoutUser(req, res) {
     return res.redirect('/login');
 }
 
+function showPayment(req, res) {
+    const amount = Number(req.query.amount || 0);
+    const merchantName = req.query.merchant || 'Vaniday';
+    const serviceName = req.query.service || 'Booking';
+
+    return res.render('payment', {
+        title: 'Payment',
+        amount,
+        merchantName,
+        serviceName
+    });
+}
+
+function confirmPayment(req, res) {
+    return res.render('payment-success', {
+        title: 'Payment Successful',
+        amount: req.body.amount,
+        merchantName: req.body.merchantName,
+        serviceName: req.body.serviceName
+    });
+}
+
 module.exports = {
     showHome,
     listMerchants,
@@ -437,6 +496,7 @@ module.exports = {
     saveQrBooking,
     createBooking,
     addToCart,
+    addProductToCart,
     showCart,
     removeFromCart,
     toggleFavouriteMerchant,
@@ -446,5 +506,7 @@ module.exports = {
     loginUser,
     showSignup,
     signupUser,
-    logoutUser
+    logoutUser,
+    showPayment,
+    confirmPayment
 };

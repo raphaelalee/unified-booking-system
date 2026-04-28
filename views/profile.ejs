@@ -57,6 +57,9 @@
             </div>
 
             <a class="button secondary full" href="/cashback">View cashback details</a>
+            <form action="/logout" method="POST">
+                <button class="text-button full" type="submit">Log out</button>
+            </form>
         </aside>
     </div>
 
@@ -84,7 +87,7 @@
                     <div class="card-footer">
                         <a class="button secondary" href="/merchants/<%= merchant.id %>">View merchant</a>
                         <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
-                            <button class="heart-button active" type="submit">♥</button>
+                            <button class="heart-button active" type="submit">&hearts;</button>
                         </form>
                     </div>
                 </article>

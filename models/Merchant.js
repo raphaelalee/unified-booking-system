@@ -1,3 +1,22 @@
+const fallbackServices = [
+    { id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }
+];
+
+function withServices(merchant) {
+    if (!merchant) {
+        return null;
+    }
+
+    if (Array.isArray(merchant.services) && merchant.services.length > 0) {
+        return merchant;
+    }
+
+    return {
+        ...merchant,
+        services: fallbackServices
+    };
+}
+
 const merchants = [
     {
         id: 1,
@@ -10,7 +29,8 @@ const merchants = [
         services: [
             { id: 101, name: 'Hair Cut & Styling', duration: '60 mins', price: 45, slots: ['10:00 AM', '2:00 PM', '5:00 PM'] },
             { id: 102, name: 'Express Facial', duration: '45 mins', price: 55, slots: ['11:00 AM', '3:30 PM'] },
-            { id: 103, name: 'Manicure', duration: '40 mins', price: 35, slots: ['12:00 PM', '4:00 PM'] }
+            { id: 103, name: 'Manicure', duration: '40 mins', price: 35, slots: ['12:00 PM', '4:00 PM'] },
+            { id: 104, name: 'QR Test Beauty Booking', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }
         ]
     },
     {
@@ -45,19 +65,31 @@ function getAll(searchTerm = '') {
     const search = searchTerm.trim().toLowerCase();
 
     if (!search) {
-        return merchants;
+        return merchants.map(withServices);
     }
 
     return merchants.filter((merchant) => {
-        return merchant.name.toLowerCase().includes(search)
-            || merchant.category.toLowerCase().includes(search)
-            || merchant.location.toLowerCase().includes(search)
-            || merchant.services.some((service) => service.name.toLowerCase().includes(search));
-    });
+        const services = Array.isArray(merchant.services) ? merchant.services : fallbackServices;
+        const searchableText = [
+            merchant.name,
+            merchant.category,
+            merchant.location,
+            merchant.description,
+            merchant.promotion,
+            ...services.flatMap((service) => [
+                service.name,
+                service.duration,
+                String(service.price),
+                ...(service.slots || [])
+            ])
+        ].join(' ').toLowerCase();
+
+        return searchableText.includes(search);
+    }).map(withServices);
 }
 
 function findById(id) {
-    return merchants.find((merchant) => merchant.id === Number(id));
+    return withServices(merchants.find((merchant) => merchant.id === Number(id)));
 }
 
 function findService(merchantId, serviceId) {

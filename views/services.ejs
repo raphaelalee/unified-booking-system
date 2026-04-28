@@ -1,5 +1,72 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const serviceSearch = typeof search !== 'undefined' ? search : '';
+    const serviceMerchants = typeof merchants !== 'undefined' ? merchants : [];
+    const serviceFavouriteIds = typeof favouriteIds !== 'undefined' ? favouriteIds : [];
+    const fallbackCatalog = [
+        {
+            id: 101,
+            name: 'Hair Cut & Styling',
+            duration: '60 mins',
+            price: 45,
+            slots: ['10:00 AM', '2:00 PM', '5:00 PM'],
+            merchantId: 1,
+            merchantName: 'Vaniday Beauty Studio',
+            merchantLocation: 'Orchard',
+            merchantCategory: 'Beauty & Wellness'
+        },
+        {
+            id: 102,
+            name: 'Express Facial',
+            duration: '45 mins',
+            price: 55,
+            slots: ['11:00 AM', '3:30 PM'],
+            merchantId: 1,
+            merchantName: 'Vaniday Beauty Studio',
+            merchantLocation: 'Orchard',
+            merchantCategory: 'Beauty & Wellness'
+        },
+        {
+            id: 201,
+            name: 'Aromatherapy Massage',
+            duration: '90 mins',
+            price: 98,
+            slots: ['9:30 AM', '1:00 PM', '6:00 PM'],
+            merchantId: 2,
+            merchantName: 'FreshGlow Spa',
+            merchantLocation: 'Tampines',
+            merchantCategory: 'Spa'
+        },
+        {
+            id: 301,
+            name: 'Classic Haircut',
+            duration: '30 mins',
+            price: 28,
+            slots: ['10:00 AM', '1:30 PM', '7:00 PM'],
+            merchantId: 3,
+            merchantName: 'Urban Groom Barbers',
+            merchantLocation: 'Woodlands',
+            merchantCategory: 'Barber'
+        }
+    ];
+    const allServices = typeof serviceCatalog !== 'undefined' && serviceCatalog.length > 0 ? serviceCatalog : fallbackCatalog;
+    const filteredServices = serviceSearch
+        ? allServices.filter((service) => {
+            const text = [
+                service.name,
+                service.duration,
+                service.price,
+                service.merchantName,
+                service.merchantLocation,
+                service.merchantCategory
+            ].join(' ').toLowerCase();
+
+            return text.includes(serviceSearch.toLowerCase());
+        })
+        : allServices;
+%>
+
 <section class="page-title">
     <p class="eyebrow">Services</p>
     <h1>Beauty and wellness services for every routine.</h1>
@@ -36,12 +103,58 @@
     </div>
 
     <div class="section-heading profile-heading">
+        <p class="eyebrow">All Services</p>
+        <h2>Choose a service first</h2>
+    </div>
+
+    <% if (filteredServices.length === 0) { %>
+        <div class="notice">
+            No individual services matched your search. Try hair, facial, spa, nails, massage, or barber.
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid">
+            <% filteredServices.forEach((service) => { %>
+                <article class="service-catalog-card">
+                    <div>
+                        <p class="tag"><%= service.merchantCategory %></p>
+                        <h3><%= service.name %></h3>
+                        <p class="muted"><%= service.merchantName %> &middot; <%= service.merchantLocation %></p>
+                        <p><%= service.duration %> &middot; $<%= service.price %></p>
+                        <p class="muted">Available: <%= service.slots.join(', ') %></p>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="service-qr-link" href="/booking/<%= service.merchantId %>" aria-label="Open QR booking page for <%= service.name %>">
+                            <img
+                                class="service-qr-code"
+                                src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=<%= encodeURIComponent('/booking/' + service.merchantId) %>"
+                                alt="QR code for <%= service.name %> booking page"
+                            >
+                        </a>
+                        <a class="button secondary" href="/booking/<%= service.merchantId %>">Book this</a>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+
+    <div class="section-heading profile-heading">
         <p class="eyebrow">Merchants</p>
         <h2>Book from Vaniday partners</h2>
     </div>
 
+    <form class="search-bar" action="/services" method="GET">
+        <input type="search" name="search" value="<%= serviceSearch %>" placeholder="Search services, merchants, category, or location">
+        <button class="button primary" type="submit">Search</button>
+    </form>
+
+    <% if (serviceMerchants.length === 0) { %>
+        <div class="notice">
+            No services found. Try searching for hair, facial, spa, barber, or a location.
+        </div>
+    <% } %>
+
     <div class="merchant-list">
-        <% merchants.forEach((merchant) => { %>
+        <% serviceMerchants.forEach((merchant) => { %>
             <article class="merchant-row">
                 <div class="merchant-thumb merchant-thumb-<%= merchant.id %>">
                     <span><%= merchant.category %></span>
@@ -50,8 +163,8 @@
                     <div class="merchant-title-row">
                         <p class="tag"><%= merchant.category %></p>
                         <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
-                            <button class="heart-button <%= favouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
-                                <%= favouriteIds.includes(merchant.id) ? '♥' : '♡' %>
+                            <button class="heart-button <%= serviceFavouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
+                                <%- serviceFavouriteIds.includes(merchant.id) ? '&hearts;' : '&#9825;' %>
                             </button>
                         </form>
                     </div>

@@ -1,34 +1,49 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">QR booking</p>
+<%
+    const bookingServices = Array.isArray(merchant.services) && merchant.services.length > 0
+        ? merchant.services
+        : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
+%>
+
+<section class="booking-hero">
+    <p class="eyebrow">Appointment booking</p>
     <h1>Book <%= merchant.name %></h1>
     <p><%= merchant.description %></p>
-    <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
+    <div class="booking-meta">
+        <span><%= merchant.location %></span>
+        <span>Rating <%= merchant.rating %></span>
+        <span><%= bookingServices.length %> services</span>
+    </div>
 </section>
 
-<section class="section two-column">
-    <div>
+<section class="section booking-layout">
+    <div class="booking-services-panel">
         <div class="section-heading">
             <p class="eyebrow">Services</p>
             <h2>Choose an appointment</h2>
         </div>
 
         <div class="service-list">
-            <% merchant.services.forEach((service) => { %>
-                <article class="service-card">
+            <% bookingServices.forEach((service) => { %>
+                <article class="booking-service-card">
                     <div>
                         <h3><%= service.name %></h3>
                         <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
                         <p>Available: <%= service.slots.join(', ') %></p>
                     </div>
+                    <span class="service-price">$<%= service.price %></span>
                 </article>
             <% }) %>
         </div>
     </div>
 
-    <aside class="booking-panel">
-        <h2>Booking form</h2>
+    <aside class="booking-form-panel">
+        <div>
+            <p class="eyebrow">Your details</p>
+            <h2>Confirm booking</h2>
+            <p class="muted">Select a service, date, and time. We will save your booking request.</p>
+        </div>
 
         <% if (errors.length > 0) { %>
             <div class="notice error">
@@ -39,26 +54,27 @@
         <% } %>
 
         <form action="/booking/<%= merchant.id %>" method="POST" class="booking-form">
-            <label>
-                Full name
-                <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name">
-            </label>
+            <div class="form-row">
+                <label>
+                    Full name
+                    <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name">
+                </label>
+                <label>
+                    Phone number
+                    <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
+                </label>
+            </div>
 
             <label>
-                Email
+                Email address
                 <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
-            </label>
-
-            <label>
-                Phone number
-                <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
             </label>
 
             <label>
                 Service
                 <select name="serviceId">
                     <option value="">Select a service</option>
-                    <% merchant.services.forEach((service) => { %>
+                    <% bookingServices.forEach((service) => { %>
                         <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
                             <%= service.name %> - $<%= service.price %>
                         </option>
@@ -66,26 +82,28 @@
                 </select>
             </label>
 
-            <label>
-                Date
-                <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
-            </label>
+            <div class="form-row">
+                <label>
+                    Date
+                    <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
+                </label>
 
-            <label>
-                Time slot
-                <select name="bookingTime">
-                    <option value="">Select a time</option>
-                    <% merchant.services.forEach((service) => { %>
-                        <optgroup label="<%= service.name %>">
-                            <% service.slots.forEach((slot) => { %>
-                                <option value="<%= slot %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
-                                    <%= slot %>
-                                </option>
-                            <% }) %>
-                        </optgroup>
-                    <% }) %>
-                </select>
-            </label>
+                <label>
+                    Time slot
+                    <select name="bookingTime">
+                        <option value="">Select a time</option>
+                        <% bookingServices.forEach((service) => { %>
+                            <optgroup label="<%= service.name %>">
+                                <% service.slots.forEach((slot) => { %>
+                                    <option value="<%= slot %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
+                                        <%= slot %>
+                                    </option>
+                                <% }) %>
+                            </optgroup>
+                        <% }) %>
+                    </select>
+                </label>
+            </div>
 
             <button class="button primary full" type="submit">Confirm booking</button>
         </form>

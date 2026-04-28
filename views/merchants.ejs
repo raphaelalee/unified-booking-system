@@ -29,7 +29,7 @@
                         <p class="tag"><%= merchant.category %></p>
                         <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
                             <button class="heart-button <%= favouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
-                                <%= favouriteIds.includes(merchant.id) ? '♥' : '♡' %>
+                                <%- favouriteIds.includes(merchant.id) ? '&hearts;' : '&#9825;' %>
                             </button>
                         </form>
                     </div>
