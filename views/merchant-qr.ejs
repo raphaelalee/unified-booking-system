@@ -1,0 +1,28 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title split">
+    <div>
+        <p class="eyebrow">Merchant QR code</p>
+        <h1><%= merchant.name %></h1>
+        <p>
+            Display this QR code at the shop or online. Customers can scan it to open
+            this merchant's booking page without installing an app.
+        </p>
+        <p class="muted"><%= merchant.location %> &middot; <%= merchant.category %></p>
+    </div>
+
+    <div class="promo-panel qr-panel">
+        <p class="eyebrow">Scan to book</p>
+        <a class="qr-code-link" href="<%= bookingUrl %>" aria-label="Open booking page for <%= merchant.name %>">
+            <img
+                class="qr-code"
+                src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=<%= encodedBookingUrl %>"
+                alt="QR code for <%= merchant.name %> booking page"
+            >
+        </a>
+        <p class="muted">Encoded booking link:</p>
+        <a class="text-link qr-link" href="<%= bookingUrl %>"><%= bookingUrl %></a>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

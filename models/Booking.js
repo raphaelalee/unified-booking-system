@@ -1,3 +1,5 @@
+const db = require('../db');
+
 const bookings = [];
 
 function create(bookingData) {
@@ -26,8 +28,32 @@ function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
     });
 }
 
+function createInDatabase(bookingData, callback) {
+    const sql = `
+        INSERT INTO bookings
+            (merchant_id, merchant_name, service_id, service_name, customer_name, email, phone, booking_date, booking_time, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const values = [
+        bookingData.merchantId,
+        bookingData.merchantName,
+        bookingData.serviceId,
+        bookingData.serviceName,
+        bookingData.customerName,
+        bookingData.email,
+        bookingData.phone,
+        bookingData.bookingDate,
+        bookingData.bookingTime,
+        bookingData.status || 'Pending'
+    ];
+
+    db.query(sql, values, callback);
+}
+
 module.exports = {
     create,
+    createInDatabase,
     getAll,
     hasExistingBooking
 };

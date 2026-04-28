@@ -1,0 +1,58 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Log In</p>
+    <h1>Welcome back to Vaniday.</h1>
+    <p>Log in to manage your profile, saved merchants, cashback, rewards, and cart.</p>
+</section>
+
+<section class="section compact">
+    <div class="login-layout">
+        <form class="login-form" action="/login" method="POST">
+            <div>
+                <p class="eyebrow">Customer Account</p>
+                <h2>Log in or create a session account</h2>
+            </div>
+
+            <% if (error) { %>
+                <div class="notice error"><p><%= error %></p></div>
+            <% } %>
+
+            <label>
+                Full name
+                <input type="text" name="name" placeholder="Enter your name">
+            </label>
+
+            <label>
+                Email
+                <input type="email" name="email" placeholder="name@example.com">
+            </label>
+
+            <label>
+                Handphone number
+                <input type="tel" name="phone" placeholder="81234567" maxlength="8">
+            </label>
+
+            <label>
+                Password
+                <input type="password" name="password" placeholder="At least 4 characters">
+            </label>
+
+            <button class="button primary full" type="submit">Log In</button>
+            <p class="auth-switch">New to Vaniday? <a class="text-link" href="/signup">Create an account</a></p>
+        </form>
+
+        <aside class="login-benefits">
+            <p class="eyebrow">Profile Benefits</p>
+            <h2>One place for your bookings.</h2>
+            <ul>
+                <li>Edit name, email, and handphone number</li>
+                <li>Track cashback and rewards</li>
+                <li>View saved merchants</li>
+                <li>Keep selected services in your cart</li>
+            </ul>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

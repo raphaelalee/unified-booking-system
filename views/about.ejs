@@ -1,29 +1,60 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Project scope</p>
-    <h1>About the Vaniday booking system</h1>
-    <p>
-        This prototype supports a unified booking marketplace where customers can
-        browse merchants, check services, view prices and promotions, and submit booking requests.
-    </p>
+<section class="page-title about-hero">
+    <div>
+        <p class="eyebrow">About Us</p>
+        <h1>Making beauty and wellness bookings effortless.</h1>
+        <p>
+            Vaniday connects customers with salons, spas, grooming studios, and beauty
+            merchants through a simple web-based booking experience. Customers can browse,
+            scan a QR code, and confirm an appointment without installing an app.
+        </p>
+        <a class="button primary" href="/services">Explore services</a>
+    </div>
+    <div class="about-image" aria-label="Beauty and wellness salon interior"></div>
 </section>
 
-<section class="section feature-grid">
-    <article>
-        <h2>Multi-merchant portal</h2>
-        <p>Customers can view different Vaniday merchants from one website instead of visiting separate pages.</p>
-    </article>
-    <article>
-        <h2>Service discovery</h2>
-        <p>Each merchant shows services, duration, pricing, available time slots, and promotions.</p>
-    </article>
-    <article>
-        <h2>Validation</h2>
-        <p>The booking form checks required fields, email format, valid service, future date, and available time slot.</p>
-    </article>
+<section class="section compact">
+    <div class="about-story">
+        <p class="eyebrow">Our Purpose</p>
+        <h2>A retail-friendly booking system for modern self-care.</h2>
+        <p>
+            This Final Year Project prototype focuses on helping beauty and wellness
+            merchants accept bookings in a convenient, cashless, and contactless way.
+            Each merchant can display a unique QR code at their shop or online, and
+            customers can scan it to open the correct booking page instantly.
+        </p>
+    </div>
+
+    <div class="stats-grid">
+        <article>
+            <strong>3</strong>
+            <span>Merchant categories</span>
+        </article>
+        <article>
+            <strong>24/7</strong>
+            <span>Online booking access</span>
+        </article>
+        <article>
+            <strong>0</strong>
+            <span>App installs required</span>
+        </article>
+    </div>
+
+    <div class="feature-grid about-values">
+        <article>
+            <h2>For customers</h2>
+            <p>Browse services, compare merchants, save favourites, and book appointments from any device.</p>
+        </article>
+        <article>
+            <h2>For merchants</h2>
+            <p>Share a unique QR booking link, reduce manual appointment handling, and support walk-in retail customers.</p>
+        </article>
+        <article>
+            <h2>For the project</h2>
+            <p>Demonstrates QR-based booking, merchant deep links, form validation, MySQL booking storage, and session features.</p>
+        </article>
+    </div>
 </section>
-
-
 
 <%- include('partials/footer') %>

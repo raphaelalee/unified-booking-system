@@ -1,9 +1,9 @@
 <%- include('partials/header', { title }) %>
 
 <section class="page-title">
-    <p class="eyebrow">Merchant portal</p>
-    <h1>Find a Vaniday merchant</h1>
-    <p>Search by merchant name, service category, or location.</p>
+    <p class="eyebrow">Merchant Directory</p>
+    <h1>Find your next beauty appointment.</h1>
+    <p>Browse salons, spas, grooming studios, and wellness merchants with instant QR booking links.</p>
 </section>
 
 <section class="section compact">
@@ -19,16 +19,29 @@
     <% } %>
 
     <div class="merchant-list">
-        <% merchants.forEach((merchant) => { %>
+        <% merchants.forEach((merchant, index) => { %>
             <article class="merchant-row">
+                <div class="merchant-thumb merchant-thumb-<%= merchant.id %>">
+                    <span><%= merchant.category %></span>
+                </div>
                 <div>
-                    <p class="tag"><%= merchant.category %></p>
+                    <div class="merchant-title-row">
+                        <p class="tag"><%= merchant.category %></p>
+                        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
+                            <button class="heart-button <%= favouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
+                                <%= favouriteIds.includes(merchant.id) ? '♥' : '♡' %>
+                            </button>
+                        </form>
+                    </div>
                     <h2><%= merchant.name %></h2>
                     <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
                     <p><%= merchant.description %></p>
                     <p class="promotion"><%= merchant.promotion %></p>
                 </div>
-                <a class="button secondary" href="/merchants/<%= merchant.id %>">View merchant</a>
+                <div class="merchant-actions">
+                    <a class="button primary" href="/merchants/<%= merchant.id %>">View merchant</a>
+                    <a class="text-link" href="/merchants/<%= merchant.id %>/qr">QR booking</a>
+                </div>
             </article>
         <% }) %>
     </div>

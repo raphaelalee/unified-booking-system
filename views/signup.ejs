@@ -1,0 +1,63 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Sign Up</p>
+    <h1>Create your Vaniday account.</h1>
+    <p>Sign up to save merchants, manage your profile, track cashback, and keep services in your cart.</p>
+</section>
+
+<section class="section compact">
+    <div class="login-layout">
+        <form class="login-form" action="/signup" method="POST">
+            <div>
+                <p class="eyebrow">Customer Account</p>
+                <h2>Sign up</h2>
+            </div>
+
+            <% if (error) { %>
+                <div class="notice error"><p><%= error %></p></div>
+            <% } %>
+
+            <label>
+                Full name
+                <input type="text" name="name" placeholder="Enter your name">
+            </label>
+
+            <label>
+                Email
+                <input type="email" name="email" placeholder="name@example.com">
+            </label>
+
+            <label>
+                Handphone number
+                <input type="tel" name="phone" placeholder="81234567" maxlength="8">
+            </label>
+
+            <label>
+                Password
+                <input type="password" name="password" placeholder="At least 4 characters">
+            </label>
+
+            <label>
+                Confirm password
+                <input type="password" name="confirmPassword" placeholder="Re-enter password">
+            </label>
+
+            <button class="button primary full" type="submit">Create account</button>
+            <p class="auth-switch">Already have an account? <a class="text-link" href="/login">Log in</a></p>
+        </form>
+
+        <aside class="login-benefits">
+            <p class="eyebrow">Why sign up?</p>
+            <h2>Your beauty booking companion.</h2>
+            <ul>
+                <li>Save favourite salons and wellness merchants</li>
+                <li>Manage personal details in your profile</li>
+                <li>View cashback and reward points</li>
+                <li>Access your cart faster before booking</li>
+            </ul>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

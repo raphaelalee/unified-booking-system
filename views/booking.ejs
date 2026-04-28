@@ -1,47 +1,17 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title split">
-    <div>
-        <p class="eyebrow"><%= merchant.category %></p>
-        <h1><%= merchant.name %></h1>
-        <p><%= merchant.description %></p>
-        <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
-        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
-            <button class="heart-button large <%= isFavourite ? 'active' : '' %>" type="submit">
-                <%= isFavourite ? '♥ Saved merchant' : '♡ Save merchant' %>
-            </button>
-        </form>
-    </div>
-    <div class="merchant-side-panels">
-        <div class="promo-panel">
-            <p class="eyebrow">Current promotion</p>
-            <strong><%= merchant.promotion %></strong>
-        </div>
-
-        <div class="promo-panel qr-panel">
-            <p class="eyebrow">QR booking</p>
-            <h2>Scan to book</h2>
-            <a class="qr-code-link" href="<%= bookingUrl %>" aria-label="Open booking page for <%= merchant.name %>">
-                <img
-                    class="qr-code"
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=<%= encodedBookingUrl %>"
-                    alt="QR code for <%= merchant.name %> booking page"
-                >
-            </a>
-            <p class="muted">
-                Customers can scan this code to open the booking page instantly without installing an app.
-            </p>
-            <a class="text-link qr-link" href="<%= bookingUrl %>"><%= bookingUrl %></a>
-            <a class="button secondary full" href="/merchants/<%= merchant.id %>/qr">Open merchant QR page</a>
-        </div>
-    </div>
+<section class="page-title">
+    <p class="eyebrow">QR booking</p>
+    <h1>Book <%= merchant.name %></h1>
+    <p><%= merchant.description %></p>
+    <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
 </section>
 
 <section class="section two-column">
     <div>
         <div class="section-heading">
             <p class="eyebrow">Services</p>
-            <h2>Availability and pricing</h2>
+            <h2>Choose an appointment</h2>
         </div>
 
         <div class="service-list">
@@ -52,17 +22,13 @@
                         <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
                         <p>Available: <%= service.slots.join(', ') %></p>
                     </div>
-                    <form action="/cart/add/<%= merchant.id %>" method="POST">
-                        <input type="hidden" name="serviceId" value="<%= service.id %>">
-                        <button class="button secondary" type="submit">Add to cart</button>
-                    </form>
                 </article>
             <% }) %>
         </div>
     </div>
 
     <aside class="booking-panel">
-        <h2>Book appointment</h2>
+        <h2>Booking form</h2>
 
         <% if (errors.length > 0) { %>
             <div class="notice error">
@@ -72,7 +38,7 @@
             </div>
         <% } %>
 
-        <form action="/merchants/<%= merchant.id %>/book" method="POST" class="booking-form">
+        <form action="/booking/<%= merchant.id %>" method="POST" class="booking-form">
             <label>
                 Full name
                 <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name">
@@ -121,7 +87,7 @@
                 </select>
             </label>
 
-            <button class="button primary full" type="submit">Submit booking request</button>
+            <button class="button primary full" type="submit">Confirm booking</button>
         </form>
     </aside>
 </section>

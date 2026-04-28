@@ -1,0 +1,46 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Cart</p>
+    <h1>Your selected services.</h1>
+    <p>Review services before choosing a merchant booking time.</p>
+</section>
+
+<section class="section compact">
+    <% if (cart.length === 0) { %>
+        <div class="empty-state">
+            <h2>Your cart is empty.</h2>
+            <p class="muted">Add salon, spa, or grooming services from a merchant page.</p>
+            <a class="button primary" href="/services">Browse services</a>
+        </div>
+    <% } else { %>
+        <div class="cart-layout">
+            <div class="cart-list">
+                <% cart.forEach((item) => { %>
+                    <article class="cart-item">
+                        <div>
+                            <p class="eyebrow"><%= item.merchantName %></p>
+                            <h2><%= item.serviceName %></h2>
+                            <p class="muted"><%= item.duration %> &middot; $<%= item.price %></p>
+                        </div>
+                        <div class="cart-item-actions">
+                            <a class="button secondary" href="/booking/<%= item.merchantId %>">Book now</a>
+                            <form action="/cart/remove/<%= item.id %>" method="POST">
+                                <button class="text-button" type="submit">Remove</button>
+                            </form>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+
+            <aside class="booking-panel">
+                <p class="eyebrow">Summary</p>
+                <h2>$<%= total %></h2>
+                <p class="muted"><%= cart.length %> service<%= cart.length === 1 ? '' : 's' %> selected</p>
+                <a class="button primary full" href="/services">Add more services</a>
+            </aside>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,96 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Profile</p>
+    <h1>Manage your Vaniday profile.</h1>
+    <p>Edit your personal details, view saved merchants, and track cashback rewards from your bookings.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+
+    <div class="profile-dashboard">
+        <form class="profile-form" action="/profile" method="POST">
+            <div>
+                <p class="eyebrow">Personal Details</p>
+                <h2>Edit profile</h2>
+            </div>
+
+            <label>
+                Full name
+                <input type="text" name="name" value="<%= profile.name %>" placeholder="Enter your name">
+            </label>
+
+            <label>
+                Email
+                <input type="email" name="email" value="<%= profile.email %>" placeholder="name@example.com">
+            </label>
+
+            <label>
+                Handphone number
+                <input type="tel" name="phone" value="<%= profile.phone %>" placeholder="81234567" maxlength="8">
+            </label>
+
+            <button class="button primary full" type="submit">Save profile</button>
+        </form>
+
+        <aside class="reward-panel">
+            <p class="eyebrow">Cashback & Rewards</p>
+            <h2>$<%= cashbackBalance %></h2>
+            <p class="muted">Available cashback balance</p>
+
+            <div class="reward-stats">
+                <div>
+                    <strong><%= rewardPoints %></strong>
+                    <span>Reward points</span>
+                </div>
+                <div>
+                    <strong><%= favourites.length %></strong>
+                    <span>Saved merchants</span>
+                </div>
+                <div>
+                    <strong><%= cartCount %></strong>
+                    <span>Cart items</span>
+                </div>
+            </div>
+
+            <a class="button secondary full" href="/cashback">View cashback details</a>
+        </aside>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Saved Merchants</p>
+        <h2>Your favourites</h2>
+    </div>
+
+    <% if (favourites.length === 0) { %>
+        <div class="empty-state">
+            <h2>No saved merchants yet.</h2>
+            <p class="muted">Tap the heart on any merchant to save it here.</p>
+            <a class="button primary" href="/services">Find services</a>
+        </div>
+    <% } else { %>
+        <div class="merchant-grid">
+            <% favourites.forEach((merchant) => { %>
+                <article class="merchant-card">
+                    <div>
+                        <p class="tag"><%= merchant.category %></p>
+                        <h3><%= merchant.name %></h3>
+                        <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
+                        <p><%= merchant.description %></p>
+                    </div>
+                    <div class="card-footer">
+                        <a class="button secondary" href="/merchants/<%= merchant.id %>">View merchant</a>
+                        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
+                            <button class="heart-button active" type="submit">♥</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

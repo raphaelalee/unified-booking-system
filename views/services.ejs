@@ -1,0 +1,72 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Services</p>
+    <h1>Beauty and wellness services for every routine.</h1>
+    <p>Explore salon, spa, nail, facial, and grooming services from Vaniday merchants.</p>
+</section>
+
+<section class="section compact">
+    <div class="content-grid">
+        <article class="content-card image-card service-hair">
+            <span>Hair</span>
+            <h2>Cut, colour and styling</h2>
+            <p>Book haircuts, blowouts, styling, colour refreshes, and treatment sessions.</p>
+        </article>
+        <article class="content-card image-card service-spa">
+            <span>Spa</span>
+            <h2>Massage and body care</h2>
+            <p>Relax with aromatherapy massage, body scrubs, and wellness treatments.</p>
+        </article>
+        <article class="content-card image-card service-nails">
+            <span>Nails</span>
+            <h2>Manicure and pedicure</h2>
+            <p>Choose express manicures, classic polish, nail care, and hand treatments.</p>
+        </article>
+        <article class="content-card image-card service-facial">
+            <span>Facial</span>
+            <h2>Skin and glow treatments</h2>
+            <p>Find facials designed for hydration, cleansing, brightening, and recovery.</p>
+        </article>
+    </div>
+
+    <div class="section-cta">
+        <h2>Ready to book?</h2>
+        <p class="muted">Pick a merchant below, choose a service, or use the QR booking link at the shop.</p>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Merchants</p>
+        <h2>Book from Vaniday partners</h2>
+    </div>
+
+    <div class="merchant-list">
+        <% merchants.forEach((merchant) => { %>
+            <article class="merchant-row">
+                <div class="merchant-thumb merchant-thumb-<%= merchant.id %>">
+                    <span><%= merchant.category %></span>
+                </div>
+                <div>
+                    <div class="merchant-title-row">
+                        <p class="tag"><%= merchant.category %></p>
+                        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
+                            <button class="heart-button <%= favouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
+                                <%= favouriteIds.includes(merchant.id) ? '♥' : '♡' %>
+                            </button>
+                        </form>
+                    </div>
+                    <h2><%= merchant.name %></h2>
+                    <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
+                    <p><%= merchant.description %></p>
+                    <p class="promotion"><%= merchant.promotion %></p>
+                </div>
+                <div class="merchant-actions">
+                    <a class="button primary" href="/merchants/<%= merchant.id %>">View services</a>
+                    <a class="text-link" href="/merchants/<%= merchant.id %>/qr">QR booking</a>
+                </div>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>
