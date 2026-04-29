@@ -7,6 +7,7 @@
             ? merchant.services
         : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
     const requestedServiceId = String((form && form.serviceId) || (typeof selectedServiceId !== 'undefined' && selectedServiceId ? selectedServiceId : ''));
+    const requestedOptionId = String((form && form.serviceOptionId) || '');
     const selectedBookingService = requestedServiceId
         ? allBookingServices.find((service) => String(service.id) === requestedServiceId)
         : null;
@@ -37,6 +38,12 @@
                     <div>
                         <h3><%= service.name %></h3>
                         <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
+                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                            <p class="muted">
+                                Options:
+                                <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
+                            </p>
+                        <% } %>
                         <p>Available: <%= service.slots.join(', ') %></p>
                     </div>
                     <span class="service-price">$<%= service.price %></span>
@@ -89,6 +96,27 @@
                 </select>
             </label>
 
+            <label>
+                Option
+                <select name="serviceOptionId" class="js-service-option-select">
+                    <option value="">Select an option</option>
+                    <% bookingServices.forEach((service) => { %>
+                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                            <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
+                                <% service.options.forEach((option) => { %>
+                                    <option
+                                        value="<%= option.id %>"
+                                        data-service-id="<%= service.id %>"
+                                        <%= requestedOptionId === String(option.id) ? 'selected' : '' %>>
+                                        <%= option.name %> - <%= option.duration %> - $<%= option.price %>
+                                    </option>
+                                <% }) %>
+                            </optgroup>
+                        <% } %>
+                    <% }) %>
+                </select>
+            </label>
+
             <div class="form-row">
                 <label>
                     Date
@@ -100,13 +128,20 @@
                     <select name="bookingTime" class="js-time-select">
                         <option value="">Select a time</option>
                         <% bookingServices.forEach((service) => { %>
-                            <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
-                                <% service.slots.forEach((slot) => { %>
-                                    <option value="<%= slot %>" data-service-id="<%= service.id %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
-                                        <%= slot %>
-                                    </option>
-                                <% }) %>
-                            </optgroup>
+                            <% const options = Array.isArray(service.options) && service.options.length > 0 ? service.options : [service]; %>
+                            <% options.forEach((option) => { %>
+                                <optgroup label="<%= service.name %><%= option.id !== service.id ? ' - ' + option.name : '' %>" data-service-id="<%= service.id %>" data-service-option-id="<%= option.id %>">
+                                    <% option.slots.forEach((slot) => { %>
+                                        <option
+                                            value="<%= slot %>"
+                                            data-service-id="<%= service.id %>"
+                                            data-service-option-id="<%= option.id %>"
+                                            <%= form.bookingTime === slot ? 'selected' : '' %>>
+                                            <%= slot %>
+                                        </option>
+                                    <% }) %>
+                                </optgroup>
+                            <% }) %>
                         <% }) %>
                     </select>
                 </label>

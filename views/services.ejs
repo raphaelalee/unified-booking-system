@@ -143,6 +143,12 @@
                         <h3><%= service.name %></h3>
                         <p class="muted"><%= service.merchantName %> &middot; <%= service.merchantLocation %></p>
                         <p><%= service.duration %> &middot; $<%= service.price %></p>
+                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                            <p class="muted">
+                                Options:
+                                <%= service.options.map((option) => option.name).join(', ') %>
+                            </p>
+                        <% } %>
                         <p class="muted">Available: <%= service.slots.join(', ') %></p>
                     </div>
                     <div class="service-card-actions">

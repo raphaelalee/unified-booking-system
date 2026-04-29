@@ -56,6 +56,12 @@
                     <div>
                         <h3><%= service.name %></h3>
                         <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
+                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                            <p class="muted">
+                                Options:
+                                <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
+                            </p>
+                        <% } %>
                         <p>Available: <%= service.slots.join(', ') %></p>
                     </div>
                     <form action="/cart/add/<%= merchant.id %>" method="POST">
@@ -107,6 +113,27 @@
             </label>
 
             <label>
+                Option
+                <select name="serviceOptionId" class="js-service-option-select">
+                    <option value="">Select an option</option>
+                    <% detailServices.forEach((service) => { %>
+                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                            <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
+                                <% service.options.forEach((option) => { %>
+                                    <option
+                                        value="<%= option.id %>"
+                                        data-service-id="<%= service.id %>"
+                                        <%= String(form.serviceOptionId) === String(option.id) ? 'selected' : '' %>>
+                                        <%= option.name %> - <%= option.duration %> - $<%= option.price %>
+                                    </option>
+                                <% }) %>
+                            </optgroup>
+                        <% } %>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label>
                 Date
                 <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
             </label>
@@ -116,13 +143,20 @@
                 <select name="bookingTime" class="js-time-select">
                     <option value="">Select a time</option>
                     <% detailServices.forEach((service) => { %>
-                        <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
-                            <% service.slots.forEach((slot) => { %>
-                                <option value="<%= slot %>" data-service-id="<%= service.id %>" <%= form.bookingTime === slot ? 'selected' : '' %>>
-                                    <%= slot %>
-                                </option>
-                            <% }) %>
-                        </optgroup>
+                        <% const options = Array.isArray(service.options) && service.options.length > 0 ? service.options : [service]; %>
+                        <% options.forEach((option) => { %>
+                            <optgroup label="<%= service.name %><%= option.id !== service.id ? ' - ' + option.name : '' %>" data-service-id="<%= service.id %>" data-service-option-id="<%= option.id %>">
+                                <% option.slots.forEach((slot) => { %>
+                                    <option
+                                        value="<%= slot %>"
+                                        data-service-id="<%= service.id %>"
+                                        data-service-option-id="<%= option.id %>"
+                                        <%= form.bookingTime === slot ? 'selected' : '' %>>
+                                        <%= slot %>
+                                    </option>
+                                <% }) %>
+                            </optgroup>
+                        <% }) %>
                     <% }) %>
                 </select>
             </label>

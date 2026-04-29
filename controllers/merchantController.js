@@ -19,6 +19,42 @@ function getSelectedService(merchant, serviceId) {
     return serviceId ? Merchant.findService(merchant.id, serviceId) : null;
 }
 
+function getServiceOptions(service) {
+    return Array.isArray(service?.options) && service.options.length > 0
+        ? service.options
+        : [];
+}
+
+function getSelectedServiceOption(service, serviceOptionId) {
+    const options = getServiceOptions(service);
+
+    return serviceOptionId ? options.find((option) => String(option.id) === String(serviceOptionId)) || null : null;
+}
+
+function getBookableSelection(service, serviceOptionId) {
+    const options = getServiceOptions(service);
+    const selectedOption = getSelectedServiceOption(service, serviceOptionId);
+
+    return {
+        options,
+        selectedOption,
+        bookableItem: selectedOption || service,
+        requiresOption: options.length > 0
+    };
+}
+
+function getPrefilledBookingForm(req, existingForm = {}) {
+    const profile = req.session.profile || {};
+    const user = req.session.user || {};
+
+    return {
+        customerName: profile.name || user.name || '',
+        email: profile.email || user.email || '',
+        phone: profile.phone || user.phone || '',
+        ...existingForm
+    };
+}
+
 function getBookingServices(merchant, selectedService = null) {
     const services = Array.isArray(merchant.services) && merchant.services.length > 0
         ? merchant.services
@@ -39,7 +75,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
     }
 
     const form = {
-        ...(options.form || {}),
+        ...getPrefilledBookingForm(req, options.form || {}),
         ...(selectedService ? { serviceId: selectedService.id } : {})
     };
     const scopedServices = getBookingServices(merchant, selectedService);
@@ -81,7 +117,7 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
         merchant,
         isFavourite: favouriteIds.includes(merchant.id),
         errors: options.errors || [],
-        form: options.form || {},
+        form: getPrefilledBookingForm(req, options.form || {}),
         todayDate: getTodayInputValue(),
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl)
@@ -94,6 +130,7 @@ function validateBooking(merchant, form) {
     const email = (form.email || '').trim();
     const phone = (form.phone || '').trim();
     const service = Merchant.findService(merchant.id, form.serviceId);
+    const serviceSelection = getBookableSelection(service, form.serviceOptionId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = form.bookingDate ? new Date(form.bookingDate) : null;
@@ -114,11 +151,15 @@ function validateBooking(merchant, form) {
         errors.push('Please select a valid service.');
     }
 
+    if (serviceSelection.requiresOption && !serviceSelection.selectedOption) {
+        errors.push('Please select a valid service option.');
+    }
+
     if (!form.bookingDate || Number.isNaN(selectedDate.getTime()) || selectedDate < today) {
         errors.push('Please choose today or a future booking date.');
     }
 
-    if (!form.bookingTime || !service || !service.slots.includes(form.bookingTime)) {
+    if (!form.bookingTime || !service || !serviceSelection.bookableItem.slots.includes(form.bookingTime)) {
         errors.push('Please select an available time slot for the selected service.');
     }
 
@@ -126,7 +167,20 @@ function validateBooking(merchant, form) {
         errors.push('This slot is already booked. Please choose another time.');
     }
 
-    return { errors, service, customerName, email, phone };
+    const serviceName = serviceSelection.selectedOption
+        ? `${service.name} - ${serviceSelection.selectedOption.name}`
+        : service?.name;
+
+    return {
+        errors,
+        service,
+        selectedOption: serviceSelection.selectedOption,
+        bookableItem: serviceSelection.bookableItem,
+        serviceName,
+        customerName,
+        email,
+        phone
+    };
 }
 
 function showHome(req, res) {
@@ -239,7 +293,7 @@ function saveQrBooking(req, res) {
         merchantId: merchant.id,
         merchantName: merchant.name,
         serviceId: validation.service.id,
-        serviceName: validation.service.name,
+        serviceName: validation.serviceName,
         customerName: validation.customerName,
         email: validation.email,
         phone: validation.phone,
@@ -278,7 +332,12 @@ function saveQrBooking(req, res) {
             return res.render('booking-success', {
                 title: 'Booking Confirmed',
                 merchant,
-                service: validation.service,
+                service: {
+                    ...validation.service,
+                    name: validation.serviceName,
+                    duration: validation.bookableItem.duration,
+                    price: validation.bookableItem.price
+                },
                 bookingDate: req.body.bookingDate,
                 bookingTime: req.body.bookingTime
             });
@@ -310,7 +369,7 @@ function createBooking(req, res) {
         merchantId: merchant.id,
         merchantName: merchant.name,
         serviceId: validation.service.id,
-        serviceName: validation.service.name,
+        serviceName: validation.serviceName,
         customerName: validation.customerName,
         email: validation.email,
         phone: validation.phone,
@@ -318,7 +377,7 @@ function createBooking(req, res) {
         bookingTime: req.body.bookingTime
     });
 
-    req.session.success = `Booking request received for ${validation.service.name} at ${merchant.name} on ${req.body.bookingDate}, ${req.body.bookingTime}.`;
+    req.session.success = `Booking request received for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${req.body.bookingTime}.`;
     return res.redirect('/');
 }
 

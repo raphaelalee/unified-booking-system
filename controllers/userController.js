@@ -7,6 +7,7 @@ function buildSessionUser(user) {
         id: user.user_id,
         name: user.name,
         email: user.email,
+        phone: user.phone || '',
         role: user.role,
         glintsBalance: user.glints_balance || 0
     };
@@ -71,7 +72,7 @@ function loginUser(req, res) {
             req.session.profile = {
                 name: user.name,
                 email: user.email,
-                phone: ''
+                phone: user.phone || ''
             };
             req.session.profileSuccess = 'You are logged in.';
 
@@ -100,18 +101,19 @@ function showSignup(req, res) {
 function signupUser(req, res) {
     const name = (req.body.name || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
+    const phone = (req.body.phone || '').trim();
     const password = req.body.password || '';
     const confirmPassword = req.body.confirmPassword || '';
 
-    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        req.session.signupError = 'Please enter a valid name and email.';
-        req.session.signupForm = { name, email };
+    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[689]\d{7}$/.test(phone)) {
+        req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
+        req.session.signupForm = { name, email, phone };
         return res.redirect('/signup');
     }
 
     if (password.length < 4 || password !== confirmPassword) {
         req.session.signupError = 'Password must be at least 4 characters and match the confirmation.';
-        req.session.signupForm = { name, email };
+        req.session.signupForm = { name, email, phone };
         return res.redirect('/signup');
     }
 
@@ -119,13 +121,13 @@ function signupUser(req, res) {
         if (lookupError) {
             console.error(lookupError);
             req.session.signupError = 'Account could not be created. Please try again.';
-            req.session.signupForm = { name, email };
+            req.session.signupForm = { name, email, phone };
             return res.redirect('/signup');
         }
 
         if (existingUser) {
             req.session.signupError = 'An account already exists with that email.';
-            req.session.signupForm = { name, email };
+            req.session.signupForm = { name, email, phone };
             return res.redirect('/signup');
         }
 
@@ -133,7 +135,7 @@ function signupUser(req, res) {
             if (hashError) {
                 console.error(hashError);
                 req.session.signupError = 'Account could not be created. Please try again.';
-                req.session.signupForm = { name, email };
+                req.session.signupForm = { name, email, phone };
                 return res.redirect('/signup');
             }
 
@@ -143,7 +145,7 @@ function signupUser(req, res) {
                     req.session.signupError = createError.code === 'ER_DUP_ENTRY'
                         ? 'An account already exists with that email.'
                         : 'Account could not be created. Please try again.';
-                    req.session.signupForm = { name, email };
+                    req.session.signupForm = { name, email, phone };
                     return res.redirect('/signup');
                 }
 
@@ -151,10 +153,11 @@ function signupUser(req, res) {
                     id: result.insertId,
                     name,
                     email,
+                    phone,
                     role: 'customer',
                     glintsBalance: 0
                 };
-                req.session.profile = { name, email, phone: '' };
+                req.session.profile = { name, email, phone };
                 req.session.profileSuccess = 'Account created successfully.';
 
                 return res.redirect('/profile');
@@ -225,7 +228,8 @@ function updateProfile(req, res) {
         req.session.user = {
             ...req.session.user,
             name,
-            email
+            email,
+            phone
         };
         req.session.profileSuccess = 'Profile updated successfully.';
 
