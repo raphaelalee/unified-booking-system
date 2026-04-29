@@ -13,6 +13,13 @@ function buildSessionUser(user) {
     };
 }
 
+function getMemberTier(points) {
+    if (points >= 10000) return 'Platinum';
+    if (points >= 5000) return 'Gold';
+    if (points >= 2000) return 'Silver';
+    return 'Bronze';
+}
+
 function showLogin(req, res) {
     if (req.session.user) {
         return res.redirect('/profile');
@@ -183,6 +190,10 @@ function showProfile(req, res) {
     };
     const rewardPoints = favourites.length * 50 + cart.length * 20;
     const cashbackBalance = (rewardPoints / 100).toFixed(2);
+    const member = {
+        points: rewardPoints,
+        tier: getMemberTier(rewardPoints)
+    };
 
     const success = req.session.profileSuccess;
     const error = req.session.profileError;
@@ -196,6 +207,7 @@ function showProfile(req, res) {
         cartCount: cart.length,
         rewardPoints,
         cashbackBalance,
+        member,
         success,
         error
     });

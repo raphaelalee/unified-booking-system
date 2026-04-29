@@ -37,7 +37,9 @@ app.get('/portal', (req, res) => {
 app.get('/services', merchantController.showServices);
 app.get('/merchants', merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
-app.get('/membership', merchantController.showMembership);
+app.get('/membership', (req, res) => {
+    res.redirect('/profile#membership');
+});
 app.post('/profile', userController.updateProfile);
 app.get('/login', userController.showLogin);
 app.post('/login', userController.loginUser);

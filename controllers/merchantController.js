@@ -535,32 +535,6 @@ function showProfile(req, res) {
     });
 }
 
-function getMemberTier(points) {
-    if (points >= 10000) return 'Platinum';
-    if (points >= 5000) return 'Gold';
-    if (points >= 2000) return 'Silver';
-    return 'Bronze';
-}
-
-function showMembership(req, res) {
-    const favouriteIds = req.session.favouriteMerchantIds || [];
-    const favourites = favouriteIds
-        .map((merchantId) => Merchant.findById(merchantId))
-        .filter(Boolean);
-    const cart = req.session.cart || [];
-    const points = favourites.length * 50 + cart.length * 20;
-    const tier = getMemberTier(points);
-
-    return res.render('membership', {
-        title: 'Membership',
-        member: {
-            points,
-            tier
-        },
-        cartCount: cart.length
-    });
-}
-
 function updateProfile(req, res) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -704,7 +678,6 @@ module.exports = {
     removeFromCart,
     toggleFavouriteMerchant,
     showProfile,
-    showMembership,
     updateProfile,
     showLogin,
     loginUser,
