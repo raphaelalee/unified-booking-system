@@ -33,6 +33,9 @@ const merchants = [
         category: 'Beauty & Wellness',
         location: 'Orchard',
         qrToken: 'vaniday-beauty-studio-orchard',
+        posSystem: 'Vaniday POS',
+        bookingSystem: 'Vaniday QR Booking',
+        integrationStatus: 'Synced',
         rating: '4.8',
         promotion: '20% off first booking',
         description: 'Hair styling, facials, and beauty treatments from trusted Vaniday merchants.',
@@ -92,6 +95,9 @@ const merchants = [
         category: 'Spa',
         location: 'Tampines',
         qrToken: 'freshglow-spa-tampines',
+        posSystem: 'FreshGlow POS',
+        bookingSystem: 'SpaDesk Scheduler',
+        integrationStatus: 'Synced',
         rating: '4.6',
         promotion: 'Free add-on massage for bookings above $80',
         description: 'Relaxing spa services with simple online booking and clear appointment slots.',
@@ -128,6 +134,9 @@ const merchants = [
         category: 'Barber',
         location: 'Woodlands',
         qrToken: 'urban-groom-barbers-woodlands',
+        posSystem: 'Urban Groom POS',
+        bookingSystem: 'BarberSlot Booking',
+        integrationStatus: 'Synced',
         rating: '4.7',
         promotion: '$5 student discount',
         description: 'Fast grooming services for walk-in style retail merchants using digital booking.',
@@ -175,6 +184,9 @@ function getAll(searchTerm = '') {
             merchant.location,
             merchant.description,
             merchant.promotion,
+            merchant.posSystem,
+            merchant.bookingSystem,
+            merchant.integrationStatus,
             ...services.flatMap((service) => [
                 service.name,
                 service.duration,
@@ -185,6 +197,40 @@ function getAll(searchTerm = '') {
 
         return searchableText.includes(search);
     }).map(withServices);
+}
+
+function getServiceCatalog(searchTerm = '') {
+    return getAll(searchTerm).flatMap((merchant) => {
+        return merchant.services.map((service) => ({
+            ...service,
+            merchantId: merchant.id,
+            merchantName: merchant.name,
+            merchantQrToken: merchant.qrToken,
+            merchantLocation: merchant.location,
+            merchantCategory: merchant.category,
+            merchantPromotion: merchant.promotion,
+            merchantRating: merchant.rating,
+            merchantPosSystem: merchant.posSystem,
+            merchantBookingSystem: merchant.bookingSystem,
+            merchantIntegrationStatus: merchant.integrationStatus,
+            serviceBookingPath: `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`
+        }));
+    });
+}
+
+function getPortalStats(searchTerm = '') {
+    const portalMerchants = getAll(searchTerm);
+    const serviceCatalog = getServiceCatalog(searchTerm);
+    const prices = serviceCatalog.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
+    const slotCount = serviceCatalog.reduce((total, service) => total + (service.slots || []).length, 0);
+
+    return {
+        merchantCount: portalMerchants.length,
+        serviceCount: serviceCatalog.length,
+        promotionCount: portalMerchants.filter((merchant) => Boolean(merchant.promotion)).length,
+        slotCount,
+        startingPrice: prices.length > 0 ? Math.min(...prices) : 0
+    };
 }
 
 function findById(id) {
@@ -207,6 +253,8 @@ function hasValidQrToken(merchant, qrToken) {
 
 module.exports = {
     getAll,
+    getServiceCatalog,
+    getPortalStats,
     findById,
     findService,
     hasValidQrToken

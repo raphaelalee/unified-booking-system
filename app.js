@@ -4,7 +4,6 @@ const session = require('express-session');
 const path = require('path');
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
-const Merchant = require('./models/Merchant');
 const Product = require('./models/Product');
 require('dotenv').config();
 
@@ -31,6 +30,11 @@ app.use((req, res, next) => {
 });
 
 app.get('/', merchantController.showHome);
+app.get('/portal', (req, res) => {
+    const query = new URLSearchParams(req.query).toString();
+    res.redirect(`/services${query ? `?${query}` : ''}`);
+});
+app.get('/services', merchantController.showServices);
 app.get('/merchants', merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
 app.get('/membership', merchantController.showMembership);
@@ -60,32 +64,6 @@ app.get('/about', (req, res) => {
 
 app.get('/contact', (req, res) => {
     res.render('contact', { title: 'Contact Us' });
-});
-
-app.get('/services', (req, res) => {
-    const search = req.query.search || '';
-    const favouriteIds = req.session.favouriteMerchantIds || [];
-    const allMerchants = Merchant.getAll();
-    const serviceCatalog = allMerchants.flatMap((merchant) => {
-        return merchant.services.map((service) => ({
-            ...service,
-            merchantId: merchant.id,
-            merchantName: merchant.name,
-            merchantQrToken: merchant.qrToken,
-            serviceBookingPath: `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`,
-            serviceBookingUrl: `${req.protocol}://${req.get('host')}/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`,
-            merchantLocation: merchant.location,
-            merchantCategory: merchant.category
-        }));
-    });
-
-    res.render('services', {
-        title: 'Services',
-        merchants: Merchant.getAll(search),
-        favouriteIds,
-        serviceCatalog,
-        search
-    });
 });
 
 app.get('/products', (req, res) => {

@@ -10,6 +10,8 @@
     --rose: #c97f72;
     --sage: #7c8b6f;
     --sage-soft: #e8eddf;
+    --teal: #2f6f73;
+    --teal-soft: #e5f0ef;
     --line: #e7d4c4;
     --danger: #9d2c30;
     --success: #496f4c;
@@ -1401,6 +1403,232 @@ select:focus {
     margin-bottom: 0;
 }
 
+.portal-hero {
+    width: min(1120px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 70px 0 34px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 34px;
+    align-items: stretch;
+}
+
+.portal-hero-copy {
+    align-self: center;
+}
+
+.portal-hero h1 {
+    max-width: 800px;
+    margin-bottom: 18px;
+    color: var(--ink);
+    font-size: clamp(2.45rem, 5vw, 4.5rem);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.portal-hero p {
+    max-width: 760px;
+}
+
+.portal-search {
+    max-width: 760px;
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid rgba(231, 212, 196, 0.8);
+    border-radius: 999px;
+    background: rgba(255, 250, 245, 0.82);
+    box-shadow: 0 18px 42px rgba(86, 45, 24, 0.1);
+}
+
+.portal-summary-panel {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background:
+        linear-gradient(135deg, rgba(229, 240, 239, 0.94), rgba(255, 250, 245, 0.96)),
+        var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.portal-stat {
+    min-height: 132px;
+    padding: 18px;
+    display: grid;
+    align-content: space-between;
+    border: 1px solid rgba(47, 111, 115, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 250, 245, 0.78);
+}
+
+.portal-stat span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.portal-stat strong {
+    color: var(--teal);
+    font-size: 2.2rem;
+    line-height: 1;
+}
+
+.portal-section.compact-top {
+    padding-top: 0;
+}
+
+.portal-merchant-grid,
+.portal-service-grid {
+    display: grid;
+    gap: 18px;
+}
+
+.portal-merchant-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.portal-service-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.portal-merchant-card,
+.portal-service-card {
+    padding: 22px;
+    display: grid;
+    gap: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 250, 245, 0.95);
+    box-shadow: var(--shadow);
+}
+
+.portal-merchant-card {
+    align-content: start;
+}
+
+.portal-service-card {
+    grid-template-rows: auto auto auto auto auto 1fr;
+}
+
+.portal-card-header,
+.portal-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.portal-card-header {
+    flex-wrap: wrap;
+}
+
+.portal-card-actions {
+    align-self: end;
+}
+
+.portal-card-actions .button {
+    flex: 1 1 140px;
+    padding-inline: 16px;
+}
+
+.sync-pill {
+    width: fit-content;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--teal-soft);
+    color: var(--teal);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.system-list {
+    display: grid;
+    gap: 10px;
+}
+
+.system-list p {
+    margin: 0;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    border: 1px solid rgba(231, 212, 196, 0.72);
+    border-radius: 8px;
+    background: #fffdf9;
+}
+
+.system-list.compact p {
+    padding: 10px 12px;
+}
+
+.system-list span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.system-list strong {
+    min-width: 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.portal-card-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.portal-card-metrics span {
+    min-height: 70px;
+    padding: 11px 8px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--sage-soft);
+    color: #41593b;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.portal-card-metrics strong {
+    display: block;
+    color: var(--ink);
+    font-size: 1.12rem;
+}
+
+.availability-strip {
+    min-height: 38px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.availability-strip span {
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: var(--teal-soft);
+    color: var(--teal);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.service-price.slim {
+    width: fit-content;
+    min-width: auto;
+    min-height: auto;
+    border-radius: 999px;
+    padding: 8px 12px;
+}
+
 .site-footer {
     border-top: 1px solid var(--line);
     background: #f4e7db;
@@ -1463,8 +1691,19 @@ select:focus {
     .giftcard-layout,
     .contact-layout,
     .about-hero,
-    .stats-grid {
+    .stats-grid,
+    .portal-hero,
+    .portal-merchant-grid,
+    .portal-service-grid {
         grid-template-columns: 1fr;
+    }
+
+    .portal-hero {
+        padding-top: 58px;
+    }
+
+    .portal-summary-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .cashback-badge {
@@ -1477,7 +1716,8 @@ select:focus {
     }
 
     .merchant-row,
-    .search-bar {
+    .search-bar,
+    .portal-search {
         grid-template-columns: 1fr;
     }
 
@@ -1511,6 +1751,11 @@ select:focus {
     .cart-item-actions {
         justify-items: start;
     }
+
+    .portal-card-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
 }
 
 @media (max-width: 560px) {
@@ -1532,6 +1777,7 @@ select:focus {
     .section,
     .page-title,
     .booking-hero,
+    .portal-hero,
     .notice {
         width: min(100% - 32px, 1120px);
     }
@@ -1540,8 +1786,14 @@ select:focus {
         width: 100%;
     }
 
-    .search-bar {
+    .search-bar,
+    .portal-search {
         border-radius: 24px;
+    }
+
+    .portal-summary-panel,
+    .portal-card-metrics {
+        grid-template-columns: 1fr;
     }
 
     .merchant-actions {
@@ -1550,5 +1802,1399 @@ select:focus {
 
     .cart-item-actions {
         justify-items: stretch;
+    }
+}
+
+/* Botanical UI refresh: visual-only overrides for the beauty and wellness theme. */
+:root {
+    --ink: #243b2a;
+    --text: #52604f;
+    --muted: #7f8b75;
+    --cream: #eef3e4;
+    --linen: #dce6ce;
+    --surface: #fbfcf6;
+    --clay: #2e492c;
+    --clay-dark: #152513;
+    --rose: #ad8970;
+    --sage: #6f8466;
+    --sage-soft: #e3ead8;
+    --teal: #245e52;
+    --teal-soft: #dfede8;
+    --line: #c9d5bd;
+    --danger: #9d2c30;
+    --success: #496f4c;
+    --shadow: 0 24px 70px rgba(36, 59, 42, 0.12);
+    --soft-shadow: 0 14px 34px rgba(36, 59, 42, 0.1);
+}
+
+body {
+    background:
+        linear-gradient(180deg, rgba(232, 239, 219, 0.94), rgba(250, 252, 245, 0.98) 44%, rgba(238, 243, 228, 0.96)),
+        url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1800&q=80");
+    background-attachment: fixed;
+    background-position: center top;
+    background-size: cover;
+    color: var(--text);
+}
+
+body,
+button,
+input,
+select {
+    font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.brand span:last-child,
+.hero h1,
+.page-title h1,
+.booking-hero h1,
+.portal-hero h1 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    letter-spacing: 0;
+}
+
+h2,
+h3 {
+    font-weight: 700;
+}
+
+.site-header {
+    background: rgba(221, 231, 204, 0.94);
+    color: var(--ink);
+    border-bottom: 1px solid rgba(97, 121, 87, 0.18);
+    box-shadow: 0 12px 40px rgba(36, 59, 42, 0.08);
+    backdrop-filter: blur(18px);
+}
+
+.nav {
+    width: min(1180px, 100%);
+    min-height: 92px;
+    margin: 0 auto;
+    grid-template-columns: auto minmax(480px, 1fr) auto;
+    gap: 18px;
+}
+
+.brand {
+    color: var(--ink);
+    font-size: 1.5rem;
+}
+
+.brand-mark {
+    background: var(--clay);
+    color: var(--surface);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.nav-links,
+.nav-tools,
+.nav-support-links,
+.nav-account-links,
+.nav-commerce-links {
+    gap: 10px;
+}
+
+.nav-links a,
+.nav-support-links a,
+.signup-text-link {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(94, 116, 82, 0.34);
+    border-radius: 999px;
+    background: rgba(239, 246, 229, 0.5);
+    color: rgba(36, 59, 42, 0.82);
+    padding: 8px 18px;
+    box-shadow: inset 0 -1px 0 rgba(36, 59, 42, 0.04);
+}
+
+.nav-links a:hover,
+.nav-support-links a:hover,
+.signup-text-link:hover,
+.brand:hover {
+    opacity: 1;
+    background: rgba(251, 252, 246, 0.86);
+    transform: translateY(-1px);
+}
+
+.nav-support-links,
+.nav-account-links {
+    border-right-color: rgba(94, 116, 82, 0.24);
+}
+
+.profile-icon-link {
+    width: 42px;
+    height: 42px;
+    justify-content: center;
+    border: 1px solid rgba(94, 116, 82, 0.34);
+    border-radius: 999px;
+    background: rgba(239, 246, 229, 0.5);
+}
+
+.login-icon {
+    width: 30px;
+    height: 30px;
+    background:
+        radial-gradient(circle at 50% 36%, var(--clay) 0 20%, transparent 21%),
+        radial-gradient(ellipse at 50% 88%, var(--clay) 0 31%, transparent 32%),
+        rgba(46, 73, 44, 0.12);
+}
+
+.bag-icon {
+    width: 32px;
+    height: 36px;
+    border-color: var(--clay);
+    color: var(--clay);
+    background: rgba(239, 246, 229, 0.5);
+}
+
+.bag-icon::before {
+    border-color: var(--clay);
+}
+
+.bag-count {
+    color: var(--clay);
+}
+
+.nav-text-button {
+    color: var(--ink);
+}
+
+main {
+    overflow: hidden;
+}
+
+.hero {
+    min-height: calc(100vh - 92px);
+    grid-template-columns: minmax(0, 0.98fr) minmax(360px, 1.02fr);
+    background:
+        linear-gradient(90deg, rgba(232, 239, 219, 0.98) 0%, rgba(244, 248, 238, 0.94) 48%, rgba(213, 225, 198, 0.9) 100%);
+    border-bottom: 1px solid rgba(97, 121, 87, 0.15);
+}
+
+.hero-content {
+    align-self: center;
+    padding: 72px max(28px, calc((100vw - 1180px) / 2)) 80px;
+}
+
+.hero-visual {
+    min-height: 620px;
+    background:
+        linear-gradient(180deg, rgba(16, 35, 20, 0.06), rgba(16, 35, 20, 0.24)),
+        url("https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=1300&q=82");
+    background-position: center;
+    background-size: cover;
+    clip-path: inset(26px 24px 26px 0 round 8px);
+}
+
+.hero h1,
+.page-title h1,
+.booking-hero h1,
+.portal-hero h1 {
+    color: var(--ink);
+    font-size: 4.35rem;
+    line-height: 0.98;
+    font-weight: 600;
+}
+
+.hero-text,
+.hero p,
+.page-title p,
+.booking-hero p,
+.portal-hero p {
+    color: var(--text);
+    font-size: 1.04rem;
+}
+
+.hero-actions {
+    justify-content: flex-start;
+}
+
+.button {
+    min-height: 46px;
+    border-radius: 999px;
+    box-shadow: none;
+    transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.button:hover,
+.text-button:hover,
+.heart-button:hover {
+    transform: translateY(-1px);
+}
+
+.button.primary {
+    background: var(--clay-dark);
+    border-color: var(--clay-dark);
+    color: var(--surface);
+}
+
+.button.primary:hover {
+    background: var(--clay);
+}
+
+.button.secondary {
+    background: rgba(251, 252, 246, 0.82);
+    border-color: rgba(94, 116, 82, 0.28);
+    color: var(--clay-dark);
+}
+
+.button.secondary:hover {
+    border-color: rgba(46, 73, 44, 0.42);
+    background: var(--surface);
+}
+
+.eyebrow {
+    color: var(--sage);
+    letter-spacing: 0.08em;
+}
+
+.section {
+    padding: 70px 0;
+}
+
+.section.compact {
+    padding-top: 34px;
+}
+
+.page-title,
+.booking-hero {
+    width: 100%;
+    margin: 0;
+    padding: 70px max(24px, calc((100% - 1120px) / 2)) 40px;
+    background:
+        linear-gradient(120deg, rgba(221, 231, 204, 0.92), rgba(248, 251, 242, 0.95));
+    border-bottom: 1px solid rgba(97, 121, 87, 0.14);
+}
+
+.page-title h1,
+.booking-hero h1 {
+    max-width: 780px;
+}
+
+.page-title.split,
+.two-column,
+.about-hero {
+    width: 100%;
+}
+
+.about-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 0.78fr);
+}
+
+.about-image {
+    min-height: 430px;
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(15, 35, 18, 0.03), rgba(15, 35, 18, 0.2)),
+        url("https://images.unsplash.com/photo-1526045478516-99145907023c?auto=format&fit=crop&w=1000&q=82");
+    background-size: cover;
+    background-position: center;
+}
+
+.merchant-card,
+.merchant-row,
+.service-card,
+.booking-panel,
+.promo-panel,
+.feature-grid article,
+.student-scope,
+.notice,
+.service-catalog-card,
+.product-card,
+.cashback-panel,
+.giftcard-options article,
+.section-cta,
+.cart-item,
+.profile-card,
+.empty-state,
+.profile-form,
+.reward-panel,
+.login-form,
+.login-benefits,
+.contact-info-panel,
+.map-panel,
+.about-story,
+.stats-grid article,
+.booking-services-panel,
+.booking-form-panel,
+.portal-merchant-card,
+.portal-service-card,
+.portal-summary-panel {
+    border-color: rgba(97, 121, 87, 0.18);
+    background: rgba(251, 252, 246, 0.9);
+    box-shadow: var(--soft-shadow);
+}
+
+.merchant-card,
+.product-card,
+.service-catalog-card,
+.portal-merchant-card,
+.portal-service-card {
+    background:
+        linear-gradient(180deg, rgba(239, 245, 231, 0.72), rgba(251, 252, 246, 0.96) 42%),
+        var(--surface);
+}
+
+.merchant-row:hover {
+    border-color: rgba(46, 73, 44, 0.32);
+    box-shadow: 0 24px 54px rgba(36, 59, 42, 0.14);
+}
+
+.merchant-thumb::before,
+.image-card::before {
+    background: linear-gradient(180deg, rgba(13, 28, 16, 0.04), rgba(13, 28, 16, 0.68));
+}
+
+.merchant-thumb-1,
+.service-hair {
+    background-image: url("https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=82");
+}
+
+.merchant-thumb-2,
+.service-spa {
+    background-image: url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=82");
+}
+
+.merchant-thumb-3 {
+    background-image: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=800&q=82");
+}
+
+.service-nails {
+    background-image: url("https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=800&q=82");
+}
+
+.service-facial {
+    background-image: url("https://images.unsplash.com/photo-1526045478516-99145907023c?auto=format&fit=crop&w=800&q=82");
+}
+
+.product-skin,
+.product-body,
+.product-cleanser {
+    background-image: url("https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=82");
+}
+
+.product-hair {
+    background-image: url("https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=800&q=82");
+}
+
+.product-lip {
+    background-image: url("https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=800&q=82");
+}
+
+.product-fragrance {
+    background-image: url("https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=800&q=82");
+}
+
+.tag {
+    color: var(--clay-dark);
+    background: var(--sage-soft);
+}
+
+.promotion,
+.booking-meta span,
+.availability-strip span,
+.sync-pill {
+    color: var(--teal);
+    background: var(--teal-soft);
+}
+
+.service-card,
+.booking-service-card {
+    border-left-color: var(--sage);
+}
+
+.service-price,
+.service-price.slim {
+    background: var(--sage-soft);
+    color: var(--clay-dark);
+}
+
+.search-bar,
+.portal-search {
+    background: rgba(251, 252, 246, 0.72);
+    border-color: rgba(97, 121, 87, 0.2);
+    box-shadow: var(--soft-shadow);
+}
+
+input,
+select {
+    background: rgba(255, 255, 252, 0.92);
+    border-color: rgba(97, 121, 87, 0.14);
+    color: var(--ink);
+}
+
+input:focus,
+select:focus {
+    border-color: var(--sage);
+    box-shadow: 0 0 0 4px rgba(111, 132, 102, 0.16);
+}
+
+.heart-button {
+    background: rgba(251, 252, 246, 0.9);
+    border-color: rgba(97, 121, 87, 0.2);
+    color: var(--clay);
+}
+
+.heart-button.active {
+    background: #eef0df;
+    border-color: rgba(173, 137, 112, 0.34);
+    color: #8a5744;
+}
+
+.text-link,
+.text-button {
+    color: var(--clay);
+}
+
+.reward-panel,
+.cashback-panel {
+    background:
+        linear-gradient(135deg, rgba(223, 237, 232, 0.88), rgba(251, 252, 246, 0.96)),
+        var(--surface);
+}
+
+.reward-panel h2,
+.cashback-badge span,
+.stats-grid strong,
+.portal-stat strong {
+    color: var(--clay);
+}
+
+.cashback-badge {
+    background: var(--clay);
+}
+
+.giftcard-preview {
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(16, 35, 20, 0.1), rgba(16, 35, 20, 0.48)),
+        url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=82");
+    background-size: cover;
+    background-position: center;
+}
+
+.portal-hero {
+    width: 100%;
+    margin: 0;
+    padding: 70px max(24px, calc((100% - 1120px) / 2)) 44px;
+    background:
+        linear-gradient(120deg, rgba(221, 231, 204, 0.94), rgba(248, 251, 242, 0.95));
+    border-bottom: 1px solid rgba(97, 121, 87, 0.14);
+}
+
+.portal-summary-panel {
+    background:
+        linear-gradient(135deg, rgba(223, 237, 232, 0.9), rgba(251, 252, 246, 0.96)),
+        var(--surface);
+}
+
+.portal-stat {
+    background: rgba(251, 252, 246, 0.72);
+    border-color: rgba(97, 121, 87, 0.16);
+}
+
+.system-list p,
+.fulfilment-choice {
+    background: rgba(255, 255, 252, 0.78);
+    border-color: rgba(97, 121, 87, 0.16);
+}
+
+.fulfilment-choice.active {
+    border-color: var(--sage);
+    background: rgba(227, 234, 216, 0.7);
+}
+
+.cart-quantity-controls {
+    background: rgba(255, 255, 252, 0.9);
+    border-color: rgba(97, 121, 87, 0.2);
+}
+
+.quantity-input {
+    border-left-color: rgba(97, 121, 87, 0.2);
+    border-right-color: rgba(97, 121, 87, 0.2);
+}
+
+.quantity-button:hover {
+    background: var(--sage-soft);
+}
+
+.site-footer {
+    background: rgba(221, 231, 204, 0.94);
+    border-top-color: rgba(97, 121, 87, 0.18);
+    color: var(--text);
+}
+
+.product-card[style],
+.tier-card[style],
+.voucher-card[style] {
+    border-color: rgba(97, 121, 87, 0.18) !important;
+    border-radius: 8px !important;
+    background: rgba(251, 252, 246, 0.9) !important;
+    box-shadow: var(--soft-shadow) !important;
+}
+
+.product-card [style*="background:#eee"] {
+    background: var(--sage-soft) !important;
+}
+
+.product-card [style*="background:#111"] {
+    background: var(--clay) !important;
+}
+
+@media (max-width: 1080px) {
+    .nav {
+        grid-template-columns: 1fr;
+        padding-top: 18px;
+        padding-bottom: 18px;
+    }
+
+    .nav-links,
+    .nav-tools {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 900px) {
+    body {
+        background-attachment: scroll;
+    }
+
+    .hero {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-content,
+    .page-title,
+    .booking-hero,
+    .portal-hero {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+
+    .hero-visual {
+        min-height: 420px;
+        clip-path: inset(0 24px 32px round 8px);
+    }
+
+    .hero h1,
+    .page-title h1,
+    .booking-hero h1,
+    .portal-hero h1 {
+        font-size: 3.35rem;
+    }
+
+    .portal-summary-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .nav-links a,
+    .nav-support-links a,
+    .signup-text-link {
+        min-height: 38px;
+        padding: 7px 12px;
+        font-size: 0.86rem;
+    }
+
+    .nav-support-links,
+    .nav-account-links {
+        border-right: 0;
+        padding-right: 0;
+    }
+
+    .hero h1,
+    .page-title h1,
+    .booking-hero h1,
+    .portal-hero h1 {
+        font-size: 2.6rem;
+        line-height: 1;
+    }
+
+    .hero-content,
+    .page-title,
+    .booking-hero,
+    .portal-hero {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .portal-summary-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .system-list p {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Roomier two-tier navigation so every feature stays visible without crowding. */
+.nav {
+    width: min(1180px, calc(100% - 32px));
+    min-height: auto;
+    padding: 14px 0 16px;
+    grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+    grid-template-areas:
+        "brand tools"
+        "links links";
+    gap: 12px 20px;
+}
+
+.brand {
+    grid-area: brand;
+}
+
+.nav-tools {
+    grid-area: tools;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.nav-links {
+    grid-area: links;
+    width: 100%;
+    justify-content: center;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(94, 116, 82, 0.18);
+}
+
+.nav-links a {
+    min-width: 108px;
+    padding-inline: 18px;
+    text-align: center;
+}
+
+.nav-support-links {
+    padding-right: 12px;
+}
+
+.nav-account-links {
+    padding-right: 12px;
+}
+
+@media (max-width: 760px) {
+    .nav {
+        width: min(100% - 24px, 1180px);
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "brand"
+            "tools"
+            "links";
+    }
+
+    .nav-tools {
+        justify-content: flex-start;
+        gap: 10px;
+    }
+
+    .nav-links {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+    }
+
+    .nav-links::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-links a {
+        min-width: max-content;
+    }
+}
+
+@media (max-width: 560px) {
+    .nav {
+        width: min(100% - 20px, 1180px);
+    }
+
+    .nav-tools,
+    .nav-support-links,
+    .nav-account-links {
+        width: 100%;
+    }
+
+    .nav-support-links,
+    .nav-account-links,
+    .nav-commerce-links {
+        justify-content: flex-start;
+    }
+}
+
+/* Membership page redesign. */
+.membership-hero {
+    width: 100%;
+    margin: 0;
+    padding: 74px max(24px, calc((100% - 1120px) / 2)) 46px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    gap: 34px;
+    align-items: stretch;
+    background:
+        linear-gradient(120deg, rgba(221, 231, 204, 0.94), rgba(248, 251, 242, 0.95));
+    border-bottom: 1px solid rgba(97, 121, 87, 0.14);
+}
+
+.membership-hero-copy {
+    align-self: center;
+}
+
+.membership-hero h1 {
+    max-width: 760px;
+    margin-bottom: 18px;
+    color: var(--ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 4.35rem;
+    font-weight: 600;
+    line-height: 0.98;
+}
+
+.membership-hero p {
+    max-width: 640px;
+    color: var(--text);
+    font-size: 1.04rem;
+}
+
+.membership-actions {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.membership-photo-card,
+.membership-points-card,
+.membership-feature-card,
+.membership-tier-card,
+.membership-reward-card {
+    border: 1px solid rgba(97, 121, 87, 0.18);
+    border-radius: 8px;
+    background: rgba(251, 252, 246, 0.9);
+    box-shadow: var(--soft-shadow);
+}
+
+.membership-photo-card {
+    min-height: 430px;
+    padding: 14px;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: 14px;
+}
+
+.membership-photo {
+    min-height: 320px;
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(20, 40, 23, 0.06), rgba(20, 40, 23, 0.22)),
+        url("https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=900&q=82");
+    background-position: center;
+    background-size: cover;
+}
+
+.membership-photo-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 4px 2px;
+}
+
+.membership-photo-caption span,
+.membership-photo-caption strong {
+    color: var(--ink);
+    font-weight: 900;
+}
+
+.membership-photo-caption span {
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: var(--sage-soft);
+}
+
+.membership-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 20px;
+}
+
+.membership-points-card {
+    padding: 28px;
+    display: grid;
+    gap: 16px;
+    align-content: start;
+    background:
+        linear-gradient(135deg, rgba(223, 237, 232, 0.88), rgba(251, 252, 246, 0.96)),
+        var(--surface);
+}
+
+.membership-points-card h2 {
+    margin-bottom: 0;
+    color: var(--ink);
+    font-size: 3.1rem;
+}
+
+.membership-tier-badge {
+    width: 122px;
+    height: 122px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    border-radius: 50%;
+    border: 1px solid rgba(97, 121, 87, 0.22);
+    background:
+        linear-gradient(145deg, rgba(251, 252, 246, 0.72), rgba(227, 234, 216, 0.92));
+    color: var(--ink);
+}
+
+.membership-tier-badge span {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.membership-tier-badge small {
+    color: var(--muted);
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.membership-tier-badge.silver {
+    background: linear-gradient(145deg, #f7f8f3, #dfe5da);
+}
+
+.membership-tier-badge.gold {
+    background: linear-gradient(145deg, #fff8df, #e2d4a4);
+}
+
+.membership-tier-badge.platinum {
+    background: linear-gradient(145deg, #f6faf8, #cfded9);
+}
+
+.membership-progress {
+    height: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(97, 121, 87, 0.14);
+}
+
+.membership-progress span {
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--sage), var(--clay));
+}
+
+.membership-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.membership-feature-card {
+    min-height: 360px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(220px, 1fr);
+    background: rgba(251, 252, 246, 0.92);
+}
+
+.membership-feature-card > div:first-child {
+    padding: 28px;
+    align-self: end;
+}
+
+.membership-feature-image {
+    min-height: 100%;
+    background:
+        linear-gradient(180deg, rgba(17, 35, 20, 0.04), rgba(17, 35, 20, 0.28)),
+        url("https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=900&q=82");
+    background-position: center;
+    background-size: cover;
+}
+
+.membership-tier-grid,
+.membership-reward-grid {
+    display: grid;
+    gap: 18px;
+}
+
+.membership-tier-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.membership-tier-card {
+    min-height: 210px;
+    padding: 22px;
+    display: grid;
+    gap: 18px;
+    align-content: space-between;
+    position: relative;
+    overflow: hidden;
+}
+
+.membership-tier-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(251, 252, 246, 0.24), rgba(251, 252, 246, 0.9)),
+        url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=700&q=82");
+    background-position: center;
+    background-size: cover;
+    opacity: 0.12;
+}
+
+.membership-tier-card > * {
+    position: relative;
+}
+
+.membership-tier-card.active {
+    border-color: rgba(46, 73, 44, 0.42);
+    background:
+        linear-gradient(145deg, rgba(227, 234, 216, 0.86), rgba(251, 252, 246, 0.96)),
+        var(--surface);
+}
+
+.tier-medallion {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid rgba(97, 121, 87, 0.2);
+    background: rgba(251, 252, 246, 0.78);
+    color: var(--clay);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+}
+
+.membership-tier-card h3,
+.membership-reward-card h3 {
+    margin-bottom: 6px;
+}
+
+.membership-tier-card p {
+    margin-bottom: 6px;
+    color: var(--ink);
+    font-weight: 900;
+}
+
+.membership-tier-card span {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.membership-reward-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.membership-reward-card {
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 180px 1fr;
+}
+
+.membership-reward-card > div:last-child {
+    padding: 20px;
+}
+
+.reward-image {
+    min-height: 180px;
+    background-position: center;
+    background-size: cover;
+}
+
+.reward-discount .reward-image {
+    background-image:
+        linear-gradient(180deg, rgba(20, 40, 23, 0.02), rgba(20, 40, 23, 0.16)),
+        url("https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=700&q=82");
+}
+
+.reward-gift .reward-image {
+    background-image:
+        linear-gradient(180deg, rgba(20, 40, 23, 0.02), rgba(20, 40, 23, 0.18)),
+        url("https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=700&q=82");
+}
+
+.reward-upgrade .reward-image {
+    background-image:
+        linear-gradient(180deg, rgba(20, 40, 23, 0.02), rgba(20, 40, 23, 0.18)),
+        url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=700&q=82");
+}
+
+.reward-premium .reward-image {
+    background-image:
+        linear-gradient(180deg, rgba(20, 40, 23, 0.02), rgba(20, 40, 23, 0.18)),
+        url("https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=700&q=82");
+}
+
+@media (max-width: 1000px) {
+    .membership-hero,
+    .membership-overview,
+    .membership-feature-card {
+        grid-template-columns: 1fr;
+    }
+
+    .membership-tier-grid,
+    .membership-reward-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .membership-feature-image {
+        min-height: 280px;
+    }
+}
+
+@media (max-width: 560px) {
+    .membership-hero {
+        padding: 54px 16px 34px;
+    }
+
+    .membership-hero h1 {
+        font-size: 2.6rem;
+    }
+
+    .membership-tier-grid,
+    .membership-reward-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .membership-photo-card {
+        min-height: auto;
+    }
+
+    .membership-photo {
+        min-height: 260px;
+    }
+}
+
+/* Classy palette refinement from the provided colour board:
+   #7B9669, #E6E6E6, #6C8480, #BAC8B1, #404E3B. */
+:root {
+    --ink: #404E3B;
+    --text: #4f5e52;
+    --muted: #6C8480;
+    --cream: #E6E6E6;
+    --linen: #BAC8B1;
+    --surface: #f7f8f3;
+    --clay: #404E3B;
+    --clay-dark: #253020;
+    --rose: #7B9669;
+    --sage: #7B9669;
+    --sage-soft: #BAC8B1;
+    --teal: #6C8480;
+    --teal-soft: #dbe3df;
+    --line: rgba(64, 78, 59, 0.2);
+    --shadow: 0 24px 68px rgba(64, 78, 59, 0.13);
+    --soft-shadow: 0 14px 36px rgba(64, 78, 59, 0.1);
+}
+
+body {
+    background:
+        linear-gradient(180deg, rgba(230, 230, 230, 0.96), rgba(186, 200, 177, 0.58) 46%, rgba(230, 230, 230, 0.96)),
+        url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1800&q=80");
+    background-attachment: fixed;
+    background-position: center top;
+    background-size: cover;
+}
+
+.site-header {
+    background: rgba(230, 230, 230, 0.92);
+    border-bottom: 1px solid rgba(64, 78, 59, 0.18);
+    box-shadow: 0 16px 42px rgba(64, 78, 59, 0.1);
+}
+
+.brand {
+    color: #404E3B;
+}
+
+.brand-mark,
+.button.primary,
+.cashback-badge {
+    background: #404E3B;
+    border-color: #404E3B;
+    color: #f7f8f3;
+}
+
+.button.primary:hover {
+    background: #2f3b2b;
+}
+
+.nav-links a,
+.nav-support-links a,
+.signup-text-link,
+.profile-icon-link {
+    background: rgba(186, 200, 177, 0.42);
+    border-color: rgba(64, 78, 59, 0.24);
+    color: #404E3B;
+}
+
+.nav-links a:hover,
+.nav-support-links a:hover,
+.signup-text-link:hover,
+.profile-icon-link:hover {
+    background: rgba(230, 230, 230, 0.94);
+    border-color: rgba(64, 78, 59, 0.36);
+}
+
+.nav-links {
+    border-top-color: rgba(64, 78, 59, 0.16);
+}
+
+.login-icon {
+    background:
+        radial-gradient(circle at 50% 36%, #404E3B 0 20%, transparent 21%),
+        radial-gradient(ellipse at 50% 88%, #404E3B 0 31%, transparent 32%),
+        rgba(123, 150, 105, 0.22);
+}
+
+.bag-icon,
+.bag-icon::before {
+    border-color: #404E3B;
+}
+
+.bag-icon {
+    background: rgba(186, 200, 177, 0.42);
+}
+
+.bag-count {
+    color: #404E3B;
+}
+
+.hero,
+.page-title,
+.booking-hero,
+.portal-hero,
+.membership-hero {
+    background:
+        linear-gradient(120deg, rgba(230, 230, 230, 0.96), rgba(186, 200, 177, 0.82));
+    border-bottom-color: rgba(64, 78, 59, 0.16);
+}
+
+.hero-visual,
+.about-image,
+.membership-photo,
+.membership-feature-image,
+.giftcard-preview {
+    filter: saturate(0.82) contrast(0.96);
+}
+
+.merchant-card,
+.merchant-row,
+.service-card,
+.booking-panel,
+.promo-panel,
+.feature-grid article,
+.student-scope,
+.notice,
+.service-catalog-card,
+.product-card,
+.cashback-panel,
+.giftcard-options article,
+.section-cta,
+.cart-item,
+.profile-card,
+.empty-state,
+.profile-form,
+.reward-panel,
+.login-form,
+.login-benefits,
+.contact-info-panel,
+.map-panel,
+.about-story,
+.stats-grid article,
+.booking-services-panel,
+.booking-form-panel,
+.portal-merchant-card,
+.portal-service-card,
+.portal-summary-panel,
+.membership-photo-card,
+.membership-points-card,
+.membership-feature-card,
+.membership-tier-card,
+.membership-reward-card {
+    border-color: rgba(64, 78, 59, 0.18);
+    background: rgba(247, 248, 243, 0.9);
+    box-shadow: var(--soft-shadow);
+}
+
+.merchant-card,
+.product-card,
+.service-catalog-card,
+.portal-merchant-card,
+.portal-service-card,
+.membership-points-card,
+.membership-tier-card.active,
+.reward-panel,
+.cashback-panel {
+    background:
+        linear-gradient(145deg, rgba(186, 200, 177, 0.4), rgba(247, 248, 243, 0.94) 48%),
+        #f7f8f3;
+}
+
+.tag,
+.membership-photo-caption span,
+.tier-medallion,
+.membership-tier-badge {
+    background: rgba(186, 200, 177, 0.64);
+    color: #404E3B;
+    border-color: rgba(64, 78, 59, 0.18);
+}
+
+.promotion,
+.booking-meta span,
+.availability-strip span,
+.sync-pill,
+.portal-stat {
+    background: rgba(108, 132, 128, 0.18);
+    color: #404E3B;
+}
+
+.service-price,
+.service-price.slim,
+.portal-card-metrics span {
+    background: rgba(186, 200, 177, 0.64);
+    color: #404E3B;
+}
+
+.search-bar,
+.portal-search {
+    background: rgba(230, 230, 230, 0.76);
+    border-color: rgba(64, 78, 59, 0.2);
+}
+
+input,
+select,
+.system-list p,
+.fulfilment-choice,
+.cart-quantity-controls {
+    background: rgba(247, 248, 243, 0.92);
+    border-color: rgba(64, 78, 59, 0.18);
+}
+
+input:focus,
+select:focus {
+    border-color: #7B9669;
+    box-shadow: 0 0 0 4px rgba(123, 150, 105, 0.18);
+}
+
+.button.secondary {
+    background: rgba(230, 230, 230, 0.78);
+    border-color: rgba(64, 78, 59, 0.24);
+    color: #404E3B;
+}
+
+.button.secondary:hover {
+    background: rgba(247, 248, 243, 0.95);
+    border-color: rgba(64, 78, 59, 0.4);
+}
+
+.heart-button {
+    background: rgba(230, 230, 230, 0.82);
+    border-color: rgba(64, 78, 59, 0.2);
+    color: #404E3B;
+}
+
+.heart-button.active {
+    background: rgba(123, 150, 105, 0.28);
+    border-color: rgba(64, 78, 59, 0.28);
+    color: #404E3B;
+}
+
+.membership-progress {
+    background: rgba(108, 132, 128, 0.2);
+}
+
+.membership-progress span {
+    background: linear-gradient(90deg, #6C8480, #7B9669, #404E3B);
+}
+
+.membership-tier-badge.silver {
+    background: linear-gradient(145deg, #E6E6E6, #BAC8B1);
+}
+
+.membership-tier-badge.gold {
+    background: linear-gradient(145deg, #BAC8B1, #7B9669);
+}
+
+.membership-tier-badge.platinum {
+    background: linear-gradient(145deg, #E6E6E6, #6C8480);
+}
+
+.site-footer {
+    background: rgba(230, 230, 230, 0.94);
+    border-top-color: rgba(64, 78, 59, 0.18);
+}
+
+/* Unified services + portal page. */
+.services-unified-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 34px;
+    align-items: stretch;
+}
+
+.services-search {
+    margin-top: 28px;
+}
+
+.services-summary-panel {
+    align-self: center;
+}
+
+.unified-service-grid {
+    align-items: stretch;
+}
+
+.unified-service-card {
+    min-height: 390px;
+    grid-template-rows: auto auto auto auto auto 1fr;
+}
+
+.unified-service-card .service-card-actions {
+    align-self: end;
+}
+
+.unified-service-card .service-qr-link {
+    justify-self: start;
+}
+
+.unified-merchant-row {
+    grid-template-columns: 220px minmax(0, 1fr) 190px;
+}
+
+.merchant-system-list {
+    margin: 16px 0;
+    max-width: 620px;
+}
+
+.portal-card-metrics.compact {
+    grid-template-columns: 1fr;
+}
+
+.portal-card-metrics.compact span {
+    min-height: 58px;
+}
+
+@media (max-width: 900px) {
+    .services-unified-hero,
+    .unified-merchant-row {
+        grid-template-columns: 1fr;
+    }
+
+    .services-summary-panel {
+        align-self: stretch;
     }
 }

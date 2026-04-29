@@ -192,6 +192,25 @@ function showHome(req, res) {
     req.session.success = null;
 }
 
+function showServices(req, res) {
+    const search = req.query.search || '';
+    const favouriteIds = req.session.favouriteMerchantIds || [];
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const serviceCatalog = Merchant.getServiceCatalog(search).map((service) => ({
+        ...service,
+        serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
+    }));
+
+    res.render('services', {
+        title: 'Services',
+        merchants: Merchant.getAll(search),
+        favouriteIds,
+        serviceCatalog,
+        portalStats: Merchant.getPortalStats(search),
+        search
+    });
+}
+
 function listMerchants(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
@@ -672,6 +691,7 @@ function confirmPayment(req, res) {
 
 module.exports = {
     showHome,
+    showServices,
     listMerchants,
     showMerchant,
     showMerchantQr,
