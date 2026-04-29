@@ -3203,6 +3203,26 @@ select:focus {
     padding-bottom: 20px;
 }
 
+.first-trial-page-title {
+    display: grid;
+    gap: 22px;
+}
+
+.one-for-one-page-title {
+    display: grid;
+    gap: 22px;
+}
+
+.happy-hour-page-title {
+    display: grid;
+    gap: 22px;
+}
+
+.featured-salons-page-title {
+    display: grid;
+    gap: 22px;
+}
+
 .promotions-breadcrumbs {
     display: flex;
     align-items: center;
@@ -3221,6 +3241,226 @@ select:focus {
     grid-template-columns: 280px minmax(0, 1fr);
     gap: 26px;
     align-items: start;
+}
+
+.first-trial-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.one-for-one-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.happy-hour-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.featured-salons-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.first-trial-summary article,
+.one-for-one-summary article,
+.happy-hour-summary article,
+.featured-salons-summary article,
+.first-trial-copy-list p {
+    border: 1px solid rgba(64, 78, 59, 0.14);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.92);
+    box-shadow: var(--soft-shadow);
+}
+
+.first-trial-summary article {
+    padding: 18px;
+}
+
+.one-for-one-summary article {
+    padding: 18px;
+}
+
+.happy-hour-summary article {
+    padding: 18px;
+}
+
+.featured-salons-summary article {
+    padding: 18px;
+}
+
+.first-trial-summary h2 {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+}
+
+.one-for-one-summary h2 {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+}
+
+.happy-hour-summary h2 {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+}
+
+.featured-salons-summary h2 {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+}
+
+.featured-salons-list {
+    display: grid;
+    gap: 18px;
+}
+
+.featured-salon-card {
+    border: 1px solid rgba(64, 78, 59, 0.16);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.94);
+    box-shadow: var(--soft-shadow);
+    overflow: hidden;
+}
+
+.featured-salon-hero {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.featured-salon-image {
+    min-height: 230px;
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    background-position: center;
+    background-size: cover;
+}
+
+.featured-salon-image::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(20, 35, 23, 0.04), rgba(20, 35, 23, 0.18));
+}
+
+.featured-salon-image-1 {
+    background-image: url("https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=900&q=80");
+}
+
+.featured-salon-image-2 {
+    background-image: url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=80");
+}
+
+.featured-salon-image-3 {
+    background-image: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=900&q=80");
+}
+
+.featured-salon-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 1;
+    padding: 10px 12px;
+    border-radius: 999px;
+    background: #ff7e72;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.featured-salon-copy {
+    display: grid;
+    gap: 14px;
+}
+
+.featured-salon-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+}
+
+.featured-salon-heading h2 {
+    margin-bottom: 6px;
+}
+
+.featured-rating {
+    margin-bottom: 0;
+}
+
+.featured-salon-reason {
+    margin-bottom: 0;
+}
+
+.featured-service-list {
+    border-top: 1px solid rgba(64, 78, 59, 0.1);
+}
+
+.featured-service-row {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.featured-service-row + .featured-service-row {
+    border-top: 1px solid rgba(64, 78, 59, 0.08);
+}
+
+.featured-service-price {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    font-weight: 800;
+}
+
+.first-trial-copy-list {
+    display: grid;
+    gap: 10px;
+}
+
+.one-for-one-copy-list {
+    display: grid;
+    gap: 10px;
+}
+
+.happy-hour-copy-list {
+    display: grid;
+    gap: 10px;
+}
+
+.first-trial-copy-list p {
+    margin-bottom: 0;
+    padding: 14px;
+}
+
+.one-for-one-copy-list p {
+    margin-bottom: 0;
+    padding: 14px;
+    border: 1px solid rgba(64, 78, 59, 0.14);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.92);
+    box-shadow: var(--soft-shadow);
+}
+
+.happy-hour-copy-list p {
+    margin-bottom: 0;
+    padding: 14px;
+    border: 1px solid rgba(64, 78, 59, 0.14);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.92);
+    box-shadow: var(--soft-shadow);
 }
 
 .promotions-filters {
@@ -3533,6 +3773,24 @@ select:focus {
 @media (max-width: 980px) {
     .promotions-layout,
     .promotion-offer-card {
+        grid-template-columns: 1fr;
+    }
+
+    .first-trial-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .one-for-one-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .happy-hour-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .featured-salons-summary,
+    .featured-salon-hero,
+    .featured-salon-heading {
         grid-template-columns: 1fr;
     }
 

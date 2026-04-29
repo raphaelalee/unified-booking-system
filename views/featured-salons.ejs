@@ -1,0 +1,85 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const salons = Array.isArray(featuredSalons) ? featuredSalons : [];
+%>
+
+<section class="page-title featured-salons-page-title">
+    <div class="promotions-breadcrumbs">
+        <a href="/">Home</a>
+        <span>/</span>
+        <a href="/promotions">Promotions</a>
+        <span>/</span>
+        <span>Featured Salons</span>
+    </div>
+    <h1>Featured salons on Vaniday.</h1>
+    <p>Curated merchant partners with stronger ratings, standout service consistency, polished brand presence and the kind of quality that makes trying somewhere new feel lower risk.</p>
+
+    <div class="featured-salons-summary">
+        <article>
+            <h2>Quality stamp</h2>
+            <p>These salons are positioned as trusted picks, backed by strong ratings, dependable booking performance and a more polished customer experience.</p>
+        </article>
+        <article>
+            <h2>Trending and premium</h2>
+            <p>Featured placements often favour merchants with a distinct aesthetic, stronger brand identity or services that feel current and premium.</p>
+        </article>
+        <article>
+            <h2>Discovery with less risk</h2>
+            <p>If you want a safer first booking or a hidden gem with better-than-average presentation, this is the shortlist to start with.</p>
+        </article>
+    </div>
+</section>
+
+<section class="section compact">
+    <div class="featured-salons-list">
+        <% salons.forEach((salon) => { %>
+            <article class="featured-salon-card">
+                <div class="featured-salon-hero">
+                    <div class="featured-salon-image featured-salon-image-<%= salon.id %>">
+                        <span class="featured-salon-badge"><%= salon.featuredLabel %></span>
+                    </div>
+
+                    <div class="featured-salon-copy">
+                        <div class="featured-salon-heading">
+                            <div>
+                                <h2><%= salon.name %></h2>
+                                <p class="muted"><%= salon.location %> &middot; <%= salon.category %></p>
+                            </div>
+                            <a class="button primary" href="/merchants/<%= salon.id %>">View salon</a>
+                        </div>
+
+                        <p class="promotion-rating featured-rating">&#9733;&#9733;&#9733;&#9733;&#9733; <span>(<%= salon.reviewCount %> reviews)</span></p>
+                        <p><%= salon.description %></p>
+                        <p class="featured-salon-reason"><strong>Why featured:</strong> <%= salon.featuredReason %></p>
+
+                        <div class="promotion-offer-tags">
+                            <span><%= salon.promotion %></span>
+                            <span><%= salon.posSystem || 'Merchant POS' %></span>
+                            <span><%= salon.bookingSystem || 'Vaniday Booking' %></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="featured-service-list">
+                    <% salon.highlightedServices.forEach((service) => { %>
+                        <div class="featured-service-row">
+                            <div>
+                                <strong><%= service.name %></strong>
+                                <span class="muted">&middot; <%= service.duration %></span>
+                            </div>
+                            <div class="featured-service-price">
+                                <% if (service.originalPrice) { %>
+                                    <span class="promotion-original-price">$<%= service.originalPrice %></span>
+                                <% } %>
+                                <strong>$<%= service.price %></strong>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

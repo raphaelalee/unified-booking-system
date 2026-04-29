@@ -1,0 +1,160 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const offers = Array.isArray(promotionOffers) ? promotionOffers : [];
+    const priceOptions = ['$', '$$', '$$$', '$$$$'].map((tier) => ({
+        label: tier,
+        value: tier,
+        count: offers.filter((offer) => offer.priceTier === tier).length
+    })).filter((option) => option.count > 0);
+    const regionOptions = [...new Set(offers.map((offer) => offer.merchantLocation))].map((region) => ({
+        label: region,
+        value: region,
+        count: offers.filter((offer) => offer.merchantLocation === region).length
+    }));
+    const categoryOptions = [...new Set(offers.map((offer) => offer.serviceCategory))].map((category) => ({
+        label: category,
+        value: category,
+        count: offers.filter((offer) => offer.serviceCategory === category).length
+    }));
+%>
+
+<section class="page-title promotions-page-title first-trial-page-title">
+    <div class="promotions-breadcrumbs">
+        <a href="/">Home</a>
+        <span>/</span>
+        <a href="/promotions">Promotions</a>
+        <span>/</span>
+        <span>First Trial</span>
+    </div>
+    <h1>First Trial deals for first-time customers.</h1>
+    <p>Book premium facials, hair treatments, massages and salon services at introductory prices before committing to regular menu rates.</p>
+
+    <div class="first-trial-summary">
+        <article>
+            <h2>One-time use</h2>
+            <p>Each first-trial offer is designed for new customers at that merchant, so you can test the service once at the introductory rate.</p>
+        </article>
+        <article>
+            <h2>30% to 50% off</h2>
+            <p>These are meant to feel like genuine entry offers, with large discounts against standard pricing rather than small campaign coupons.</p>
+        </article>
+        <article>
+            <h2>No bill shock</h2>
+            <p>The price shown on the page is the price you pay, with no hidden top-ups or surprise package conversion fees.</p>
+        </article>
+    </div>
+</section>
+
+<section class="section compact promotions-layout">
+    <aside class="promotions-filters" aria-label="First trial filters">
+        <div class="filter-card">
+            <div class="filter-card-header">
+                <h2>Filters</h2>
+                <button class="filter-clear-button" type="button">Clear All</button>
+            </div>
+
+            <div class="filter-group">
+                <h3>Price</h3>
+                <div class="filter-pill-row">
+                    <% priceOptions.forEach((option) => { %>
+                        <label class="filter-check">
+                            <input type="checkbox" data-filter-group="price" value="<%= option.value %>">
+                            <span><%= option.label %></span>
+                        </label>
+                    <% }) %>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <h3>Region</h3>
+                <% regionOptions.forEach((option) => { %>
+                    <label class="filter-line">
+                        <input type="checkbox" data-filter-group="region" value="<%= option.value %>">
+                        <span><%= option.label %></span>
+                        <strong><%= option.count %></strong>
+                    </label>
+                <% }) %>
+            </div>
+
+            <div class="filter-group">
+                <h3>Categories</h3>
+                <% categoryOptions.forEach((option) => { %>
+                    <label class="filter-line">
+                        <input type="checkbox" data-filter-group="category" value="<%= option.value %>">
+                        <span><%= option.label %></span>
+                        <strong><%= option.count %></strong>
+                    </label>
+                <% }) %>
+            </div>
+
+            <div class="filter-group">
+                <h3>What you will find</h3>
+                <div class="first-trial-copy-list">
+                    <p>Skincare trials like hydrating facials or laser-style deep cleansing sessions.</p>
+                    <p>Hair and scalp services for styling, colouring or treatment discovery visits.</p>
+                    <p>Wellness options like massage, grooming, lashes and nails at introductory rates.</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="promotions-results">
+        <div class="promotions-results-count">
+            <strong data-promotions-count><%= offers.length %></strong> first-trial services found.
+        </div>
+
+        <div class="promotions-list" data-promotions-list>
+            <% offers.forEach((offer) => { %>
+                <article
+                    class="promotion-offer-card"
+                    data-price="<%= offer.priceTier %>"
+                    data-region="<%= offer.merchantLocation %>"
+                    data-category="<%= offer.serviceCategory %>"
+                >
+                    <div class="promotion-offer-image promotion-offer-image-<%= offer.merchantId %>">
+                        <span class="promotion-badge">First trial</span>
+                        <span class="promotion-badge secondary">-<%= offer.discountPercent %>%</span>
+                    </div>
+
+                    <div class="promotion-offer-content">
+                        <div class="promotion-offer-topline">
+                            <div>
+                                <h2>[First Trial] <%= offer.name %></h2>
+                                <p class="promotion-duration"><span class="duration-dot"></span><%= offer.duration %></p>
+                            </div>
+                            <div class="promotion-price-block">
+                                <span class="promotion-original-price">$<%= offer.originalPrice %></span>
+                                <strong>$<%= offer.price %></strong>
+                            </div>
+                        </div>
+
+                        <div class="promotion-offer-meta">
+                            <div>
+                                <h3><%= offer.merchantName %></h3>
+                                <p><%= offer.merchantPromotion %></p>
+                                <p class="muted">Singapore &middot; <%= offer.merchantLocation %> &middot; <%= offer.merchantCategory %></p>
+                                <p class="promotion-rating">&#9733;&#9733;&#9733;&#9733;&#9733; <span>(<%= offer.merchantRating %>)</span></p>
+                            </div>
+                            <a class="button primary" href="<%= offer.serviceBookingPath %>">Book now</a>
+                        </div>
+
+                        <div class="promotion-offer-tags">
+                            <span>First Trial</span>
+                            <span>New customer only</span>
+                            <span><%= offer.merchantLocation %></span>
+                            <span><%= offer.serviceCategory %></span>
+                        </div>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+
+        <div class="notice promotions-empty-state is-hidden" data-promotions-empty>
+            No first-trial services match the selected filters.
+        </div>
+    </div>
+</section>
+
+<script src="/js/promotions-filters.js?v=1"></script>
+<%- include('partials/footer') %>

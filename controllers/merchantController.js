@@ -211,8 +211,8 @@ function showServices(req, res) {
     });
 }
 
-function showPromotions(req, res) {
-    const promotionOffers = Merchant.getAll().flatMap((merchant) => {
+function buildPromotionOffers() {
+    return Merchant.getAll().flatMap((merchant) => {
         return merchant.services.flatMap((service) => {
             const options = getServiceOptions(service);
             const items = options.length > 0 ? options : [service];
@@ -243,10 +243,77 @@ function showPromotions(req, res) {
             });
         });
     }).sort((left, right) => right.discountPercent - left.discountPercent);
+}
 
+function showPromotions(req, res) {
+    const promotionOffers = buildPromotionOffers();
     res.render('promotions', {
         title: 'Promotions',
         promotionOffers
+    });
+}
+
+function showFirstTrial(req, res) {
+    const firstTrialOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === 'First Trial');
+
+    res.render('first-trial', {
+        title: 'First Trial',
+        promotionOffers: firstTrialOffers
+    });
+}
+
+function showHappyHour(req, res) {
+    const happyHourOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === 'Happy Hour');
+
+    res.render('happy-hour', {
+        title: 'Happy Hour',
+        promotionOffers: happyHourOffers
+    });
+}
+
+function showOneForOne(req, res) {
+    const oneForOneOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === '1 For 1');
+
+    res.render('one-for-one', {
+        title: '1 For 1',
+        promotionOffers: oneForOneOffers
+    });
+}
+
+function showFeaturedSalons(req, res) {
+    const featuredSalons = Merchant.getAll()
+        .map((merchant) => {
+            const services = Array.isArray(merchant.services) ? merchant.services : [];
+            const highlightedServices = services.slice(0, 3).map((service) => {
+                const options = getServiceOptions(service);
+                const featuredOption = options.length > 0 ? options[0] : service;
+                const originalPrice = Math.round(Number(featuredOption.price) * 1.22);
+
+                return {
+                    name: featuredOption.name || service.name,
+                    duration: featuredOption.duration || service.duration,
+                    price: Number(featuredOption.price),
+                    originalPrice: originalPrice > Number(featuredOption.price) ? originalPrice : null
+                };
+            });
+
+            return {
+                ...merchant,
+                featuredLabel: merchant.rating >= 4.7 ? 'Top Rated Partner' : 'Trending Pick',
+                reviewCount: merchant.id === 1 ? 128 : merchant.id === 2 ? 96 : 74,
+                featuredReason: merchant.id === 1
+                    ? 'High review volume, premium treatments and consistent bookings.'
+                    : merchant.id === 2
+                        ? 'Wellness favourite with strong repeat demand and destination-worthy spa services.'
+                        : 'Popular grooming destination with reliable service quality and standout merchant identity.',
+                highlightedServices
+            };
+        })
+        .sort((left, right) => Number(right.rating) - Number(left.rating));
+
+    res.render('featured-salons', {
+        title: 'Featured Salons',
+        featuredSalons
     });
 }
 
@@ -706,6 +773,10 @@ module.exports = {
     showHome,
     showServices,
     showPromotions,
+    showFirstTrial,
+    showHappyHour,
+    showOneForOne,
+    showFeaturedSalons,
     listMerchants,
     showMerchant,
     showMerchantQr,
