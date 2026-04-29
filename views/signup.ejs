@@ -20,27 +20,22 @@
 
             <label>
                 Full name
-                <input type="text" name="name" value="<%= form.name || '' %>" placeholder="Enter your name">
+                <input type="text" name="name" value="<%= form.name || '' %>" placeholder="Enter your name" required>
             </label>
 
             <label>
                 Email
-                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
-            </label>
-
-            <label>
-                Handphone number
-                <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
+                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" required>
             </label>
 
             <label>
                 Password
-                <input type="password" name="password" placeholder="At least 4 characters">
+                <input type="password" name="password" placeholder="At least 4 characters" required>
             </label>
 
             <label>
                 Confirm password
-                <input type="password" name="confirmPassword" placeholder="Re-enter password">
+                <input type="password" name="confirmPassword" placeholder="Re-enter password" required>
             </label>
 
             <button class="button primary full" type="submit">Create account</button>

@@ -10,6 +10,9 @@
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
 
     <div class="profile-dashboard">
         <form class="profile-form" action="/profile" method="POST">
