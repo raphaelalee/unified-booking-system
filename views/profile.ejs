@@ -3,6 +3,11 @@
 <%
     const progress = Math.min((member.points / 10000) * 100, 100);
     const next = Math.max(10000 - member.points, 0);
+    const referralReward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
+    const referralPrefix = ((profile.name || 'vaniday').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4) || 'vani').toUpperCase();
+    const referralId = String((currentUser && currentUser.id) || 0).padStart(4, '0');
+    const referralCode = `${referralPrefix}${referralId}`;
+    const referralDiscount = member.tier === 'Platinum' ? 15 : 10;
     const tiers = [
         { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
         { name: 'Silver', points: '2,000+', detail: 'Bonus rewards', className: 'silver' },
@@ -192,6 +197,110 @@
                 </div>
             </article>
         <% } %>
+    </div>
+
+    <div id="referral" class="section-heading profile-heading">
+        <p class="eyebrow">Referral</p>
+        <h2>Invite friends and earn VaniRewards points</h2>
+        <p>
+            Earn <strong><%= referralReward %> VaniGlints</strong> for each successful referral.
+            Your friend gets <strong>$<%= referralDiscount %> off</strong> their first booking, and your tier can increase the points you earn.
+        </p>
+    </div>
+
+    <div class="referral-layout">
+        <article class="referral-panel referral-summary-panel">
+            <div class="referral-summary-grid">
+                <div>
+                    <p class="eyebrow">What You Get</p>
+                    <h3><%= referralReward %> VaniGlints per friend</h3>
+                    <p class="muted">1,000 Glints = $1 SGD, and your <%= member.tier %> tier boosts your referral earnings over time.</p>
+                </div>
+                <div>
+                    <p class="eyebrow">What Your Friend Gets</p>
+                    <h3>$<%= referralDiscount %> off first booking</h3>
+                    <p class="muted">New users can use your referral link or code for an immediate first-service discount.</p>
+                </div>
+            </div>
+            <div class="referral-tip">
+                <strong>Tip:</strong> Referral rewards stack with your own spending points, and payment-partner campaigns can sometimes offer even bigger first-booking discounts.
+            </div>
+        </article>
+
+        <div class="referral-columns">
+            <section class="referral-panel">
+                <div class="referral-panel-header">
+                    <h3>Referral URL and code</h3>
+                </div>
+
+                <div class="referral-field-group">
+                    <label>
+                        Referral Link
+                        <input type="text" value="https://www.vaniday.com/ref/<%= referralCode %>" readonly>
+                    </label>
+
+                    <label>
+                        Referral Code
+                        <input type="text" value="<%= referralCode %>" readonly>
+                    </label>
+
+                    <label>
+                        Referral Email
+                        <input type="text" value="<%= profile.email %>" readonly>
+                    </label>
+                </div>
+
+                <div class="referral-social-row">
+                    <span>Referral via social</span>
+                    <div class="promotion-offer-tags">
+                        <span>WhatsApp</span>
+                        <span>Telegram</span>
+                        <span>Instagram</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="referral-panel">
+                <div class="referral-panel-header">
+                    <h3>Send invitations</h3>
+                </div>
+
+                <form class="referral-form">
+                    <label>
+                        Send from
+                        <select>
+                            <option>Store</option>
+                            <option>Email</option>
+                            <option>Profile</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Invite your friends by entering their email addresses below
+                        <textarea rows="4" placeholder="friend1@example.com, friend2@example.com"></textarea>
+                    </label>
+
+                    <button class="button primary" type="button">Send now</button>
+                </form>
+            </section>
+        </div>
+
+        <section class="referral-panel referral-tracker-panel">
+            <div class="referral-panel-header">
+                <h3>Referrals</h3>
+            </div>
+
+            <div class="referral-tracker-empty">
+                <div class="referral-tracker-illustration" aria-hidden="true">
+                    <span class="tracker-megaphone"></span>
+                    <span class="tracker-coin tracker-coin-a"></span>
+                    <span class="tracker-coin tracker-coin-b"></span>
+                    <span class="tracker-coin tracker-coin-c"></span>
+                </div>
+                <h2>No referrals yet</h2>
+                <p class="muted">Sounds like a great time to get someone new on board.</p>
+            </div>
+        </section>
     </div>
 
     <div class="section-heading profile-heading">
