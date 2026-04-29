@@ -211,6 +211,45 @@ function showServices(req, res) {
     });
 }
 
+function showPromotions(req, res) {
+    const promotionOffers = Merchant.getAll().flatMap((merchant) => {
+        return merchant.services.flatMap((service) => {
+            const options = getServiceOptions(service);
+            const items = options.length > 0 ? options : [service];
+
+            return items.map((item, index) => {
+                const originalPrice = Math.round(Number(item.price) * (1.18 + (index * 0.04)));
+                const discountPercent = Math.max(10, Math.round(((originalPrice - Number(item.price)) / originalPrice) * 100));
+
+                return {
+                    id: `${merchant.id}-${service.id}-${item.id || index}`,
+                    merchantId: merchant.id,
+                    merchantName: merchant.name,
+                    merchantLocation: merchant.location,
+                    merchantCategory: merchant.category,
+                    merchantRating: merchant.rating,
+                    merchantPromotion: merchant.promotion,
+                    name: options.length > 0 ? `${service.name} - ${item.name}` : service.name,
+                    serviceCategory: service.name,
+                    duration: item.duration || service.duration,
+                    price: Number(item.price),
+                    originalPrice,
+                    discountPercent,
+                    campaignLabel: index === 0 ? 'First Trial' : index === 1 ? 'Happy Hour' : '1 For 1',
+                    priceTier: Number(item.price) < 30 ? '$' : Number(item.price) < 55 ? '$$' : Number(item.price) < 80 ? '$$$' : '$$$$',
+                    regions: [merchant.location, merchant.category],
+                    serviceBookingPath: `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`
+                };
+            });
+        });
+    }).sort((left, right) => right.discountPercent - left.discountPercent);
+
+    res.render('promotions', {
+        title: 'Promotions',
+        promotionOffers
+    });
+}
+
 function listMerchants(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
@@ -666,6 +705,7 @@ function confirmPayment(req, res) {
 module.exports = {
     showHome,
     showServices,
+    showPromotions,
     listMerchants,
     showMerchant,
     showMerchantQr,

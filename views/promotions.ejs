@@ -1,0 +1,163 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const offers = Array.isArray(promotionOffers) ? promotionOffers : [];
+    const priceOptions = ['$', '$$', '$$$', '$$$$'].map((tier) => ({
+        label: tier,
+        value: tier,
+        count: offers.filter((offer) => offer.priceTier === tier).length
+    })).filter((option) => option.count > 0);
+    const regionOptions = [...new Set(offers.map((offer) => offer.merchantLocation))].map((region) => ({
+        label: region,
+        value: region,
+        count: offers.filter((offer) => offer.merchantLocation === region).length
+    }));
+    const campaignOptions = [...new Set(offers.map((offer) => offer.campaignLabel))].map((campaign) => ({
+        label: campaign,
+        value: campaign,
+        count: offers.filter((offer) => offer.campaignLabel === campaign).length
+    }));
+    const categoryOptions = [...new Set(offers.map((offer) => offer.serviceCategory))].map((category) => ({
+        label: category,
+        value: category,
+        count: offers.filter((offer) => offer.serviceCategory === category).length
+    }));
+%>
+
+<section class="page-title promotions-page-title">
+    <div class="promotions-breadcrumbs">
+        <a href="/">Home</a>
+        <span>/</span>
+        <span>Promotions</span>
+    </div>
+    <h1>Marketplace & promotions across participating salons.</h1>
+    <p>Browse campaign offers, featured merchants, first-trial deals and limited-time booking discounts from the Vaniday portal.</p>
+</section>
+
+<section class="section compact promotions-layout">
+    <aside class="promotions-filters" aria-label="Promotion filters">
+        <div class="filter-card">
+            <div class="filter-card-header">
+                <h2>Filters</h2>
+                <button class="filter-clear-button" type="button">Clear All</button>
+            </div>
+
+            <div class="filter-group">
+                <h3>Price</h3>
+                <div class="filter-pill-row">
+                    <% priceOptions.forEach((option) => { %>
+                        <label class="filter-check">
+                            <input type="checkbox" data-filter-group="price" value="<%= option.value %>">
+                            <span><%= option.label %></span>
+                        </label>
+                    <% }) %>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <h3>Region</h3>
+                <% regionOptions.forEach((option) => { %>
+                    <label class="filter-line">
+                        <input type="checkbox" data-filter-group="region" value="<%= option.value %>">
+                        <span><%= option.label %></span>
+                        <strong><%= option.count %></strong>
+                    </label>
+                <% }) %>
+            </div>
+
+            <div class="filter-group">
+                <h3>Campaigns</h3>
+                <% campaignOptions.forEach((option) => { %>
+                    <label class="filter-line">
+                        <input type="checkbox" data-filter-group="campaign" value="<%= option.value %>">
+                        <span><%= option.label %></span>
+                        <strong><%= option.count %></strong>
+                    </label>
+                <% }) %>
+            </div>
+
+            <div class="filter-group">
+                <h3>Categories</h3>
+                <% categoryOptions.forEach((option) => { %>
+                    <label class="filter-line">
+                        <input type="checkbox" data-filter-group="category" value="<%= option.value %>">
+                        <span><%= option.label %></span>
+                        <strong><%= option.count %></strong>
+                    </label>
+                <% }) %>
+            </div>
+
+            <div class="filter-group">
+                <h3>Price Range</h3>
+                <div class="filter-range-labels">
+                    <span>SGD 20</span>
+                    <span>SGD 120</span>
+                </div>
+                <div class="filter-range-track" aria-hidden="true">
+                    <span class="filter-range-fill"></span>
+                    <span class="filter-range-thumb left"></span>
+                    <span class="filter-range-thumb right"></span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="promotions-results">
+        <div class="promotions-results-count">
+            <strong data-promotions-count><%= offers.length %></strong> promotions found.
+        </div>
+
+        <div class="promotions-list" data-promotions-list>
+            <% offers.forEach((offer) => { %>
+                <article
+                    class="promotion-offer-card"
+                    data-price="<%= offer.priceTier %>"
+                    data-region="<%= offer.merchantLocation %>"
+                    data-campaign="<%= offer.campaignLabel %>"
+                    data-category="<%= offer.serviceCategory %>"
+                >
+                    <div class="promotion-offer-image promotion-offer-image-<%= offer.merchantId %>">
+                        <span class="promotion-badge">10% cashback</span>
+                        <span class="promotion-badge secondary">-<%= offer.discountPercent %>%</span>
+                    </div>
+
+                    <div class="promotion-offer-content">
+                        <div class="promotion-offer-topline">
+                            <div>
+                                <h2><%= offer.name %></h2>
+                                <p class="promotion-duration"><span class="duration-dot"></span><%= offer.duration %></p>
+                            </div>
+                            <div class="promotion-price-block">
+                                <span class="promotion-original-price">$<%= offer.originalPrice %></span>
+                                <strong>$<%= offer.price %></strong>
+                            </div>
+                        </div>
+
+                        <div class="promotion-offer-meta">
+                            <div>
+                                <h3><%= offer.merchantName %> - <%= offer.merchantLocation %></h3>
+                                <p><%= offer.merchantPromotion %></p>
+                                <p class="muted">Singapore &middot; <%= offer.merchantCategory %></p>
+                                <p class="promotion-rating">&#9733;&#9733;&#9733;&#9733;&#9733; <span>(<%= offer.merchantRating %>)</span></p>
+                            </div>
+                            <a class="button primary" href="<%= offer.serviceBookingPath %>">Book now</a>
+                        </div>
+
+                        <div class="promotion-offer-tags">
+                            <span><%= offer.campaignLabel %></span>
+                            <% offer.regions.forEach((region) => { %>
+                                <span><%= region %></span>
+                            <% }) %>
+                        </div>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+        <div class="notice promotions-empty-state is-hidden" data-promotions-empty>
+            No promotions match the selected filters.
+        </div>
+    </div>
+</section>
+
+<script src="/js/promotions-filters.js?v=1"></script>
+<%- include('partials/footer') %>

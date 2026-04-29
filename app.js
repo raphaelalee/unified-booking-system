@@ -35,6 +35,7 @@ app.get('/portal', (req, res) => {
     res.redirect(`/services${query ? `?${query}` : ''}`);
 });
 app.get('/services', merchantController.showServices);
+app.get('/promotions', merchantController.showPromotions);
 app.get('/merchants', merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
 app.get('/membership', (req, res) => {

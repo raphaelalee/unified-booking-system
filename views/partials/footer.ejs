@@ -3,5 +3,46 @@
         <p>&copy; 2026 Vaniday Booking System. Final Year Project prototype.</p>
     </footer>
     <script src="/js/booking-service-slots.js?v=1"></script>
+    <script>
+        (() => {
+            const dropdown = document.querySelector('.nav-dropdown');
+            const trigger = dropdown?.querySelector('.nav-dropdown-trigger');
+
+            if (!dropdown || !trigger) {
+                return;
+            }
+
+            const setOpen = (isOpen) => {
+                dropdown.classList.toggle('is-open', isOpen);
+                trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            };
+
+            trigger.addEventListener('click', (event) => {
+                event.preventDefault();
+                setOpen(!dropdown.classList.contains('is-open'));
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!dropdown.contains(event.target)) {
+                    setOpen(false);
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    setOpen(false);
+                    trigger.focus();
+                }
+            });
+
+            dropdown.addEventListener('focusout', () => {
+                window.setTimeout(() => {
+                    if (!dropdown.contains(document.activeElement)) {
+                        setOpen(false);
+                    }
+                }, 0);
+            });
+        })();
+    </script>
 </body>
 </html>
