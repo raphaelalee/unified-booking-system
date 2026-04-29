@@ -33,7 +33,13 @@
                     <a class="profile-icon-link" href="/profile" aria-label="Profile">
                         <span class="login-icon" aria-hidden="true"></span>
                     </a>
-                    <a class="signup-text-link" href="/signup">Sign Up</a>
+                    <% if (currentUser) { %>
+                        <form action="/logout" method="POST">
+                            <button class="text-button" type="submit">Log Out</button>
+                        </form>
+                    <% } else { %>
+                        <a class="signup-text-link" href="/signup">Sign Up</a>
+                    <% } %>
                 </div>
                 <div class="nav-commerce-links">
                     <a class="bag-link" href="/cart" aria-label="Cart">

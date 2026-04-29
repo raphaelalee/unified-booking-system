@@ -11,7 +11,7 @@
         <form class="login-form" action="/login" method="POST">
             <div>
                 <p class="eyebrow">Customer Account</p>
-                <h2>Log in or create a session account</h2>
+                <h2>Log in</h2>
             </div>
 
             <% if (error) { %>
@@ -19,23 +19,13 @@
             <% } %>
 
             <label>
-                Full name
-                <input type="text" name="name" placeholder="Enter your name">
-            </label>
-
-            <label>
                 Email
-                <input type="email" name="email" placeholder="name@example.com">
-            </label>
-
-            <label>
-                Handphone number
-                <input type="tel" name="phone" placeholder="81234567" maxlength="8">
+                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" required>
             </label>
 
             <label>
                 Password
-                <input type="password" name="password" placeholder="At least 4 characters">
+                <input type="password" name="password" placeholder="Enter your password" required>
             </label>
 
             <button class="button primary full" type="submit">Log In</button>
