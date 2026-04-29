@@ -1,0 +1,108 @@
+<%- include('partials/header', { title }) %>
+
+<%
+  const progress = Math.min((member.points / 10000) * 100, 100);
+  const next = 10000 - member.points;
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Membership</p>
+    <h1>Your rewards, points, and perks.</h1>
+    <p>Unlock better benefits as you progress through tiers.</p>
+</section>
+
+<!-- MEMBERSHIP OVERVIEW -->
+<section class="section compact">
+
+    <div class="product-grid">
+
+        <!-- POINTS CARD -->
+        <article class="product-card" style="border: 2px solid #ddd; border-radius: 12px; padding: 16px; background: #f9f9f9; text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                <div style="width: 80px; height: 80px; background: #f4e4d4; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                    <span style="font-size: 14px; font-weight: bold; color: #cd7f32;">Bronze Tier</span>
+                </div>
+                <h2 style="font-size: 32px; margin: 8px 0; color: #333;"><%= member.points %> Points</h2>
+                <p style="color: #666; font-size: 14px;">
+                    <%= next > 0 
+                        ? next + " points to reach Platinum" 
+                        : "Maximum tier reached 🎉" %>
+                </p>
+                <div style="background:#eee; height:10px; border-radius:999px; overflow:hidden; margin-top:12px; width: 80%;">
+                    <div style="width:<%= progress %>%; height:100%; background:#111;"></div>
+                </div>
+            </div>
+        </article>
+
+        <!-- TIER INFO -->
+        <article class="product-card">
+
+            <p class="tag">Tiers</p>
+            <h2>Membership Levels</h2>
+            <p class="muted">Progress through tiers to unlock better rewards.</p>
+            <div class="tier-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 10px;">
+                <div class="tier-card" style="border: 2px solid #cd7f32; border-radius: 12px; padding: 16px; text-align: center; background: #fff8e1;">
+                    <img src="/images/bronze-tier.png" alt="Bronze Tier" style="width: 60px; height: 60px;">
+                    <h3 style="margin: 12px 0; color: #cd7f32;">Bronze</h3>
+                    <p style="color: #666;">Entry level</p>
+                </div>
+                <div class="tier-card" style="border: 2px solid #c0c0c0; border-radius: 12px; padding: 16px; text-align: center; background: #f4f4f4;">
+                    <img src="/images/silver-tier.png" alt="Silver Tier" style="width: 60px; height: 60px;">
+                    <h3 style="margin: 12px 0; color: #c0c0c0;">Silver</h3>
+                    <p style="color: #666;">Bonus rewards</p>
+                </div>
+                <div class="tier-card" style="border: 2px solid #ffd700; border-radius: 12px; padding: 16px; text-align: center; background: #fffde7;">
+                    <img src="/images/gold-tier.png" alt="Gold Tier" style="width: 60px; height: 60px;">
+                    <h3 style="margin: 12px 0; color: #ffd700;">Gold</h3>
+                    <p style="color: #666;">Priority perks</p>
+                </div>
+                <div class="tier-card" style="border: 2px solid #e5e4e2; border-radius: 12px; padding: 16px; text-align: center; background: #f9f9f9;">
+                    <img src="/images/platinum-tier.png" alt="Platinum Tier" style="width: 60px; height: 60px;">
+                    <h3 style="margin: 12px 0; color: #e5e4e2;">Platinum</h3>
+                    <p style="color: #666;">VIP benefits</p>
+                </div>
+            </div>
+        </article>
+
+        <!-- UNLOCKABLE REWARDS -->
+        <article class="product-card">
+
+            <p class="tag">Unlockable Rewards</p>
+            <h2>Vouchers & Gift Cards</h2>
+            <p class="muted">Earn exclusive rewards as you level up.</p>
+            <div class="voucher-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 10px;">
+                <% if (member.tier === 'Bronze' || member.tier === 'Silver' || member.tier === 'Gold' || member.tier === 'Platinum') { %>
+                    <div class="voucher-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; text-align: center;">
+                        <img src="/images/5-percent-voucher.png" alt="5% Discount Voucher" style="width: 50px; height: 50px;">
+                        <h3 style="margin: 8px 0;">5% Discount Voucher</h3>
+                        <p style="color: #666;">Available at all tiers</p>
+                    </div>
+                <% } %>
+                <% if (member.tier === 'Silver' || member.tier === 'Gold' || member.tier === 'Platinum') { %>
+                    <div class="voucher-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; text-align: center;">
+                        <img src="/images/10-dollar-giftcard.png" alt="$10 Gift Card" style="width: 50px; height: 50px;">
+                        <h3 style="margin: 8px 0;">$10 Gift Card</h3>
+                        <p style="color: #666;">Unlock at Silver tier</p>
+                    </div>
+                <% } %>
+                <% if (member.tier === 'Gold' || member.tier === 'Platinum') { %>
+                    <div class="voucher-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; text-align: center;">
+                        <img src="/images/free-upgrade.png" alt="Free Service Upgrade" style="width: 50px; height: 50px;">
+                        <h3 style="margin: 8px 0;">Free Service Upgrade</h3>
+                        <p style="color: #666;">Unlock at Gold tier</p>
+                    </div>
+                <% } %>
+                <% if (member.tier === 'Platinum') { %>
+                    <div class="voucher-card" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; text-align: center;">
+                        <img src="/images/50-dollar-giftcard.png" alt="$50 Exclusive Gift Card" style="width: 50px; height: 50px;">
+                        <h3 style="margin: 8px 0;">$50 Exclusive Gift Card</h3>
+                        <p style="color: #666;">Unlock at Platinum tier</p>
+                    </div>
+                <% } %>
+            </div>
+        </article>
+
+    </div>
+</section>
+
+<%- include('partials/footer') %>

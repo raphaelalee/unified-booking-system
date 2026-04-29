@@ -32,6 +32,7 @@ app.use((req, res, next) => {
 app.get('/', merchantController.showHome);
 app.get('/merchants', merchantController.listMerchants);
 app.get('/profile', merchantController.showProfile);
+app.get('/membership', merchantController.showMembership);
 app.post('/profile', merchantController.updateProfile);
 app.get('/login', merchantController.showLogin);
 app.post('/login', merchantController.loginUser);
