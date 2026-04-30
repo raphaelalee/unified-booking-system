@@ -1,0 +1,123 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">NETS QR</p>
+    <h1>Scan to complete payment.</h1>
+    <p>Use your banking app or NETS app to scan this QR code.</p>
+</section>
+
+<section class="section compact">
+    <% const _completeUrl = typeof completeUrl !== 'undefined' ? completeUrl : '/nets/complete'; %>
+    <% const _failCompleteUrl = typeof failCompleteUrl !== 'undefined' ? failCompleteUrl : '/nets/complete-fail'; %>
+    <% const _successRedirect = typeof successRedirect !== 'undefined' ? successRedirect : '/payment/success'; %>
+    <% const _failRedirect = typeof failRedirect !== 'undefined' ? failRedirect : '/nets-qr/fail'; %>
+    <% const _backPrimaryUrl = typeof backPrimaryUrl !== 'undefined' ? backPrimaryUrl : '/payment'; %>
+    <% const _backPrimaryLabel = typeof backPrimaryLabel !== 'undefined' ? backPrimaryLabel : 'Back to payment'; %>
+    <% const _backSecondaryUrl = typeof backSecondaryUrl !== 'undefined' ? backSecondaryUrl : '/cart'; %>
+    <% const _backSecondaryLabel = typeof backSecondaryLabel !== 'undefined' ? backSecondaryLabel : 'Back to cart'; %>
+
+    <div class="login-layout">
+        <div class="promo-panel qr-panel">
+            <p class="eyebrow">NETS QR payment</p>
+            <h2>S$ <%= Number(total || 0).toFixed(2) %></h2>
+            <% if (typeof isPrototypeQr !== 'undefined' && isPrototypeQr) { %>
+                <div class="notice error">
+                    <p>NETS sandbox did not return a QR, so this prototype QR is shown for testing.</p>
+                    <% if (typeof netsErrorMessage !== 'undefined' && netsErrorMessage) { %>
+                        <p><%= netsErrorMessage %></p>
+                    <% } %>
+                </div>
+            <% } %>
+            <img class="qr-code" src="<%= qrCodeUrl %>" alt="NETS QR Code">
+            <p class="muted">QR expires in <strong id="qrTimer">05:00</strong></p>
+            <p class="muted">Transaction reference</p>
+            <p class="qr-link"><%= txnRetrievalRef %></p>
+            <div class="hero-actions">
+                <a class="button secondary" href="<%= _backPrimaryUrl %>"><%= _backPrimaryLabel %></a>
+                <a class="text-link" href="<%= _backSecondaryUrl %>"><%= _backSecondaryLabel %></a>
+            </div>
+        </div>
+
+        <aside class="login-benefits">
+            <p class="eyebrow">Payment status</p>
+            <h2 id="statusText">Waiting for payment...</h2>
+            <p class="muted">The page will update automatically after NETS confirms the payment.</p>
+        </aside>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const txnRetrievalRef = '<%= txnRetrievalRef %>';
+    const statusEl = document.getElementById('statusText');
+    const timerEl = document.getElementById('qrTimer');
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    let es = null;
+    let expired = false;
+
+    function expirePayment() {
+        if (expired) return;
+        expired = true;
+        if (statusEl) statusEl.textContent = 'QR expired. Redirecting...';
+        if (es) es.close();
+        fetch('<%= _failCompleteUrl %>', { method: 'POST', credentials: 'include' })
+            .finally(function () {
+                window.location.href = '<%= _failRedirect %>';
+            });
+    }
+
+    function updateTimer() {
+        const remaining = Math.max(0, expiresAt - Date.now());
+        const minutes = String(Math.floor(remaining / 60000)).padStart(2, '0');
+        const seconds = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${minutes}:${seconds}`;
+
+        if (remaining <= 0) {
+            expirePayment();
+        }
+    }
+
+    updateTimer();
+    const timerInterval = setInterval(updateTimer, 1000);
+
+    try {
+        es = new EventSource(`/sse/payment-status/${encodeURIComponent(txnRetrievalRef)}`);
+    } catch (error) {
+        if (statusEl) statusEl.textContent = 'Payment status check is unavailable.';
+    }
+
+    if (!es) return;
+
+    es.onmessage = async function (event) {
+        const data = JSON.parse(event.data || '{}');
+
+        if (data.success) {
+            if (statusEl) statusEl.textContent = 'Payment successful. Redirecting...';
+            clearInterval(timerInterval);
+            await fetch('<%= _completeUrl %>', { method: 'POST', credentials: 'include' });
+            window.location.href = '<%= _successRedirect %>';
+            es.close();
+            return;
+        }
+
+        if (data.fail) {
+            if (statusEl) statusEl.textContent = 'Payment failed. Redirecting...';
+            clearInterval(timerInterval);
+            await fetch('<%= _failCompleteUrl %>', { method: 'POST', credentials: 'include' });
+            window.location.href = '<%= _failRedirect %>';
+            es.close();
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = data.timeout
+            ? 'Payment is still pending. Please check your banking app.'
+            : 'Waiting for payment...';
+    };
+
+    es.onerror = function () {
+        if (statusEl) statusEl.textContent = 'Checking payment status...';
+    };
+});
+</script>
+
+<%- include('partials/footer') %>

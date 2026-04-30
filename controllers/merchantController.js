@@ -3,6 +3,7 @@ const Merchant = require('../models/Merchant');
 const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const { requestNetsQr, createPrototypeNetsQr, createSandboxTxnId, isQrSuccess, checkStatus } = require('../services/nets');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const {
     getMerchantScanPath,
@@ -978,7 +979,9 @@ function checkout(req, res) {
     return res.render('payment', {
         title: 'Payment',
         amount,
-        merchantName: fulfilment === 'pickup' ? (pickupMerchantId || 'Vaniday') : 'Delivery',
+        merchantName: fulfilment === 'pickup'
+            ? (pickupMerchantId === 'any' ? 'Any merchant' : pickupMerchantId || 'Vaniday')
+            : 'Delivery',
         serviceName: 'Cart checkout',
         cartItemId: '',
         cartCheckout: true,
@@ -1069,22 +1072,239 @@ function showPayment(req, res) {
         merchantName,
         serviceName,
         cartItemId,
-        cartCheckout
+        cartCheckout,
+        selectedItemIds: [],
+        fulfilment: '',
+        pickupMerchantId: '',
+        deliveryAddress: '',
+        deliveryUnit: '',
+        deliveryPostal: '',
+        deliveryPhone: '',
+        error: null
     });
 }
 
-function confirmPayment(req, res) {
-    if (req.body.cartCheckout === 'true') {
-        req.session.cart = [];
-    } else if (req.body.cartItemId) {
-        req.session.cart = (req.session.cart || []).filter((item) => String(item.id) !== String(req.body.cartItemId));
+function getPaymentPayload(body = {}) {
+    return {
+        amount: Number(body.amount || 0),
+        merchantName: body.merchantName || 'Vaniday',
+        serviceName: body.serviceName || 'Booking',
+        cartItemId: body.cartItemId || '',
+        cartCheckout: body.cartCheckout === 'true',
+        selectedItemIds: String(body.selectedItemIds || ''),
+        fulfilment: body.fulfilment || '',
+        pickupMerchantId: body.pickupMerchantId || '',
+        deliveryAddress: body.deliveryAddress || '',
+        deliveryUnit: body.deliveryUnit || '',
+        deliveryPostal: body.deliveryPostal || '',
+        deliveryPhone: body.deliveryPhone || ''
+    };
+}
+
+function applyPaymentSideEffects(req, payment) {
+    if (payment.cartCheckout) {
+        if (payment.selectedItemIds) {
+            const selectedIds = payment.selectedItemIds.split(',').map((id) => id.trim()).filter(Boolean);
+            req.session.cart = (req.session.cart || []).filter((item) => !selectedIds.includes(String(item.id)));
+        } else {
+            req.session.cart = [];
+        }
+    } else if (payment.cartItemId) {
+        req.session.cart = (req.session.cart || []).filter((item) => String(item.id) !== String(payment.cartItemId));
     }
+}
+
+function renderPaymentForm(res, payment, error = null) {
+    return res.status(error ? 400 : 200).render('payment', {
+        title: 'Payment',
+        ...payment,
+        error
+    });
+}
+
+async function getNetsQrImage(qrCode) {
+    if (!qrCode) {
+        return '';
+    }
+
+    if (/^data:image\//i.test(qrCode) || /^https?:\/\//i.test(qrCode)) {
+        return qrCode;
+    }
+
+    if (/^iVBOR/i.test(qrCode)) {
+        return `data:image/png;base64,${qrCode}`;
+    }
+
+    return QRCode.toDataURL(qrCode, { errorCorrectionLevel: 'M', margin: 2, width: 280 });
+}
+
+async function confirmPayment(req, res) {
+    const payment = getPaymentPayload(req.body);
+
+    if (!Number.isFinite(payment.amount) || payment.amount <= 0) {
+        return renderPaymentForm(res, payment, 'Payment amount is invalid.');
+    }
+
+    if (req.body.paymentMethod === 'nets') {
+        let qrData;
+        let netsError = null;
+
+        try {
+            const txnId = createSandboxTxnId();
+            try {
+                qrData = await requestNetsQr(payment.amount, txnId);
+            } catch (error) {
+                netsError = error;
+                console.error(error);
+                qrData = createPrototypeNetsQr(payment.amount, txnId);
+            }
+
+            if (!isQrSuccess(qrData)) {
+                throw new Error(`NETS QR was not accepted: ${JSON.stringify(qrData)}`);
+            }
+
+            req.session.pendingNetsPayment = {
+                ...payment,
+                txnId,
+                txnRetrievalRef: qrData.txn_retrieval_ref
+            };
+
+            return res.render('netsQR', {
+                title: 'NETS QR Payment',
+                total: payment.amount,
+                qrCodeUrl: await getNetsQrImage(qrData.qr_code),
+                txnRetrievalRef: qrData.txn_retrieval_ref,
+                isPrototypeQr: Boolean(qrData.prototype),
+                netsErrorMessage: netsError ? netsError.message : null,
+                completeUrl: '/nets/complete',
+                failCompleteUrl: '/nets/complete-fail',
+                successRedirect: '/payment/success',
+                failRedirect: '/nets-qr/fail',
+                backPrimaryUrl: '/cart',
+                backPrimaryLabel: 'Back to cart',
+                backSecondaryUrl: '/services',
+                backSecondaryLabel: 'Browse services'
+            });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).render('netsQRfail', {
+                title: 'NETS Payment Failed',
+                errorMsg: 'NETS QR code could not be generated. Please try again.'
+            });
+        }
+    }
+
+    applyPaymentSideEffects(req, payment);
 
     return res.render('payment-success', {
         title: 'Payment Successful',
-        amount: req.body.amount,
-        merchantName: req.body.merchantName,
-        serviceName: req.body.serviceName
+        amount: payment.amount,
+        merchantName: payment.merchantName,
+        serviceName: payment.serviceName
+    });
+}
+
+function completeNetsPayment(req, res) {
+    const payment = req.session.pendingNetsPayment;
+
+    if (!payment) {
+        return res.status(400).json({ ok: false });
+    }
+
+    applyPaymentSideEffects(req, payment);
+    req.session.lastPayment = payment;
+    req.session.pendingNetsPayment = null;
+
+    return res.json({ ok: true });
+}
+
+function failNetsPayment(req, res) {
+    req.session.pendingNetsPayment = null;
+    return res.json({ ok: true });
+}
+
+function showNetsFail(req, res) {
+    return res.render('netsQRfail', {
+        title: 'NETS Payment Failed',
+        errorMsg: 'NETS payment failed or expired. Please try again.'
+    });
+}
+
+function showPaymentSuccess(req, res) {
+    const payment = req.session.lastPayment;
+
+    if (!payment) {
+        return res.redirect('/cart');
+    }
+
+    req.session.lastPayment = null;
+
+    return res.render('payment-success', {
+        title: 'Payment Successful',
+        amount: payment.amount,
+        merchantName: payment.merchantName,
+        serviceName: payment.serviceName
+    });
+}
+
+function streamNetsPaymentStatus(req, res) {
+    const txnRetrievalRef = req.params.txnRetrievalRef;
+    let checks = 0;
+
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive'
+    });
+    res.flushHeaders?.();
+
+    const send = (payload) => {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    if (String(txnRetrievalRef).startsWith('PROTO-')) {
+        setTimeout(() => {
+            send({ success: true, prototype: true });
+            res.end();
+        }, 2500);
+        return;
+    }
+
+    const interval = setInterval(async () => {
+        checks += 1;
+
+        try {
+            const result = await checkStatus(txnRetrievalRef);
+
+            if (result.status === 'SUCCESS') {
+                send({ success: true });
+                clearInterval(interval);
+                res.end();
+                return;
+            }
+
+            if (result.status === 'FAIL') {
+                send({ fail: true });
+                clearInterval(interval);
+                res.end();
+                return;
+            }
+
+            send({ pending: true });
+        } catch (error) {
+            console.error(error);
+            send({ pending: true });
+        }
+
+        if (checks >= 40) {
+            send({ pending: true, timeout: true });
+            clearInterval(interval);
+            res.end();
+        }
+    }, 3000);
+
+    req.on('close', () => {
+        clearInterval(interval);
     });
 }
 
@@ -1114,5 +1334,10 @@ module.exports = {
     updateCartItem,
     toggleFavouriteMerchant,
     showPayment,
-    confirmPayment
+    confirmPayment,
+    completeNetsPayment,
+    failNetsPayment,
+    showNetsFail,
+    showPaymentSuccess,
+    streamNetsPaymentStatus
 };

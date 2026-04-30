@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const path = require('path');
+require('dotenv').config();
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
@@ -10,7 +11,6 @@ const merchantDashboardController = require('./controllers/merchantDashboardCont
 const { allowBookingViewer, allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
-require('dotenv').config();
 
 const app = express();
 
@@ -130,6 +130,11 @@ app.get('/products', allowGuestOrCustomer, (req, res) => {
 app.post('/checkout', requireCustomer, merchantController.checkout);
 app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
+app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
+app.post('/nets/complete', requireCustomer, merchantController.completeNetsPayment);
+app.post('/nets/complete-fail', requireCustomer, merchantController.failNetsPayment);
+app.get('/nets-qr/fail', requireCustomer, merchantController.showNetsFail);
+app.get('/sse/payment-status/:txnRetrievalRef', requireCustomer, merchantController.streamNetsPaymentStatus);
 
 app.get('/cashback', requireCustomer, (req, res) => {
     res.render('cashback', { title: 'Cashback' });

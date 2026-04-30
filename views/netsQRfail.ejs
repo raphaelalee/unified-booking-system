@@ -1,0 +1,20 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">NETS QR</p>
+    <h1>Payment failed.</h1>
+    <p><%= errorMsg || 'Payment failed. Please try again.' %></p>
+</section>
+
+<section class="section compact">
+    <div class="empty-state">
+        <h2>NETS payment was not completed.</h2>
+        <p class="muted">Return to your cart or payment page and try again.</p>
+        <div class="hero-actions">
+            <a class="button primary" href="/cart">Back to cart</a>
+            <a class="button secondary" href="/services">Browse services</a>
+        </div>
+    </div>
+</section>
+
+<%- include('partials/footer') %>
