@@ -99,6 +99,40 @@ function getMerchantByUserId(userId, callback) {
     });
 }
 
+function getMerchantBySalonId(salonId, callback) {
+    const sql = `
+        SELECT
+            salons.salon_id,
+            salons.merchant_id,
+            salons.salon_name,
+            salons.address,
+            salons.description AS salon_description,
+            services.service_id,
+            services.category_id,
+            services.service_name,
+            services.description,
+            services.duration_mins,
+            services.price,
+            categories.category_name,
+            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
+        FROM salons
+        LEFT JOIN services ON services.salon_id = salons.salon_id
+        LEFT JOIN categories ON categories.category_id = services.category_id
+        LEFT JOIN service_slots ON service_slots.service_id = services.service_id
+        WHERE salons.salon_id = ?
+        ORDER BY services.service_id, service_slots.timeslot
+    `;
+
+    db.query(sql, [salonId], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, mapMerchantRows(rows));
+    });
+}
+
 function getCategories(callback) {
     const sql = `
         SELECT category_id, category_name
@@ -662,6 +696,7 @@ function createMerchant(merchantData, callback) {
 
 module.exports = {
     getMerchantByUserId,
+    getMerchantBySalonId,
     getCategories,
     getSalons,
     getAllServices,

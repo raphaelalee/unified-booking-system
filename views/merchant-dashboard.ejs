@@ -106,6 +106,24 @@
         <a class="button primary" href="/merchant/services/new">Add service</a>
     </div>
 
+    <div class="promo-panel qr-panel">
+        <p class="eyebrow">Merchant QR</p>
+        <h2>Shop booking QR</h2>
+        <p class="muted">
+            This signed QR link is tied to merchant ID <%= merchant.id %> and opens only this merchant's services.
+        </p>
+        <form action="/merchant/generate-qr" method="POST">
+            <button class="button primary" type="submit">Generate QR Code</button>
+        </form>
+        <% if (qrCodeDataUrl && qrBookingUrl) { %>
+            <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
+                <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+            </a>
+            <p class="muted">Encoded booking link:</p>
+            <a class="text-link qr-link" href="<%= qrBookingUrl %>"><%= qrBookingUrl %></a>
+        <% } %>
+    </div>
+
     <div class="service-catalog-grid unified-service-grid">
         <% merchant.services.forEach((service) => { %>
             <article class="service-catalog-card unified-service-card">

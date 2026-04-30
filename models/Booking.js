@@ -25,6 +25,7 @@ function getAllInDatabase(callback) {
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            COALESCE(bookings.merchant_id, salons.salon_id) AS merchant_id,
             users.name AS customer_name,
             users.email,
             salons.salon_name AS merchant_name,
@@ -77,14 +78,16 @@ function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookin
     const sql = `
         SELECT bookings.booking_id
         FROM bookings
-        WHERE service_id = ?
+        INNER JOIN services ON services.service_id = bookings.service_id
+        WHERE bookings.service_id = ?
+            AND services.salon_id = ?
             AND booking_date = ?
             AND timeslot = ?
             AND status <> 'cancelled'
         LIMIT 1
     `;
 
-    db.query(sql, [serviceId, bookingDate, bookingTime], (error, results) => {
+    db.query(sql, [serviceId, merchantId, bookingDate, bookingTime], (error, results) => {
         if (error) {
             callback(error);
             return;
@@ -102,12 +105,13 @@ function createInDatabase(bookingData, callback) {
 
     const sql = `
         INSERT INTO bookings
-            (user_id, service_id, booking_date, timeslot, status, qr_code_token)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (user_id, merchant_id, service_id, booking_date, timeslot, status, qr_code_token)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
         bookingData.userId,
+        bookingData.merchantId,
         bookingData.serviceId,
         bookingData.bookingDate,
         bookingData.bookingTime,

@@ -16,7 +16,7 @@
         <a class="qr-code-link" href="<%= bookingUrl %>" aria-label="Open booking page for <%= merchant.name %>">
             <img
                 class="qr-code"
-                src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=<%= encodedBookingUrl %>"
+                src="<%= qrCodeDataUrl %>"
                 alt="QR code for <%= merchant.name %> booking page"
             >
         </a>

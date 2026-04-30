@@ -623,6 +623,36 @@ h3 {
     align-items: center;
 }
 
+.cart-item.compact {
+    padding: 14px;
+    gap: 12px;
+}
+
+.cart-item-check {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    flex: 0 0 auto;
+    accent-color: var(--teal);
+}
+
+.remove-icon-button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    width: 36px;
+    height: 36px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.remove-icon-button:hover {
+    background: rgba(155, 200, 190, 0.06);
+    color: var(--danger);
+}
+
 .cart-item-actions {
     display: grid;
     gap: 10px;

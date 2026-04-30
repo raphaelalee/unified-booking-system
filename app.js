@@ -23,7 +23,7 @@ app.use(express.static(path.join(__dirname, 'public'), { redirect: false })); //
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(session({
-    secret: 'vaniday_secret_key',
+    secret: process.env.SESSION_SECRET || 'vaniday_secret_key',
     resave: false,
     saveUninitialized: true
 }));
@@ -68,8 +68,11 @@ app.get('/cart/product/:productId', (req, res) => {
 app.post('/cart/product/:productId', merchantController.addProductToCart);
 app.post('/cart/update/:itemId', merchantController.updateCartItem);
 app.post('/cart/remove/:itemId', merchantController.removeFromCart);
+app.post('/cart/delete-selected', merchantController.deleteSelectedCartItems);
 app.post('/merchants/:merchantId/favourite', merchantController.toggleFavouriteMerchant);
-app.get('/merchants/:merchantId/qr', merchantController.showMerchantQr);
+app.get('/merchants/:merchantId/qr', requireRole('merchant'), merchantController.showMerchantQr);
+app.get('/scan/:merchantId', merchantController.showSecureScanBooking);
+app.post('/scan/:merchantId', merchantController.saveSecureScanBooking);
 app.get('/booking/:merchantId/:qrToken', merchantController.showBookingPage);
 app.post('/booking/:merchantId/:qrToken', merchantController.saveQrBooking);
 app.get('/booking/:merchantId', merchantController.showBookingPage);
@@ -79,11 +82,13 @@ app.post('/merchants/:id/book', merchantController.createBooking);
 app.post('/api/ai/chat', aiController.getBeautyAdvice);
 app.get('/merchant', requireRole('merchant'), merchantDashboardController.showDashboard);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
+app.post('/merchant/generate-qr', requireRole('merchant'), merchantDashboardController.generateQr);
 app.get('/merchant/services/new', requireRole('merchant'), merchantDashboardController.showNewService);
 app.post('/merchant/services', requireRole('merchant'), merchantDashboardController.createService);
 app.get('/merchant/services/:serviceId/edit', requireRole('merchant'), merchantDashboardController.showEditService);
 app.post('/merchant/services/:serviceId', requireRole('merchant'), merchantDashboardController.updateService);
 app.post('/merchant/services/:serviceId/delete', requireRole('merchant'), merchantDashboardController.deleteService);
+app.get('/merchant/:merchantId', merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
@@ -110,6 +115,7 @@ app.get('/products', (req, res) => {
     });
 });
 
+app.post('/checkout', merchantController.checkout);
 app.get('/payment', merchantController.showPayment);
 app.post('/payment', merchantController.confirmPayment);
 

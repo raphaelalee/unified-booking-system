@@ -24,21 +24,16 @@
             <strong><%= merchant.promotion %></strong>
         </div>
 
-        <div class="promo-panel qr-panel">
-            <p class="eyebrow">QR booking</p>
-            <h2>Scan to book</h2>
-            <a class="qr-code-link" href="<%= bookingUrl %>" aria-label="Open booking page for <%= merchant.name %>">
-                <img
-                    class="qr-code"
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=<%= encodedBookingUrl %>"
-                    alt="QR code for <%= merchant.name %> booking page"
-                >
-            </a>
+        <div class="promo-panel">
+            <p class="eyebrow">Booking link</p>
+            <h2>Book online</h2>
             <p class="muted">
-                Customers can scan this code to open the booking page instantly without installing an app.
+                Open this merchant's booking page to view only its services and available slots.
             </p>
-            <a class="text-link qr-link" href="<%= bookingUrl %>"><%= bookingUrl %></a>
-            <a class="button secondary full" href="/merchants/<%= merchant.id %>/qr">Open merchant QR page</a>
+            <a class="button secondary full" href="<%= bookingUrl %>">Open booking page</a>
+            <% if (typeof canGenerateQr !== 'undefined' && canGenerateQr) { %>
+                <a class="button primary full" href="/merchants/<%= merchant.id %>/qr">Open QR code</a>
+            <% } %>
         </div>
     </div>
 </section>
