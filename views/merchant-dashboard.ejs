@@ -1,5 +1,23 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const formatPromotionDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+%>
+
 <section class="page-title">
     <p class="eyebrow">Merchant Portal</p>
     <h1><%= merchant.name %></h1>
@@ -40,6 +58,11 @@
             <span>Avg Service Price</span>
             <strong>$<%= stats.averagePrice.toFixed(2) %></strong>
             <small>current menu average</small>
+        </div>
+        <div class="portal-stat">
+            <span>Promotions</span>
+            <strong><%= stats.promotionCount %></strong>
+            <small>merchant campaigns</small>
         </div>
     </div>
 
@@ -152,6 +175,51 @@
             </article>
         <% }) %>
     </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Merchant Promotions</p>
+        <h2>Current promotion campaigns</h2>
+    </div>
+
+    <% if (!Array.isArray(promotions) || promotions.length === 0) { %>
+        <div class="notice">
+            No promotions have been created yet. Add one to feature discounts, first trials, happy hour offers, or highlighted listings.
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% promotions.forEach((promotion) => { %>
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= promotion.type.replace(/_/g, ' ') %></span>
+                        <span class="service-price slim"><%= promotion.status %></span>
+                    </div>
+                    <div>
+                        <h3><%= promotion.title %></h3>
+                        <p class="muted">
+                            <%= promotion.serviceName || 'All merchant services' %> &middot;
+                            <%= promotion.discountType.replace(/_/g, ' ') %>
+                            <% if (promotion.discountValue !== null) { %>
+                                &middot; <%= promotion.discountValue %>
+                            <% } %>
+                        </p>
+                        <% if (promotion.description) { %>
+                            <p><%= promotion.description %></p>
+                        <% } %>
+                    </div>
+                    <div class="availability-strip">
+                        <span>Starts <%= formatPromotionDate(promotion.startDate) %></span>
+                        <span>Ends <%= formatPromotionDate(promotion.endDate) %></span>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/merchant/promotions/<%= promotion.id %>/edit">Edit</a>
+                        <form action="/merchant/promotions/<%= promotion.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
 </section>
 
 <%- include('partials/footer') %>

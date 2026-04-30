@@ -3730,6 +3730,13 @@ select:focus {
     align-items: center;
 }
 
+.inline-button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
 .service-admin-form {
     max-width: 680px;
 }

@@ -94,6 +94,12 @@ app.post('/merchant/products', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/products/:productId/edit', requireRole('merchant'), merchantDashboardController.showEditProduct);
 app.post('/merchant/products/:productId', requireRole('merchant'), merchantDashboardController.updateProduct);
 app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
+app.get('/merchant/promotions', requireRole('merchant'), merchantDashboardController.listPromotions);
+app.get('/merchant/promotions/new', requireRole('merchant'), merchantDashboardController.showNewPromotion);
+app.post('/merchant/promotions', requireRole('merchant'), merchantDashboardController.createPromotion);
+app.get('/merchant/promotions/:promotionId/edit', requireRole('merchant'), merchantDashboardController.showEditPromotion);
+app.post('/merchant/promotions/:promotionId', requireRole('merchant'), merchantDashboardController.updatePromotion);
+app.post('/merchant/promotions/:promotionId/delete', requireRole('merchant'), merchantDashboardController.deletePromotion);
 app.get('/merchant/:merchantId', allowGuestOrCustomer, merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
