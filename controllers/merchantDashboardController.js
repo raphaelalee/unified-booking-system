@@ -1,4 +1,70 @@
+const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
+
+function getBookingAmount(booking) {
+    return Number(booking.service_price || booking.price || 0);
+}
+
+function getUniqueCount(items, getValue) {
+    return new Set(items.map(getValue).filter(Boolean)).size;
+}
+
+function buildMerchantReports(merchant, bookings, bookingError) {
+    const services = merchant.services || [];
+    const slotCount = services.reduce((total, service) => total + (service.slots || []).length, 0);
+    const prices = services.map((service) => Number(service.price)).filter(Number.isFinite);
+    const validationIssues = [];
+
+    if (bookingError) {
+        validationIssues.push('Booking records could not be loaded from the database. Service reporting is still available.');
+    }
+
+    if (services.length === 0) {
+        validationIssues.push('No services have been created for this merchant yet.');
+    }
+
+    services.forEach((service) => {
+        if (!service.description) {
+            validationIssues.push(`${service.name} is missing a customer-facing description.`);
+        }
+
+        if (!Array.isArray(service.slots) || service.slots.length === 0) {
+            validationIssues.push(`${service.name} has no available slots.`);
+        }
+
+        if (!Number.isFinite(Number(service.price)) || Number(service.price) <= 0) {
+            validationIssues.push(`${service.name} needs a valid price above $0.`);
+        }
+    });
+
+    return {
+        stats: {
+            serviceCount: services.length,
+            slotCount,
+            bookingCount: bookings.length,
+            customerCount: getUniqueCount(bookings, (booking) => booking.email),
+            bookingRevenue: bookings.reduce((sum, booking) => sum + getBookingAmount(booking), 0),
+            averagePrice: prices.length > 0 ? prices.reduce((sum, price) => sum + price, 0) / prices.length : 0
+        },
+        customerReport: {
+            totalCustomers: getUniqueCount(bookings, (booking) => booking.email),
+            recentBookings: bookings.slice(0, 6)
+        },
+        merchantReport: {
+            serviceCount: services.length,
+            slotCount,
+            categoryCount: getUniqueCount(services, (service) => service.category),
+            topService: services.reduce((top, service) => {
+                return Number(service.price || 0) > Number(top?.price || 0) ? service : top;
+            }, null)
+        },
+        validationReport: {
+            issues: validationIssues,
+            status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+        },
+        databaseError: Boolean(bookingError)
+    };
+}
 
 function renderMerchantLookupError(res, error, merchant) {
     if (error) {
@@ -60,7 +126,7 @@ function validateServiceForm(form) {
     return errors;
 }
 
-function showServices(req, res) {
+function showDashboard(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
 
@@ -68,16 +134,25 @@ function showServices(req, res) {
             return handled;
         }
 
-        const success = req.session.merchantSuccess;
-        const error = req.session.merchantError;
-        req.session.merchantSuccess = null;
-        req.session.merchantError = null;
+        return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
+            if (bookingError) {
+                console.error(bookingError);
+            }
 
-        return res.render('merchant-dashboard', {
-            title: 'Merchant Services',
-            merchant,
-            success,
-            error
+            const reports = buildMerchantReports(merchant, bookingError ? [] : bookings, Boolean(bookingError));
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-dashboard', {
+                title: 'Merchant Dashboard',
+                merchant,
+                bookings: bookingError ? [] : bookings,
+                success,
+                error,
+                ...reports
+            });
         });
     });
 }
@@ -313,7 +388,8 @@ function deleteService(req, res) {
 }
 
 module.exports = {
-    showServices,
+    showDashboard,
+    showServices: showDashboard,
     showNewService,
     createService,
     showEditService,

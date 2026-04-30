@@ -28,7 +28,8 @@ function getAllInDatabase(callback) {
             users.name AS customer_name,
             users.email,
             salons.salon_name AS merchant_name,
-            services.service_name
+            services.service_name,
+            services.price AS service_price
         FROM bookings
         INNER JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -37,6 +38,29 @@ function getAllInDatabase(callback) {
     `;
 
     db.query(sql, callback);
+}
+
+function getByMerchantUserId(userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            salons.salon_name AS merchant_name,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE salons.merchant_id = ?
+        ORDER BY bookings.booking_id DESC
+    `;
+
+    db.query(sql, [userId], callback);
 }
 
 function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
@@ -99,6 +123,7 @@ module.exports = {
     createInDatabase,
     getAll,
     getAllInDatabase,
+    getByMerchantUserId,
     hasExistingBooking,
     hasExistingBookingInDatabase
 };

@@ -780,6 +780,315 @@ h3 {
     font-weight: 800;
 }
 
+.account-layout {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.account-main-stack {
+    display: grid;
+    gap: 18px;
+}
+
+.account-panel,
+.account-summary-panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 250, 245, 0.95);
+    box-shadow: var(--shadow);
+}
+
+.account-panel {
+    padding: 24px;
+    display: grid;
+    gap: 18px;
+}
+
+.account-summary-panel {
+    position: sticky;
+    top: 104px;
+    padding: 24px;
+    display: grid;
+    gap: 20px;
+    background:
+        linear-gradient(145deg, rgba(232, 237, 223, 0.72), rgba(255, 250, 245, 0.98) 58%),
+        var(--surface);
+}
+
+.account-avatar {
+    width: 78px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(97, 121, 87, 0.22);
+    border-radius: 50%;
+    background: rgba(186, 200, 177, 0.44);
+    color: var(--ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 2.3rem;
+    font-weight: 700;
+}
+
+.account-name-block {
+    display: grid;
+    gap: 6px;
+}
+
+.account-name-block h2,
+.account-panel-header h2 {
+    margin: 0;
+}
+
+.account-name-block p {
+    margin: 0;
+    color: var(--muted);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.account-role-chip {
+    width: fit-content;
+    padding: 6px 10px;
+    border: 1px solid rgba(97, 121, 87, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 250, 245, 0.72);
+    color: var(--ink);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.account-summary-list {
+    margin: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.account-summary-list div,
+.saved-merchant-row {
+    padding: 12px;
+    border: 1px solid rgba(64, 78, 59, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 252, 0.64);
+}
+
+.account-summary-list dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.account-summary-list dd {
+    margin: 4px 0 0;
+    color: var(--ink);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.account-summary-list a {
+    color: var(--clay);
+}
+
+.account-actions,
+.account-form {
+    display: grid;
+    gap: 14px;
+}
+
+.account-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.account-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--ink);
+    font-weight: 800;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.form-grid label:last-child {
+    grid-column: span 2;
+}
+
+.account-form-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.password-requirements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.password-requirements span {
+    padding: 7px 10px;
+    border: 1px solid rgba(97, 121, 87, 0.16);
+    border-radius: 999px;
+    background: rgba(232, 237, 223, 0.52);
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.account-panel-header .membership-tier-badge {
+    width: 86px;
+    height: 86px;
+    flex: 0 0 auto;
+}
+
+.account-panel-header .membership-tier-badge span {
+    font-size: 1.2rem;
+}
+
+.account-panel-header .membership-tier-badge small {
+    font-size: 0.68rem;
+}
+
+.account-membership-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.account-membership-strip div {
+    padding: 14px;
+    border: 1px solid rgba(64, 78, 59, 0.12);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.76);
+}
+
+.referral-code-card {
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+    border: 1px solid rgba(64, 78, 59, 0.14);
+    border-radius: 8px;
+    background:
+        linear-gradient(145deg, rgba(232, 237, 223, 0.7), rgba(255, 250, 245, 0.94)),
+        var(--surface);
+}
+
+.referral-code-card span,
+.referral-metrics span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.referral-code-card strong {
+    color: var(--ink);
+    font-size: 2rem;
+    letter-spacing: 0;
+}
+
+.referral-code-card input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 252, 0.72);
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    padding: 12px 14px;
+}
+
+.referral-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.referral-metrics div {
+    padding: 14px;
+    border: 1px solid rgba(64, 78, 59, 0.12);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.76);
+}
+
+.referral-metrics strong,
+.referral-metrics span {
+    display: block;
+}
+
+.referral-metrics strong {
+    color: var(--ink);
+    font-size: 1.35rem;
+}
+
+.referral-metrics span {
+    margin-top: 4px;
+}
+
+.account-membership-strip strong,
+.account-membership-strip span {
+    display: block;
+}
+
+.account-membership-strip strong {
+    color: var(--ink);
+    font-size: 1.35rem;
+}
+
+.account-membership-strip span {
+    margin-top: 4px;
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.account-progress {
+    display: grid;
+    gap: 8px;
+}
+
+.account-progress > div:first-child {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.86rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.account-progress p {
+    margin: 0;
+}
+
+.saved-merchant-list {
+    display: grid;
+    gap: 10px;
+}
+
+.saved-merchant-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.saved-merchant-row strong,
+.saved-merchant-row span {
+    display: block;
+}
+
+.saved-merchant-row span {
+    margin-top: 4px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
 .profile-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -787,6 +1096,14 @@ h3 {
 }
 
 .profile-dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 24px;
+    align-items: start;
+}
+
+.profile-security-grid {
+    margin-top: 24px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
     gap: 24px;
@@ -802,6 +1119,7 @@ h3 {
 
 .profile-form,
 .reward-panel,
+.profile-security-panel,
 .login-form,
 .login-benefits {
     background: rgba(255, 250, 245, 0.95);
@@ -827,6 +1145,26 @@ h3 {
 
 .login-benefits {
     padding: 26px;
+}
+
+.profile-security-panel {
+    padding: 26px;
+    display: grid;
+    gap: 14px;
+    background:
+        linear-gradient(135deg, rgba(223, 237, 232, 0.86), rgba(255, 250, 245, 0.98)),
+        var(--surface);
+}
+
+.profile-security-panel ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.profile-security-panel li + li {
+    margin-top: 10px;
 }
 
 .login-benefits ul {
@@ -1904,7 +2242,10 @@ select:focus {
     .two-column,
     .booking-layout,
     .cart-layout,
+    .account-layout,
+    .form-grid,
     .profile-dashboard,
+    .profile-security-grid,
     .login-layout,
     .profile-grid,
     .referral-columns,
@@ -1922,6 +2263,18 @@ select:focus {
 
     .portal-hero {
         padding-top: 58px;
+    }
+
+    .account-summary-panel {
+        position: static;
+    }
+
+    .form-grid label:last-child {
+        grid-column: auto;
+    }
+
+    .account-membership-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .portal-summary-panel {
@@ -2014,8 +2367,21 @@ select:focus {
     }
 
     .portal-summary-panel,
+    .account-membership-strip,
+    .referral-metrics,
     .portal-card-metrics {
         grid-template-columns: 1fr;
+    }
+
+    .account-panel,
+    .account-summary-panel {
+        padding: 18px;
+    }
+
+    .account-panel-header,
+    .saved-merchant-row {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .merchant-actions {
@@ -3339,8 +3705,123 @@ select:focus {
 }
 
 .admin-summary-panel {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-bottom: 38px;
+}
+
+.dashboard-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 28px;
+}
+
+.portal-stat small {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.dashboard-report-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 34px;
+}
+
+.dashboard-report-card {
+    min-height: 100%;
+    padding: 22px;
+    display: grid;
+    gap: 16px;
+    align-content: start;
+    border: 1px solid rgba(64, 78, 59, 0.16);
+    border-radius: 8px;
+    background: rgba(247, 248, 243, 0.94);
+    box-shadow: var(--soft-shadow);
+}
+
+.dashboard-report-card h2 {
+    margin-bottom: 0;
+    font-size: 1.55rem;
+}
+
+.report-metric-list {
+    display: grid;
+    gap: 10px;
+}
+
+.report-metric-list p {
+    margin: 0;
+    padding: 12px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom: 1px solid rgba(64, 78, 59, 0.1);
+    color: var(--muted);
+}
+
+.report-metric-list p:last-child {
+    border-bottom: 0;
+}
+
+.report-metric-list strong {
+    color: var(--ink);
+    white-space: nowrap;
+}
+
+.dashboard-mini-list {
+    display: grid;
+    gap: 10px;
+}
+
+.dashboard-mini-list div,
+.dashboard-highlight {
+    padding: 12px;
+    border: 1px solid rgba(64, 78, 59, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 252, 0.68);
+}
+
+.dashboard-mini-list strong,
+.dashboard-mini-list span,
+.dashboard-highlight span,
+.dashboard-highlight strong,
+.dashboard-highlight small {
+    display: block;
+}
+
+.dashboard-mini-list span,
+.dashboard-highlight span,
+.dashboard-highlight small {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.dashboard-highlight strong {
+    margin-top: 4px;
+    color: var(--ink);
+    font-size: 1.1rem;
+}
+
+.validation-report-card.healthy {
+    border-color: rgba(123, 150, 105, 0.35);
+    background: linear-gradient(145deg, rgba(227, 234, 216, 0.76), rgba(247, 248, 243, 0.96));
+}
+
+.validation-report-card.needs-review {
+    border-color: rgba(168, 72, 63, 0.28);
+    background: linear-gradient(145deg, rgba(255, 236, 230, 0.78), rgba(247, 248, 243, 0.96));
+}
+
+.validation-list {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text);
+}
+
+.validation-list li + li {
+    margin-top: 8px;
 }
 
 .admin-table-wrap {
@@ -3388,7 +3869,8 @@ select:focus {
 }
 
 @media (max-width: 760px) {
-    .admin-summary-panel {
+    .dashboard-kpi-grid,
+    .dashboard-report-grid {
         grid-template-columns: 1fr;
     }
 

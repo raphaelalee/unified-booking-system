@@ -19,7 +19,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
-app.use(express.static(path.join(__dirname, 'public'))); // For CSS, Images, JS
+app.use(express.static(path.join(__dirname, 'public'), { redirect: false })); // For CSS, Images, JS
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(session({
@@ -54,6 +54,7 @@ app.get('/membership', (req, res) => {
     res.redirect('/profile#membership');
 });
 app.post('/profile', userController.updateProfile);
+app.post('/profile/password', userController.updatePassword);
 app.get('/login', userController.showLogin);
 app.post('/login', userController.loginUser);
 app.get('/signup', userController.showSignup);
@@ -76,6 +77,7 @@ app.post('/booking/:merchantId', merchantController.saveQrBooking);
 app.get('/merchants/:id', merchantController.showMerchant);
 app.post('/merchants/:id/book', merchantController.createBooking);
 app.post('/api/ai/chat', aiController.getBeautyAdvice);
+app.get('/merchant', requireRole('merchant'), merchantDashboardController.showDashboard);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
 app.get('/merchant/services/new', requireRole('merchant'), merchantDashboardController.showNewService);
 app.post('/merchant/services', requireRole('merchant'), merchantDashboardController.createService);

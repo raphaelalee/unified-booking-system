@@ -1,6 +1,92 @@
 const bcrypt = require('bcrypt');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
+const User = require('../models/User');
+
+function getBookingAmount(booking) {
+    return Number(booking.service_price || booking.price || 0);
+}
+
+function getUniqueCount(items, getValue) {
+    return new Set(items.map(getValue).filter(Boolean)).size;
+}
+
+function buildValidationReport({ merchants, bookings, bookingError, userError }) {
+    const issues = [];
+    const merchantsWithoutServices = merchants.filter((merchant) => Number(merchant.service_count || 0) === 0);
+    const merchantsMissingAddress = merchants.filter((merchant) => !merchant.address);
+    const merchantsMissingDescription = merchants.filter((merchant) => !merchant.description);
+
+    if (bookingError) {
+        issues.push('Booking database reporting could not be loaded, so fallback booking data is displayed.');
+    }
+
+    if (userError) {
+        issues.push('Customer account reporting could not be loaded from the database.');
+    }
+
+    if (merchantsWithoutServices.length > 0) {
+        issues.push(`${merchantsWithoutServices.length} merchant account${merchantsWithoutServices.length === 1 ? '' : 's'} currently ${merchantsWithoutServices.length === 1 ? 'has' : 'have'} no services.`);
+    }
+
+    if (merchantsMissingAddress.length > 0) {
+        issues.push(`${merchantsMissingAddress.length} merchant profile${merchantsMissingAddress.length === 1 ? '' : 's'} ${merchantsMissingAddress.length === 1 ? 'is' : 'are'} missing an address.`);
+    }
+
+    if (merchantsMissingDescription.length > 0) {
+        issues.push(`${merchantsMissingDescription.length} merchant profile${merchantsMissingDescription.length === 1 ? '' : 's'} ${merchantsMissingDescription.length === 1 ? 'needs' : 'need'} a description.`);
+    }
+
+    if (bookings.some((booking) => !booking.status)) {
+        issues.push('Some bookings are missing a status value.');
+    }
+
+    return {
+        issues,
+        status: issues.length === 0 ? 'Healthy' : 'Needs Review'
+    };
+}
+
+function buildAdminReports(merchants, bookings, userSummary, bookingError, userError) {
+    const serviceCount = merchants.reduce((total, merchant) => {
+        return total + Number(merchant.service_count || 0);
+    }, 0);
+    const bookingRevenue = bookings.reduce((sum, booking) => sum + getBookingAmount(booking), 0);
+    const customerCount = Number(userSummary.roleCounts.customer || 0);
+    const merchantUserCount = Number(userSummary.roleCounts.merchant || merchants.length || 0);
+    const merchantsWithoutServices = merchants.filter((merchant) => Number(merchant.service_count || 0) === 0);
+    const topMerchant = merchants.reduce((top, merchant) => {
+        return Number(merchant.service_count || 0) > Number(top?.service_count || 0) ? merchant : top;
+    }, null);
+
+    return {
+        stats: {
+            merchantCount: merchants.length,
+            merchantUserCount,
+            customerCount,
+            adminCount: Number(userSummary.roleCounts.admin || 0),
+            serviceCount,
+            bookingCount: bookings.length,
+            uniqueBookedCustomers: getUniqueCount(bookings, (booking) => booking.email),
+            bookingRevenue,
+            averageServicesPerMerchant: merchants.length > 0 ? serviceCount / merchants.length : 0,
+            totalGlints: Number(userSummary.totalGlints || 0)
+        },
+        customerReport: {
+            totalCustomers: customerCount,
+            bookedCustomers: getUniqueCount(bookings, (booking) => booking.email),
+            recentCustomers: userSummary.recentCustomers || [],
+            totalGlints: Number(userSummary.totalGlints || 0)
+        },
+        merchantReport: {
+            totalMerchants: merchants.length,
+            totalServices: serviceCount,
+            merchantsWithoutServices,
+            topMerchant
+        },
+        validationReport: buildValidationReport({ merchants, bookings, bookingError, userError })
+    };
+}
 
 function getMerchantForm(body = {}) {
     return {
@@ -128,32 +214,38 @@ function showDashboard(req, res) {
             });
         }
 
-        const serviceCount = merchants.reduce((total, merchant) => {
-            return total + Number(merchant.service_count || 0);
-        }, 0);
-
         return Booking.getAllInDatabase((bookingError, bookings) => {
             if (bookingError) {
                 console.error(bookingError);
             }
 
-            const success = req.session.adminSuccess;
-            const error = req.session.adminError;
-            req.session.adminSuccess = null;
-            req.session.adminError = null;
+            return User.getDashboardSummary((userError, userSummary) => {
+                if (userError) {
+                    console.error(userError);
+                }
 
-            return res.render('admin-dashboard', {
-                title: 'Admin Dashboard',
-                merchants,
-                bookings: bookingError ? Booking.getAll() : bookings,
-                stats: {
-                    merchantCount: merchants.length,
-                    serviceCount,
-                    bookingCount: bookingError ? Booking.getAll().length : bookings.length
-                },
-                databaseError: Boolean(bookingError),
-                success,
-                error
+                const dashboardBookings = bookingError ? Booking.getAll() : bookings;
+                const reports = buildAdminReports(
+                    merchants,
+                    dashboardBookings,
+                    userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
+                    Boolean(bookingError),
+                    Boolean(userError)
+                );
+                const success = req.session.adminSuccess;
+                const error = req.session.adminError;
+                req.session.adminSuccess = null;
+                req.session.adminError = null;
+
+                return res.render('admin-dashboard', {
+                    title: 'Admin Dashboard',
+                    merchants,
+                    bookings: dashboardBookings,
+                    databaseError: Boolean(bookingError || userError),
+                    success,
+                    error,
+                    ...reports
+                });
             });
         });
     });

@@ -3,7 +3,7 @@
 <section class="page-title">
     <p class="eyebrow">Merchant Portal</p>
     <h1><%= merchant.name %></h1>
-    <p>Manage only the services assigned to your merchant account.</p>
+    <p>Track your own customer bookings, merchant service performance, and validation issues without seeing other merchants' data.</p>
 </section>
 
 <section class="section compact">
@@ -13,6 +13,90 @@
     <% if (error) { %>
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
+
+    <% if (databaseError) { %>
+        <div class="notice error">
+            <p>Booking records could not be loaded, so customer reporting is temporarily limited.</p>
+        </div>
+    <% } %>
+
+    <div class="portal-summary-panel dashboard-kpi-grid merchant-kpi-grid">
+        <div class="portal-stat">
+            <span>Services</span>
+            <strong><%= stats.serviceCount %></strong>
+            <small><%= stats.slotCount %> available slots</small>
+        </div>
+        <div class="portal-stat">
+            <span>Bookings</span>
+            <strong><%= stats.bookingCount %></strong>
+            <small><%= stats.customerCount %> unique customers</small>
+        </div>
+        <div class="portal-stat">
+            <span>Projected Revenue</span>
+            <strong>$<%= stats.bookingRevenue.toFixed(2) %></strong>
+            <small>from your bookings</small>
+        </div>
+        <div class="portal-stat">
+            <span>Avg Service Price</span>
+            <strong>$<%= stats.averagePrice.toFixed(2) %></strong>
+            <small>current menu average</small>
+        </div>
+    </div>
+
+    <div class="dashboard-report-grid">
+        <article class="dashboard-report-card">
+            <p class="eyebrow">Customer Information</p>
+            <h2>Your customer activity</h2>
+            <div class="report-metric-list">
+                <p><span>Unique customers</span><strong><%= customerReport.totalCustomers %></strong></p>
+                <p><span>Total bookings</span><strong><%= stats.bookingCount %></strong></p>
+                <p><span>Booking revenue</span><strong>$<%= stats.bookingRevenue.toFixed(2) %></strong></p>
+            </div>
+            <% if (customerReport.recentBookings.length > 0) { %>
+                <div class="dashboard-mini-list">
+                    <% customerReport.recentBookings.forEach((booking) => { %>
+                        <div>
+                            <strong><%= booking.customer_name || booking.customerName %></strong>
+                            <span><%= booking.service_name || booking.serviceName %> &middot; <%= booking.booking_date || booking.bookingDate %></span>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <p class="muted">No customer bookings have been recorded yet.</p>
+            <% } %>
+        </article>
+
+        <article class="dashboard-report-card">
+            <p class="eyebrow">Merchant Information</p>
+            <h2>Your service summary</h2>
+            <div class="report-metric-list">
+                <p><span>Service categories</span><strong><%= merchantReport.categoryCount %></strong></p>
+                <p><span>Available slots</span><strong><%= merchantReport.slotCount %></strong></p>
+                <p><span>Active services</span><strong><%= merchantReport.serviceCount %></strong></p>
+            </div>
+            <% if (merchantReport.topService) { %>
+                <div class="dashboard-highlight">
+                    <span>Highest priced service</span>
+                    <strong><%= merchantReport.topService.name %></strong>
+                    <small>$<%= Number(merchantReport.topService.price).toFixed(2) %></small>
+                </div>
+            <% } %>
+        </article>
+
+        <article class="dashboard-report-card validation-report-card <%= validationReport.issues.length > 0 ? 'needs-review' : 'healthy' %>">
+            <p class="eyebrow">Validation & Error Reporting</p>
+            <h2><%= validationReport.status %></h2>
+            <% if (validationReport.issues.length === 0) { %>
+                <p class="muted">Your merchant profile and service setup look complete.</p>
+            <% } else { %>
+                <ul class="validation-list">
+                    <% validationReport.issues.forEach((issue) => { %>
+                        <li><%= issue %></li>
+                    <% }) %>
+                </ul>
+            <% } %>
+        </article>
+    </div>
 
     <div class="section-cta">
         <div>

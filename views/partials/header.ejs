@@ -21,11 +21,14 @@
                     <a href="/admin">Dashboard</a>
                     <a href="/admin/merchants/new">Add Merchant</a>
                     <a href="/admin/services">Manage Services</a>
+                    <a href="/profile">Profile</a>
                     <a href="/admin/services/new">Add Service</a>
                     <a href="/">Public Site</a>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
+                    <a href="/merchant">Dashboard</a>
                     <a href="/merchant/services">My Services</a>
                     <a href="/merchant/services/new">Add Service</a>
+                    <a href="/profile">Profile</a>
                     <a href="/services">Public Services</a>
                     <a href="/merchants">Directory</a>
                 <% } else { %>

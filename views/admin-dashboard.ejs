@@ -2,8 +2,8 @@
 
 <section class="page-title">
     <p class="eyebrow">Admin Portal</p>
-    <h1>All merchants and booking data.</h1>
-    <p>Admins can view every merchant, service, and booking across the platform.</p>
+    <h1>Reporting and dashboards.</h1>
+    <p>Admins can summarize customer information, merchant information, booking activity, validation issues, and error reporting across the whole platform.</p>
 </section>
 
 <section class="section compact">
@@ -16,23 +16,86 @@
 
     <% if (databaseError) { %>
         <div class="notice error">
-            <p>Database bookings could not be loaded, so only in-memory bookings are shown.</p>
+            <p>Some dashboard database reporting could not be loaded. Check the validation report below for details.</p>
         </div>
     <% } %>
 
-    <div class="portal-summary-panel admin-summary-panel">
+    <div class="portal-summary-panel admin-summary-panel dashboard-kpi-grid">
+        <div class="portal-stat">
+            <span>Customers</span>
+            <strong><%= stats.customerCount %></strong>
+            <small>registered customer accounts</small>
+        </div>
         <div class="portal-stat">
             <span>Merchants</span>
             <strong><%= stats.merchantCount %></strong>
-        </div>
-        <div class="portal-stat">
-            <span>Services</span>
-            <strong><%= stats.serviceCount %></strong>
+            <small><%= stats.merchantUserCount %> merchant users</small>
         </div>
         <div class="portal-stat">
             <span>Bookings</span>
             <strong><%= stats.bookingCount %></strong>
+            <small><%= stats.uniqueBookedCustomers %> unique booked customers</small>
         </div>
+        <div class="portal-stat">
+            <span>Projected Revenue</span>
+            <strong>$<%= stats.bookingRevenue.toFixed(2) %></strong>
+            <small>from recorded bookings</small>
+        </div>
+    </div>
+
+    <div class="dashboard-report-grid">
+        <article class="dashboard-report-card">
+            <p class="eyebrow">Customer Information</p>
+            <h2>Customer summary</h2>
+            <div class="report-metric-list">
+                <p><span>Total customers</span><strong><%= customerReport.totalCustomers %></strong></p>
+                <p><span>Booked customers</span><strong><%= customerReport.bookedCustomers %></strong></p>
+                <p><span>Total VaniGlints</span><strong><%= customerReport.totalGlints %></strong></p>
+            </div>
+            <% if (customerReport.recentCustomers.length > 0) { %>
+                <div class="dashboard-mini-list">
+                    <% customerReport.recentCustomers.forEach((customer) => { %>
+                        <div>
+                            <strong><%= customer.name %></strong>
+                            <span><%= customer.email %></span>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <p class="muted">No customer accounts found yet.</p>
+            <% } %>
+        </article>
+
+        <article class="dashboard-report-card">
+            <p class="eyebrow">Merchant Information</p>
+            <h2>Merchant summary</h2>
+            <div class="report-metric-list">
+                <p><span>Total services</span><strong><%= merchantReport.totalServices %></strong></p>
+                <p><span>Avg services / merchant</span><strong><%= stats.averageServicesPerMerchant.toFixed(1) %></strong></p>
+                <p><span>No-service merchants</span><strong><%= merchantReport.merchantsWithoutServices.length %></strong></p>
+            </div>
+            <% if (merchantReport.topMerchant) { %>
+                <div class="dashboard-highlight">
+                    <span>Most complete merchant</span>
+                    <strong><%= merchantReport.topMerchant.salon_name %></strong>
+                    <small><%= merchantReport.topMerchant.service_count %> services</small>
+                </div>
+            <% } %>
+        </article>
+
+        <article class="dashboard-report-card validation-report-card <%= validationReport.issues.length > 0 ? 'needs-review' : 'healthy' %>">
+            <p class="eyebrow">Validation & Error Reporting</p>
+            <h2><%= validationReport.status %></h2>
+            <% if (validationReport.issues.length === 0) { %>
+                <p class="muted">No validation or dashboard loading issues detected.</p>
+            <% } else { %>
+                <ul class="validation-list">
+                    <% validationReport.issues.forEach((issue) => { %>
+                        <li><%= issue %></li>
+                    <% }) %>
+                </ul>
+            <% } %>
+        </article>
     </div>
 
     <div class="section-cta">
@@ -47,12 +110,9 @@
         </div>
     </div>
 
-    <div class="section-cta">
-        <div>
-            <p class="eyebrow">Merchants</p>
-            <h2>Connected merchant accounts</h2>
-        </div>
-        <a class="button secondary" href="/admin/merchants/new">Add merchant</a>
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Merchants</p>
+        <h2>Connected merchant accounts</h2>
     </div>
 
     <div class="merchant-list">

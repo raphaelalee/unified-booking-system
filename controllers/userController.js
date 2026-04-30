@@ -16,6 +16,7 @@ function buildSessionUser(user) {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
+        referralCode: user.referral_code || '',
         role: user.role,
         glintsBalance: user.glints_balance || 0
     };
@@ -38,21 +39,104 @@ function buildMember(points) {
     };
 }
 
-function buildReferral(profile, user, member) {
+function generateReferralCode(userId) {
+    return `VANI${String(userId).padStart(4, '0')}`;
+}
+
+function buildCustomerReferral(member, referralCode) {
     const reward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
-    const prefix = ((profile.name || 'vaniday').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4) || 'vani').toUpperCase();
-    const userId = String((user && user.id) || 0).padStart(4, '0');
-    const code = `${prefix}${userId}`;
     const discount = member.tier === 'Platinum' ? 15 : 10;
     const mailSubject = encodeURIComponent('Join Vaniday with my referral code');
-    const mailBody = encodeURIComponent(`Use my Vaniday referral code ${code} to get $${discount} off your first booking.`);
+    const mailBody = encodeURIComponent(`Use my Vaniday referral code ${referralCode} to get $${discount} off your first booking.`);
 
     return {
+        code: referralCode,
+        link: `https://www.vaniday.com/ref/${referralCode}`,
         reward,
-        code,
         discount,
         mailto: `mailto:?subject=${mailSubject}&body=${mailBody}`
     };
+}
+
+function buildCustomerProfileExtras(req, accountUser, callback) {
+    const favouriteIds = req.session.favouriteMerchantIds || [];
+    const favourites = favouriteIds
+        .map((merchantId) => Merchant.findById(merchantId))
+        .filter(Boolean);
+    const cart = req.session.cart || [];
+    const cartItemCount = getCartItemCount(cart);
+    const rewardPoints = favourites.length * 50 + cartItemCount * 20;
+    const member = buildMember(rewardPoints);
+    const referralCode = accountUser.referral_code || generateReferralCode(accountUser.user_id);
+
+    const customerExtras = {
+        favourites,
+        cartItemCount,
+        rewardPoints,
+        cashbackBalance: (rewardPoints / 100).toFixed(2),
+        member,
+        referral: buildCustomerReferral(member, referralCode)
+    };
+
+    if (accountUser.referral_code) {
+        callback(null, customerExtras);
+        return;
+    }
+
+    User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
+        if (error) {
+            callback(error, customerExtras);
+            return;
+        }
+
+        req.session.user.referralCode = referralCode;
+        callback(null, customerExtras);
+    });
+}
+
+function getEmptyCustomerExtras() {
+    return {
+        favourites: [],
+        cartItemCount: 0,
+        rewardPoints: 0,
+        cashbackBalance: '0.00',
+        member: buildMember(0),
+        referral: null
+    };
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidOptionalPhone(phone) {
+    return phone === '' || /^[689]\d{7}$/.test(phone);
+}
+
+function getDashboardPath(role) {
+    if (role === 'admin') return '/admin';
+    if (role === 'merchant') return '/merchant';
+    return '/profile';
+}
+
+function getRoleLabel(role) {
+    if (role === 'admin') return 'Admin';
+    if (role === 'merchant') return 'Merchant';
+    return 'Customer';
+}
+
+function validateNewPassword(password) {
+    const errors = [];
+
+    if (password.length < 8) {
+        errors.push('New password must be at least 8 characters.');
+    }
+
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        errors.push('New password must include at least one letter and one number.');
+    }
+
+    return errors;
 }
 
 function showLogin(req, res) {
@@ -76,7 +160,7 @@ function loginUser(req, res) {
     const email = (req.body.email || '').trim().toLowerCase();
     const password = req.body.password || '';
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 1) {
+    if (!isValidEmail(email) || password.length < 1) {
         req.session.loginError = 'Please enter a valid email and password.';
         req.session.loginForm = { email };
         return res.redirect('/login');
@@ -123,7 +207,7 @@ function loginUser(req, res) {
             }
 
             if (req.session.user.role === 'merchant') {
-                return res.redirect('/merchant/services');
+                return res.redirect('/merchant');
             }
 
             return res.redirect('/profile');
@@ -155,7 +239,7 @@ function signupUser(req, res) {
     const password = req.body.password || '';
     const confirmPassword = req.body.confirmPassword || '';
 
-    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[689]\d{7}$/.test(phone)) {
+    if (name.length < 2 || !isValidEmail(email) || !/^[689]\d{7}$/.test(phone)) {
         req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
         req.session.signupForm = { name, email, phone };
         return res.redirect('/signup');
@@ -189,7 +273,7 @@ function signupUser(req, res) {
                 return res.redirect('/signup');
             }
 
-            return User.create({ name, email, password: passwordHash }, (createError, result) => {
+            return User.create({ name, email, phone, password: passwordHash }, (createError, result) => {
                 if (createError) {
                     console.error(createError);
                     req.session.signupError = createError.code === 'ER_DUP_ENTRY'
@@ -199,18 +283,29 @@ function signupUser(req, res) {
                     return res.redirect('/signup');
                 }
 
+                const referralCode = generateReferralCode(result.insertId);
                 req.session.user = {
                     id: result.insertId,
                     name,
                     email,
                     phone,
+                    referralCode,
                     role: 'customer',
                     glintsBalance: 0
                 };
                 req.session.profile = { name, email, phone };
-                req.session.profileSuccess = 'Account created successfully.';
 
-                return res.redirect('/profile');
+                return User.updateReferralCode(result.insertId, referralCode, (referralError) => {
+                    if (referralError) {
+                        console.error(referralError);
+                        req.session.user.referralCode = '';
+                        req.session.profileSuccess = 'Account created successfully. Your referral code will be prepared from your profile page.';
+                        return res.redirect('/profile');
+                    }
+
+                    req.session.profileSuccess = 'Account created successfully.';
+                    return res.redirect('/profile');
+                });
             });
         });
     });
@@ -221,38 +316,60 @@ function showProfile(req, res) {
         return res.redirect('/login');
     }
 
-    const favouriteIds = req.session.favouriteMerchantIds || [];
-    const favourites = favouriteIds
-        .map((merchantId) => Merchant.findById(merchantId))
-        .filter(Boolean);
-    const cart = req.session.cart || [];
-    const cartItemCount = getCartItemCount(cart);
-    const profile = req.session.profile || {
-        name: req.session.user.name,
-        email: req.session.user.email,
-        phone: ''
-    };
-    const rewardPoints = favourites.length * 50 + cartItemCount * 20;
-    const cashbackBalance = (rewardPoints / 100).toFixed(2);
-    const member = buildMember(rewardPoints);
-    const referral = buildReferral(profile, req.session.user, member);
+    return User.findById(req.session.user.id, (lookupError, accountUser) => {
+        if (lookupError) {
+            console.error(lookupError);
+        }
 
-    const success = req.session.profileSuccess;
-    const error = req.session.profileError;
-    req.session.profileSuccess = null;
-    req.session.profileError = null;
+        const sessionProfile = req.session.profile || {};
+        const profile = {
+            name: accountUser?.name || sessionProfile.name || req.session.user.name,
+            email: accountUser?.email || sessionProfile.email || req.session.user.email,
+            phone: accountUser?.phone || sessionProfile.phone || ''
+        };
 
-    return res.render('profile', {
-        title: 'Profile',
-        profile,
-        favourites,
-        cartCount: cartItemCount,
-        rewardPoints,
-        cashbackBalance,
-        member,
-        referral,
-        success,
-        error
+        if (accountUser) {
+            req.session.user = buildSessionUser(accountUser);
+            req.session.profile = profile;
+        }
+
+        const isCustomer = req.session.user.role === 'customer';
+        const renderProfile = (customerExtras, customerExtraError = null) => {
+            const success = req.session.profileSuccess;
+            const error = req.session.profileError
+                || (lookupError ? 'Account details could not be refreshed from the database.' : null)
+                || (customerExtraError ? 'Referral details could not be saved yet. Please refresh and try again.' : null);
+            req.session.profileSuccess = null;
+            req.session.profileError = null;
+
+            return res.render('profile', {
+                title: 'Profile',
+                profile,
+                favourites: customerExtras.favourites,
+                cartCount: customerExtras.cartItemCount,
+                rewardPoints: customerExtras.rewardPoints,
+                cashbackBalance: customerExtras.cashbackBalance,
+                member: customerExtras.member,
+                referral: customerExtras.referral,
+                isCustomer,
+                dashboardPath: getDashboardPath(req.session.user.role),
+                roleLabel: getRoleLabel(req.session.user.role),
+                success,
+                error
+            });
+        };
+
+        if (!isCustomer || !accountUser) {
+            return renderProfile(getEmptyCustomerExtras());
+        }
+
+        return buildCustomerProfileExtras(req, accountUser, (customerExtraError, customerExtras) => {
+            if (customerExtraError) {
+                console.error(customerExtraError);
+            }
+
+            return renderProfile(customerExtras, customerExtraError);
+        });
     });
 }
 
@@ -265,12 +382,12 @@ function updateProfile(req, res) {
     const email = (req.body.email || '').trim().toLowerCase();
     const phone = (req.body.phone || '').trim();
 
-    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        req.session.profileError = 'Please enter a valid name and email.';
+    if (name.length < 2 || !isValidEmail(email) || !isValidOptionalPhone(phone)) {
+        req.session.profileError = 'Please enter a valid name, email, and Singapore handphone number.';
         return res.redirect('/profile');
     }
 
-    return User.updateProfile(req.session.user.id, { name, email }, (error) => {
+    return User.updateProfile(req.session.user.id, { name, email, phone }, (error) => {
         if (error) {
             console.error(error);
             req.session.profileError = error.code === 'ER_DUP_ENTRY'
@@ -292,6 +409,86 @@ function updateProfile(req, res) {
     });
 }
 
+function updatePassword(req, res) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    const currentPassword = req.body.currentPassword || '';
+    const newPassword = req.body.newPassword || '';
+    const confirmPassword = req.body.confirmPassword || '';
+    const passwordErrors = validateNewPassword(newPassword);
+
+    req.session.passwordChangeAttempts = req.session.passwordChangeAttempts || 0;
+
+    if (req.session.passwordChangeAttempts >= 5) {
+        req.session.profileError = 'Too many failed password attempts. Please log out and log in again before trying to change your password.';
+        return res.redirect('/profile');
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        req.session.profileError = 'Please complete all password fields.';
+        return res.redirect('/profile');
+    }
+
+    if (newPassword !== confirmPassword) {
+        req.session.profileError = 'New password and confirmation do not match.';
+        return res.redirect('/profile');
+    }
+
+    if (passwordErrors.length > 0) {
+        req.session.profileError = passwordErrors.join(' ');
+        return res.redirect('/profile');
+    }
+
+    if (currentPassword === newPassword) {
+        req.session.profileError = 'New password must be different from your current password.';
+        return res.redirect('/profile');
+    }
+
+    return User.findById(req.session.user.id, (lookupError, user) => {
+        if (lookupError || !user) {
+            console.error(lookupError);
+            req.session.profileError = 'Your account could not be verified. Please log in again.';
+            return res.redirect('/profile');
+        }
+
+        return bcrypt.compare(currentPassword, user.password, (compareError, currentMatches) => {
+            if (compareError) {
+                console.error(compareError);
+                req.session.profileError = 'Password could not be checked. Please try again.';
+                return res.redirect('/profile');
+            }
+
+            if (!currentMatches) {
+                req.session.passwordChangeAttempts += 1;
+                req.session.profileError = 'Current password is incorrect.';
+                return res.redirect('/profile');
+            }
+
+            return bcrypt.hash(newPassword, 12, (hashError, passwordHash) => {
+                if (hashError) {
+                    console.error(hashError);
+                    req.session.profileError = 'Password could not be secured. Please try again.';
+                    return res.redirect('/profile');
+                }
+
+                return User.updatePassword(req.session.user.id, passwordHash, (updateError) => {
+                    if (updateError) {
+                        console.error(updateError);
+                        req.session.profileError = 'Password could not be updated. Please try again.';
+                        return res.redirect('/profile');
+                    }
+
+                    req.session.passwordChangeAttempts = 0;
+                    req.session.profileSuccess = 'Password updated successfully.';
+                    return res.redirect('/profile');
+                });
+            });
+        });
+    });
+}
+
 function logoutUser(req, res) {
     req.session.destroy(() => {
         res.redirect('/login');
@@ -305,5 +502,6 @@ module.exports = {
     signupUser,
     showProfile,
     updateProfile,
+    updatePassword,
     logoutUser
 };
