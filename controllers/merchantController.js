@@ -188,7 +188,8 @@ function showHome(req, res) {
     res.render('home', {
         title: 'Vaniday',
         merchants: Merchant.getAll(),
-        success: req.session.success
+        success: req.session.success,
+        showChatbot: true
     });
     req.session.success = null;
 }
@@ -208,7 +209,8 @@ function showServices(req, res) {
         favouriteIds,
         serviceCatalog,
         portalStats: Merchant.getPortalStats(search),
-        search
+        search,
+        showChatbot: true
     });
 }
 

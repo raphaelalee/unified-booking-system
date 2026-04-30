@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
+const aiController = require('./controllers/aiController');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
 require('dotenv').config();
@@ -71,6 +72,7 @@ app.get('/booking/:merchantId', merchantController.showBookingPage);
 app.post('/booking/:merchantId', merchantController.saveQrBooking);
 app.get('/merchants/:id', merchantController.showMerchant);
 app.post('/merchants/:id/book', merchantController.createBooking);
+app.post('/api/ai/chat', aiController.getBeautyAdvice);
 
 app.get('/about', (req, res) => {
     res.render('about', { title: 'About Us' });
@@ -83,7 +85,8 @@ app.get('/contact', (req, res) => {
 app.get('/products', (req, res) => {
     res.render('products', {
         title: 'Products',
-        products: Product.getAll()
+        products: Product.getAll(),
+        showChatbot: true
     });
 });
 

@@ -1,0 +1,36 @@
+<section class="ai-chatbot" aria-label="Vaniday AI beauty assistant">
+    <button class="ai-chatbot-toggle" type="button" aria-expanded="false" aria-controls="ai-chatbot-panel">
+        <span aria-hidden="true">AI</span>
+        <span class="ai-chatbot-toggle-text">Ask Beauty AI</span>
+    </button>
+
+    <div class="ai-chatbot-panel" id="ai-chatbot-panel" hidden>
+        <div class="ai-chatbot-header">
+            <div>
+                <p>Vaniday AI</p>
+                <span>Beauty and wellness assistant</span>
+            </div>
+            <button class="ai-chatbot-close" type="button" aria-label="Close chatbot">×</button>
+        </div>
+
+        <div class="ai-chatbot-messages" aria-live="polite">
+            <div class="ai-chatbot-message bot">
+                Hi, I can help you choose services, products, or booking options. What are you looking for today?
+            </div>
+        </div>
+
+        <form class="ai-chatbot-form">
+            <label class="sr-only" for="ai-chatbot-input">Ask the Vaniday AI assistant</label>
+            <input
+                id="ai-chatbot-input"
+                name="message"
+                type="text"
+                autocomplete="off"
+                placeholder="Ask about hair, nails, facial..."
+                maxlength="500"
+                required
+            >
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</section>
