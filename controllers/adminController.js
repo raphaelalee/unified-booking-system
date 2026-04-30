@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
+const Promotion = require('../models/Promotion');
 const User = require('../models/User');
 
 function getBookingAmount(booking) {
@@ -138,6 +139,22 @@ function getServiceForm(body = {}) {
     };
 }
 
+function formatDateTimeLocalValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const pad = (part) => String(part).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function validateServiceForm(form) {
     const errors = [];
     const salonId = Number(form.salonId);
@@ -171,6 +188,94 @@ function validateServiceForm(form) {
     }
 
     return errors;
+}
+
+function getPromotionForm(body = {}) {
+    return {
+        salonId: String(body.salonId || '').trim(),
+        serviceId: String(body.serviceId || '').trim(),
+        title: String(body.title || '').trim(),
+        type: String(body.type || '').trim(),
+        discountType: String(body.discountType || '').trim(),
+        discountValue: String(body.discountValue || '').trim(),
+        startDate: String(body.startDate || '').trim(),
+        endDate: String(body.endDate || '').trim(),
+        status: String(body.status || '').trim(),
+        description: String(body.description || '').trim(),
+        terms: String(body.terms || '').trim()
+    };
+}
+
+function validatePromotionForm(form, salons, services) {
+    const errors = [];
+    const salonId = Number(form.salonId);
+    const serviceId = form.serviceId ? Number(form.serviceId) : null;
+    const discountValue = form.discountValue === '' ? null : Number(form.discountValue);
+    const startDate = form.startDate ? new Date(form.startDate) : null;
+    const endDate = form.endDate ? new Date(form.endDate) : null;
+    const validSalonIds = new Set((salons || []).map((salon) => Number(salon.salon_id)));
+    const validServices = (services || []).filter((service) => Number(service.salonId) === salonId);
+    const validServiceIds = new Set(validServices.map((service) => Number(service.id)));
+
+    if (!Number.isInteger(salonId) || !validSalonIds.has(salonId)) {
+        errors.push('Please select a valid merchant salon.');
+    }
+
+    if (form.title.length < 2) {
+        errors.push('Promotion title must be at least 2 characters.');
+    }
+
+    if (!Promotion.PROMOTION_TYPES.includes(form.type)) {
+        errors.push('Please choose a valid promotion type.');
+    }
+
+    if (!Promotion.DISCOUNT_TYPES.includes(form.discountType)) {
+        errors.push('Please choose a valid discount type.');
+    }
+
+    if (serviceId !== null && (!Number.isInteger(serviceId) || !validServiceIds.has(serviceId))) {
+        errors.push('Please choose a valid service for the selected salon.');
+    }
+
+    if (form.discountType !== 'tag_only') {
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            errors.push('Please enter a valid discount value.');
+        }
+    }
+
+    if (!(startDate instanceof Date) || Number.isNaN(startDate?.getTime())) {
+        errors.push('Please enter a valid promotion start date.');
+    }
+
+    if (!(endDate instanceof Date) || Number.isNaN(endDate?.getTime())) {
+        errors.push('Please enter a valid promotion end date.');
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+        errors.push('Promotion end date must be after the start date.');
+    }
+
+    if (!Promotion.PROMOTION_STATUSES.includes(form.status)) {
+        errors.push('Please choose a valid promotion status.');
+    }
+
+    return errors;
+}
+
+function buildPromotionPayload(form) {
+    return {
+        salonId: Number(form.salonId),
+        serviceId: form.serviceId ? Number(form.serviceId) : null,
+        title: form.title,
+        type: form.type,
+        discountType: form.discountType,
+        discountValue: form.discountType === 'tag_only' || form.discountValue === '' ? null : Number(form.discountValue),
+        startDate: form.startDate,
+        endDate: form.endDate,
+        status: form.status,
+        description: form.description,
+        terms: form.terms
+    };
 }
 
 function renderServiceForm(res, options) {
@@ -476,14 +581,286 @@ function deleteService(req, res) {
     });
 }
 
+function renderPromotionForm(res, options) {
+    return MerchantService.getSalons((salonError, salons) => {
+        if (salonError) {
+            console.error(salonError);
+            return res.status(500).render('error', {
+                title: 'Salons Not Found',
+                message: 'Merchant salons could not be loaded.'
+            });
+        }
+
+        return MerchantService.getAllServices((serviceError, services) => {
+            if (serviceError) {
+                console.error(serviceError);
+                return res.status(500).render('error', {
+                    title: 'Services Not Found',
+                    message: 'Merchant services could not be loaded.'
+                });
+            }
+
+            return res.status(options.status || 200).render('admin-promotion-form', {
+                title: options.title,
+                salons,
+                services,
+                promotion: options.promotion || null,
+                form: options.form,
+                promotionTypes: Promotion.PROMOTION_TYPES,
+                discountTypes: Promotion.DISCOUNT_TYPES,
+                statuses: Promotion.PROMOTION_STATUSES,
+                errors: options.errors || []
+            });
+        });
+    });
+}
+
+function listPromotions(req, res) {
+    return Promotion.getAll((promotionError, promotions) => {
+        if (promotionError) {
+            console.error(promotionError);
+            return res.status(500).render('error', {
+                title: 'Admin Promotions Error',
+                message: 'Promotions could not be loaded from the database.'
+            });
+        }
+
+        const groupedPromotions = {
+            first_trial: promotions.filter((promotion) => promotion.type === 'first_trial'),
+            happy_hour: promotions.filter((promotion) => promotion.type === 'happy_hour'),
+            one_for_one: promotions.filter((promotion) => promotion.type === 'one_for_one'),
+            featured: promotions.filter((promotion) => promotion.type === 'featured')
+        };
+
+        const success = req.session.adminSuccess;
+        const error = req.session.adminError;
+        req.session.adminSuccess = null;
+        req.session.adminError = null;
+
+        return res.render('admin-promotions', {
+            title: 'Manage Promotions',
+            promotions,
+            groupedPromotions,
+            success,
+            error
+        });
+    });
+}
+
+function showNewPromotion(req, res) {
+    return renderPromotionForm(res, {
+        title: 'Add Promotion',
+        form: getPromotionForm({
+            status: 'draft',
+            discountType: 'percentage',
+            type: 'first_trial'
+        })
+    });
+}
+
+function createPromotion(req, res) {
+    const form = getPromotionForm(req.body);
+
+    return MerchantService.getSalons((salonError, salons) => {
+        if (salonError) {
+            console.error(salonError);
+            return res.status(500).render('error', {
+                title: 'Salons Not Found',
+                message: 'Merchant salons could not be loaded.'
+            });
+        }
+
+        return MerchantService.getAllServices((serviceError, services) => {
+            if (serviceError) {
+                console.error(serviceError);
+                return res.status(500).render('error', {
+                    title: 'Services Not Found',
+                    message: 'Merchant services could not be loaded.'
+                });
+            }
+
+            const errors = validatePromotionForm(form, salons, services);
+
+            if (errors.length > 0) {
+                return res.status(400).render('admin-promotion-form', {
+                    title: 'Add Promotion',
+                    salons,
+                    services,
+                    promotion: null,
+                    form,
+                    promotionTypes: Promotion.PROMOTION_TYPES,
+                    discountTypes: Promotion.DISCOUNT_TYPES,
+                    statuses: Promotion.PROMOTION_STATUSES,
+                    errors
+                });
+            }
+
+            return Promotion.createAsAdmin(buildPromotionPayload(form), (createError) => {
+                if (createError) {
+                    console.error(createError);
+                    return res.status(500).render('admin-promotion-form', {
+                        title: 'Add Promotion',
+                        salons,
+                        services,
+                        promotion: null,
+                        form,
+                        promotionTypes: Promotion.PROMOTION_TYPES,
+                        discountTypes: Promotion.DISCOUNT_TYPES,
+                        statuses: Promotion.PROMOTION_STATUSES,
+                        errors: ['Promotion could not be created. Please try again.']
+                    });
+                }
+
+                req.session.adminSuccess = 'Promotion created successfully.';
+                return res.redirect('/admin/promotions');
+            });
+        });
+    });
+}
+
+function showEditPromotion(req, res) {
+    return Promotion.findById(req.params.promotionId, (promotionError, promotion) => {
+        if (promotionError) {
+            console.error(promotionError);
+            return res.status(500).render('error', {
+                title: 'Promotion Not Found',
+                message: 'Promotion data could not be loaded.'
+            });
+        }
+
+        if (!promotion) {
+            return res.status(404).render('error', {
+                title: 'Promotion Not Found',
+                message: 'The selected promotion could not be found.'
+            });
+        }
+
+        return renderPromotionForm(res, {
+            title: 'Edit Promotion',
+            promotion,
+            form: {
+                salonId: String(promotion.salonId),
+                serviceId: promotion.serviceId ? String(promotion.serviceId) : '',
+                title: promotion.title,
+                type: promotion.type,
+                discountType: promotion.discountType,
+                discountValue: promotion.discountValue === null ? '' : String(promotion.discountValue),
+                startDate: formatDateTimeLocalValue(promotion.startDate),
+                endDate: formatDateTimeLocalValue(promotion.endDate),
+                status: promotion.status,
+                description: promotion.description || '',
+                terms: promotion.terms || ''
+            }
+        });
+    });
+}
+
+function updatePromotion(req, res) {
+    return Promotion.findById(req.params.promotionId, (promotionError, promotion) => {
+        if (promotionError) {
+            console.error(promotionError);
+            return res.status(500).render('error', {
+                title: 'Promotion Not Found',
+                message: 'Promotion data could not be loaded.'
+            });
+        }
+
+        if (!promotion) {
+            return res.status(404).render('error', {
+                title: 'Promotion Not Found',
+                message: 'The selected promotion could not be found.'
+            });
+        }
+
+        const form = getPromotionForm(req.body);
+
+        return MerchantService.getSalons((salonError, salons) => {
+            if (salonError) {
+                console.error(salonError);
+                return res.status(500).render('error', {
+                    title: 'Salons Not Found',
+                    message: 'Merchant salons could not be loaded.'
+                });
+            }
+
+            return MerchantService.getAllServices((serviceError, services) => {
+                if (serviceError) {
+                    console.error(serviceError);
+                    return res.status(500).render('error', {
+                        title: 'Services Not Found',
+                        message: 'Merchant services could not be loaded.'
+                    });
+                }
+
+                const errors = validatePromotionForm(form, salons, services);
+
+                if (errors.length > 0) {
+                    return res.status(400).render('admin-promotion-form', {
+                        title: 'Edit Promotion',
+                        salons,
+                        services,
+                        promotion,
+                        form,
+                        promotionTypes: Promotion.PROMOTION_TYPES,
+                        discountTypes: Promotion.DISCOUNT_TYPES,
+                        statuses: Promotion.PROMOTION_STATUSES,
+                        errors
+                    });
+                }
+
+                return Promotion.updateAsAdmin(promotion.id, buildPromotionPayload(form), (updateError) => {
+                    if (updateError) {
+                        console.error(updateError);
+                        return res.status(500).render('admin-promotion-form', {
+                            title: 'Edit Promotion',
+                            salons,
+                            services,
+                            promotion,
+                            form,
+                            promotionTypes: Promotion.PROMOTION_TYPES,
+                            discountTypes: Promotion.DISCOUNT_TYPES,
+                            statuses: Promotion.PROMOTION_STATUSES,
+                            errors: ['Promotion could not be updated. Please check the salon, service, and dates.']
+                        });
+                    }
+
+                    req.session.adminSuccess = 'Promotion updated successfully.';
+                    return res.redirect('/admin/promotions');
+                });
+            });
+        });
+    });
+}
+
+function deletePromotion(req, res) {
+    return Promotion.deleteAsAdmin(req.params.promotionId, (deleteError, result) => {
+        if (deleteError) {
+            console.error(deleteError);
+            req.session.adminError = 'Promotion could not be deleted.';
+            return res.redirect('/admin/promotions');
+        }
+
+        const deleted = Boolean(result && result.affectedRows > 0);
+        req.session.adminSuccess = deleted ? 'Promotion deleted successfully.' : null;
+        req.session.adminError = deleted ? null : 'Promotion could not be deleted.';
+        return res.redirect('/admin/promotions');
+    });
+}
+
 module.exports = {
     showDashboard,
     showNewMerchant,
     createMerchant,
     listServices,
+    showNewPromotion,
+    createPromotion,
     showNewService,
     createService,
     showEditService,
     updateService,
-    deleteService
+    deleteService,
+    listPromotions,
+    showEditPromotion,
+    updatePromotion,
+    deletePromotion
 };

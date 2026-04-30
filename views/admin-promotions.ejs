@@ -1,0 +1,149 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const categoryMeta = [
+        { key: 'first_trial', label: 'First Trial' },
+        { key: 'happy_hour', label: 'Happy Hour' },
+        { key: 'one_for_one', label: '1 For 1' },
+        { key: 'featured', label: 'Featured' }
+    ];
+    const storeOptions = [...new Set(promotions.map((promotion) => promotion.salonName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const formatPromotionDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>Manage promotions.</h1>
+    <p>Review promotions across all merchants, grouped by category for first trial, happy hour, 1-for-1, and featured campaigns.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Promotions</p>
+            <h2><%= promotions.length %> promotions</h2>
+        </div>
+        <div class="admin-action-row">
+            <label>
+                <span class="sr-only">Filter by store</span>
+                <select class="js-admin-promotion-store-filter">
+                    <option value="">All stores</option>
+                    <% storeOptions.forEach((storeName) => { %>
+                        <option value="<%= storeName %>"><%= storeName %></option>
+                    <% }) %>
+                </select>
+            </label>
+            <a class="button secondary" href="/admin">Back to admin</a>
+            <a class="button secondary" href="/admin/promotions/new">Add promotion</a>
+        </div>
+    </div>
+
+    <% categoryMeta.forEach((category) => { %>
+        <% const categoryPromotions = groupedPromotions[category.key] || []; %>
+        <div class="section-heading profile-heading js-admin-promotion-section">
+            <p class="eyebrow">Promotion Category</p>
+            <h2><%= category.label %></h2>
+        </div>
+
+        <% if (categoryPromotions.length === 0) { %>
+            <div class="notice js-admin-promotion-empty">
+                <p>No <%= category.label %> promotions found.</p>
+            </div>
+        <% } else { %>
+            <div class="service-catalog-grid unified-service-grid js-admin-promotion-grid">
+                <% categoryPromotions.forEach((promotion) => { %>
+                    <article class="service-catalog-card unified-service-card js-admin-promotion-card" data-store="<%= promotion.salonName %>">
+                        <div class="portal-card-header">
+                            <span class="tag"><%= category.label %></span>
+                            <span class="service-price slim"><%= promotion.status %></span>
+                        </div>
+                        <div>
+                            <h3><%= promotion.title %></h3>
+                            <p class="muted"><%= promotion.salonName %> &middot; <%= promotion.serviceName || 'All merchant services' %></p>
+                            <p>
+                                <%= promotion.discountType.replace(/_/g, ' ') %>
+                                <% if (promotion.discountValue !== null) { %>
+                                    &middot; <%= promotion.discountValue %>
+                                <% } %>
+                            </p>
+                            <% if (promotion.description) { %>
+                                <p class="muted"><%= promotion.description %></p>
+                            <% } %>
+                        </div>
+                        <div class="availability-strip">
+                            <span>Starts <%= formatPromotionDate(promotion.startDate) %></span>
+                            <span>Ends <%= formatPromotionDate(promotion.endDate) %></span>
+                        </div>
+                        <div class="service-card-actions">
+                            <a class="button secondary full" href="/admin/promotions/<%= promotion.id %>/edit">Edit</a>
+                            <form action="/admin/promotions/<%= promotion.id %>/delete" method="POST">
+                                <button class="button secondary full danger-button" type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+        <% } %>
+    <% }) %>
+</section>
+
+<script>
+    (() => {
+        const storeFilter = document.querySelector('.js-admin-promotion-store-filter');
+        const categorySections = Array.from(document.querySelectorAll('.js-admin-promotion-section'));
+        const categoryGrids = Array.from(document.querySelectorAll('.js-admin-promotion-grid'));
+
+        if (!storeFilter || categoryGrids.length === 0) {
+            return;
+        }
+
+        const applyFilter = () => {
+            const selectedStore = storeFilter.value.trim().toLowerCase();
+
+            categoryGrids.forEach((grid, index) => {
+                const cards = Array.from(grid.querySelectorAll('.js-admin-promotion-card'));
+                const visibleCount = cards.reduce((count, card) => {
+                    const storeName = (card.dataset.store || '').trim().toLowerCase();
+                    const isVisible = !selectedStore || storeName === selectedStore;
+
+                    card.style.display = isVisible ? '' : 'none';
+                    return count + (isVisible ? 1 : 0);
+                }, 0);
+
+                const section = categorySections[index];
+
+                if (section) {
+                    section.style.display = visibleCount > 0 ? '' : 'none';
+                }
+
+                grid.style.display = visibleCount > 0 ? '' : 'none';
+            });
+        };
+
+        storeFilter.addEventListener('change', applyFilter);
+        applyFilter();
+    })();
+</script>
+
+<%- include('partials/footer') %>

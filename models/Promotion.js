@@ -13,6 +13,7 @@ function mapPromotion(row) {
         id: row.promotion_id,
         promotionId: row.promotion_id,
         salonId: row.salon_id,
+        salonName: row.salon_name || '',
         serviceId: row.service_id,
         serviceName: row.service_name || '',
         title: row.title,
@@ -25,6 +26,39 @@ function mapPromotion(row) {
         description: row.description || '',
         terms: row.terms || ''
     };
+}
+
+function getAll(callback) {
+    const sql = `
+        SELECT
+            promotions.promotion_id,
+            promotions.salon_id,
+            promotions.service_id,
+            promotions.title,
+            promotions.type,
+            promotions.discount_type,
+            promotions.discount_value,
+            promotions.start_date,
+            promotions.end_date,
+            promotions.status,
+            promotions.description,
+            promotions.terms,
+            services.service_name,
+            salons.salon_name
+        FROM promotions
+        INNER JOIN salons ON salons.salon_id = promotions.salon_id
+        LEFT JOIN services ON services.service_id = promotions.service_id
+        ORDER BY promotions.type, promotions.start_date DESC, promotions.promotion_id DESC
+    `;
+
+    db.query(sql, (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, (rows || []).map(mapPromotion));
+    });
 }
 
 function getByMerchantUserId(userId, callback) {
@@ -57,6 +91,40 @@ function getByMerchantUserId(userId, callback) {
         }
 
         callback(null, (rows || []).map(mapPromotion));
+    });
+}
+
+function findById(promotionId, callback) {
+    const sql = `
+        SELECT
+            promotions.promotion_id,
+            promotions.salon_id,
+            promotions.service_id,
+            promotions.title,
+            promotions.type,
+            promotions.discount_type,
+            promotions.discount_value,
+            promotions.start_date,
+            promotions.end_date,
+            promotions.status,
+            promotions.description,
+            promotions.terms,
+            services.service_name,
+            salons.salon_name
+        FROM promotions
+        INNER JOIN salons ON salons.salon_id = promotions.salon_id
+        LEFT JOIN services ON services.service_id = promotions.service_id
+        WHERE promotions.promotion_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [promotionId], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, mapPromotion(rows[0]));
     });
 }
 
@@ -143,6 +211,40 @@ function createForMerchant(userId, promotion, callback) {
     db.query(sql, params, callback);
 }
 
+function createAsAdmin(promotion, callback) {
+    const sql = `
+        INSERT INTO promotions (
+            salon_id,
+            service_id,
+            title,
+            type,
+            discount_type,
+            discount_value,
+            start_date,
+            end_date,
+            status,
+            description,
+            terms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+        promotion.salonId,
+        promotion.serviceId || null,
+        promotion.title,
+        promotion.type,
+        promotion.discountType,
+        promotion.discountValue,
+        promotion.startDate,
+        promotion.endDate,
+        promotion.status,
+        promotion.description,
+        promotion.terms
+    ];
+
+    db.query(sql, params, callback);
+}
+
 function updateForMerchant(userId, promotionId, promotion, callback) {
     const sql = `
         UPDATE promotions
@@ -180,6 +282,42 @@ function updateForMerchant(userId, promotionId, promotion, callback) {
     db.query(sql, params, callback);
 }
 
+function updateAsAdmin(promotionId, promotion, callback) {
+    const sql = `
+        UPDATE promotions
+        SET
+            salon_id = ?,
+            service_id = ?,
+            title = ?,
+            type = ?,
+            discount_type = ?,
+            discount_value = ?,
+            start_date = ?,
+            end_date = ?,
+            status = ?,
+            description = ?,
+            terms = ?
+        WHERE promotion_id = ?
+    `;
+
+    const params = [
+        promotion.salonId,
+        promotion.serviceId || null,
+        promotion.title,
+        promotion.type,
+        promotion.discountType,
+        promotion.discountValue,
+        promotion.startDate,
+        promotion.endDate,
+        promotion.status,
+        promotion.description,
+        promotion.terms,
+        promotionId
+    ];
+
+    db.query(sql, params, callback);
+}
+
 function deleteForMerchant(userId, promotionId, callback) {
     const sql = `
         DELETE promotions
@@ -192,13 +330,22 @@ function deleteForMerchant(userId, promotionId, callback) {
     db.query(sql, [promotionId, userId], callback);
 }
 
+function deleteAsAdmin(promotionId, callback) {
+    db.query('DELETE FROM promotions WHERE promotion_id = ?', [promotionId], callback);
+}
+
 module.exports = {
     PROMOTION_TYPES,
     DISCOUNT_TYPES,
     PROMOTION_STATUSES,
+    getAll,
     getByMerchantUserId,
+    findById,
     findForMerchant,
+    createAsAdmin,
     createForMerchant,
     updateForMerchant,
-    deleteForMerchant
+    updateAsAdmin,
+    deleteForMerchant,
+    deleteAsAdmin
 };
