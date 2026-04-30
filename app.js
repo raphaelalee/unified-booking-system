@@ -80,7 +80,7 @@ app.post('/booking/:merchantId', merchantController.saveQrBooking);
 app.get('/merchants/:id', merchantController.showMerchant);
 app.post('/merchants/:id/book', merchantController.createBooking);
 app.post('/api/ai/chat', aiController.getBeautyAdvice);
-app.get('/merchant', requireRole('merchant'), merchantDashboardController.showDashboard);
+app.get('/merchant', requireRole('merchant'), merchantDashboardController.showServices);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
 app.post('/merchant/generate-qr', requireRole('merchant'), merchantDashboardController.generateQr);
 app.get('/merchant/services/new', requireRole('merchant'), merchantDashboardController.showNewService);

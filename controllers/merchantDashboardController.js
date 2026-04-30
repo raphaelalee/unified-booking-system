@@ -1,5 +1,6 @@
 const QRCode = require('qrcode');
 const MerchantService = require('../models/MerchantService');
+const Booking = require('../models/Booking');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -64,7 +65,15 @@ function validateServiceForm(form) {
     return errors;
 }
 
-function showDashboard(req, res) {
+function buildMerchantReports(merchant, bookings = [], hadError = false) {
+    return {
+        totalBookings: bookings.length,
+        recentBookings: Array.isArray(bookings) ? bookings.slice(0, 5) : [],
+        hasError: Boolean(hadError)
+    };
+}
+
+function showServices(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
 
@@ -83,13 +92,14 @@ function showDashboard(req, res) {
             req.session.merchantSuccess = null;
             req.session.merchantError = null;
 
-        return res.render('merchant-dashboard', {
+            return res.render('merchant-dashboard', {
             title: 'Merchant Services',
             merchant,
             success,
             error,
             qrCodeDataUrl: null,
             qrBookingUrl: null
+        });
         });
     });
 }
