@@ -14,6 +14,24 @@ function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
 }
 
+function appendQueryParams(path, params = {}) {
+    const searchParams = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            searchParams.set(key, String(value));
+        }
+    });
+
+    const queryString = searchParams.toString();
+
+    if (!queryString) {
+        return path;
+    }
+
+    return `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
+}
+
 function getBookingPath(merchant, service = null) {
     const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
     return `/booking/${merchant.id}/${merchant.qrToken}${serviceQuery}`;
@@ -34,6 +52,45 @@ function getSecureBookingUrl(req, merchant, service = null) {
     const serviceQuery = service ? `&serviceId=${encodeURIComponent(service.id)}` : '';
 
     return `${getMerchantScanUrl(req, merchant.id)}${serviceQuery}`;
+}
+
+function getPromotionQueryParams(promotion = null) {
+    if (!promotion) {
+        return {};
+    }
+
+    return {
+        source: 'promotions',
+        promoCampaign: promotion.campaignLabel,
+        promoTitle: promotion.title || promotion.name,
+        promoPrice: promotion.price,
+        promoOriginalPrice: promotion.originalPrice,
+        promoDiscountPercent: promotion.discountPercent
+    };
+}
+
+function getPromotionSelection(query = {}) {
+    if (query.source !== 'promotions') {
+        return null;
+    }
+
+    const campaignLabel = (query.promoCampaign || '').trim();
+    const title = (query.promoTitle || '').trim();
+    const price = Number(query.promoPrice);
+    const originalPrice = Number(query.promoOriginalPrice);
+    const discountPercent = Number(query.promoDiscountPercent);
+
+    if (!campaignLabel && !title) {
+        return null;
+    }
+
+    return {
+        campaignLabel,
+        title,
+        price: Number.isFinite(price) ? price : null,
+        originalPrice: Number.isFinite(originalPrice) ? originalPrice : null,
+        discountPercent: Number.isFinite(discountPercent) ? discountPercent : null
+    };
 }
 
 function getSelectedService(merchant, serviceId) {
@@ -92,7 +149,12 @@ function getBookingServices(merchant, selectedService = null) {
 
 function renderBookingPage(req, res, merchant, options = {}) {
     const requestedServiceId = options.form?.serviceId || req.query.serviceId;
+    const requestedServiceOptionId = options.form?.serviceOptionId || req.query.serviceOptionId;
     const selectedService = getSelectedService(merchant, requestedServiceId);
+    const selectedServiceOption = selectedService
+        ? getSelectedServiceOption(selectedService, requestedServiceOptionId)
+        : null;
+    const selectedPromotion = options.selectedPromotion || getPromotionSelection(req.query);
 
     if (requestedServiceId && !selectedService) {
         return res.status(404).render('error', {
@@ -101,15 +163,32 @@ function renderBookingPage(req, res, merchant, options = {}) {
         });
     }
 
+    if (requestedServiceOptionId && selectedService && !selectedServiceOption) {
+        return res.status(404).render('error', {
+            title: 'Service Option Not Found',
+            message: 'This service option does not belong to the selected service.'
+        });
+    }
+
     const form = {
         ...getPrefilledBookingForm(req, options.form || {}),
-        ...(selectedService ? { serviceId: selectedService.id } : {})
+        ...(selectedService ? { serviceId: selectedService.id } : {}),
+        ...(selectedServiceOption ? { serviceOptionId: selectedServiceOption.id } : {})
     };
     const scopedServices = getBookingServices(merchant, selectedService);
     const useSecureQr = options.secureQr || Boolean(req.params.token || req.query.token);
-    const bookingUrl = useSecureQr
-        ? getSecureBookingUrl(req, merchant, selectedService)
-        : getBookingUrl(req, merchant, selectedService);
+    const bookingPath = appendQueryParams(
+        useSecureQr
+            ? getSecureBookingPath(merchant, selectedService)
+            : getBookingPath(merchant, selectedService),
+        getPromotionQueryParams(selectedPromotion)
+    );
+    const bookingUrl = appendQueryParams(
+        useSecureQr
+            ? getSecureBookingUrl(req, merchant, selectedService)
+            : getBookingUrl(req, merchant, selectedService),
+        getPromotionQueryParams(selectedPromotion)
+    );
 
     return res.status(options.status || 200).render('booking', {
         title: `Book ${merchant.name}`,
@@ -117,10 +196,9 @@ function renderBookingPage(req, res, merchant, options = {}) {
         scopedServices,
         errors: options.errors || [],
         form,
+        selectedPromotion,
         selectedServiceId: selectedService ? selectedService.id : null,
-        bookingPath: useSecureQr
-            ? getSecureBookingPath(merchant, selectedService)
-            : getBookingPath(merchant, selectedService),
+        bookingPath,
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
         todayDate: getTodayInputValue()
@@ -247,14 +325,23 @@ function showServices(req, res) {
 }
 
 function buildPromotionOffers() {
+    const discountPattern = [25, 20, 15, 10, 5];
+    const cashbackPattern = [10, 9, 8, 7, 6, 5];
+
     return Merchant.getAll().flatMap((merchant) => {
         return merchant.services.flatMap((service) => {
             const options = getServiceOptions(service);
             const items = options.length > 0 ? options : [service];
 
             return items.map((item, index) => {
-                const originalPrice = Math.round(Number(item.price) * (1.18 + (index * 0.04)));
-                const discountPercent = Math.max(10, Math.round(((originalPrice - Number(item.price)) / originalPrice) * 100));
+                const basePrice = Number(item.price);
+                const campaignLabel = index === 0 ? 'First Trial' : index === 1 ? 'Happy Hour' : '1 For 1';
+                const discountIndex = (merchant.id + service.id + index) % discountPattern.length;
+                const cashbackIndex = (merchant.id + service.id + index) % cashbackPattern.length;
+                const discountPercent = discountPattern[discountIndex];
+                const cashbackPercent = cashbackPattern[cashbackIndex];
+                const originalPrice = basePrice;
+                const price = Math.max(1, Math.round((basePrice * (100 - discountPercent))) / 100);
 
                 return {
                     id: `${merchant.id}-${service.id}-${item.id || index}`,
@@ -267,13 +354,25 @@ function buildPromotionOffers() {
                     name: options.length > 0 ? `${service.name} - ${item.name}` : service.name,
                     serviceCategory: service.name,
                     duration: item.duration || service.duration,
-                    price: Number(item.price),
+                    price,
                     originalPrice,
                     discountPercent,
-                    campaignLabel: index === 0 ? 'First Trial' : index === 1 ? 'Happy Hour' : '1 For 1',
-                    priceTier: Number(item.price) < 30 ? '$' : Number(item.price) < 55 ? '$$' : Number(item.price) < 80 ? '$$$' : '$$$$',
+                    cashbackPercent,
+                    campaignLabel,
+                    priceTier: price < 30 ? '$' : price < 55 ? '$$' : price < 80 ? '$$$' : '$$$$',
                     regions: [merchant.location, merchant.category],
-                    serviceBookingPath: `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${service.id}`
+                    serviceBookingPath: appendQueryParams(
+                        `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${encodeURIComponent(service.id)}`,
+                        {
+                            source: 'promotions',
+                            serviceOptionId: options.length > 0 ? item.id : '',
+                            promoCampaign: campaignLabel,
+                            promoTitle: options.length > 0 ? `${service.name} - ${item.name}` : service.name,
+                            promoPrice: price,
+                            promoOriginalPrice: originalPrice,
+                            promoDiscountPercent: discountPercent
+                        }
+                    )
                 };
             });
         });
