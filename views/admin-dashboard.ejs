@@ -1,0 +1,127 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>All merchants and booking data.</h1>
+    <p>Admins can view every merchant, service, and booking across the platform.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <% if (databaseError) { %>
+        <div class="notice error">
+            <p>Database bookings could not be loaded, so only in-memory bookings are shown.</p>
+        </div>
+    <% } %>
+
+    <div class="portal-summary-panel admin-summary-panel">
+        <div class="portal-stat">
+            <span>Merchants</span>
+            <strong><%= stats.merchantCount %></strong>
+        </div>
+        <div class="portal-stat">
+            <span>Services</span>
+            <strong><%= stats.serviceCount %></strong>
+        </div>
+        <div class="portal-stat">
+            <span>Bookings</span>
+            <strong><%= stats.bookingCount %></strong>
+        </div>
+    </div>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Site Management</p>
+            <h2>Admin controls</h2>
+            <p class="muted">Manage merchant accounts, services, and booking records from the admin area.</p>
+        </div>
+        <div class="admin-action-row">
+            <a class="button primary" href="/admin/merchants/new">Add merchant</a>
+            <a class="button secondary" href="/admin/services">Manage services</a>
+        </div>
+    </div>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Merchants</p>
+            <h2>Connected merchant accounts</h2>
+        </div>
+        <a class="button secondary" href="/admin/merchants/new">Add merchant</a>
+    </div>
+
+    <div class="merchant-list">
+        <% merchants.forEach((merchant) => { %>
+            <article class="merchant-row unified-merchant-row">
+                <div class="merchant-thumb merchant-thumb-<%= merchant.salon_id %>">
+                    <span>Merchant</span>
+                </div>
+                <div>
+                    <div class="portal-card-header">
+                        <p class="tag">Merchant</p>
+                        <span class="sync-pill">Database</span>
+                    </div>
+                    <h2><%= merchant.salon_name %></h2>
+                    <p class="muted"><%= merchant.address || 'No address set' %> &middot; Owner <%= merchant.owner_email %></p>
+                    <p><%= merchant.description %></p>
+                </div>
+                <div class="merchant-actions">
+                    <div class="portal-card-metrics compact">
+                        <span><strong><%= merchant.service_count %></strong> services</span>
+                        <span><strong>#<%= merchant.merchant_user_id %></strong> owner ID</span>
+                    </div>
+                </div>
+            </article>
+        <% }) %>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Bookings</p>
+        <h2>Platform booking records</h2>
+    </div>
+
+    <% if (bookings.length === 0) { %>
+        <div class="notice">
+            <p>No bookings have been recorded yet.</p>
+        </div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Merchant</th>
+                        <th>Service</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% bookings.forEach((booking) => { %>
+                        <tr>
+                            <td><%= booking.id %></td>
+                            <td><%= booking.merchant_name || booking.merchantName %></td>
+                            <td><%= booking.service_name || booking.serviceName %></td>
+                            <td>
+                                <strong><%= booking.customer_name || booking.customerName %></strong><br>
+                                <span><%= booking.email %></span>
+                            </td>
+                            <td><%= booking.booking_date || booking.bookingDate %></td>
+                            <td><%= booking.booking_time || booking.bookingTime %></td>
+                            <td><span class="sync-pill"><%= booking.status %></span></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

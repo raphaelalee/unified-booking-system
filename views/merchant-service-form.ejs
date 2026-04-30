@@ -1,0 +1,63 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1><%= service ? 'Edit service' : 'Add service' %></h1>
+    <p><%= merchant.name %> can only manage services under this merchant profile.</p>
+</section>
+
+<section class="section compact">
+    <form class="login-form service-admin-form" action="<%= service ? `/merchant/services/${service.id}` : '/merchant/services' %>" method="POST">
+        <% if (errors.length > 0) { %>
+            <div class="notice error">
+                <% errors.forEach((error) => { %>
+                    <p><%= error %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <label>
+            Service name
+            <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Facial" required>
+        </label>
+
+        <label>
+            Category
+            <select name="categoryId" required>
+                <option value="">Select category</option>
+                <% categories.forEach((category) => { %>
+                    <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>>
+                        <%= category.category_name %>
+                    </option>
+                <% }) %>
+            </select>
+        </label>
+
+        <label>
+            Description
+            <textarea name="description" placeholder="Short service description"><%= form.description %></textarea>
+        </label>
+
+        <label>
+            Duration in minutes
+            <input type="number" name="durationMins" value="<%= form.durationMins %>" min="1" step="1" placeholder="60" required>
+        </label>
+
+        <label>
+            Price
+            <input type="number" name="price" value="<%= form.price %>" min="0" step="0.01" placeholder="68" required>
+        </label>
+
+        <label>
+            Slots
+            <input type="text" name="slots" value="<%= form.slots %>" placeholder="10:00, 14:00, 17:00" required>
+        </label>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit"><%= service ? 'Update service' : 'Create service' %></button>
+            <a class="button secondary" href="/merchant/services">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

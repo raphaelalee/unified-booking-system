@@ -525,7 +525,16 @@ function saveQrBooking(req, res) {
         });
     }
 
+    if (!req.session.user) {
+        return renderBookingPage(req, res, merchant, {
+            status: 401,
+            errors: ['Please log in before confirming a booking.'],
+            form: req.body
+        });
+    }
+
     const bookingData = {
+        userId: req.session.user.id,
         merchantId: merchant.id,
         merchantName: merchant.name,
         serviceId: validation.service.id,
@@ -534,7 +543,8 @@ function saveQrBooking(req, res) {
         email: validation.email,
         phone: validation.phone,
         bookingDate: req.body.bookingDate,
-        bookingTime: req.body.bookingTime
+        bookingTime: req.body.bookingTime,
+        qrCodeToken: req.params.qrToken
     };
 
     Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (lookupError, exists) => {

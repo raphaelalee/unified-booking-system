@@ -36,6 +36,7 @@ const merchants = [
         posSystem: 'Vaniday POS',
         bookingSystem: 'Vaniday QR Booking',
         integrationStatus: 'Synced',
+        ownerEmail: 'beauty@vaniday.sg',
         rating: '4.8',
         promotion: '20% off first booking',
         description: 'Hair styling, facials, and beauty treatments from trusted Vaniday merchants.',
@@ -98,6 +99,7 @@ const merchants = [
         posSystem: 'FreshGlow POS',
         bookingSystem: 'SpaDesk Scheduler',
         integrationStatus: 'Synced',
+        ownerEmail: 'spa@vaniday.sg',
         rating: '4.6',
         promotion: 'Free add-on massage for bookings above $80',
         description: 'Relaxing spa services with simple online booking and clear appointment slots.',
@@ -137,6 +139,7 @@ const merchants = [
         posSystem: 'Urban Groom POS',
         bookingSystem: 'BarberSlot Booking',
         integrationStatus: 'Synced',
+        ownerEmail: 'barber@vaniday.sg',
         rating: '4.7',
         promotion: '$5 student discount',
         description: 'Fast grooming services for walk-in style retail merchants using digital booking.',
@@ -237,6 +240,16 @@ function findById(id) {
     return withServices(merchants.find((merchant) => merchant.id === Number(id)));
 }
 
+function findByOwner(user) {
+    if (!user) {
+        return null;
+    }
+
+    return withServices(merchants.find((merchant) => {
+        return merchant.ownerUserId === user.id || merchant.ownerEmail === user.email;
+    }));
+}
+
 function findService(merchantId, serviceId) {
     const merchant = findById(merchantId);
 
@@ -245,6 +258,96 @@ function findService(merchantId, serviceId) {
     }
 
     return merchant.services.find((service) => service.id === Number(serviceId)) || null;
+}
+
+function getNextServiceId(merchant) {
+    const existingIds = merchant.services.flatMap((service) => {
+        const optionIds = Array.isArray(service.options)
+            ? service.options.map((option) => Number(option.id))
+            : [];
+
+        return [Number(service.id), ...optionIds];
+    }).filter(Number.isFinite);
+
+    const baseId = Number(merchant.id) * 100;
+    const highestId = existingIds.length > 0 ? Math.max(...existingIds) : baseId;
+
+    return highestId + 1;
+}
+
+function normalizeSlots(slots) {
+    if (Array.isArray(slots)) {
+        return slots.map((slot) => String(slot).trim()).filter(Boolean);
+    }
+
+    return String(slots || '')
+        .split(',')
+        .map((slot) => slot.trim())
+        .filter(Boolean);
+}
+
+function buildServiceData(serviceData, existingService = {}) {
+    const price = Number(serviceData.price);
+
+    return {
+        ...existingService,
+        name: String(serviceData.name || '').trim(),
+        duration: String(serviceData.duration || '').trim(),
+        price: Number.isFinite(price) ? price : 0,
+        slots: normalizeSlots(serviceData.slots)
+    };
+}
+
+function createService(merchantId, serviceData) {
+    const merchant = findById(merchantId);
+
+    if (!merchant) {
+        return null;
+    }
+
+    const service = {
+        id: getNextServiceId(merchant),
+        ...buildServiceData(serviceData)
+    };
+
+    merchant.services.push(service);
+    return service;
+}
+
+function updateService(merchantId, serviceId, serviceData) {
+    const merchant = findById(merchantId);
+
+    if (!merchant) {
+        return null;
+    }
+
+    const serviceIndex = merchant.services.findIndex((service) => service.id === Number(serviceId));
+
+    if (serviceIndex === -1) {
+        return null;
+    }
+
+    const existingService = merchant.services[serviceIndex];
+    const updatedService = {
+        ...buildServiceData(serviceData, existingService),
+        id: existingService.id
+    };
+
+    merchant.services[serviceIndex] = updatedService;
+    return updatedService;
+}
+
+function deleteService(merchantId, serviceId) {
+    const merchant = findById(merchantId);
+
+    if (!merchant) {
+        return false;
+    }
+
+    const originalLength = merchant.services.length;
+    merchant.services = merchant.services.filter((service) => service.id !== Number(serviceId));
+
+    return merchant.services.length !== originalLength;
 }
 
 function hasValidQrToken(merchant, qrToken) {
@@ -256,6 +359,10 @@ module.exports = {
     getServiceCatalog,
     getPortalStats,
     findById,
+    findByOwner,
     findService,
+    createService,
+    updateService,
+    deleteService,
     hasValidQrToken
 };

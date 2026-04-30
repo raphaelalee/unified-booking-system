@@ -1,0 +1,55 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1><%= merchant.name %></h1>
+    <p>Manage only the services assigned to your merchant account.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="section-cta">
+        <div>
+            <h2>Services</h2>
+            <p class="muted"><%= merchant.services.length %> active services for <%= merchant.location %>.</p>
+        </div>
+        <a class="button primary" href="/merchant/services/new">Add service</a>
+    </div>
+
+    <div class="service-catalog-grid unified-service-grid">
+        <% merchant.services.forEach((service) => { %>
+            <article class="service-catalog-card unified-service-card">
+                <div class="portal-card-header">
+                    <span class="tag"><%= service.category || merchant.category %></span>
+                    <span class="service-price slim">$<%= service.price %></span>
+                </div>
+                <div>
+                    <h3><%= service.name %></h3>
+                    <p class="muted"><%= service.duration %></p>
+                    <% if (service.description) { %>
+                        <p><%= service.description %></p>
+                    <% } %>
+                </div>
+                <div class="availability-strip">
+                    <% (service.slots || []).forEach((slot) => { %>
+                        <span><%= slot %></span>
+                    <% }) %>
+                </div>
+                <div class="service-card-actions">
+                    <a class="button secondary full" href="/merchant/services/<%= service.id %>/edit">Edit</a>
+                    <form action="/merchant/services/<%= service.id %>/delete" method="POST">
+                        <button class="button secondary full danger-button" type="submit">Delete</button>
+                    </form>
+                </div>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

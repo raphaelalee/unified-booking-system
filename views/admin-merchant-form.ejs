@@ -1,0 +1,61 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>Add merchant.</h1>
+    <p>Create a merchant login account and its salon profile in one step.</p>
+</section>
+
+<section class="section compact">
+    <form class="login-form service-admin-form" action="/admin/merchants" method="POST">
+        <% if (errors.length > 0) { %>
+            <div class="notice error">
+                <% errors.forEach((error) => { %>
+                    <p><%= error %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <label>
+            Merchant owner name
+            <input type="text" name="ownerName" value="<%= form.ownerName %>" placeholder="FreshGlow Spa Merchant" required>
+        </label>
+
+        <label>
+            Merchant email
+            <input type="email" name="email" value="<%= form.email %>" placeholder="merchant@example.com" required>
+        </label>
+
+        <label>
+            Temporary password
+            <input type="password" name="password" value="<%= form.password %>" placeholder="At least 4 characters" required>
+        </label>
+
+        <label>
+            Salon name
+            <input type="text" name="salonName" value="<%= form.salonName %>" placeholder="FreshGlow Spa" required>
+        </label>
+
+        <label>
+            Address or location
+            <input type="text" name="address" value="<%= form.address %>" placeholder="Tampines" required>
+        </label>
+
+        <label>
+            Description
+            <textarea name="description" placeholder="Short merchant description"><%= form.description %></textarea>
+        </label>
+
+        <label>
+            Image URL
+            <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/image.jpg">
+        </label>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Create merchant</button>
+            <a class="button secondary" href="/admin">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

@@ -17,35 +17,53 @@
                 <span>Vaniday</span>
             </a>
             <div class="nav-links">
-                <a href="/">Home</a>
-                <a href="/services">Services</a>
-                <div class="nav-dropdown">
-                    <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
-                        <span>Promotions</span>
-                        <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
-                    </button>
-                    <div class="nav-dropdown-menu" id="promotions-menu" aria-label="Promotions menu">
-                        <a href="/promotions">All Promotions</a>
-                        <a href="/promotions/first-trial">First Trial</a>
-                        <a href="/promotions/happy-hour">Happy Hour</a>
-                        <a href="/promotions/1-for-1">1 For 1</a>
-                        <a href="/promotions/featured-salons">Featured Salons</a>
+                <% if (currentUser && currentUser.role === 'admin') { %>
+                    <a href="/admin">Dashboard</a>
+                    <a href="/admin/merchants/new">Add Merchant</a>
+                    <a href="/admin/services">Manage Services</a>
+                    <a href="/admin/services/new">Add Service</a>
+                    <a href="/">Public Site</a>
+                <% } else if (currentUser && currentUser.role === 'merchant') { %>
+                    <a href="/merchant/services">My Services</a>
+                    <a href="/merchant/services/new">Add Service</a>
+                    <a href="/services">Public Services</a>
+                    <a href="/merchants">Directory</a>
+                <% } else { %>
+                    <a href="/">Home</a>
+                    <a href="/services">Services</a>
+                    <div class="nav-dropdown">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
+                            <span>Promotions</span>
+                            <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+                        </button>
+                        <div class="nav-dropdown-menu" id="promotions-menu" aria-label="Promotions menu">
+                            <a href="/promotions">All Promotions</a>
+                            <a href="/promotions/first-trial">First Trial</a>
+                            <a href="/promotions/happy-hour">Happy Hour</a>
+                            <a href="/promotions/1-for-1">1 For 1</a>
+                            <a href="/promotions/featured-salons">Featured Salons</a>
+                        </div>
                     </div>
-                </div>
-                <a href="/products">Products</a>
-                <a href="/cashback">Cashback</a>
-                <a href="/giftcards">Gift Cards</a>
+                    <a href="/products">Products</a>
+                    <a href="/cashback">Cashback</a>
+                    <a href="/giftcards">Gift Cards</a>
+                <% } %>
             </div>
             <div class="nav-tools">
-                <div class="nav-support-links">
-                    <a href="/about">About</a>
-                    <a href="/contact">Contact</a>
-                </div>
+                <% if (!currentUser || currentUser.role === 'customer') { %>
+                    <div class="nav-support-links">
+                        <a href="/about">About</a>
+                        <a href="/contact">Contact</a>
+                    </div>
+                <% } %>
                 <div class="nav-account-links">
                     <a class="profile-icon-link" href="/profile" aria-label="Profile">
                         <span class="login-icon" aria-hidden="true"></span>
                     </a>
                     <% if (currentUser) { %>
+                        <% if (currentUser.role !== 'customer') { %>
+                            <span class="nav-role-pill"><%= currentUser.role %></span>
+                        <% } %>
                         <form action="/logout" method="POST">
                             <button class="text-button" type="submit">Log Out</button>
                         </form>
@@ -53,13 +71,15 @@
                         <a class="signup-text-link" href="/signup">Sign Up</a>
                     <% } %>
                 </div>
-                <div class="nav-commerce-links">
-                    <a class="bag-link" href="/cart" aria-label="Cart">
-                        <span class="bag-icon" aria-hidden="true">
-                            <span class="bag-count"><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
-                        </span>
-                    </a>
-                </div>
+                <% if (!currentUser || currentUser.role === 'customer') { %>
+                    <div class="nav-commerce-links">
+                        <a class="bag-link" href="/cart" aria-label="Cart">
+                            <span class="bag-icon" aria-hidden="true">
+                                <span class="bag-count"><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
+                            </span>
+                        </a>
+                    </div>
+                <% } %>
             </div>
         </nav>
     </header>

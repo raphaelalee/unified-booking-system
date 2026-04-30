@@ -118,6 +118,14 @@ function loginUser(req, res) {
             };
             req.session.profileSuccess = 'You are logged in.';
 
+            if (req.session.user.role === 'admin') {
+                return res.redirect('/admin');
+            }
+
+            if (req.session.user.role === 'merchant') {
+                return res.redirect('/merchant/services');
+            }
+
             return res.redirect('/profile');
         });
     });

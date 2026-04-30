@@ -1,0 +1,65 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>Manage all services.</h1>
+    <p>Create, edit, or delete services across every merchant salon.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Services</p>
+            <h2><%= services.length %> services</h2>
+        </div>
+        <div class="admin-action-row">
+            <a class="button secondary" href="/admin">Back to admin</a>
+            <a class="button primary" href="/admin/services/new">Add service</a>
+        </div>
+    </div>
+
+    <% if (services.length === 0) { %>
+        <div class="notice">
+            <p>No services have been created yet.</p>
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% services.forEach((service) => { %>
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= service.category || 'Service' %></span>
+                        <span class="service-price slim">$<%= service.price %></span>
+                    </div>
+                    <div>
+                        <h3><%= service.name %></h3>
+                        <p class="muted"><%= service.salonName %> &middot; <%= service.salonAddress || 'No address set' %></p>
+                        <p><%= service.duration %></p>
+                        <% if (service.description) { %>
+                            <p class="muted"><%= service.description %></p>
+                        <% } %>
+                    </div>
+                    <div class="availability-strip">
+                        <% (service.slots || []).forEach((slot) => { %>
+                            <span><%= slot %></span>
+                        <% }) %>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/admin/services/<%= service.id %>/edit">Edit</a>
+                        <form action="/admin/services/<%= service.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

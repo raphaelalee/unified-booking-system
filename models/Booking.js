@@ -18,6 +18,27 @@ function getAll() {
     return bookings;
 }
 
+function getAllInDatabase(callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            salons.salon_name AS merchant_name,
+            services.service_name
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        ORDER BY bookings.booking_id DESC
+    `;
+
+    db.query(sql, callback);
+}
+
 function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
     return bookings.some((booking) => {
         return booking.merchantId === Number(merchantId)
@@ -30,17 +51,16 @@ function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
 
 function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookingTime, callback) {
     const sql = `
-        SELECT id
+        SELECT bookings.booking_id
         FROM bookings
-        WHERE merchant_id = ?
-            AND service_id = ?
+        WHERE service_id = ?
             AND booking_date = ?
-            AND booking_time = ?
-            AND status <> 'Cancelled'
+            AND timeslot = ?
+            AND status <> 'cancelled'
         LIMIT 1
     `;
 
-    db.query(sql, [merchantId, serviceId, bookingDate, bookingTime], (error, results) => {
+    db.query(sql, [serviceId, bookingDate, bookingTime], (error, results) => {
         if (error) {
             callback(error);
             return;
@@ -51,23 +71,24 @@ function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookin
 }
 
 function createInDatabase(bookingData, callback) {
+    if (!bookingData.userId) {
+        callback(new Error('A logged-in user is required to save this booking in the current database schema.'));
+        return;
+    }
+
     const sql = `
         INSERT INTO bookings
-            (merchant_id, merchant_name, service_id, service_name, customer_name, email, phone, booking_date, booking_time, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, service_id, booking_date, timeslot, status, qr_code_token)
+        VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
-        bookingData.merchantId,
-        bookingData.merchantName,
+        bookingData.userId,
         bookingData.serviceId,
-        bookingData.serviceName,
-        bookingData.customerName,
-        bookingData.email,
-        bookingData.phone,
         bookingData.bookingDate,
         bookingData.bookingTime,
-        bookingData.status || 'Pending'
+        bookingData.status || 'pending',
+        bookingData.qrCodeToken || null
     ];
 
     db.query(sql, values, callback);
@@ -77,6 +98,7 @@ module.exports = {
     create,
     createInDatabase,
     getAll,
+    getAllInDatabase,
     hasExistingBooking,
     hasExistingBookingInDatabase
 };
