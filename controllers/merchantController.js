@@ -878,36 +878,44 @@ function addToCart(req, res) {
 }
 
 function addProductToCart(req, res) {
-    const product = Product.findById(req.params.productId);
+    return Product.findById(req.params.productId, (lookupError, product) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Product Error',
+                message: 'Product details could not be loaded.'
+            });
+        }
 
-    if (!product) {
-        return res.status(404).render('error', {
-            title: 'Product Not Found',
-            message: 'The product you selected could not be found.'
-        });
-    }
+        if (!product) {
+            return res.status(404).render('error', {
+                title: 'Product Not Found',
+                message: 'The product you selected could not be found.'
+            });
+        }
 
-    req.session.cart = req.session.cart || [];
-    const existingProduct = req.session.cart.find((item) => item.type === 'Product' && item.serviceId === product.id);
+        req.session.cart = req.session.cart || [];
+        const existingProduct = req.session.cart.find((item) => item.type === 'Product' && String(item.serviceId) === String(product.id));
 
-    if (existingProduct) {
-        existingProduct.quantity = Math.min(Number(existingProduct.quantity || 1) + 1, 99);
-    } else {
-        req.session.cart.push({
-            id: Date.now(),
-            type: 'Product',
-            merchantId: null,
-            merchantName: product.category,
-            serviceId: product.id,
-            serviceName: product.name,
-            duration: product.description,
-            price: product.price,
-            quantity: 1
-        });
-    }
+        if (existingProduct) {
+            existingProduct.quantity = Math.min(Number(existingProduct.quantity || 1) + 1, 99);
+        } else {
+            req.session.cart.push({
+                id: Date.now(),
+                type: 'Product',
+                merchantId: product.salonId || null,
+                merchantName: product.category,
+                serviceId: product.id,
+                serviceName: product.name,
+                duration: product.description,
+                price: product.price,
+                quantity: 1
+            });
+        }
 
-    req.session.success = `${product.name} was added to your cart.`;
-    return res.redirect('/cart');
+        req.session.success = `${product.name} was added to your cart.`;
+        return res.redirect('/cart');
+    });
 }
 
 function showCart(req, res) {

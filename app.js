@@ -7,7 +7,7 @@ const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
-const { requireRole } = require('./middleware');
+const { allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
 require('dotenv').config();
@@ -34,23 +34,23 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get('/', merchantController.showHome);
-app.get('/portal', (req, res) => {
+app.get('/', allowGuestOrCustomer, merchantController.showHome);
+app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
     res.redirect(`/services${query ? `?${query}` : ''}`);
 });
-app.get('/services', merchantController.showServices);
-app.get('/promotions', merchantController.showPromotions);
-app.get('/promotions/first-trial', merchantController.showFirstTrial);
-app.get('/promotions/happy-hour', merchantController.showHappyHour);
-app.get('/promotions/1-for-1', merchantController.showOneForOne);
-app.get('/promotions/one-for-one', (req, res) => {
+app.get('/services', allowGuestOrCustomer, merchantController.showServices);
+app.get('/promotions', allowGuestOrCustomer, merchantController.showPromotions);
+app.get('/promotions/first-trial', allowGuestOrCustomer, merchantController.showFirstTrial);
+app.get('/promotions/happy-hour', allowGuestOrCustomer, merchantController.showHappyHour);
+app.get('/promotions/1-for-1', allowGuestOrCustomer, merchantController.showOneForOne);
+app.get('/promotions/one-for-one', allowGuestOrCustomer, (req, res) => {
     res.redirect('/promotions/1-for-1');
 });
-app.get('/promotions/featured-salons', merchantController.showFeaturedSalons);
-app.get('/merchants', merchantController.listMerchants);
+app.get('/promotions/featured-salons', allowGuestOrCustomer, merchantController.showFeaturedSalons);
+app.get('/merchants', allowGuestOrCustomer, merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
-app.get('/membership', (req, res) => {
+app.get('/membership', requireCustomer, (req, res) => {
     res.redirect('/profile#membership');
 });
 app.post('/profile', userController.updateProfile);
@@ -60,26 +60,26 @@ app.post('/login', userController.loginUser);
 app.get('/signup', userController.showSignup);
 app.post('/signup', userController.signupUser);
 app.post('/logout', userController.logoutUser);
-app.get('/cart', merchantController.showCart);
-app.post('/cart/add/:merchantId', merchantController.addToCart);
-app.get('/cart/product/:productId', (req, res) => {
+app.get('/cart', requireCustomer, merchantController.showCart);
+app.post('/cart/add/:merchantId', requireCustomer, merchantController.addToCart);
+app.get('/cart/product/:productId', allowGuestOrCustomer, (req, res) => {
     res.redirect('/products');
 });
-app.post('/cart/product/:productId', merchantController.addProductToCart);
-app.post('/cart/update/:itemId', merchantController.updateCartItem);
-app.post('/cart/remove/:itemId', merchantController.removeFromCart);
-app.post('/cart/delete-selected', merchantController.deleteSelectedCartItems);
-app.post('/merchants/:merchantId/favourite', merchantController.toggleFavouriteMerchant);
+app.post('/cart/product/:productId', requireCustomer, merchantController.addProductToCart);
+app.post('/cart/update/:itemId', requireCustomer, merchantController.updateCartItem);
+app.post('/cart/remove/:itemId', requireCustomer, merchantController.removeFromCart);
+app.post('/cart/delete-selected', requireCustomer, merchantController.deleteSelectedCartItems);
+app.post('/merchants/:merchantId/favourite', requireCustomer, merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', requireRole('merchant'), merchantController.showMerchantQr);
-app.get('/scan/:merchantId', merchantController.showSecureScanBooking);
-app.post('/scan/:merchantId', merchantController.saveSecureScanBooking);
-app.get('/booking/:merchantId/:qrToken', merchantController.showBookingPage);
-app.post('/booking/:merchantId/:qrToken', merchantController.saveQrBooking);
-app.get('/booking/:merchantId', merchantController.showBookingPage);
-app.post('/booking/:merchantId', merchantController.saveQrBooking);
-app.get('/merchants/:id', merchantController.showMerchant);
-app.post('/merchants/:id/book', merchantController.createBooking);
-app.post('/api/ai/chat', aiController.getBeautyAdvice);
+app.get('/scan/:merchantId', allowGuestOrCustomer, merchantController.showSecureScanBooking);
+app.post('/scan/:merchantId', requireCustomer, merchantController.saveSecureScanBooking);
+app.get('/booking/:merchantId/:qrToken', allowGuestOrCustomer, merchantController.showBookingPage);
+app.post('/booking/:merchantId/:qrToken', requireCustomer, merchantController.saveQrBooking);
+app.get('/booking/:merchantId', allowGuestOrCustomer, merchantController.showBookingPage);
+app.post('/booking/:merchantId', requireCustomer, merchantController.saveQrBooking);
+app.get('/merchants/:id', allowGuestOrCustomer, merchantController.showMerchant);
+app.post('/merchants/:id/book', requireCustomer, merchantController.createBooking);
+app.post('/api/ai/chat', allowGuestOrCustomer, aiController.getBeautyAdvice);
 app.get('/merchant', requireRole('merchant'), merchantDashboardController.showServices);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
 app.post('/merchant/generate-qr', requireRole('merchant'), merchantDashboardController.generateQr);
@@ -88,7 +88,13 @@ app.post('/merchant/services', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/services/:serviceId/edit', requireRole('merchant'), merchantDashboardController.showEditService);
 app.post('/merchant/services/:serviceId', requireRole('merchant'), merchantDashboardController.updateService);
 app.post('/merchant/services/:serviceId/delete', requireRole('merchant'), merchantDashboardController.deleteService);
-app.get('/merchant/:merchantId', merchantController.showPublicMerchantBooking);
+app.get('/merchant/products', requireRole('merchant'), merchantDashboardController.listProducts);
+app.get('/merchant/products/new', requireRole('merchant'), merchantDashboardController.showNewProduct);
+app.post('/merchant/products', requireRole('merchant'), merchantDashboardController.createProduct);
+app.get('/merchant/products/:productId/edit', requireRole('merchant'), merchantDashboardController.showEditProduct);
+app.post('/merchant/products/:productId', requireRole('merchant'), merchantDashboardController.updateProduct);
+app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
+app.get('/merchant/:merchantId', allowGuestOrCustomer, merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
@@ -99,31 +105,37 @@ app.get('/admin/services/:serviceId/edit', requireRole('admin'), adminController
 app.post('/admin/services/:serviceId', requireRole('admin'), adminController.updateService);
 app.post('/admin/services/:serviceId/delete', requireRole('admin'), adminController.deleteService);
 
-app.get('/about', (req, res) => {
+app.get('/about', allowGuestOrCustomer, (req, res) => {
     res.render('about', { title: 'About Us' });
 });
 
-app.get('/contact', (req, res) => {
+app.get('/contact', allowGuestOrCustomer, (req, res) => {
     res.render('contact', { title: 'Contact Us' });
 });
 
-app.get('/products', (req, res) => {
-    res.render('products', {
-        title: 'Products',
-        products: Product.getAll(),
-        showChatbot: true
+app.get('/products', allowGuestOrCustomer, (req, res) => {
+    Product.getAll((error, products) => {
+        if (error) {
+            console.error(error);
+        }
+
+        res.render('products', {
+            title: 'Products',
+            products: error ? Product.getAll() : products,
+            showChatbot: true
+        });
     });
 });
 
-app.post('/checkout', merchantController.checkout);
-app.get('/payment', merchantController.showPayment);
-app.post('/payment', merchantController.confirmPayment);
+app.post('/checkout', requireCustomer, merchantController.checkout);
+app.get('/payment', requireCustomer, merchantController.showPayment);
+app.post('/payment', requireCustomer, merchantController.confirmPayment);
 
-app.get('/cashback', (req, res) => {
+app.get('/cashback', requireCustomer, (req, res) => {
     res.render('cashback', { title: 'Cashback' });
 });
 
-app.get('/giftcards', (req, res) => {
+app.get('/giftcards', requireCustomer, (req, res) => {
     res.render('giftcards', { title: 'Gift Cards' });
 });
 

@@ -141,7 +141,7 @@ function validateNewPassword(password) {
 
 function showLogin(req, res) {
     if (req.session.user) {
-        return res.redirect('/profile');
+        return res.redirect(getDashboardPath(req.session.user.role));
     }
 
     const error = req.session.loginError;
@@ -217,7 +217,7 @@ function loginUser(req, res) {
 
 function showSignup(req, res) {
     if (req.session.user) {
-        return res.redirect('/profile');
+        return res.redirect(getDashboardPath(req.session.user.role));
     }
 
     const error = req.session.signupError;
