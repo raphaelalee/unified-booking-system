@@ -618,6 +618,12 @@ h3 {
     justify-items: end;
 }
 
+.cart-quantity-form {
+    display: grid;
+    gap: 10px;
+    justify-items: end;
+}
+
 .cart-item-copy {
     min-width: 0;
 }

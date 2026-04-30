@@ -7,6 +7,10 @@
 </section>
 
 <section class="section compact">
+    <% if (typeof success !== 'undefined' && success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+
     <% if (cart.length === 0) { %>
         <div class="empty-state" id="empty-cart-state">
             <h2>Your cart is empty.</h2>
@@ -20,21 +24,30 @@
         <div class="cart-layout">
             <div class="cart-list">
                 <% cart.forEach((item) => { %>
-                    <%
-                        const bookingPath = `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}`;
-                    %>
+                    <% const bookingPath = item.merchantId ? `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}` : ''; %>
                     <article class="cart-item">
-                        <div>
+                        <div class="cart-item-copy">
                             <p class="eyebrow"><%= item.type || 'Service' %> &middot; <%= item.merchantName %></p>
                             <h2><%= item.serviceName %></h2>
-                            <p class="muted"><%= item.duration %> &middot; $<%= item.price %></p>
-                            <p class="muted">Quantity: 1</p>
+                            <p class="muted"><%= item.duration %> &middot; $<%= Number(item.price).toFixed(2) %><%= item.type === 'Product' ? ' each' : '' %></p>
+                            <p class="muted">Quantity: <%= item.quantity %></p>
+                            <% if (item.quantity > 1) { %>
+                                <p class="line-total">Item total: $<%= Number(item.lineTotal).toFixed(2) %></p>
+                            <% } %>
                         </div>
                         <div class="cart-item-actions">
                             <% if (item.merchantId) { %>
                                 <a class="button secondary" href="<%= bookingPath %>">Book now</a>
                             <% } else { %>
-                                <a class="button secondary" href="/payment?amount=<%= item.price %>&service=<%= encodeURIComponent(item.serviceName) %>&merchant=<%= encodeURIComponent(item.merchantName) %>">Pay now</a>
+                                <form class="cart-quantity-form" action="/cart/update/<%= item.id %>" method="POST">
+                                    <div class="cart-quantity-controls" aria-label="Edit quantity for <%= item.serviceName %>">
+                                        <button class="quantity-button" type="submit" name="quantityDelta" value="-1" aria-label="Decrease quantity">-</button>
+                                        <input class="quantity-input" type="number" name="quantity" min="1" max="99" value="<%= item.quantity %>" aria-label="Quantity">
+                                        <button class="quantity-button" type="submit" name="quantityDelta" value="1" aria-label="Increase quantity">+</button>
+                                    </div>
+                                    <button class="button secondary" type="submit">Update</button>
+                                </form>
+                                <a class="button secondary" href="/payment?amount=<%= Number(item.lineTotal).toFixed(2) %>&service=<%= encodeURIComponent(item.serviceName) %>&merchant=<%= encodeURIComponent(item.merchantName) %>&cartItemId=<%= encodeURIComponent(item.id) %>">Pay now</a>
                             <% } %>
                             <form action="/cart/remove/<%= item.id %>" method="POST">
                                 <button class="text-button" type="submit">Remove</button>
@@ -46,18 +59,14 @@
 
             <aside class="booking-panel">
                 <p class="eyebrow">Summary</p>
-                <h2>$<%= total %></h2>
-                <p class="muted"><%= cart.length %> item<%= cart.length === 1 ? '' : 's' %> selected</p>
-                <a class="button secondary full" href="/payment?amount=<%= total %>&service=Cart checkout&merchant=Vaniday">Checkout and pay</a>
+                <h2>$<%= Number(total).toFixed(2) %></h2>
+                <p class="muted"><%= itemCount %> item<%= itemCount === 1 ? '' : 's' %> selected</p>
+                <a class="button secondary full" href="/payment?amount=<%= Number(total).toFixed(2) %>&service=Cart checkout&merchant=Vaniday&cartCheckout=true">Checkout and pay</a>
                 <a class="button primary full" href="/services">Add more services</a>
                 <a class="text-link" href="/products">Shop products</a>
             </aside>
         </div>
     <% } %>
-
-    <div id="browser-product-cart"></div>
 </section>
-
-<script src="/js/cart-products.js"></script>
 
 <%- include('partials/footer') %>

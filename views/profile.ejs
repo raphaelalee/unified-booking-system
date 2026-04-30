@@ -1,21 +1,5 @@
 <%- include('partials/header', { title }) %>
 
-<%
-    const progress = Math.min((member.points / 10000) * 100, 100);
-    const next = Math.max(10000 - member.points, 0);
-    const referralReward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
-    const referralPrefix = ((profile.name || 'vaniday').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4) || 'vani').toUpperCase();
-    const referralId = String((currentUser && currentUser.id) || 0).padStart(4, '0');
-    const referralCode = `${referralPrefix}${referralId}`;
-    const referralDiscount = member.tier === 'Platinum' ? 15 : 10;
-    const tiers = [
-        { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
-        { name: 'Silver', points: '2,000+', detail: 'Bonus rewards', className: 'silver' },
-        { name: 'Gold', points: '5,000+', detail: 'Priority perks', className: 'gold' },
-        { name: 'Platinum', points: '10,000+', detail: 'VIP benefits', className: 'platinum' }
-    ];
-%>
-
 <section class="page-title">
     <p class="eyebrow">Profile</p>
     <h1>Manage your Vaniday profile and membership.</h1>
@@ -81,6 +65,7 @@
 
             <a class="button secondary full" href="/cashback">View cashback details</a>
             <a class="button secondary full" href="#membership">View membership perks</a>
+            <a class="button secondary full" href="#referral">Invite friends</a>
             <form action="/logout" method="POST">
                 <button class="text-button full" type="submit">Log out</button>
             </form>
@@ -101,12 +86,12 @@
             </div>
             <h2><%= member.points %> Points</h2>
             <p class="muted">
-                <%= next > 0
-                    ? next + " points to reach Platinum"
+                <%= member.next > 0
+                    ? member.next + " points to reach Platinum"
                     : "Maximum tier reached" %>
             </p>
             <div class="membership-progress" aria-label="Membership progress">
-                <span style="width:<%= progress %>%"></span>
+                <span style="width:<%= member.progress %>%"></span>
             </div>
             <div class="membership-progress-labels">
                 <span>Bronze</span>
@@ -134,7 +119,7 @@
     </div>
 
     <div class="membership-tier-grid">
-        <% tiers.forEach((tier) => { %>
+        <% member.tiers.forEach((tier) => { %>
             <article class="membership-tier-card <%= tier.className %> <%= member.tier === tier.name ? 'active' : '' %>">
                 <div class="tier-medallion">
                     <span><%= tier.name.charAt(0) %></span>
@@ -203,8 +188,8 @@
         <p class="eyebrow">Referral</p>
         <h2>Invite friends and earn VaniRewards points</h2>
         <p>
-            Earn <strong><%= referralReward %> VaniGlints</strong> for each successful referral.
-            Your friend gets <strong>$<%= referralDiscount %> off</strong> their first booking, and your tier can increase the points you earn.
+            Earn <strong><%= referral.reward %> VaniGlints</strong> for each successful referral.
+            Your friend gets <strong>$<%= referral.discount %> off</strong> their first booking, and your tier can increase the points you earn.
         </p>
     </div>
 
@@ -213,12 +198,12 @@
             <div class="referral-summary-grid">
                 <div>
                     <p class="eyebrow">What You Get</p>
-                    <h3><%= referralReward %> VaniGlints per friend</h3>
+                    <h3><%= referral.reward %> VaniGlints per friend</h3>
                     <p class="muted">1,000 Glints = $1 SGD, and your <%= member.tier %> tier boosts your referral earnings over time.</p>
                 </div>
                 <div>
                     <p class="eyebrow">What Your Friend Gets</p>
-                    <h3>$<%= referralDiscount %> off first booking</h3>
+                    <h3>$<%= referral.discount %> off first booking</h3>
                     <p class="muted">New users can use your referral link or code for an immediate first-service discount.</p>
                 </div>
             </div>
@@ -236,12 +221,12 @@
                 <div class="referral-field-group">
                     <label>
                         Referral Link
-                        <input type="text" value="https://www.vaniday.com/ref/<%= referralCode %>" readonly>
+                        <input type="text" value="https://www.vaniday.com/ref/<%= referral.code %>" readonly>
                     </label>
 
                     <label>
                         Referral Code
-                        <input type="text" value="<%= referralCode %>" readonly>
+                        <input type="text" value="<%= referral.code %>" readonly>
                     </label>
 
                     <label>
@@ -265,23 +250,14 @@
                     <h3>Send invitations</h3>
                 </div>
 
-                <form class="referral-form">
+                <div class="referral-form">
                     <label>
-                        Send from
-                        <select>
-                            <option>Store</option>
-                            <option>Email</option>
-                            <option>Profile</option>
-                        </select>
+                        Invite message
+                        <textarea rows="4" readonly>Use my Vaniday referral code <%= referral.code %> to get $<%= referral.discount %> off your first booking.</textarea>
                     </label>
 
-                    <label>
-                        Invite your friends by entering their email addresses below
-                        <textarea rows="4" placeholder="friend1@example.com, friend2@example.com"></textarea>
-                    </label>
-
-                    <button class="button primary" type="button">Send now</button>
-                </form>
+                    <a class="button primary" href="<%= referral.mailto %>">Open email invite</a>
+                </div>
             </section>
         </div>
 

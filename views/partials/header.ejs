@@ -25,10 +25,10 @@
                         <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
                     </button>
                     <div class="nav-dropdown-menu" id="promotions-menu" aria-label="Promotions menu">
+                        <a href="/promotions">All Promotions</a>
                         <a href="/promotions/first-trial">First Trial</a>
                         <a href="/promotions/happy-hour">Happy Hour</a>
                         <a href="/promotions/1-for-1">1 For 1</a>
-                        <a href="/promotions">Promotions</a>
                         <a href="/promotions/featured-salons">Featured Salons</a>
                     </div>
                 </div>
@@ -46,7 +46,6 @@
                         <span class="login-icon" aria-hidden="true"></span>
                     </a>
                     <% if (currentUser) { %>
-                        <a class="signup-text-link" href="/profile#referral">Referral</a>
                         <form action="/logout" method="POST">
                             <button class="text-button" type="submit">Log Out</button>
                         </form>

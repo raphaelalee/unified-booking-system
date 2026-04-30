@@ -1,6 +1,14 @@
 const bcrypt = require('bcrypt');
 const Merchant = require('../models/Merchant');
 const User = require('../models/User');
+const { getCartItemCount } = require('../utils/cart');
+
+const membershipTiers = [
+    { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
+    { name: 'Silver', points: '2,000+', detail: 'Bonus rewards', className: 'silver' },
+    { name: 'Gold', points: '5,000+', detail: 'Priority perks', className: 'gold' },
+    { name: 'Platinum', points: '10,000+', detail: 'VIP benefits', className: 'platinum' }
+];
 
 function buildSessionUser(user) {
     return {
@@ -18,6 +26,33 @@ function getMemberTier(points) {
     if (points >= 5000) return 'Gold';
     if (points >= 2000) return 'Silver';
     return 'Bronze';
+}
+
+function buildMember(points) {
+    return {
+        points,
+        tier: getMemberTier(points),
+        progress: Math.min((points / 10000) * 100, 100),
+        next: Math.max(10000 - points, 0),
+        tiers: membershipTiers
+    };
+}
+
+function buildReferral(profile, user, member) {
+    const reward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
+    const prefix = ((profile.name || 'vaniday').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4) || 'vani').toUpperCase();
+    const userId = String((user && user.id) || 0).padStart(4, '0');
+    const code = `${prefix}${userId}`;
+    const discount = member.tier === 'Platinum' ? 15 : 10;
+    const mailSubject = encodeURIComponent('Join Vaniday with my referral code');
+    const mailBody = encodeURIComponent(`Use my Vaniday referral code ${code} to get $${discount} off your first booking.`);
+
+    return {
+        reward,
+        code,
+        discount,
+        mailto: `mailto:?subject=${mailSubject}&body=${mailBody}`
+    };
 }
 
 function showLogin(req, res) {
@@ -183,17 +218,16 @@ function showProfile(req, res) {
         .map((merchantId) => Merchant.findById(merchantId))
         .filter(Boolean);
     const cart = req.session.cart || [];
+    const cartItemCount = getCartItemCount(cart);
     const profile = req.session.profile || {
         name: req.session.user.name,
         email: req.session.user.email,
         phone: ''
     };
-    const rewardPoints = favourites.length * 50 + cart.length * 20;
+    const rewardPoints = favourites.length * 50 + cartItemCount * 20;
     const cashbackBalance = (rewardPoints / 100).toFixed(2);
-    const member = {
-        points: rewardPoints,
-        tier: getMemberTier(rewardPoints)
-    };
+    const member = buildMember(rewardPoints);
+    const referral = buildReferral(profile, req.session.user, member);
 
     const success = req.session.profileSuccess;
     const error = req.session.profileError;
@@ -204,10 +238,11 @@ function showProfile(req, res) {
         title: 'Profile',
         profile,
         favourites,
-        cartCount: cart.length,
+        cartCount: cartItemCount,
         rewardPoints,
         cashbackBalance,
         member,
+        referral,
         success,
         error
     });

@@ -12,6 +12,8 @@
             <input type="hidden" name="amount" value="<%= amount %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
             <input type="hidden" name="serviceName" value="<%= serviceName %>">
+            <input type="hidden" name="cartItemId" value="<%= cartItemId || '' %>">
+            <input type="hidden" name="cartCheckout" value="<%= cartCheckout ? 'true' : 'false' %>">
 
             <div>
                 <p class="eyebrow">Card payment</p>

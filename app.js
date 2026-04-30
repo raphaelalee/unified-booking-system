@@ -5,6 +5,7 @@ const path = require('path');
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const Product = require('./models/Product');
+const { getCartItemCount } = require('./utils/cart');
 require('dotenv').config();
 
 const app = express();
@@ -24,7 +25,7 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
-    res.locals.cartCount = req.session.cart ? req.session.cart.length : 0;
+    res.locals.cartCount = getCartItemCount(req.session.cart || []);
     res.locals.currentUser = req.session.user || null;
     next();
 });
@@ -39,6 +40,9 @@ app.get('/promotions', merchantController.showPromotions);
 app.get('/promotions/first-trial', merchantController.showFirstTrial);
 app.get('/promotions/happy-hour', merchantController.showHappyHour);
 app.get('/promotions/1-for-1', merchantController.showOneForOne);
+app.get('/promotions/one-for-one', (req, res) => {
+    res.redirect('/promotions/1-for-1');
+});
 app.get('/promotions/featured-salons', merchantController.showFeaturedSalons);
 app.get('/merchants', merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
@@ -53,8 +57,11 @@ app.post('/signup', userController.signupUser);
 app.post('/logout', userController.logoutUser);
 app.get('/cart', merchantController.showCart);
 app.post('/cart/add/:merchantId', merchantController.addToCart);
-app.get('/cart/product/:productId', merchantController.addProductToCart);
+app.get('/cart/product/:productId', (req, res) => {
+    res.redirect('/products');
+});
 app.post('/cart/product/:productId', merchantController.addProductToCart);
+app.post('/cart/update/:itemId', merchantController.updateCartItem);
 app.post('/cart/remove/:itemId', merchantController.removeFromCart);
 app.post('/merchants/:merchantId/favourite', merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', merchantController.showMerchantQr);

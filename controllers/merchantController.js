@@ -1,6 +1,7 @@
 const Merchant = require('../models/Merchant');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 
 function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
@@ -245,6 +246,118 @@ function buildPromotionOffers() {
     }).sort((left, right) => right.discountPercent - left.discountPercent);
 }
 
+const promotionCampaigns = {
+    firstTrial: {
+        label: 'First Trial',
+        title: 'First Trial',
+        pageClass: 'first-trial-page-title',
+        summaryClass: 'first-trial-summary',
+        copyListClass: 'first-trial-copy-list',
+        heading: 'First Trial deals for first-time customers.',
+        description: 'Book premium facials, hair treatments, massages and salon services at introductory prices before committing to regular menu rates.',
+        filterAriaLabel: 'First trial filters',
+        countLabel: 'first-trial services found',
+        emptyMessage: 'No first-trial services match the selected filters.',
+        badge: 'First trial',
+        offerTitlePrefix: '[First Trial]',
+        summaryCards: [
+            {
+                title: 'One-time use',
+                body: 'Each first-trial offer is designed for new customers at that merchant, so you can test the service once at the introductory rate.'
+            },
+            {
+                title: '30% to 50% off',
+                body: 'These are genuine entry offers, with larger discounts against standard pricing instead of small campaign coupons.'
+            },
+            {
+                title: 'No bill shock',
+                body: 'The price shown on the page is the price you pay, with no hidden top-ups or surprise package conversion fees.'
+            }
+        ],
+        noteTitle: 'What you will find',
+        notes: [
+            'Skincare trials like hydrating facials or deep cleansing sessions.',
+            'Hair and scalp services for styling, colouring or treatment discovery visits.',
+            'Wellness options like massage, grooming, lashes and nails at introductory rates.'
+        ],
+        staticTags: ['New customer only'],
+        includeLocationTag: true,
+        includeCategoryTag: true
+    },
+    happyHour: {
+        label: 'Happy Hour',
+        title: 'Happy Hour',
+        pageClass: 'happy-hour-page-title',
+        summaryClass: 'happy-hour-summary',
+        copyListClass: 'happy-hour-copy-list',
+        heading: 'Happy Hour deals for off-peak salon and wellness slots.',
+        description: 'Book during quieter weekday windows to unlock repeatable discounts on facials, hair services, massages and more without paying prime-time rates.',
+        filterAriaLabel: 'Happy hour filters',
+        countLabel: 'happy-hour services found',
+        emptyMessage: 'No happy-hour services match the selected filters.',
+        badge: 'Happy hour',
+        offerTitlePrefix: '[Happy Hour]',
+        summaryCards: [
+            {
+                title: 'Time-restricted savings',
+                body: 'These offers are usually tied to quieter hours like weekday mornings and afternoons, often between 10:00 AM and 4:00 PM.'
+            },
+            {
+                title: 'Book more than once',
+                body: 'Unlike first-trial deals, Happy Hour offers are often reusable as long as you can make the merchant off-peak window.'
+            },
+            {
+                title: 'Flexible schedule wins',
+                body: 'If you can book midweek, this is one of the easiest ways to visit better salons more often.'
+            }
+        ],
+        noteTitle: 'Happy Hour notes',
+        notes: [
+            'These slots are designed to fill quiet periods, so weekday daytime appointments are the most common.',
+            'Discounts are usually around 10% to 30% off standard pricing, which makes them ideal for regular upkeep.',
+            'Watch for overlap with 1-for-1 offers because some off-peak windows can stack with bring-a-friend value.'
+        ],
+        staticTags: ['Weekday off-peak', 'Repeatable deal'],
+        includeCategoryTag: true
+    },
+    oneForOne: {
+        label: '1 For 1',
+        title: '1 For 1',
+        pageClass: 'one-for-one-page-title',
+        summaryClass: 'one-for-one-summary',
+        copyListClass: 'one-for-one-copy-list',
+        heading: '1 For 1 deals with the highest value per booking.',
+        description: 'Pay one final price and enjoy two matching treatments, whether you bring a friend, plan a couple session, or reserve a shared pampering slot in advance.',
+        filterAriaLabel: '1 for 1 filters',
+        countLabel: '1-for-1 services found',
+        emptyMessage: 'No 1-for-1 services match the selected filters.',
+        badge: '1 for 1',
+        offerTitlePrefix: '[1 For 1]',
+        summaryCards: [
+            {
+                title: 'Bring a friend',
+                body: 'Most 1-for-1 deals are built for two people at the same time, so you can split the price or treat someone else.'
+            },
+            {
+                title: 'High-value categories',
+                body: 'Expect massages, facials, nails, lash treatments, scalp care and spa sessions where dual bookings make the offer worth chasing.'
+            },
+            {
+                title: 'Final total shown',
+                body: 'The displayed price is the total payable for both people, aligned with no hidden second-person fee.'
+            }
+        ],
+        noteTitle: 'How to use it',
+        notes: [
+            'Book earlier than usual because most salons need to balance two simultaneous slots for the same offer.',
+            'Check the fine print if you want to use the second treatment later, because most deals are same-time bookings.',
+            'Grab good slots early, since salons usually release only a limited number of 1-for-1 appointments per day.'
+        ],
+        staticTags: ['Bring a friend', 'Final total shown'],
+        includeCategoryTag: true
+    }
+};
+
 function showPromotions(req, res) {
     const promotionOffers = buildPromotionOffers();
     res.render('promotions', {
@@ -253,31 +366,27 @@ function showPromotions(req, res) {
     });
 }
 
-function showFirstTrial(req, res) {
-    const firstTrialOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === 'First Trial');
+function renderPromotionCampaign(res, campaignKey) {
+    const campaign = promotionCampaigns[campaignKey];
+    const promotionOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === campaign.label);
 
-    res.render('first-trial', {
-        title: 'First Trial',
-        promotionOffers: firstTrialOffers
+    return res.render('promotion-campaign', {
+        title: campaign.title,
+        campaign,
+        promotionOffers
     });
+}
+
+function showFirstTrial(req, res) {
+    return renderPromotionCampaign(res, 'firstTrial');
 }
 
 function showHappyHour(req, res) {
-    const happyHourOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === 'Happy Hour');
-
-    res.render('happy-hour', {
-        title: 'Happy Hour',
-        promotionOffers: happyHourOffers
-    });
+    return renderPromotionCampaign(res, 'happyHour');
 }
 
 function showOneForOne(req, res) {
-    const oneForOneOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === '1 For 1');
-
-    res.render('one-for-one', {
-        title: '1 For 1',
-        promotionOffers: oneForOneOffers
-    });
+    return renderPromotionCampaign(res, 'oneForOne');
 }
 
 function showFeaturedSalons(req, res) {
@@ -544,45 +653,87 @@ function addProductToCart(req, res) {
     }
 
     req.session.cart = req.session.cart || [];
-    req.session.cart.push({
-        id: Date.now(),
-        type: 'Product',
-        merchantId: null,
-        merchantName: product.category,
-        serviceId: product.id,
-        serviceName: product.name,
-        duration: product.description,
-        price: product.price
-    });
+    const existingProduct = req.session.cart.find((item) => item.type === 'Product' && item.serviceId === product.id);
 
+    if (existingProduct) {
+        existingProduct.quantity = Math.min(Number(existingProduct.quantity || 1) + 1, 99);
+    } else {
+        req.session.cart.push({
+            id: Date.now(),
+            type: 'Product',
+            merchantId: null,
+            merchantName: product.category,
+            serviceId: product.id,
+            serviceName: product.name,
+            duration: product.description,
+            price: product.price,
+            quantity: 1
+        });
+    }
+
+    req.session.success = `${product.name} was added to your cart.`;
     return res.redirect('/cart');
 }
 
 function showCart(req, res) {
     const cart = (req.session.cart || []).map((item) => {
+        const quantity = getCartQuantity(item);
+        const lineTotal = getCartLineTotal(item);
+
         if (!item.merchantId || item.merchantQrToken) {
-            return item;
+            return {
+                ...item,
+                quantity,
+                lineTotal
+            };
         }
 
         const merchant = Merchant.findById(item.merchantId);
 
         return {
             ...item,
-            merchantQrToken: merchant ? merchant.qrToken : null
+            merchantQrToken: merchant ? merchant.qrToken : null,
+            quantity,
+            lineTotal
         };
     });
-    const total = cart.reduce((sum, item) => sum + Number(item.price), 0);
+    const total = cart.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+    const itemCount = getCartItemCount(cart);
+    const success = req.session.success;
+    req.session.success = null;
 
     return res.render('cart', {
         title: 'Cart',
         cart,
-        total
+        total,
+        itemCount,
+        success
     });
 }
 
 function removeFromCart(req, res) {
     const cart = req.session.cart || [];
     req.session.cart = cart.filter((item) => String(item.id) !== String(req.params.itemId));
+
+    return res.redirect('/cart');
+}
+
+function updateCartItem(req, res) {
+    const cart = req.session.cart || [];
+    const item = cart.find((cartItem) => String(cartItem.id) === String(req.params.itemId));
+
+    if (!item || item.type !== 'Product') {
+        return res.redirect('/cart');
+    }
+
+    const currentQuantity = Math.max(1, Number(item.quantity || 1));
+    const quantityDelta = Number(req.body.quantityDelta || 0);
+    const nextQuantity = quantityDelta
+        ? currentQuantity + quantityDelta
+        : Number(req.body.quantity || currentQuantity);
+    const requestedQuantity = Number.isFinite(nextQuantity) ? nextQuantity : currentQuantity;
+
+    item.quantity = getCartQuantity({ quantity: requestedQuantity });
 
     return res.redirect('/cart');
 }
@@ -609,158 +760,30 @@ function toggleFavouriteMerchant(req, res) {
     return res.redirect(req.get('referer') || '/merchants');
 }
 
-function showProfile(req, res) {
-    if (!req.session.user) {
-        return res.redirect('/login');
-    }
-
-    const favouriteIds = req.session.favouriteMerchantIds || [];
-    const favourites = favouriteIds
-        .map((merchantId) => Merchant.findById(merchantId))
-        .filter(Boolean);
-    const cart = req.session.cart || [];
-    const profile = req.session.profile || {
-        name: 'Guest User',
-        email: '',
-        phone: ''
-    };
-    const rewardPoints = favourites.length * 50 + cart.length * 20;
-    const cashbackBalance = (rewardPoints / 100).toFixed(2);
-
-    const success = req.session.profileSuccess;
-    req.session.profileSuccess = null;
-
-    return res.render('profile', {
-        title: 'Profile',
-        profile,
-        favourites,
-        cartCount: cart.length,
-        rewardPoints,
-        cashbackBalance,
-        success
-    });
-}
-
-function updateProfile(req, res) {
-    if (!req.session.user) {
-        return res.redirect('/login');
-    }
-
-    const name = (req.body.name || '').trim();
-    const email = (req.body.email || '').trim();
-    const phone = (req.body.phone || '').trim();
-
-    req.session.profile = {
-        name: name || 'Guest User',
-        email,
-        phone
-    };
-    req.session.user = {
-        name: name || 'Guest User',
-        email
-    };
-    req.session.profileSuccess = 'Profile updated successfully.';
-
-    return res.redirect('/profile');
-}
-
-function showLogin(req, res) {
-    if (req.session.user) {
-        return res.redirect('/profile');
-    }
-
-    const error = req.session.loginError;
-    req.session.loginError = null;
-
-    return res.render('login', {
-        title: 'Log In',
-        error,
-        form: {}
-    });
-}
-
-function loginUser(req, res) {
-    const name = (req.body.name || '').trim();
-    const email = (req.body.email || '').trim();
-    const phone = (req.body.phone || '').trim();
-    const password = (req.body.password || '').trim();
-
-    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[689]\d{7}$/.test(phone) || password.length < 4) {
-        req.session.loginError = 'Please enter a valid name, email, 8-digit Singapore handphone number, and password.';
-        return res.redirect('/login');
-    }
-
-    req.session.user = { name, email };
-    req.session.profile = { name, email, phone };
-    req.session.profileSuccess = 'You are logged in.';
-
-    return res.redirect('/profile');
-}
-
-function showSignup(req, res) {
-    if (req.session.user) {
-        return res.redirect('/profile');
-    }
-
-    const error = req.session.signupError;
-    const form = req.session.signupForm || {};
-    req.session.signupError = null;
-    req.session.signupForm = null;
-
-    return res.render('signup', {
-        title: 'Sign Up',
-        error,
-        form
-    });
-}
-
-function signupUser(req, res) {
-    const name = (req.body.name || '').trim();
-    const email = (req.body.email || '').trim();
-    const phone = (req.body.phone || '').trim();
-    const password = (req.body.password || '').trim();
-    const confirmPassword = (req.body.confirmPassword || '').trim();
-
-    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[689]\d{7}$/.test(phone)) {
-        req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
-        req.session.signupForm = { name, email, phone };
-        return res.redirect('/signup');
-    }
-
-    if (password.length < 4 || password !== confirmPassword) {
-        req.session.signupError = 'Password must be at least 4 characters and match the confirmation.';
-        req.session.signupForm = { name, email, phone };
-        return res.redirect('/signup');
-    }
-
-    req.session.user = { name, email };
-    req.session.profile = { name, email, phone };
-    req.session.profileSuccess = 'Account created successfully.';
-
-    return res.redirect('/profile');
-}
-
-function logoutUser(req, res) {
-    req.session.user = null;
-    req.session.profileSuccess = null;
-
-    return res.redirect('/login');
-}
-
 function showPayment(req, res) {
     const amount = Number(req.query.amount || 0);
     const merchantName = req.query.merchant || 'Vaniday';
     const serviceName = req.query.service || 'Booking';
+    const cartItemId = req.query.cartItemId || '';
+    const cartCheckout = req.query.cartCheckout === 'true';
 
     return res.render('payment', {
         title: 'Payment',
         amount,
         merchantName,
-        serviceName
+        serviceName,
+        cartItemId,
+        cartCheckout
     });
 }
 
 function confirmPayment(req, res) {
+    if (req.body.cartCheckout === 'true') {
+        req.session.cart = [];
+    } else if (req.body.cartItemId) {
+        req.session.cart = (req.session.cart || []).filter((item) => String(item.id) !== String(req.body.cartItemId));
+    }
+
     return res.render('payment-success', {
         title: 'Payment Successful',
         amount: req.body.amount,
@@ -787,14 +810,8 @@ module.exports = {
     addProductToCart,
     showCart,
     removeFromCart,
+    updateCartItem,
     toggleFavouriteMerchant,
-    showProfile,
-    updateProfile,
-    showLogin,
-    loginUser,
-    showSignup,
-    signupUser,
-    logoutUser,
     showPayment,
     confirmPayment
 };

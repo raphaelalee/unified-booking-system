@@ -19,35 +19,29 @@
     }));
 %>
 
-<section class="page-title promotions-page-title first-trial-page-title">
+<section class="page-title promotions-page-title <%= campaign.pageClass %>">
     <div class="promotions-breadcrumbs">
         <a href="/">Home</a>
         <span>/</span>
         <a href="/promotions">Promotions</a>
         <span>/</span>
-        <span>First Trial</span>
+        <span><%= campaign.label %></span>
     </div>
-    <h1>First Trial deals for first-time customers.</h1>
-    <p>Book premium facials, hair treatments, massages and salon services at introductory prices before committing to regular menu rates.</p>
+    <h1><%= campaign.heading %></h1>
+    <p><%= campaign.description %></p>
 
-    <div class="first-trial-summary">
-        <article>
-            <h2>One-time use</h2>
-            <p>Each first-trial offer is designed for new customers at that merchant, so you can test the service once at the introductory rate.</p>
-        </article>
-        <article>
-            <h2>30% to 50% off</h2>
-            <p>These are meant to feel like genuine entry offers, with large discounts against standard pricing rather than small campaign coupons.</p>
-        </article>
-        <article>
-            <h2>No bill shock</h2>
-            <p>The price shown on the page is the price you pay, with no hidden top-ups or surprise package conversion fees.</p>
-        </article>
+    <div class="<%= campaign.summaryClass %>">
+        <% campaign.summaryCards.forEach((card) => { %>
+            <article>
+                <h2><%= card.title %></h2>
+                <p><%= card.body %></p>
+            </article>
+        <% }) %>
     </div>
 </section>
 
 <section class="section compact promotions-layout">
-    <aside class="promotions-filters" aria-label="First trial filters">
+    <aside class="promotions-filters" aria-label="<%= campaign.filterAriaLabel %>">
         <div class="filter-card">
             <div class="filter-card-header">
                 <h2>Filters</h2>
@@ -89,11 +83,11 @@
             </div>
 
             <div class="filter-group">
-                <h3>What you will find</h3>
-                <div class="first-trial-copy-list">
-                    <p>Skincare trials like hydrating facials or laser-style deep cleansing sessions.</p>
-                    <p>Hair and scalp services for styling, colouring or treatment discovery visits.</p>
-                    <p>Wellness options like massage, grooming, lashes and nails at introductory rates.</p>
+                <h3><%= campaign.noteTitle %></h3>
+                <div class="<%= campaign.copyListClass %>">
+                    <% campaign.notes.forEach((note) => { %>
+                        <p><%= note %></p>
+                    <% }) %>
                 </div>
             </div>
         </div>
@@ -101,7 +95,7 @@
 
     <div class="promotions-results">
         <div class="promotions-results-count">
-            <strong data-promotions-count><%= offers.length %></strong> first-trial services found.
+            <strong data-promotions-count><%= offers.length %></strong> <%= campaign.countLabel %>.
         </div>
 
         <div class="promotions-list" data-promotions-list>
@@ -113,14 +107,14 @@
                     data-category="<%= offer.serviceCategory %>"
                 >
                     <div class="promotion-offer-image promotion-offer-image-<%= offer.merchantId %>">
-                        <span class="promotion-badge">First trial</span>
+                        <span class="promotion-badge"><%= campaign.badge %></span>
                         <span class="promotion-badge secondary">-<%= offer.discountPercent %>%</span>
                     </div>
 
                     <div class="promotion-offer-content">
                         <div class="promotion-offer-topline">
                             <div>
-                                <h2>[First Trial] <%= offer.name %></h2>
+                                <h2><%= campaign.offerTitlePrefix %> <%= offer.name %></h2>
                                 <p class="promotion-duration"><span class="duration-dot"></span><%= offer.duration %></p>
                             </div>
                             <div class="promotion-price-block">
@@ -140,10 +134,16 @@
                         </div>
 
                         <div class="promotion-offer-tags">
-                            <span>First Trial</span>
-                            <span>New customer only</span>
-                            <span><%= offer.merchantLocation %></span>
-                            <span><%= offer.serviceCategory %></span>
+                            <span><%= campaign.label %></span>
+                            <% campaign.staticTags.forEach((tag) => { %>
+                                <span><%= tag %></span>
+                            <% }) %>
+                            <% if (campaign.includeLocationTag) { %>
+                                <span><%= offer.merchantLocation %></span>
+                            <% } %>
+                            <% if (campaign.includeCategoryTag) { %>
+                                <span><%= offer.serviceCategory %></span>
+                            <% } %>
                         </div>
                     </div>
                 </article>
@@ -151,7 +151,7 @@
         </div>
 
         <div class="notice promotions-empty-state is-hidden" data-promotions-empty>
-            No first-trial services match the selected filters.
+            <%= campaign.emptyMessage %>
         </div>
     </div>
 </section>
