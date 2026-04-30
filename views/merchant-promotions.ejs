@@ -1,6 +1,7 @@
 <%- include('partials/header', { title }) %>
 
 <%
+    const categoryOptions = [...new Set(promotions.map((promotion) => promotion.type).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const formatPromotionDate = (value) => {
         const date = value instanceof Date ? value : new Date(value);
 
@@ -37,7 +38,18 @@
             <h2>Promotion campaigns</h2>
             <p class="muted"><%= promotions.length %> promotions currently linked to this merchant.</p>
         </div>
-        <a class="button primary" href="/merchant/promotions/new">Add promotion</a>
+        <div class="inline-button-group">
+            <label>
+                <span class="sr-only">Filter by category</span>
+                <select class="js-merchant-promotion-category-filter">
+                    <option value="">All categories</option>
+                    <% categoryOptions.forEach((category) => { %>
+                        <option value="<%= category %>"><%= category.replace(/_/g, ' ') %></option>
+                    <% }) %>
+                </select>
+            </label>
+            <a class="button primary" href="/merchant/promotions/new">Add promotion</a>
+        </div>
     </div>
 
     <% if (promotions.length === 0) { %>
@@ -47,7 +59,7 @@
     <% } else { %>
         <div class="service-catalog-grid unified-service-grid">
             <% promotions.forEach((promotion) => { %>
-                <article class="service-catalog-card unified-service-card">
+                <article class="service-catalog-card unified-service-card js-merchant-promotion-card" data-category="<%= promotion.type %>">
                     <div class="portal-card-header">
                         <span class="tag"><%= promotion.type.replace(/_/g, ' ') %></span>
                         <span class="service-price slim"><%= promotion.status %></span>
@@ -83,5 +95,26 @@
         </div>
     <% } %>
 </section>
+
+<script>
+    (() => {
+        const categoryFilter = document.querySelector('.js-merchant-promotion-category-filter');
+        const promotionCards = Array.from(document.querySelectorAll('.js-merchant-promotion-card'));
+
+        if (!categoryFilter || promotionCards.length === 0) {
+            return;
+        }
+
+        categoryFilter.addEventListener('change', () => {
+            const selectedCategory = categoryFilter.value.trim().toLowerCase();
+
+            promotionCards.forEach((card) => {
+                const category = (card.dataset.category || '').trim().toLowerCase();
+                const isVisible = !selectedCategory || category === selectedCategory;
+                card.style.display = isVisible ? '' : 'none';
+            });
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

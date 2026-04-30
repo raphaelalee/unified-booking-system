@@ -61,6 +61,46 @@ function getAll(callback) {
     });
 }
 
+function getActivePublic(callback) {
+    const sql = `
+        SELECT
+            promotions.promotion_id,
+            promotions.salon_id,
+            promotions.service_id,
+            promotions.title,
+            promotions.type,
+            promotions.discount_type,
+            promotions.discount_value,
+            promotions.start_date,
+            promotions.end_date,
+            promotions.status,
+            promotions.description,
+            promotions.terms,
+            salons.salon_name,
+            salons.address,
+            salons.description AS salon_description
+        FROM promotions
+        INNER JOIN salons ON salons.salon_id = promotions.salon_id
+        WHERE promotions.status = 'active'
+            AND promotions.start_date <= NOW()
+            AND promotions.end_date >= NOW()
+        ORDER BY promotions.type, promotions.start_date DESC, promotions.promotion_id DESC
+    `;
+
+    db.query(sql, (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, (rows || []).map((row) => ({
+            ...mapPromotion(row),
+            address: row.address || '',
+            salonDescription: row.salon_description || ''
+        })));
+    });
+}
+
 function getByMerchantUserId(userId, callback) {
     const sql = `
         SELECT
@@ -339,6 +379,7 @@ module.exports = {
     DISCOUNT_TYPES,
     PROMOTION_STATUSES,
     getAll,
+    getActivePublic,
     getByMerchantUserId,
     findById,
     findForMerchant,

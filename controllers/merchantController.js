@@ -1,6 +1,7 @@
 const QRCode = require('qrcode');
 const Merchant = require('../models/Merchant');
 const MerchantService = require('../models/MerchantService');
+const Promotion = require('../models/Promotion');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
@@ -379,6 +380,240 @@ function buildPromotionOffers() {
     }).sort((left, right) => right.discountPercent - left.discountPercent);
 }
 
+function calculatePromotionPrice(basePrice, promotion) {
+    const price = Number(basePrice || 0);
+    const discountValue = Number(promotion.discountValue || 0);
+
+    if (!Number.isFinite(price) || price <= 0) {
+        return { originalPrice: 0, price: 0, discountPercent: 0 };
+    }
+
+    let promoPrice = price;
+
+    if (promotion.discountType === 'percentage') {
+        promoPrice = price * Math.max(0, (100 - discountValue)) / 100;
+    } else if (promotion.discountType === 'fixed_amount') {
+        promoPrice = price - discountValue;
+    } else if (promotion.discountType === 'fixed_price') {
+        promoPrice = discountValue;
+    }
+
+    const roundedPrice = Math.max(1, Math.round(promoPrice * 100) / 100);
+    const discountPercent = price > 0
+        ? Math.max(0, Math.round(((price - roundedPrice) / price) * 100))
+        : 0;
+
+    return {
+        originalPrice: Math.round(price * 100) / 100,
+        price: roundedPrice,
+        discountPercent
+    };
+}
+
+function getCashbackPercent(promotionId) {
+    const cashbackPattern = [10, 9, 8, 7, 6, 5];
+    return cashbackPattern[Number(promotionId) % cashbackPattern.length];
+}
+
+function getPromotionLabel(type) {
+    if (type === 'first_trial') {
+        return 'First Trial';
+    }
+
+    if (type === 'happy_hour') {
+        return 'Happy Hour';
+    }
+
+    if (type === 'one_for_one') {
+        return '1 For 1';
+    }
+
+    if (type === 'featured') {
+        return 'Featured';
+    }
+
+    return 'Promotion';
+}
+
+function buildPublicPromotionOffer(promotion, service) {
+    const pricing = calculatePromotionPrice(service.price, promotion);
+
+    return {
+        id: promotion.id,
+        promotionId: promotion.id,
+        merchantId: promotion.salonId,
+        merchantName: promotion.salonName,
+        merchantLocation: promotion.address || 'No address set',
+        merchantCategory: service.category || 'Merchant',
+        merchantRating: '4.8',
+        merchantPromotion: promotion.description || promotion.terms || promotion.title,
+        name: promotion.title,
+        serviceCategory: service.category || service.name,
+        duration: service.duration,
+        price: pricing.price,
+        originalPrice: pricing.originalPrice,
+        discountPercent: pricing.discountPercent,
+        cashbackPercent: getCashbackPercent(promotion.id),
+        campaignLabel: getPromotionLabel(promotion.type),
+        priceTier: pricing.price < 30 ? '$' : pricing.price < 55 ? '$$' : pricing.price < 80 ? '$$$' : '$$$$',
+        regions: [promotion.address || 'No address set', service.category || service.name],
+        serviceBookingPath: appendQueryParams(
+            getMerchantScanPath(promotion.salonId),
+            {
+                source: 'promotions',
+                serviceId: service.id,
+                promoCampaign: getPromotionLabel(promotion.type),
+                promoTitle: promotion.title,
+                promoPrice: pricing.price,
+                promoOriginalPrice: pricing.originalPrice,
+                promoDiscountPercent: pricing.discountPercent
+            }
+        )
+    };
+}
+
+function getPromotionServiceForSalon(promotion, servicesBySalon) {
+    const salonServices = servicesBySalon[promotion.salonId] || [];
+
+    if (salonServices.length === 0) {
+        return null;
+    }
+
+    if (promotion.serviceId) {
+        const linkedService = salonServices.find((service) => String(service.id) === String(promotion.serviceId));
+
+        if (linkedService) {
+            return linkedService;
+        }
+    }
+
+    return salonServices[0];
+}
+
+function loadPublicPromotionOffers(callback) {
+    return Promotion.getActivePublic((promotionError, promotions) => {
+        if (promotionError) {
+            callback(promotionError);
+            return;
+        }
+
+        return MerchantService.getAllServices((serviceError, services) => {
+            if (serviceError) {
+                callback(serviceError);
+                return;
+            }
+
+            const servicesBySalon = (services || []).reduce((groups, service) => {
+                if (!groups[service.salonId]) {
+                    groups[service.salonId] = [];
+                }
+
+                groups[service.salonId].push(service);
+                return groups;
+            }, {});
+
+            const offers = (promotions || [])
+                .filter((promotion) => promotion.type !== 'featured')
+                .map((promotion) => {
+                    const linkedService = getPromotionServiceForSalon(promotion, servicesBySalon);
+
+                    if (!linkedService) {
+                        return null;
+                    }
+
+                    return buildPublicPromotionOffer(promotion, linkedService);
+                })
+                .filter(Boolean)
+                .sort((left, right) => right.discountPercent - left.discountPercent);
+
+            callback(null, offers);
+        });
+    });
+}
+
+function loadFeaturedSalons(callback) {
+    return Promotion.getActivePublic((promotionError, promotions) => {
+        if (promotionError) {
+            callback(promotionError);
+            return;
+        }
+
+        return MerchantService.getAllServices((serviceError, services) => {
+            if (serviceError) {
+                callback(serviceError);
+                return;
+            }
+
+            const servicesBySalon = (services || []).reduce((groups, service) => {
+                if (!groups[service.salonId]) {
+                    groups[service.salonId] = [];
+                }
+
+                groups[service.salonId].push(service);
+                return groups;
+            }, {});
+
+            const featuredPromotions = (promotions || []).filter((promotion) => promotion.type === 'featured');
+            const salonsById = new Map();
+
+            featuredPromotions.forEach((promotion) => {
+                const salonServices = servicesBySalon[promotion.salonId] || [];
+                const linkedService = getPromotionServiceForSalon(promotion, servicesBySalon);
+
+                if (!salonsById.has(promotion.salonId)) {
+                    salonsById.set(promotion.salonId, {
+                        id: promotion.salonId,
+                        name: promotion.salonName,
+                        location: promotion.address || 'No address set',
+                        category: linkedService?.category || 'Merchant',
+                        description: promotion.salonDescription || promotion.description || 'Featured merchant promotion.',
+                        promotion: promotion.title,
+                        posSystem: 'Merchant POS',
+                        bookingSystem: 'Vaniday Booking',
+                        rating: 4.8,
+                        reviewCount: 48 + (Number(promotion.salonId) * 9),
+                        featuredLabel: 'Featured Partner',
+                        featuredReason: promotion.description || promotion.terms || 'Selected for featured merchant visibility.',
+                        publicPath: `/merchant/${promotion.salonId}`,
+                        highlightedServices: []
+                    });
+                }
+
+                const salonEntry = salonsById.get(promotion.salonId);
+                const highlightedPool = promotion.serviceId && linkedService
+                    ? [linkedService, ...salonServices.filter((service) => String(service.id) !== String(linkedService.id))]
+                    : salonServices;
+
+                const uniqueServices = [];
+                const seenIds = new Set();
+
+                highlightedPool.forEach((service) => {
+                    if (service && !seenIds.has(String(service.id)) && uniqueServices.length < 3) {
+                        seenIds.add(String(service.id));
+                        uniqueServices.push(service);
+                    }
+                });
+
+                salonEntry.highlightedServices = uniqueServices.map((service) => {
+                    const promoSource = featuredPromotions.find((item) => String(item.salonId) === String(promotion.salonId) && String(item.serviceId || '') === String(service.id));
+                    const pricing = promoSource
+                        ? calculatePromotionPrice(service.price, promoSource)
+                        : { originalPrice: null, price: Number(service.price) };
+
+                    return {
+                        name: service.name,
+                        duration: service.duration,
+                        price: pricing.price,
+                        originalPrice: pricing.originalPrice && pricing.originalPrice > pricing.price ? pricing.originalPrice : null
+                    };
+                });
+            });
+
+            callback(null, Array.from(salonsById.values()));
+        });
+    });
+}
+
 const promotionCampaigns = {
     firstTrial: {
         label: 'First Trial',
@@ -492,70 +727,67 @@ const promotionCampaigns = {
 };
 
 function showPromotions(req, res) {
-    const promotionOffers = buildPromotionOffers();
-    res.render('promotions', {
-        title: 'Promotions',
-        promotionOffers
+    return loadPublicPromotionOffers((error, promotionOffers) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Promotions Error',
+                message: 'Promotions could not be loaded from the database.'
+            });
+        }
+
+        return res.render('promotions', {
+            title: 'Promotions',
+            promotionOffers
+        });
     });
 }
 
-function renderPromotionCampaign(res, campaignKey) {
+function renderPromotionCampaign(req, res, campaignKey) {
     const campaign = promotionCampaigns[campaignKey];
-    const promotionOffers = buildPromotionOffers().filter((offer) => offer.campaignLabel === campaign.label);
+    return loadPublicPromotionOffers((error, promotionOffers) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Promotions Error',
+                message: 'Promotions could not be loaded from the database.'
+            });
+        }
 
-    return res.render('promotion-campaign', {
-        title: campaign.title,
-        campaign,
-        promotionOffers
+        return res.render('promotion-campaign', {
+            title: campaign.title,
+            campaign,
+            promotionOffers: promotionOffers.filter((offer) => offer.campaignLabel === campaign.label)
+        });
     });
 }
 
 function showFirstTrial(req, res) {
-    return renderPromotionCampaign(res, 'firstTrial');
+    return renderPromotionCampaign(req, res, 'firstTrial');
 }
 
 function showHappyHour(req, res) {
-    return renderPromotionCampaign(res, 'happyHour');
+    return renderPromotionCampaign(req, res, 'happyHour');
 }
 
 function showOneForOne(req, res) {
-    return renderPromotionCampaign(res, 'oneForOne');
+    return renderPromotionCampaign(req, res, 'oneForOne');
 }
 
 function showFeaturedSalons(req, res) {
-    const featuredSalons = Merchant.getAll()
-        .map((merchant) => {
-            const services = Array.isArray(merchant.services) ? merchant.services : [];
-            const highlightedServices = services.slice(0, 3).map((service) => {
-                const options = getServiceOptions(service);
-                const featuredOption = options.length > 0 ? options[0] : service;
-                const originalPrice = Math.round(Number(featuredOption.price) * 1.22);
-
-                return {
-                    name: featuredOption.name || service.name,
-                    duration: featuredOption.duration || service.duration,
-                    price: Number(featuredOption.price),
-                    originalPrice: originalPrice > Number(featuredOption.price) ? originalPrice : null
-                };
+    return loadFeaturedSalons((error, featuredSalons) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Featured Salons Error',
+                message: 'Featured salons could not be loaded from the database.'
             });
+        }
 
-            return {
-                ...merchant,
-                featuredLabel: merchant.rating >= 4.7 ? 'Top Rated Partner' : 'Trending Pick',
-                reviewCount: merchant.id === 1 ? 128 : merchant.id === 2 ? 96 : 74,
-                featuredReason: merchant.id === 1
-                    ? 'High review volume, premium treatments and consistent bookings.'
-                    : merchant.id === 2
-                        ? 'Wellness favourite with strong repeat demand and destination-worthy spa services.'
-                        : 'Popular grooming destination with reliable service quality and standout merchant identity.',
-                highlightedServices
-            };
-        })
-        .sort((left, right) => Number(right.rating) - Number(left.rating));
-
-    res.render('featured-salons', {
-        title: 'Featured Salons',
-        featuredSalons
+        return res.render('featured-salons', {
+            title: 'Featured Salons',
+            featuredSalons
+        });
     });
 }
 
