@@ -1,6 +1,7 @@
 const QRCode = require('qrcode');
 const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
+const Product = require('../models/Product');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -60,6 +61,39 @@ function validateServiceForm(form) {
 
     if (slots.length === 0) {
         errors.push('Please enter at least one available slot.');
+    }
+
+    return errors;
+}
+
+function getProductForm(body = {}) {
+    return {
+        name: String(body.name || '').trim(),
+        price: String(body.price || '').trim(),
+        stockQuantity: String(body.stockQuantity || body.stock_quantity || '').trim(),
+        imageUrl: String(body.imageUrl || body.image_url || '').trim()
+    };
+}
+
+function validateProductForm(form) {
+    const errors = [];
+    const price = Number(form.price);
+    const stockQuantity = Number(form.stockQuantity);
+
+    if (form.name.length < 2) {
+        errors.push('Product name must be at least 2 characters.');
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+        errors.push('Please enter a valid product price.');
+    }
+
+    if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+        errors.push('Please enter a valid stock quantity.');
+    }
+
+    if (form.imageUrl && !/^https?:\/\/.+/i.test(form.imageUrl)) {
+        errors.push('Image URL must start with http:// or https://.');
     }
 
     return errors;
@@ -434,6 +468,224 @@ function deleteService(req, res) {
     });
 }
 
+function listProducts(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Products Error',
+                    message: 'Products could not be loaded from the database.'
+                });
+            }
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-products', {
+                title: 'Merchant Products',
+                merchant,
+                products,
+                success,
+                error
+            });
+        });
+    });
+}
+
+function showNewProduct(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return res.render('merchant-product-form', {
+            title: 'Add Product',
+            merchant,
+            product: null,
+            form: getProductForm(),
+            errors: []
+        });
+    });
+}
+
+function createProduct(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        const form = getProductForm(req.body);
+        const errors = validateProductForm(form);
+
+        if (errors.length > 0) {
+            return res.status(400).render('merchant-product-form', {
+                title: 'Add Product',
+                merchant,
+                product: null,
+                form,
+                errors
+            });
+        }
+
+        return Product.createForMerchant(req.session.user.id, {
+            name: form.name,
+            price: Number(form.price),
+            stockQuantity: Number(form.stockQuantity),
+            imageUrl: form.imageUrl
+        }, (createError, result) => {
+            if (createError) {
+                console.error(createError);
+                return res.status(500).render('merchant-product-form', {
+                    title: 'Add Product',
+                    merchant,
+                    product: null,
+                    form,
+                    errors: ['Product could not be created. Please try again.']
+                });
+            }
+
+            if (!result || result.affectedRows === 0) {
+                return res.status(403).render('error', {
+                    title: 'Merchant Not Assigned',
+                    message: 'Your merchant account needs an admin-created salon before products can be listed.'
+                });
+            }
+
+            req.session.merchantSuccess = 'Product created successfully.';
+            return res.redirect('/merchant/products');
+        });
+    });
+}
+
+function showEditProduct(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.findForMerchant(req.session.user.id, req.params.productId, (productError, product) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Product Not Found',
+                    message: 'Product data could not be loaded.'
+                });
+            }
+
+            if (!product) {
+                return res.status(404).render('error', {
+                    title: 'Product Not Found',
+                    message: 'This product does not belong to your merchant account.'
+                });
+            }
+
+            return res.render('merchant-product-form', {
+                title: 'Edit Product',
+                merchant,
+                product,
+                form: {
+                    name: product.name,
+                    price: String(product.price),
+                    stockQuantity: String(product.stockQuantity),
+                    imageUrl: product.imageUrl || ''
+                },
+                errors: []
+            });
+        });
+    });
+}
+
+function updateProduct(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.findForMerchant(req.session.user.id, req.params.productId, (productError, product) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Product Not Found',
+                    message: 'Product data could not be loaded.'
+                });
+            }
+
+            if (!product) {
+                return res.status(404).render('error', {
+                    title: 'Product Not Found',
+                    message: 'This product does not belong to your merchant account.'
+                });
+            }
+
+            const form = getProductForm(req.body);
+            const errors = validateProductForm(form);
+
+            if (errors.length > 0) {
+                return res.status(400).render('merchant-product-form', {
+                    title: 'Edit Product',
+                    merchant,
+                    product,
+                    form,
+                    errors
+                });
+            }
+
+            return Product.updateForMerchant(req.session.user.id, product.id, {
+                name: form.name,
+                price: Number(form.price),
+                stockQuantity: Number(form.stockQuantity),
+                imageUrl: form.imageUrl
+            }, (updateError, result) => {
+                if (updateError) {
+                    console.error(updateError);
+                    return res.status(500).render('merchant-product-form', {
+                        title: 'Edit Product',
+                        merchant,
+                        product,
+                        form,
+                        errors: ['Product could not be updated. Please try again.']
+                    });
+                }
+
+                req.session.merchantSuccess = result.affectedRows > 0 ? 'Product updated successfully.' : null;
+                req.session.merchantError = result.affectedRows > 0 ? null : 'Product could not be updated.';
+                return res.redirect('/merchant/products');
+            });
+        });
+    });
+}
+
+function deleteProduct(req, res) {
+    return Product.deleteForMerchant(req.session.user.id, req.params.productId, (error, deleted) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Product could not be deleted.';
+            return res.redirect('/merchant/products');
+        }
+
+        req.session.merchantSuccess = deleted ? 'Product deleted successfully.' : null;
+        req.session.merchantError = deleted ? null : 'Product could not be deleted.';
+        return res.redirect('/merchant/products');
+    });
+}
+
 module.exports = {
     showServices,
     generateQr,
@@ -441,5 +693,11 @@ module.exports = {
     createService,
     showEditService,
     updateService,
-    deleteService
+    deleteService,
+    listProducts,
+    showNewProduct,
+    createProduct,
+    showEditProduct,
+    updateProduct,
+    deleteProduct
 };

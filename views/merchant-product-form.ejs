@@ -1,0 +1,46 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1><%= product ? 'Edit product.' : 'Add product.' %></h1>
+    <p><%= merchant.name %> can only manage products under this merchant profile.</p>
+</section>
+
+<section class="section compact">
+    <form class="login-form service-admin-form" action="<%= product ? `/merchant/products/${product.id}` : '/merchant/products' %>" method="POST">
+        <% if (errors.length > 0) { %>
+            <div class="notice error">
+                <% errors.forEach((error) => { %>
+                    <p><%= error %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <label>
+            Product name
+            <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required>
+        </label>
+
+        <label>
+            Price
+            <input type="number" name="price" value="<%= form.price %>" placeholder="38.00" min="0" step="0.01" required>
+        </label>
+
+        <label>
+            Stock quantity
+            <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
+        </label>
+
+        <label>
+            Image URL
+            <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/product.jpg">
+        </label>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit"><%= product ? 'Save product' : 'Create product' %></button>
+            <a class="button secondary" href="/merchant/products">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

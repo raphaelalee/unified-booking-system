@@ -1,0 +1,53 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1>My products.</h1>
+    <p>List and manage products for <%= merchant.name %>. Customers can shop these products from the Vaniday product page.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Products</p>
+            <h2><%= products.length %> listed products</h2>
+            <p class="muted">Only products connected to your merchant account appear here.</p>
+        </div>
+        <div class="admin-action-row">
+            <a class="button secondary" href="/merchant">Back to dashboard</a>
+            <a class="button primary" href="/merchant/products/new">Add product</a>
+        </div>
+    </div>
+
+    <% if (products.length === 0) { %>
+        <div class="notice">
+            <p>No products listed yet. Add your first product when it is ready for customers.</p>
+        </div>
+    <% } else { %>
+        <div class="product-grid">
+            <% products.forEach((product) => { %>
+                <article class="product-card">
+                    <div class="product-image product-skin" style="<%= product.imageUrl ? `background-image: url('${product.imageUrl}')` : '' %>"></div>
+                    <p class="tag"><%= product.salonName %></p>
+                    <h2><%= product.name %></h2>
+                    <p class="muted">$<%= product.price.toFixed(2) %> &middot; <%= product.stockQuantity %> in stock</p>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/merchant/products/<%= product.id %>/edit">Edit</a>
+                        <form action="/merchant/products/<%= product.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

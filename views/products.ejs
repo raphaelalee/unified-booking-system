@@ -30,8 +30,12 @@
 <section class="section compact">
     <div class="product-grid">
         <% productList.forEach((product) => { %>
+            <%
+                const productImageClass = productImages[product.id] || 'product-skin';
+                const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+            %>
             <article class="product-card">
-                <div class="product-image <%= productImages[product.id] %>"></div>
+                <div class="product-image <%= productImageClass %>" style="<%= productImageStyle %>"></div>
                 <p class="tag"><%= product.category %></p>
                 <h2><%= product.name %></h2>
                 <p class="muted">$<%= product.price %> &middot; <%= product.description %></p>

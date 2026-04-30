@@ -12,28 +12,34 @@
 <body>
     <header class="site-header">
         <nav class="nav">
-            <a class="brand" href="/">
+            <%
+                const brandHref = currentUser && currentUser.role === 'admin'
+                    ? '/admin'
+                    : currentUser && currentUser.role === 'merchant'
+                        ? '/merchant'
+                        : '/';
+            %>
+            <a class="brand" href="<%= brandHref %>">
                 <span class="brand-mark">V</span>
                 <span>Vaniday</span>
             </a>
             <div class="nav-links">
                 <% if (currentUser && currentUser.role === 'admin') { %>
                     <a href="/admin">Dashboard</a>
-                    <a href="/admin/merchants/new">Add Merchant</a>
                     <a href="/admin/services">Manage Services</a>
-                    <a href="/profile">Profile</a>
                     <a href="/admin/services/new">Add Service</a>
-                    <a href="/">Public Site</a>
+                    <a href="/admin/merchants/new">Add Merchant</a>
+                    <a href="/profile">Profile</a>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <a href="/merchant">Dashboard</a>
                     <a href="/merchant/services">My Services</a>
+                    <a href="/merchant/products">My Products</a>
                     <a href="/merchant/services/new">Add Service</a>
                     <a href="/profile">Profile</a>
-                    <a href="/services">Public Services</a>
-                    <a href="/merchants">Directory</a>
                 <% } else { %>
                     <a href="/">Home</a>
                     <a href="/services">Services</a>
+                    <a href="/merchants">Merchants</a>
                     <div class="nav-dropdown">
                         <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
                             <span>Promotions</span>
@@ -48,8 +54,10 @@
                         </div>
                     </div>
                     <a href="/products">Products</a>
-                    <a href="/cashback">Cashback</a>
-                    <a href="/giftcards">Gift Cards</a>
+                    <% if (currentUser && currentUser.role === 'customer') { %>
+                        <a href="/cashback">Cashback</a>
+                        <a href="/giftcards">Gift Cards</a>
+                    <% } %>
                 <% } %>
             </div>
             <div class="nav-tools">
@@ -74,7 +82,7 @@
                         <a class="signup-text-link" href="/signup">Sign Up</a>
                     <% } %>
                 </div>
-                <% if (!currentUser || currentUser.role === 'customer') { %>
+                <% if (currentUser && currentUser.role === 'customer') { %>
                     <div class="nav-commerce-links">
                         <a class="bag-link" href="/cart" aria-label="Cart">
                             <span class="bag-icon" aria-hidden="true">
