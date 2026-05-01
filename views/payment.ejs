@@ -8,6 +8,12 @@
 
 <section class="section compact">
     <div class="login-layout">
+        <%
+            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
+                ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0))
+                : 0;
+            const paymentAmountDue = Math.max(Number(amount || 0) - paymentCashbackEstimate, 0);
+        %>
         <form class="login-form" action="/payment" method="POST">
             <input type="hidden" name="amount" value="<%= amount %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
@@ -17,6 +23,10 @@
             <input type="hidden" name="checkoutId" value="<%= typeof checkoutId !== 'undefined' ? checkoutId : '' %>">
             <input type="hidden" name="bookingId" value="<%= typeof bookingId !== 'undefined' ? bookingId : '' %>">
             <input type="hidden" name="selectedItemIds" value="<%= Array.isArray(selectedItemIds) ? selectedItemIds.join(',') : (selectedItemIds || '') %>">
+            <input type="hidden" name="useCashback" value="<%= typeof useCashback !== 'undefined' && useCashback ? 'true' : 'false' %>">
+            <% if (typeof useCashback !== 'undefined' && useCashback) { %>
+                <input type="hidden" name="redeemCashback" value="on">
+            <% } %>
             <input type="hidden" name="fulfilment" value="<%= fulfilment || '' %>">
             <input type="hidden" name="pickupMerchantId" value="<%= pickupMerchantId || '' %>">
             <input type="hidden" name="deliveryAddress" value="<%= deliveryAddress || '' %>">
@@ -30,23 +40,89 @@
 
             <div>
                 <p class="eyebrow">Payment method</p>
-                <h2>$<%= Number(amount).toFixed(2) %></h2>
+                <h2>$<%= paymentAmountDue.toFixed(2) %></h2>
                 <p class="muted"><%= serviceName %> &middot; <%= merchantName %></p>
             </div>
 
-            <fieldset>
+            <% if (typeof cartCheckout !== 'undefined' && cartCheckout && typeof useCashback !== 'undefined' && useCashback) { %>
+                <div class="loyalty-redemption-card">
+                    <span>
+                        <strong>Cashback selected from cart</strong>
+                        <small>
+                            Available $<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>.
+                            Estimated cashback applied: $<%= paymentCashbackEstimate.toFixed(2) %>.
+                            The final discount is checked again securely when payment is recorded.
+                        </small>
+                    </span>
+                </div>
+            <% } else if (!(typeof cartCheckout !== 'undefined' && cartCheckout)) { %>
+                <div class="loyalty-redemption-card">
+                    <% if (typeof loyalty !== 'undefined' && loyalty && Number(loyalty.wallet.cashbackBalance || 0) > 0) { %>
+                    <label>
+                        <input type="checkbox" name="redeemCashback" value="on">
+                        <span>
+                            <strong>Use cashback rewards</strong>
+                            <small>
+                                Available $<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %>.
+                                Up to $<%= Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0)).toFixed(2) %> will be applied to this payment.
+                            </small>
+                        </span>
+                    </label>
+                    <% } else { %>
+                    <span>
+                        <strong>No cashback available yet</strong>
+                        <small>Complete this payment to earn rewards for your next checkout.</small>
+                    </span>
+                    <% } %>
+                </div>
+            <% } %>
+
+            <fieldset class="payment-methods">
                 <legend class="eyebrow">Choose payment</legend>
-                <label>
-                    <input type="radio" name="paymentMethod" value="card" checked>
-                    Card payment
+                <label class="payment-method-card featured">
+                    <input type="radio" name="paymentMethod" value="apple_pay" checked>
+                    <span class="payment-method-icon">AP</span>
+                    <span>
+                        <strong>Apple Pay</strong>
+                        <small>Fast wallet checkout</small>
+                    </span>
                 </label>
-                <label>
+                <label class="payment-method-card">
+                    <input type="radio" name="paymentMethod" value="paypal">
+                    <span class="payment-method-icon">PP</span>
+                    <span>
+                        <strong>PayPal</strong>
+                        <small>Pay with your PayPal account</small>
+                    </span>
+                </label>
+                <label class="payment-method-card">
+                    <input type="radio" name="paymentMethod" value="stripe">
+                    <span class="payment-method-icon">ST</span>
+                    <span>
+                        <strong>Stripe</strong>
+                        <small>Secure hosted card payment</small>
+                    </span>
+                </label>
+                <label class="payment-method-card">
                     <input type="radio" name="paymentMethod" value="nets">
-                    NETS QR
+                    <span class="payment-method-icon">QR</span>
+                    <span>
+                        <strong>NETS QR</strong>
+                        <small>Scan and pay locally</small>
+                    </span>
+                </label>
+                <label class="payment-method-card">
+                    <input type="radio" name="paymentMethod" value="card">
+                    <span class="payment-method-icon">CC</span>
+                    <span>
+                        <strong>Card payment</strong>
+                        <small>Manual prototype card form</small>
+                    </span>
                 </label>
             </fieldset>
 
             <div id="card-payment-fields">
+                <p class="eyebrow">Card details</p>
                 <label>
                     Cardholder name
                     <input type="text" name="cardholderName" placeholder="Mary Tan">
@@ -72,15 +148,27 @@
             <p id="nets-payment-note" class="muted" style="display:none;">
                 Continue to generate a NETS QR code for this payment.
             </p>
+            <p id="wallet-payment-note" class="muted">
+                Continue to complete this prototype wallet payment.
+            </p>
+            <p id="stripe-payment-note" class="muted" style="display:none;">
+                Continue to complete this prototype Stripe payment.
+            </p>
 
-            <button class="button primary full" type="submit">Continue payment</button>
+            <button id="payment-submit-button" class="button primary full" type="submit">Continue with Apple Pay</button>
         </form>
 
         <aside class="login-benefits">
             <p class="eyebrow">Payment summary</p>
             <h2><%= merchantName %></h2>
             <p><%= serviceName %></p>
-            <p class="promotion">$<%= Number(amount).toFixed(2) %> total</p>
+            <div class="cart-totals">
+                <p><span>Subtotal</span><strong>$<%= Number(amount).toFixed(2) %></strong></p>
+                <% if (paymentCashbackEstimate > 0) { %>
+                    <p><span>Cashback</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
+                <% } %>
+                <p class="cart-total-line"><span>Total due</span><strong>$<%= paymentAmountDue.toFixed(2) %></strong></p>
+            </div>
             <p class="muted">Prototype payment only. No real card charge is made.</p>
         </aside>
     </div>
@@ -91,11 +179,26 @@ document.addEventListener('DOMContentLoaded', function () {
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
     const cardFields = document.getElementById('card-payment-fields');
     const netsNote = document.getElementById('nets-payment-note');
+    const walletNote = document.getElementById('wallet-payment-note');
+    const stripeNote = document.getElementById('stripe-payment-note');
+    const submitButton = document.getElementById('payment-submit-button');
 
     function syncPaymentMethod() {
-        const selected = methodInputs.find((input) => input.checked)?.value || 'card';
+        const selected = methodInputs.find((input) => input.checked)?.value || 'apple_pay';
         if (cardFields) cardFields.style.display = selected === 'card' ? '' : 'none';
         if (netsNote) netsNote.style.display = selected === 'nets' ? '' : 'none';
+        if (stripeNote) stripeNote.style.display = selected === 'stripe' ? '' : 'none';
+        if (walletNote) walletNote.style.display = ['apple_pay', 'paypal'].includes(selected) ? '' : 'none';
+        if (submitButton) {
+            const labels = {
+                apple_pay: 'Continue with Apple Pay',
+                paypal: 'Continue with PayPal',
+                stripe: 'Continue with Stripe',
+                nets: 'Generate NETS QR',
+                card: 'Continue card payment'
+            };
+            submitButton.textContent = labels[selected] || 'Continue payment';
+        }
     }
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));

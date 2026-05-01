@@ -153,7 +153,25 @@ function getReceiptById(id, callback) {
     });
 }
 
+function attachTransaction(bookingId, transactionId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET transaction_id = ?
+        WHERE booking_id = ?
+    `;
+
+    db.query(sql, [transactionId, bookingId], (error, result) => {
+        if (error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE')) {
+            callback(null, result);
+            return;
+        }
+
+        callback(error, result);
+    });
+}
+
 module.exports = {
+    attachTransaction,
     create,
     createInDatabase,
     getReceiptById,

@@ -57,8 +57,9 @@
             <div class="account-actions">
                 <% if (isCustomer) { %>
                     <a class="button primary full" href="/services">Book services</a>
+                    <a class="button secondary full" href="/profile/history">Purchase history</a>
                     <a class="button secondary full" href="/rewards-game">Rewards game</a>
-                    <a class="button secondary full" href="/cashback">Cashback</a>
+                    <a class="button secondary full" href="#wallet">Rewards wallet</a>
                 <% } else { %>
                     <a class="button primary full" href="<%= dashboardPath %>">Back to dashboard</a>
                 <% } %>
@@ -181,6 +182,67 @@
                                 : "Maximum tier reached" %>
                         </p>
                     </div>
+                </section>
+
+                <section id="wallet" class="account-panel loyalty-profile-panel">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Wallet</p>
+                            <h2>Loyalty & rewards</h2>
+                        </div>
+                        <a class="button secondary" href="/profile/history">Purchase history</a>
+                    </div>
+
+                    <div class="loyalty-balance">
+                        <div>
+                            <span>Points</span>
+                            <strong><%= loyalty ? loyalty.wallet.pointsBalance : 0 %></strong>
+                        </div>
+                        <div>
+                            <span>Cashback</span>
+                            <strong>$<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %></strong>
+                        </div>
+                        <div>
+                            <span>Lifetime points</span>
+                            <strong><%= loyalty ? loyalty.wallet.lifetimePoints : 0 %></strong>
+                        </div>
+                    </div>
+
+                    <% if (loyalty) { %>
+                        <div class="loyalty-rule-strip">
+                            <p><span>Earn</span><strong><%= loyalty.rules.pointsPerDollar %> pts / $1</strong></p>
+                            <p><span>Cashback</span><strong><%= loyalty.rules.cashbackPercent %>%</strong></p>
+                            <p><span>Redeem</span><strong><%= loyalty.rules.minPointsToRedeem %> pts min</strong></p>
+                        </div>
+
+                        <form class="loyalty-inline-redeem" action="/wallet/redeem" method="POST">
+                            <label>
+                                Convert points into cashback
+                                <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                            </label>
+                            <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem</button>
+                        </form>
+
+                        <% if (!loyalty.transactions.length) { %>
+                            <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
+                        <% } else { %>
+                            <div class="wallet-mini-history">
+                                <% loyalty.transactions.slice(0, 5).forEach((entry) => { %>
+                                    <p>
+                                        <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                        <strong><%= entry.description %></strong>
+                                        <em>
+                                            <%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts
+                                            &middot;
+                                            <%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %>
+                                        </em>
+                                    </p>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    <% } else { %>
+                        <p class="muted">Wallet details could not be loaded right now.</p>
+                    <% } %>
                 </section>
 
                 <% if (referral) { %>

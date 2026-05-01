@@ -1,0 +1,103 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Rewards wallet</p>
+    <h1>Your loyalty balance.</h1>
+    <p>Earn points and cashback from completed Vaniday payments, then redeem them for future bookings.</p>
+</section>
+
+<section class="section compact loyalty-page">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
+
+    <div class="loyalty-grid">
+        <article class="account-panel loyalty-balance-card">
+            <p class="eyebrow">Wallet</p>
+            <div class="loyalty-balance">
+                <div>
+                    <span>Points</span>
+                    <strong><%= wallet.pointsBalance %></strong>
+                </div>
+                <div>
+                    <span>Cashback</span>
+                    <strong>$<%= Number(wallet.cashbackBalance || 0).toFixed(2) %></strong>
+                </div>
+                <div>
+                    <span>Lifetime points</span>
+                    <strong><%= wallet.lifetimePoints %></strong>
+                </div>
+            </div>
+        </article>
+
+        <form class="account-panel loyalty-redeem-card" action="/wallet/redeem" method="POST">
+            <div>
+                <p class="eyebrow">Redeem</p>
+                <h2>Convert points to cashback</h2>
+                <p class="muted">
+                    Minimum <%= rules.minPointsToRedeem %> points. Every point becomes
+                    $<%= Number(rules.pointsToCashRate || 0).toFixed(2) %> cashback.
+                </p>
+            </div>
+            <label>
+                Points to redeem
+                <input type="number" name="points" min="<%= rules.minPointsToRedeem %>" step="1" max="<%= wallet.pointsBalance %>" value="<%= wallet.pointsBalance >= rules.minPointsToRedeem ? rules.minPointsToRedeem : 0 %>" <%= wallet.pointsBalance < rules.minPointsToRedeem ? 'disabled' : '' %>>
+            </label>
+            <button class="button primary" type="submit" <%= wallet.pointsBalance < rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem rewards</button>
+        </form>
+    </div>
+
+    <div class="account-panel loyalty-rules-panel">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Rules</p>
+                <h2>How rewards are earned</h2>
+            </div>
+            <a class="button secondary" href="/services">Book services</a>
+        </div>
+        <div class="loyalty-rule-strip">
+            <p><span>Points</span><strong><%= rules.pointsPerDollar %> / $1</strong></p>
+            <p><span>Cashback</span><strong><%= rules.cashbackPercent %>%</strong></p>
+            <p><span>Status</span><strong><%= rules.isEnabled ? 'Active' : 'Paused' %></strong></p>
+        </div>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">History</p>
+        <h2>Wallet transactions</h2>
+    </div>
+
+    <% if (!transactions.length) { %>
+        <div class="notice">No wallet transactions yet</div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Points</th>
+                        <th>Cashback</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% transactions.forEach((entry) => { %>
+                        <tr>
+                            <td><%= new Date(entry.createdAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></td>
+                            <td><span class="sync-pill"><%= entry.type.replace('_', ' ') %></span></td>
+                            <td><%= entry.description %></td>
+                            <td><%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %></td>
+                            <td><%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

@@ -5,6 +5,9 @@ const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const Transaction = require('../models/Transaction');
+const PurchaseHistory = require('../models/PurchaseHistory');
+const Loyalty = require('../models/Loyalty');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const {
     getMerchantScanPath,
@@ -1295,12 +1298,19 @@ function showCart(req, res) {
     const success = req.session.success;
     req.session.success = null;
 
-    return res.render('cart', {
-        title: 'Cart',
-        cart,
-        total,
-        itemCount,
-        success
+    return Loyalty.getWalletView(req.session.user.id, (walletError, loyalty) => {
+        if (walletError) {
+            console.error(walletError);
+        }
+
+        return res.render('cart', {
+            title: 'Cart',
+            cart,
+            total,
+            itemCount,
+            success,
+            loyalty: walletError ? null : loyalty
+        });
     });
 }
 
@@ -1329,6 +1339,7 @@ function checkout(req, res) {
     const deliveryUnit = req.body.deliveryUnit || '';
     const deliveryPostal = req.body.deliveryPostal || '';
     const deliveryPhone = req.body.deliveryPhone || '';
+    const useCashback = req.body.redeemCashback === 'on';
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
 
@@ -1346,12 +1357,15 @@ function checkout(req, res) {
         items: selectedItems.map((item) => ({
             name: item.serviceName,
             type: item.type === 'Product' ? 'Product' : 'Service',
+            serviceId: item.serviceId,
             quantity: item.quantity,
+            price: Number(item.price || 0),
             unitPrice: Number(item.price || 0),
             lineTotal: Number(item.lineTotal || 0),
             detail: item.merchantName || ''
         })),
         selectedItemIds: selectedItems.map((item) => String(item.id)).join(','),
+        useCashback,
         fulfilment,
         pickupMerchantId,
         deliveryAddress,
@@ -1360,24 +1374,32 @@ function checkout(req, res) {
         deliveryPhone
     };
 
-    return res.render('payment', {
-        title: 'Payment',
-        amount,
-        merchantName: fulfilment === 'pickup'
-            ? (pickupMerchantId === 'any' ? 'Any merchant' : pickupMerchantId || 'Vaniday')
-            : 'Delivery',
-        serviceName: 'Cart checkout',
-        cartItemId: '',
-        cartCheckout: true,
-        checkoutId,
-        bookingId: '',
-        selectedItemIds: selectedIds,
-        fulfilment,
-        pickupMerchantId,
-        deliveryAddress,
-        deliveryUnit,
-        deliveryPostal,
-        deliveryPhone
+    return Loyalty.getWalletView(req.session.user.id, (walletError, loyalty) => {
+        if (walletError) {
+            console.error(walletError);
+        }
+
+        return res.render('payment', {
+            title: 'Payment',
+            amount,
+            merchantName: fulfilment === 'pickup'
+                ? (pickupMerchantId === 'any' ? 'Any merchant' : pickupMerchantId || 'Vaniday')
+                : 'Delivery',
+            serviceName: 'Cart checkout',
+            cartItemId: '',
+            cartCheckout: true,
+            checkoutId,
+            bookingId: '',
+            selectedItemIds: selectedIds,
+            useCashback,
+            fulfilment,
+            pickupMerchantId,
+            deliveryAddress,
+            deliveryUnit,
+            deliveryPostal,
+            deliveryPhone,
+            loyalty: walletError ? null : loyalty
+        });
     });
 }
 
@@ -1479,14 +1501,28 @@ async function showPayment(req, res) {
             });
         }
 
-    return res.render('payment', {
-        title: 'Payment',
-        amount,
-        merchantName,
-        serviceName,
-        cartItemId,
-        cartCheckout
-    });
+        const loyalty = await getLoyaltyView(req.session.user.id);
+
+        return res.render('payment', {
+            title: 'Payment',
+            amount: Number(booking.service_price || 0),
+            merchantName: booking.merchant_name,
+            serviceName: booking.service_name,
+            cartItemId: '',
+            cartCheckout: false,
+            checkoutId: '',
+            bookingId: booking.id,
+            selectedItemIds: [],
+            useCashback: false,
+            fulfilment: '',
+            pickupMerchantId: '',
+            deliveryAddress: '',
+            deliveryUnit: '',
+            deliveryPostal: '',
+            deliveryPhone: '',
+            loyalty,
+            error: null
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).render('error', {
@@ -1497,35 +1533,313 @@ async function showPayment(req, res) {
 
 }
 
-function confirmPayment(req, res) {
-    if (req.body.cartCheckout === 'true') {
-        req.session.cart = [];
-    } else if (req.body.cartItemId) {
-        req.session.cart = (req.session.cart || []).filter((item) => String(item.id) !== String(req.body.cartItemId));
+function getPaymentPayload(body = {}) {
+    return {
+        amount: Number(body.amount || 0),
+        merchantName: body.merchantName || 'Vaniday',
+        serviceName: body.serviceName || 'Booking',
+        cartItemId: body.cartItemId || '',
+        cartCheckout: body.cartCheckout === 'true',
+        checkoutId: body.checkoutId || '',
+        bookingId: body.bookingId || '',
+        selectedItemIds: String(body.selectedItemIds || ''),
+        useCashback: body.redeemCashback === 'on' || body.useCashback === 'true'
+    };
+}
+
+function getPaymentMethodLabel(method) {
+    const labels = {
+        apple_pay: 'Apple Pay',
+        paypal: 'PayPal',
+        nets: 'NETS QR',
+        stripe: 'Stripe',
+        card: 'Card payment'
+    };
+
+    return labels[method] || labels.card;
+}
+
+async function buildTrustedPayment(req, payment) {
+    if (payment.bookingId) {
+        const booking = await getBookingReceipt(payment.bookingId);
+
+        if (!booking || String(booking.user_id) !== String(req.session.user.id)) {
+            throw new Error('Booking payment session is invalid.');
+        }
+
+        return {
+            kind: 'booking',
+            receiptId: String(booking.id),
+            userId: booking.user_id,
+            userName: booking.customer_name,
+            merchantName: booking.merchant_name,
+            serviceName: booking.service_name,
+            amount: Number(booking.service_price || 0),
+            items: [
+                {
+                    name: booking.service_name,
+                    type: 'Service',
+                    quantity: 1,
+                    price: Number(booking.service_price || 0),
+                    unitPrice: Number(booking.service_price || 0),
+                    lineTotal: Number(booking.service_price || 0),
+                    detail: `${booking.booking_date} at ${booking.booking_time}`
+                }
+            ],
+            bookingDate: booking.booking_date,
+            bookingTime: booking.booking_time
+        };
     }
 
-    return res.render('payment-success', {
-        title: 'Payment Successful',
-        amount: req.body.amount,
-        merchantName: req.body.merchantName,
-        serviceName: req.body.serviceName
+    if (payment.checkoutId) {
+        const pending = req.session.pendingPayments?.[payment.checkoutId];
+
+        if (!pending || String(pending.userId) !== String(req.session.user.id)) {
+            throw new Error('Order payment session is invalid or expired.');
+        }
+
+        return pending;
+    }
+
+    throw new Error('Payment session is invalid or expired.');
+}
+
+function renderPaymentForm(res, payment, error = null) {
+    return res.status(error ? 400 : 200).render('payment', {
+        title: 'Payment',
+        selectedItemIds: [],
+        fulfilment: '',
+        pickupMerchantId: '',
+        deliveryAddress: '',
+        deliveryUnit: '',
+        deliveryPostal: '',
+        deliveryPhone: '',
+        loyalty: null,
+        ...payment,
+        error
     });
 }
 
-function completeNetsPayment(req, res) {
-    try {
-        return res.render('payment-success', {
-            title: 'Payment Successful',
-            amount: req.body.amount || req.query.amount,
-            merchantName: req.body.merchantName || req.query.merchantName,
-            serviceName: req.body.serviceName || req.query.serviceName
+function getLoyaltyView(userId) {
+    return new Promise((resolve) => {
+        Loyalty.getWalletView(userId, (error, loyalty) => {
+            if (error) {
+                console.error(error);
+                resolve(null);
+                return;
+            }
+
+            resolve(loyalty);
         });
+    });
+}
+
+async function applyCashbackRedemption(req, payment) {
+    if (req.body.redeemCashback !== 'on' && payment.useCashback !== true) {
+        return payment;
+    }
+
+    const loyalty = await getLoyaltyView(req.session.user.id);
+    const availableCashback = Number(loyalty?.wallet?.cashbackBalance || 0);
+    const redeemableAmount = Math.min(availableCashback, Number(payment.amount || 0));
+    const cashbackRedeemed = Math.round(redeemableAmount * 100) / 100;
+
+    if (cashbackRedeemed <= 0) {
+        return payment;
+    }
+
+    return {
+        ...payment,
+        originalAmount: Number(payment.amount || 0),
+        cashbackRedeemed,
+        amount: Math.max(0, Math.round((Number(payment.amount || 0) - cashbackRedeemed) * 100) / 100)
+    };
+}
+
+function persistPaidTransaction(payment, paymentMethod) {
+    return new Promise((resolve, reject) => {
+        Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], (error, result) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            const transactionId = result?.insertId || null;
+
+            if (payment.kind !== 'booking' || !transactionId) {
+                resolve(transactionId);
+                return;
+            }
+
+            Booking.attachTransaction(payment.receiptId, transactionId, (bookingError) => {
+                if (bookingError) {
+                    reject(bookingError);
+                    return;
+                }
+
+                resolve(transactionId);
+            });
+        });
+    });
+}
+
+function applyPaymentSideEffects(req, payment) {
+    if (payment.kind === 'order') {
+        const selectedIds = String(payment.selectedItemIds || '').split(',').map((id) => id.trim()).filter(Boolean);
+
+        req.session.cart = selectedIds.length
+            ? (req.session.cart || []).filter((item) => !selectedIds.includes(String(item.id)))
+            : [];
+    }
+}
+
+function savePaidReceipt(req, payment, paymentMethod) {
+    const receiptId = String(payment.receiptId);
+
+    req.session.receipts = req.session.receipts || {};
+    const receipt = {
+        id: receiptId,
+        displayId: payment.displayId,
+        type: payment.kind === 'booking' ? 'booking' : 'order',
+        userId: payment.userId,
+        userName: payment.userName || req.session.user?.name || 'Customer',
+        merchantName: payment.merchantName,
+        items: payment.items || [],
+        totalAmount: Number(payment.amount || 0),
+        originalAmount: Number(payment.originalAmount || payment.amount || 0),
+        cashbackRedeemed: Number(payment.cashbackRedeemed || 0),
+        paymentMethod,
+        paymentStatus: 'paid',
+        paidAt: new Date().toISOString(),
+        bookingDate: payment.bookingDate,
+        bookingTime: payment.bookingTime
+    };
+    req.session.receipts[receiptId] = receipt;
+
+    PurchaseHistory.save(receipt, (error) => {
+        if (error) {
+            console.error(error);
+        }
+    });
+
+    Loyalty.awardForReceipt(receipt, (error) => {
+        if (error) {
+            console.error(error);
+        }
+    });
+
+    if (payment.kind === 'order' && req.session.pendingPayments) {
+        delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
+    }
+
+    if (payment.kind === 'booking') {
+        req.session.lastBookingId = null;
+    }
+}
+
+async function completeTrustedPayment(req, payment, paymentMethod) {
+    const pendingPaymentId = payment.receiptId;
+    const transactionId = await persistPaidTransaction(payment, paymentMethod);
+    const paidPayment = { ...payment, pendingPaymentId };
+
+    if (payment.kind === 'order' && transactionId) {
+        paidPayment.receiptId = `order-${transactionId}`;
+        paidPayment.displayId = transactionId;
+    }
+
+    if (Number(paidPayment.cashbackRedeemed || 0) > 0) {
+        await new Promise((resolve, reject) => {
+            Loyalty.redeemCashback(
+                paidPayment.userId,
+                paidPayment.cashbackRedeemed,
+                `redeem-${paidPayment.receiptId}`,
+                (error) => error ? reject(error) : resolve()
+            );
+        });
+    }
+
+    applyPaymentSideEffects(req, payment);
+    savePaidReceipt(req, paidPayment, paymentMethod);
+
+    return paidPayment.receiptId;
+}
+
+async function confirmPayment(req, res) {
+    const payment = getPaymentPayload(req.body);
+    let trustedPayment;
+
+    try {
+        trustedPayment = await buildTrustedPayment(req, payment);
+        trustedPayment = await applyCashbackRedemption(req, trustedPayment);
+    } catch (error) {
+        return renderPaymentForm(res, payment, error.message);
+    }
+
+    if (!Number.isFinite(trustedPayment.amount) || trustedPayment.amount < 0) {
+        return renderPaymentForm(res, payment, 'Payment amount is invalid.');
+    }
+
+    if (trustedPayment.amount === 0) {
+        try {
+            const receiptId = await completeTrustedPayment(req, trustedPayment, 'Cashback');
+            return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+        } catch (error) {
+            console.error(error);
+            return renderPaymentForm(res, payment, 'Cashback could not be redeemed. Please try again.');
+        }
+    }
+
+    const selectedPaymentMethod = req.body.paymentMethod || 'card';
+
+    if (selectedPaymentMethod === 'nets') {
+        const txnRetrievalRef = `PROTO-${Date.now()}`;
+        req.session.pendingNetsPayment = {
+            ...trustedPayment,
+            txnRetrievalRef
+        };
+
+        return res.render('netsQR', {
+            title: 'NETS QR Payment',
+            total: trustedPayment.amount,
+            qrCodeUrl: await QRCode.toDataURL(`NETS:${txnRetrievalRef}:${trustedPayment.amount}`),
+            txnRetrievalRef,
+            isPrototypeQr: true,
+            netsErrorMessage: null,
+            completeUrl: '/nets/complete',
+            failCompleteUrl: '/nets/complete-fail',
+            successRedirect: '/payment/success',
+            failRedirect: '/nets-qr/fail',
+            backPrimaryUrl: '/cart',
+            backPrimaryLabel: 'Back to cart',
+            backSecondaryUrl: '/services',
+            backSecondaryLabel: 'Browse services'
+        });
+    }
+
+    try {
+        const receiptId = await completeTrustedPayment(req, trustedPayment, getPaymentMethodLabel(selectedPaymentMethod));
+        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
     } catch (error) {
         console.error(error);
-        return res.status(500).render('error', {
-            title: 'Nets Payment Error',
-            message: 'An error occurred processing the Nets payment.'
-        });
+        return renderPaymentForm(res, payment, 'Payment could not be recorded. Please try again.');
+    }
+}
+
+async function completeNetsPayment(req, res) {
+    const payment = req.session.pendingNetsPayment;
+
+    if (!payment) {
+        return res.status(400).json({ ok: false });
+    }
+
+    try {
+        const receiptId = await completeTrustedPayment(req, payment, 'NETS QR');
+        req.session.lastPayment = { receiptId };
+        req.session.pendingNetsPayment = null;
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ ok: false });
     }
 }
 
@@ -1538,6 +1852,13 @@ function showNetsFail(req, res) {
 }
 
 function showPaymentSuccess(req, res) {
+    const payment = req.session.lastPayment;
+
+    if (payment?.receiptId) {
+        req.session.lastPayment = null;
+        return res.redirect(`/receipt/${encodeURIComponent(payment.receiptId)}`);
+    }
+
     return res.render('payment-success', {
         title: 'Payment Successful',
         amount: req.query.amount || null,
@@ -1552,7 +1873,9 @@ function streamNetsPaymentStatus(req, res) {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const data = JSON.stringify({ txnRetrievalRef: txn, status: 'unknown' });
+    const data = JSON.stringify(String(txn).startsWith('PROTO-')
+        ? { success: true, prototype: true }
+        : { txnRetrievalRef: txn, status: 'unknown' });
     res.write(`data: ${data}\n\n`);
     res.end();
 }

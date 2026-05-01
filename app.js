@@ -9,8 +9,10 @@ const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
 const gameController = require('./controllers/gameController');
 const receiptController = require('./controllers/receiptController');
+const profileController = require('./controllers/profileController');
+const loyaltyController = require('./controllers/loyaltyController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
-const { allowGuestOrCustomer, requireCustomer, requireRole, allowBookingViewer } = require('./middleware');
+const { allowGuestOrCustomer, requireCustomer, requireLogin, requireRole, allowBookingViewer } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
 
@@ -52,6 +54,7 @@ app.get('/promotions/one-for-one', allowGuestOrCustomer, (req, res) => {
 app.get('/promotions/featured-salons', allowGuestOrCustomer, merchantController.showFeaturedSalons);
 app.get('/merchants', allowGuestOrCustomer, merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
+app.get('/profile/history', requireLogin, profileController.showHistory);
 app.get('/membership', requireCustomer, (req, res) => {
     res.redirect('/profile#membership');
 });
@@ -129,6 +132,8 @@ app.get('/admin/promotions/:promotionId/edit', requireRole('admin'), adminContro
 app.post('/admin/promotions/:promotionId', requireRole('admin'), adminController.updatePromotion);
 app.post('/admin/promotions/:promotionId/delete', requireRole('admin'), adminController.deletePromotion);
 app.get('/admin/rewards-game', requireRole('admin'), gameController.showAdminGame);
+app.get('/admin/loyalty', requireRole('admin'), loyaltyController.showAdminRules);
+app.post('/admin/loyalty', requireRole('admin'), loyaltyController.updateAdminRules);
 app.post('/admin/rewards-game/settings', requireRole('admin'), gameController.updateAdminSettings);
 app.get('/admin/rewards-game/prizes/new', requireRole('admin'), gameController.showNewAdminPrize);
 app.post('/admin/rewards-game/prizes', requireRole('admin'), gameController.createAdminPrize);
@@ -170,9 +175,9 @@ app.post('/nets/complete-fail', requireCustomer, merchantController.failNetsPaym
 app.get('/nets-qr/fail', requireCustomer, merchantController.showNetsFail);
 app.get('/sse/payment-status/:txnRetrievalRef', requireCustomer, merchantController.streamNetsPaymentStatus);
 
-app.get('/cashback', requireCustomer, (req, res) => {
-    res.render('cashback', { title: 'Cashback' });
-});
+app.get('/wallet', requireCustomer, loyaltyController.showWallet);
+app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
+app.get('/cashback', requireCustomer, loyaltyController.showCashback);
 
 app.get('/giftcards', requireCustomer, (req, res) => {
     res.render('giftcards', { title: 'Gift Cards' });

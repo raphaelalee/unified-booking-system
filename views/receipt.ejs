@@ -2,11 +2,14 @@
 
 <section class="page-title receipt-title">
     <p class="eyebrow"><%= receipt.type === 'booking' ? 'Booking receipt' : 'Order receipt' %></p>
-    <h1>Receipt #<%= receipt.id %></h1>
+    <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
     <p>
         <strong><%= receipt.userName %></strong> paid
         <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
         by <strong><%= receipt.paymentMethod %></strong>.
+        <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
+            Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+        <% } %>
     </p>
     <% if (!pdfMode) { %>
         <div class="hero-actions">
@@ -21,7 +24,7 @@
         <article class="receipt-card">
             <div class="receipt-meta-grid">
                 <p><span>User</span><strong><%= receipt.userName %></strong></p>
-                <p><span>ID</span><strong><%= receipt.id %></strong></p>
+                <p><span>ID</span><strong><%= receipt.displayId || receipt.id %></strong></p>
                 <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
                 <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
             </div>
@@ -60,6 +63,12 @@
                 <span>Total amount</span>
                 <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
             </div>
+            <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Cashback redeemed</span>
+                    <strong>-$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
         </article>
 
         <aside class="receipt-qr-panel">

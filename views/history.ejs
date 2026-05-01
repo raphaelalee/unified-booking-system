@@ -1,0 +1,56 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Profile</p>
+    <h1>Purchase history.</h1>
+    <p>Review your service bookings and product purchases.</p>
+</section>
+
+<section class="section compact">
+    <div class="history-filter-tabs">
+        <a class="button <%= activeFilter === 'all' ? 'primary' : 'secondary' %>" href="/profile/history">All (<%= counts.all %>)</a>
+        <a class="button <%= activeFilter === 'bookings' ? 'primary' : 'secondary' %>" href="/profile/history?type=bookings">Bookings (<%= counts.bookings %>)</a>
+        <a class="button <%= activeFilter === 'products' ? 'primary' : 'secondary' %>" href="/profile/history?type=products">Products (<%= counts.products %>)</a>
+    </div>
+
+    <% if (!history.length) { %>
+        <div class="notice">
+            No purchases yet
+        </div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Items/Services</th>
+                        <th>Amount</th>
+                        <th>Payment Method</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% history.forEach((entry) => { %>
+                        <tr>
+                            <td><%= entry.id %></td>
+                            <td><span class="sync-pill"><%= entry.type %></span></td>
+                            <td><%= entry.itemNames %></td>
+                            <td>$<%= Number(entry.totalAmount || 0).toFixed(2) %></td>
+                            <td><%= entry.paymentMethod %></td>
+                            <td><%= entry.paymentStatus %></td>
+                            <td><%= entry.createdAtLabel %></td>
+                            <td>
+                                <a class="button secondary" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">Receipt</a>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>
