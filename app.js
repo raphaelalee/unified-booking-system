@@ -8,8 +8,7 @@ const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
-const receiptController = require('./controllers/receiptController');
-const { allowBookingViewer, allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
+const { allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
 
@@ -56,6 +55,10 @@ app.get('/membership', requireCustomer, (req, res) => {
 });
 app.post('/profile', userController.updateProfile);
 app.post('/profile/password', userController.updatePassword);
+app.get('/rewards-game', requireCustomer, gameController.showCustomerGame);
+app.post('/rewards-game/play', requireCustomer, gameController.playCustomerGame);
+app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);
+app.post('/rewards-game/flappy/finish', requireCustomer, gameController.finishFlappyGame);
 app.get('/login', userController.showLogin);
 app.post('/login', userController.loginUser);
 app.get('/signup', userController.showSignup);
@@ -101,6 +104,12 @@ app.post('/merchant/promotions', requireRole('merchant'), merchantDashboardContr
 app.get('/merchant/promotions/:promotionId/edit', requireRole('merchant'), merchantDashboardController.showEditPromotion);
 app.post('/merchant/promotions/:promotionId', requireRole('merchant'), merchantDashboardController.updatePromotion);
 app.post('/merchant/promotions/:promotionId/delete', requireRole('merchant'), merchantDashboardController.deletePromotion);
+app.get('/merchant/rewards-game', requireRole('merchant'), gameController.showMerchantGame);
+app.get('/merchant/rewards-game/prizes/new', requireRole('merchant'), gameController.showNewMerchantPrize);
+app.post('/merchant/rewards-game/prizes', requireRole('merchant'), gameController.createMerchantPrize);
+app.get('/merchant/rewards-game/prizes/:prizeId/edit', requireRole('merchant'), gameController.showEditMerchantPrize);
+app.post('/merchant/rewards-game/prizes/:prizeId', requireRole('merchant'), gameController.updateMerchantPrize);
+app.post('/merchant/rewards-game/prizes/:prizeId/delete', requireRole('merchant'), gameController.deleteMerchantPrize);
 app.get('/merchant/:merchantId', allowGuestOrCustomer, merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
@@ -117,6 +126,13 @@ app.post('/admin/services/:serviceId/delete', requireRole('admin'), adminControl
 app.get('/admin/promotions/:promotionId/edit', requireRole('admin'), adminController.showEditPromotion);
 app.post('/admin/promotions/:promotionId', requireRole('admin'), adminController.updatePromotion);
 app.post('/admin/promotions/:promotionId/delete', requireRole('admin'), adminController.deletePromotion);
+app.get('/admin/rewards-game', requireRole('admin'), gameController.showAdminGame);
+app.post('/admin/rewards-game/settings', requireRole('admin'), gameController.updateAdminSettings);
+app.get('/admin/rewards-game/prizes/new', requireRole('admin'), gameController.showNewAdminPrize);
+app.post('/admin/rewards-game/prizes', requireRole('admin'), gameController.createAdminPrize);
+app.get('/admin/rewards-game/prizes/:prizeId/edit', requireRole('admin'), gameController.showEditAdminPrize);
+app.post('/admin/rewards-game/prizes/:prizeId', requireRole('admin'), gameController.updateAdminPrize);
+app.post('/admin/rewards-game/prizes/:prizeId/delete', requireRole('admin'), gameController.deleteAdminPrize);
 
 app.get('/about', allowGuestOrCustomer, (req, res) => {
     res.render('about', { title: 'About Us' });

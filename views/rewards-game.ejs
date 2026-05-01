@@ -1,0 +1,172 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const formatMoney = (value) => Number(value || 0).toFixed(2);
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+    const prizeTypeLabel = (type) => String(type || '').replace(/_/g, ' ');
+    const gameEnabled = wallet.settings.isEnabled;
+    const canPlay = gameEnabled && wallet.playBalance > 0;
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Customer Rewards</p>
+    <h1>Play and win Vaniday rewards.</h1>
+    <p>Unused weekly plays are saved for you, and paid purchases unlock extra chances automatically.</p>
+</section>
+
+<section class="section compact">
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <% if (wallet.weeklyAdded > 0 || wallet.bonusAdded > 0) { %>
+        <div class="notice success">
+            <p>
+                <% if (wallet.weeklyAdded > 0) { %>
+                    <%= wallet.weeklyAdded %> weekly play<%= wallet.weeklyAdded === 1 ? '' : 's' %> added.
+                <% } %>
+                <% if (wallet.bonusAdded > 0) { %>
+                    <%= wallet.bonusAdded %> spend bonus play<%= wallet.bonusAdded === 1 ? '' : 's' %> added.
+                <% } %>
+            </p>
+        </div>
+    <% } %>
+
+    <% if (result) { %>
+        <div class="game-result-card">
+            <p class="eyebrow">Latest Flappy Reward</p>
+            <h2><%= result.title %></h2>
+            <p><%= result.description || 'Your reward has been recorded in your rewards history.' %></p>
+            <% if (gameScore !== null) { %>
+                <p class="muted">Final score: <strong><%= gameScore %></strong></p>
+            <% } %>
+        </div>
+    <% } %>
+
+    <div class="portal-summary-panel dashboard-kpi-grid game-kpi-grid">
+        <div class="portal-stat">
+            <span>Play Balance</span>
+            <strong><%= wallet.playBalance %></strong>
+            <small>Available chances</small>
+        </div>
+        <div class="portal-stat">
+            <span>Weekly Free Plays</span>
+            <strong><%= wallet.settings.weeklyFreePlays %></strong>
+            <small>Unused plays collate</small>
+        </div>
+        <div class="portal-stat">
+            <span>Paid Spend</span>
+            <strong>$<%= formatMoney(wallet.totalSpend) %></strong>
+            <small>Tracked from completed payments</small>
+        </div>
+        <div class="portal-stat">
+            <span>Next Bonus</span>
+            <strong>$<%= formatMoney(wallet.spendToNextPlay) %></strong>
+            <small>Spend needed for another chance</small>
+        </div>
+    </div>
+
+    <div class="game-layout">
+        <article class="game-play-card flappy-launch-card">
+            <div class="flappy-launch-scene" aria-hidden="true">
+                <span class="flappy-launch-bird"></span>
+                <span class="flappy-launch-pipe pipe-left"></span>
+                <span class="flappy-launch-pipe pipe-right"></span>
+            </div>
+            <div>
+                <p class="eyebrow"><%= gameEnabled ? 'Game Active' : 'Paused' %></p>
+                <h2>Flappy Rewards</h2>
+                <p class="muted">
+                    Launch the game on its own page, clear as many pipes as you can, and win a reward when each try ends.
+                </p>
+            </div>
+            <% if (canPlay) { %>
+                <a class="button primary full js-launch-flappy" href="/rewards-game/flappy">Launch Flappy Rewards</a>
+            <% } else { %>
+                <button class="button primary full" type="button" disabled>No plays available</button>
+            <% } %>
+        </article>
+
+        <aside class="dashboard-report-card game-rule-card">
+            <p class="eyebrow">How chances work</p>
+            <h2>Built like a weekly reward wallet</h2>
+            <div class="report-metric-list">
+                <p><span>Free trial</span><strong><%= wallet.settings.weeklyFreePlays %> per week</strong></p>
+                <p><span>Spend tier</span><strong>$<%= formatMoney(wallet.settings.spendPerBonusPlay) %></strong></p>
+                <p><span>Tier reward</span><strong><%= wallet.settings.bonusPlaysPerThreshold %> play<%= wallet.settings.bonusPlaysPerThreshold === 1 ? '' : 's' %></strong></p>
+            </div>
+            <p class="muted">Admin controls the game rules. Merchants can add their own voucher or benefit prizes.</p>
+        </aside>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Reward History</p>
+        <h2>Recent wins</h2>
+    </div>
+
+    <% if (plays.length === 0) { %>
+        <div class="notice">
+            <p>No rewards won yet. Your first play will appear here.</p>
+        </div>
+    <% } else { %>
+        <div class="game-history-list">
+            <% plays.forEach((play) => { %>
+                <article class="dashboard-mini-list game-history-card">
+                    <div>
+                        <strong><%= play.prizeTitle %></strong>
+                        <span>
+                            <%= prizeTypeLabel(play.prizeType) %>
+                            <% if (play.rewardValue) { %>
+                                &middot; <%= play.rewardValue %>
+                            <% } %>
+                        </span>
+                        <span><%= formatDate(play.createdAt) %></span>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<div class="game-launch-overlay" aria-hidden="true">
+    <div>
+        <span class="flappy-launch-bird"></span>
+        <p class="eyebrow">Redirecting</p>
+        <h2>Launching Flappy Rewards</h2>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const launchLink = document.querySelector('.js-launch-flappy');
+        const overlay = document.querySelector('.game-launch-overlay');
+
+        if (!launchLink || !overlay) {
+            return;
+        }
+
+        launchLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            overlay.classList.add('is-visible');
+            window.setTimeout(() => {
+                window.location.href = launchLink.href;
+            }, 720);
+        });
+    })();
+</script>
+
+<%- include('partials/footer') %>

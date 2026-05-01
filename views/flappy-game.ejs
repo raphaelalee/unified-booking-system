@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> | Vaniday</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="flappy-page">
+    <div class="flappy-transition flappy-entry" aria-hidden="true">
+        <div>
+            <span class="flappy-launch-bird"></span>
+            <p class="eyebrow">Entering Game Mode</p>
+            <h1>Flappy Rewards</h1>
+        </div>
+    </div>
+
+    <div class="flappy-return-transition" aria-hidden="true">
+        <div>
+            <span class="flappy-launch-bird"></span>
+            <p class="eyebrow">Returning</p>
+            <h1>Back to Vaniday</h1>
+        </div>
+    </div>
+
+    <main class="flappy-shell">
+        <section class="flappy-stage-panel">
+            <div class="flappy-topbar">
+                <div class="flappy-actions">
+                    <a class="button secondary" href="<%= returnPath %>">Exit game</a>
+                    <button class="button secondary" id="flappy-pause" type="button" disabled>Pause</button>
+                </div>
+                <div class="flappy-hud" aria-live="polite">
+                    <span>Tries <strong id="flappy-tries"><%= wallet.playBalance %></strong></span>
+                    <span>Score <strong id="flappy-score">0</strong></span>
+                    <span>Best <strong id="flappy-best">0</strong></span>
+                    <span>Level <strong id="flappy-level">1</strong></span>
+                    <span>Combo <strong id="flappy-streak">0</strong></span>
+                </div>
+            </div>
+
+            <div class="flappy-canvas-frame">
+                <canvas id="flappy-canvas" width="420" height="600" aria-label="Flappy Rewards game canvas"></canvas>
+                <div class="flappy-panel is-visible" id="flappy-panel">
+                    <p class="eyebrow" id="flappy-panel-kicker">Ready</p>
+                    <h2 id="flappy-panel-title">Clear the pipes.</h2>
+                    <p id="flappy-panel-message">Keep the bird in flight, build a combo, and earn a reward draw after every run.</p>
+                    <div class="flappy-prize-card" id="flappy-prize-card" hidden>
+                        <strong id="flappy-prize-title"></strong>
+                        <span id="flappy-prize-description"></span>
+                    </div>
+                    <button class="button primary" id="flappy-primary" type="button">Start flying</button>
+                </div>
+                <div class="flappy-countdown" id="flappy-countdown" hidden>3</div>
+                <div class="flappy-toast" id="flappy-toast" hidden></div>
+            </div>
+        </section>
+
+        <aside class="flappy-side-panel">
+            <p class="eyebrow">Reward Mode</p>
+            <h2>Every run unlocks a reward draw.</h2>
+            <div class="report-metric-list">
+                <p><span>Available tries</span><strong id="flappy-side-tries"><%= wallet.playBalance %></strong></p>
+                <p><span>Weekly grant</span><strong><%= wallet.settings.weeklyFreePlays %></strong></p>
+                <p><span>Spend tier</span><strong>$<%= Number(wallet.settings.spendPerBonusPlay || 0).toFixed(2) %></strong></p>
+            </div>
+            <div class="flappy-level-card">
+                <div>
+                    <span>Run intensity</span>
+                    <strong id="flappy-side-level">Level 1</strong>
+                </div>
+                <div class="flappy-level-meter" aria-hidden="true">
+                    <span id="flappy-level-meter"></span>
+                </div>
+            </div>
+            <div class="flappy-milestone-list">
+                <p class="eyebrow">Milestones</p>
+                <div><strong>5</strong><span>Clean start</span></div>
+                <div><strong>12</strong><span>Hot streak</span></div>
+                <div><strong>20</strong><span>Elite flight</span></div>
+            </div>
+            <p class="muted">When your last try is used, this page will animate back to your rewards dashboard automatically.</p>
+        </aside>
+    </main>
+
+    <script>
+        window.flappyRewardsConfig = <%- JSON.stringify({
+            initialPlays: Number(wallet.playBalance || 0),
+            finishUrl: '/rewards-game/flappy/finish',
+            returnPath
+        }).replace(/</g, '\\u003c') %>;
+    </script>
+    <script src="/js/flappy-rewards.js?v=2"></script>
+</body>
+</html>
