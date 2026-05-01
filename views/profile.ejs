@@ -37,6 +37,10 @@
                         <dd><%= member.tier %></dd>
                     </div>
                     <div>
+                        <dt>VaniGlints</dt>
+                        <dd><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</dd>
+                    </div>
+                    <div>
                         <dt>Cashback</dt>
                         <dd>$<%= cashbackBalance %></dd>
                     </div>
@@ -152,6 +156,10 @@
                         <div>
                             <strong><%= member.points %></strong>
                             <span>Points</span>
+                        </div>
+                        <div>
+                            <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %></strong>
+                            <span>VaniGlints</span>
                         </div>
                         <div>
                             <strong>$<%= cashbackBalance %></strong>

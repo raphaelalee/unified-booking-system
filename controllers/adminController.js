@@ -139,7 +139,7 @@ function getServiceForm(body = {}) {
     };
 }
 
-function formatDateTimeLocalValue(value) {
+function formatDateInputValue(value) {
     if (!value) {
         return '';
     }
@@ -150,9 +150,7 @@ function formatDateTimeLocalValue(value) {
         return '';
     }
 
-    const pad = (part) => String(part).padStart(2, '0');
-
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return date.toISOString().slice(0, 10);
 }
 
 function validateServiceForm(form) {
@@ -200,10 +198,35 @@ function getPromotionForm(body = {}) {
         discountValue: String(body.discountValue || '').trim(),
         startDate: String(body.startDate || '').trim(),
         endDate: String(body.endDate || '').trim(),
+        slots: String(body.slots || '').trim(),
         status: String(body.status || '').trim(),
         description: String(body.description || '').trim(),
         terms: String(body.terms || '').trim()
     };
+}
+
+function normalizePromotionSlots(value = '') {
+    return String(value)
+        .split(',')
+        .map((slot) => slot.trim())
+        .filter(Boolean)
+        .join(', ');
+}
+
+function parsePromotionSlots(value = '') {
+    return normalizePromotionSlots(value)
+        .split(',')
+        .map((slot) => slot.trim())
+        .filter(Boolean);
+}
+
+function isValidSlotFormat(value) {
+    return /^\d{1,2}:\d{2}$/.test(value);
+}
+
+function isWeekday(date) {
+    const day = date.getDay();
+    return day >= 1 && day <= 5;
 }
 
 function validatePromotionForm(form, salons, services) {
@@ -213,6 +236,7 @@ function validatePromotionForm(form, salons, services) {
     const discountValue = form.discountValue === '' ? null : Number(form.discountValue);
     const startDate = form.startDate ? new Date(form.startDate) : null;
     const endDate = form.endDate ? new Date(form.endDate) : null;
+    const slots = parsePromotionSlots(form.slots);
     const validSalonIds = new Set((salons || []).map((salon) => Number(salon.salon_id)));
     const validServices = (services || []).filter((service) => Number(service.salonId) === salonId);
     const validServiceIds = new Set(validServices.map((service) => Number(service.id)));
@@ -255,6 +279,14 @@ function validatePromotionForm(form, salons, services) {
         errors.push('Promotion end date must be after the start date.');
     }
 
+    if (slots.length > 0 && slots.some((slot) => !isValidSlotFormat(slot))) {
+        errors.push('Slots must use HH:MM format, for example 10:00, 14:00, 17:00.');
+    }
+
+    if (form.type === 'happy_hour' && startDate && endDate && (!isWeekday(startDate) || !isWeekday(endDate))) {
+        errors.push('Happy Hour promotions must be scheduled on weekdays only.');
+    }
+
     if (!Promotion.PROMOTION_STATUSES.includes(form.status)) {
         errors.push('Please choose a valid promotion status.');
     }
@@ -272,6 +304,7 @@ function buildPromotionPayload(form) {
         discountValue: form.discountType === 'tag_only' || form.discountValue === '' ? null : Number(form.discountValue),
         startDate: form.startDate,
         endDate: form.endDate,
+        allowedSlots: normalizePromotionSlots(form.slots),
         status: form.status,
         description: form.description,
         terms: form.terms
@@ -745,8 +778,9 @@ function showEditPromotion(req, res) {
                 type: promotion.type,
                 discountType: promotion.discountType,
                 discountValue: promotion.discountValue === null ? '' : String(promotion.discountValue),
-                startDate: formatDateTimeLocalValue(promotion.startDate),
-                endDate: formatDateTimeLocalValue(promotion.endDate),
+                startDate: formatDateInputValue(promotion.startDate),
+                endDate: formatDateInputValue(promotion.endDate),
+                slots: promotion.allowedSlots || '',
                 status: promotion.status,
                 description: promotion.description || '',
                 terms: promotion.terms || ''

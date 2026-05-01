@@ -208,4 +208,39 @@
     </aside>
 </section>
 
+<script>
+    (() => {
+        const bookingForm = document.querySelector('.booking-form');
+        const dateField = bookingForm?.querySelector('input[name="bookingDate"]');
+        const selectedPromotion = <%- JSON.stringify(selectedPromotion || null) %>;
+
+        if (!bookingForm || !dateField || !selectedPromotion || selectedPromotion.campaignLabel !== 'Happy Hour') {
+            return;
+        }
+
+        const validateWeekendRule = () => {
+            if (!dateField.value) {
+                dateField.setCustomValidity('');
+                return;
+            }
+
+            const selectedDate = new Date(`${dateField.value}T00:00:00`);
+
+            if (Number.isNaN(selectedDate.getTime())) {
+                dateField.setCustomValidity('');
+                return;
+            }
+
+            const day = selectedDate.getDay();
+            const isWeekday = day >= 1 && day <= 5;
+
+            dateField.setCustomValidity(isWeekday ? '' : 'Happy Hour promotions can only be booked on weekdays.');
+        };
+
+        dateField.addEventListener('input', validateWeekendRule);
+        dateField.addEventListener('change', validateWeekendRule);
+        validateWeekendRule();
+    })();
+</script>
+
 <%- include('partials/footer') %>

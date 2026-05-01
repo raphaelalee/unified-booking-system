@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const Merchant = require('../models/Merchant');
+const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
 const { getCartItemCount } = require('../utils/cart');
 
@@ -123,6 +124,51 @@ function getRoleLabel(role) {
     if (role === 'admin') return 'Admin';
     if (role === 'merchant') return 'Merchant';
     return 'Customer';
+}
+
+function getRewardShopOffers() {
+    return [
+        {
+            id: 'glints-1000',
+            glintsCost: 1000,
+            voucherValue: 1,
+            title: '$1 Off Booking',
+            detail: 'Best for stacking up small cashback-style redemptions.'
+        },
+        {
+            id: 'glints-5000',
+            glintsCost: 5000,
+            voucherValue: 5,
+            title: '$5 Off Booking',
+            detail: 'A stronger offset for weekday treatments and quick services.'
+        },
+        {
+            id: 'glints-10000',
+            glintsCost: 10000,
+            voucherValue: 10,
+            title: '$10 Off Booking',
+            detail: 'Ideal for premium facials, massages, and bundled appointments.'
+        },
+        {
+            id: 'glints-15000',
+            glintsCost: 15000,
+            voucherValue: 15,
+            title: '$15 Off Booking',
+            detail: 'Higher-value reward for larger bookings and platform promos.'
+        }
+    ];
+}
+
+function getDailyRewardTrack(wallet) {
+    const values = RewardShop.DAILY_REWARD_VALUES;
+    const currentDay = Number(wallet?.currentDay || 0);
+
+    return values.map((points, index) => ({
+        points,
+        label: index === 0 ? 'Today' : `Day ${index + 1}`,
+        isClaimed: index < currentDay,
+        isCurrent: index === currentDay
+    }));
 }
 
 function validateNewPassword(password) {
@@ -303,8 +349,14 @@ function signupUser(req, res) {
                         return res.redirect('/profile');
                     }
 
-                    req.session.profileSuccess = 'Account created successfully.';
-                    return res.redirect('/profile');
+                    return RewardShop.initializeForUser(result.insertId, (rewardError) => {
+                        if (rewardError) {
+                            console.error(rewardError);
+                        }
+
+                        req.session.profileSuccess = 'Account created successfully.';
+                        return res.redirect('/profile');
+                    });
                 });
             });
         });
@@ -325,7 +377,8 @@ function showProfile(req, res) {
         const profile = {
             name: accountUser?.name || sessionProfile.name || req.session.user.name,
             email: accountUser?.email || sessionProfile.email || req.session.user.email,
-            phone: accountUser?.phone || sessionProfile.phone || ''
+            phone: accountUser?.phone || sessionProfile.phone || '',
+            glintsBalance: Number(accountUser?.glints_balance ?? req.session.user.glintsBalance ?? 0)
         };
 
         if (accountUser) {
@@ -370,6 +423,80 @@ function showProfile(req, res) {
 
             return renderProfile(customerExtras, customerExtraError);
         });
+    });
+}
+
+function showRewardShop(req, res) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    return User.findById(req.session.user.id, (lookupError, accountUser) => {
+        if (lookupError || !accountUser) {
+            if (lookupError) {
+                console.error(lookupError);
+            }
+
+            return res.status(500).render('error', {
+                title: 'Reward Shop Error',
+                message: 'Your reward balance could not be loaded.'
+            });
+        }
+
+        req.session.user = buildSessionUser(accountUser);
+        const glintsBalance = Number(accountUser.glints_balance || 0);
+        return RewardShop.getWallet(req.session.user.id, (walletError, rewardWallet) => {
+            if (walletError) {
+                console.error(walletError);
+                return res.status(500).render('error', {
+                    title: 'Reward Shop Error',
+                    message: 'Your daily reward details could not be loaded.'
+                });
+            }
+
+            const offers = getRewardShopOffers().map((offer) => ({
+                ...offer,
+                canRedeem: glintsBalance >= offer.glintsCost,
+                remaining: Math.max(offer.glintsCost - glintsBalance, 0)
+            }));
+            const success = req.session.rewardShopSuccess || null;
+            const error = req.session.rewardShopError || null;
+            req.session.rewardShopSuccess = null;
+            req.session.rewardShopError = null;
+
+            return res.render('reward-shop', {
+                title: 'Reward Shop',
+                glintsBalance,
+                offers,
+                success,
+                error,
+                rewardWallet,
+                dailyRewards: getDailyRewardTrack(rewardWallet)
+            });
+        });
+    });
+}
+
+function claimRewardShopDaily(req, res) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    return RewardShop.claimDailyReward(req.session.user.id, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.rewardShopError = 'Daily VaniGlints could not be claimed. Please try again.';
+            return res.redirect('/reward-shop');
+        }
+
+        if (result.alreadyClaimed) {
+            req.session.rewardShopError = 'You already claimed today. Next claim is tomorrow.';
+            return res.redirect('/reward-shop');
+        }
+
+        req.session.user.glintsBalance = Number(req.session.user.glintsBalance || 0) + Number(result.rewardValue || 0);
+        req.session.rewardShopSuccess = `Claimed ${result.rewardValue} VaniGlints for today.`;
+        return res.redirect('/reward-shop');
     });
 }
 
@@ -501,6 +628,8 @@ module.exports = {
     showSignup,
     signupUser,
     showProfile,
+    showRewardShop,
+    claimRewardShopDaily,
     updateProfile,
     updatePassword,
     logoutUser
