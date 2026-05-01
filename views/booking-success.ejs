@@ -8,7 +8,7 @@
         on <strong><%= bookingDate %></strong> at <strong><%= bookingTime %></strong>.
     </p>
     <div class="hero-actions">
-        <a class="button primary" href="/payment?amount=<%= service.price %>&service=<%= encodeURIComponent(service.name) %>&merchant=<%= encodeURIComponent(merchant.name) %>">Proceed to payment</a>
+        <a class="button primary" href="/payment?bookingId=<%= encodeURIComponent(bookingId) %>">Proceed to payment</a>
         <a class="button secondary" href="<%= typeof anotherBookingPath !== 'undefined' ? anotherBookingPath : '/merchant/' + merchant.id %>">Create another booking</a>
     </div>
 </section>

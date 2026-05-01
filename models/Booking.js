@@ -122,9 +122,41 @@ function createInDatabase(bookingData, callback) {
     db.query(sql, values, callback);
 }
 
+function getReceiptById(id, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            salons.salon_name AS merchant_name,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [id], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows[0] || null);
+    });
+}
+
 module.exports = {
     create,
     createInDatabase,
+    getReceiptById,
     getAll,
     getAllInDatabase,
     getByMerchantUserId,

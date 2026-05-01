@@ -14,6 +14,8 @@
             <input type="hidden" name="serviceName" value="<%= serviceName %>">
             <input type="hidden" name="cartItemId" value="<%= cartItemId || '' %>">
             <input type="hidden" name="cartCheckout" value="<%= cartCheckout ? 'true' : 'false' %>">
+            <input type="hidden" name="checkoutId" value="<%= typeof checkoutId !== 'undefined' ? checkoutId : '' %>">
+            <input type="hidden" name="bookingId" value="<%= typeof bookingId !== 'undefined' ? bookingId : '' %>">
             <input type="hidden" name="selectedItemIds" value="<%= Array.isArray(selectedItemIds) ? selectedItemIds.join(',') : (selectedItemIds || '') %>">
             <input type="hidden" name="fulfilment" value="<%= fulfilment || '' %>">
             <input type="hidden" name="pickupMerchantId" value="<%= pickupMerchantId || '' %>">

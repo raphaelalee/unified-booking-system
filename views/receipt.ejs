@@ -1,0 +1,74 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title receipt-title">
+    <p class="eyebrow"><%= receipt.type === 'booking' ? 'Booking receipt' : 'Order receipt' %></p>
+    <h1>Receipt #<%= receipt.id %></h1>
+    <p>
+        <strong><%= receipt.userName %></strong> paid
+        <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+        by <strong><%= receipt.paymentMethod %></strong>.
+    </p>
+    <% if (!pdfMode) { %>
+        <div class="hero-actions">
+            <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download PDF</a>
+            <a class="button secondary" href="/services">Continue browsing</a>
+        </div>
+    <% } %>
+</section>
+
+<section class="section compact">
+    <div class="receipt-layout">
+        <article class="receipt-card">
+            <div class="receipt-meta-grid">
+                <p><span>User</span><strong><%= receipt.userName %></strong></p>
+                <p><span>ID</span><strong><%= receipt.id %></strong></p>
+                <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
+                <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
+            </div>
+
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Item / service</th>
+                            <th>Type</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% receipt.items.forEach((item) => { %>
+                            <tr>
+                                <td>
+                                    <strong><%= item.name %></strong>
+                                    <% if (item.detail) { %>
+                                        <span><%= item.detail %></span>
+                                    <% } %>
+                                </td>
+                                <td><%= item.type || 'Item' %></td>
+                                <td><%= item.quantity || 1 %></td>
+                                <td>$<%= Number(item.unitPrice || 0).toFixed(2) %></td>
+                                <td>$<%= Number(item.lineTotal || 0).toFixed(2) %></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="receipt-total">
+                <span>Total amount</span>
+                <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+            </div>
+        </article>
+
+        <aside class="receipt-qr-panel">
+            <p class="eyebrow">Check-in QR</p>
+            <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="Check-in QR code for receipt <%= receipt.id %>">
+            <p class="muted">Scan this QR code at the merchant counter to verify the signed check-in token.</p>
+            <p class="qr-link"><%= checkinUrl %></p>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

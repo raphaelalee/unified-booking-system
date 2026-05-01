@@ -9,8 +9,10 @@
     "ejs": "^5.0.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.3",
     "openai": "^6.35.0",
+    "puppeteer": "^24.42.0",
     "qrcode": "^1.5.4",
     "stripe": "^22.1.0"
   }
