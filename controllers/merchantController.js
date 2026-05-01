@@ -298,9 +298,21 @@ function validateBooking(merchant, form) {
 }
 
 function showHome(req, res) {
+    const search = req.query.search || '';
+    const favouriteIds = req.session.favouriteMerchantIds || [];
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const serviceCatalog = Merchant.getServiceCatalog(search).map((service) => ({
+        ...service,
+        serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
+    }));
+
     res.render('home', {
         title: 'Vaniday',
-        merchants: Merchant.getAll(),
+        merchants: Merchant.getAll(search),
+        favouriteIds,
+        serviceCatalog,
+        portalStats: Merchant.getPortalStats(search),
+        search,
         success: req.session.success,
         showChatbot: true
     });

@@ -16,11 +16,114 @@
     <div class="hero-visual" aria-label="Salon products and wellness ambience"></div>
 </section>
 
+<%
+    const serviceSearch = typeof search !== 'undefined' ? search : '';
+    const serviceMerchants = typeof merchants !== 'undefined' ? merchants : [];
+    const stats = typeof portalStats !== 'undefined' ? portalStats : {
+        merchantCount: serviceMerchants.length,
+        serviceCount: 0,
+        promotionCount: 0,
+        slotCount: 0,
+        startingPrice: 0
+    };
+    const allServices = typeof serviceCatalog !== 'undefined' ? serviceCatalog : [];
+    const filteredServices = serviceSearch
+        ? allServices.filter((service) => {
+            const text = [
+                service.name,
+                service.duration,
+                service.price,
+                service.merchantName,
+                service.merchantLocation,
+                service.merchantCategory,
+                service.merchantPromotion,
+                service.merchantPosSystem,
+                service.merchantBookingSystem,
+                service.merchantIntegrationStatus
+            ].join(' ').toLowerCase();
+
+            return text.includes(serviceSearch.toLowerCase());
+        })
+        : allServices;
+%>
+
+<section class="page-title services-unified-hero">
+    <div>
+        <p class="eyebrow">Services & Booking Portal</p>
+        <h1>All merchants, services, prices and booking systems in one place.</h1>
+        <p>
+            Compare salon, spa, nail, facial and grooming services from connected merchants.
+            Check availability, promotions and POS booking integrations before booking.
+        </p>
+        <form class="portal-search services-search" action="/services" method="GET">
+            <input
+                type="search"
+                name="search"
+                value="<%= serviceSearch %>"
+                placeholder="Search services, merchants, location, promotion, POS, or booking system"
+            >
+            <button class="button primary" type="submit">Search</button>
+        </form>
+    </div>
+
+    <aside class="portal-summary-panel services-summary-panel" aria-label="Services and merchant summary">
+        <div class="portal-stat">
+            <span>Merchants</span>
+            <strong><%= stats.merchantCount %></strong>
+        </div>
+        <div class="portal-stat">
+            <span>Services</span>
+            <strong><%= filteredServices.length %></strong>
+        </div>
+        <div class="portal-stat">
+            <span>Open slots</span>
+            <strong><%= stats.slotCount %></strong>
+        </div>
+        <div class="portal-stat">
+            <span>From</span>
+            <strong>$<%= stats.startingPrice %></strong>
+        </div>
+    </aside>
+</section>
+
 <% if (success) { %>
     <section class="notice success">
         <%= success %>
     </section>
 <% } %>
+
+<section class="section compact">
+    <div class="content-grid">
+        <article class="content-card image-card service-hair">
+            <span>Hair</span>
+            <h2>Cut, colour and styling</h2>
+            <p>Book haircuts, blowouts, styling, colour refreshes, and treatment sessions.</p>
+        </article>
+        <article class="content-card image-card service-spa">
+            <span>Spa</span>
+            <h2>Massage and body care</h2>
+            <p>Relax with aromatherapy massage, body scrubs, and wellness treatments.</p>
+        </article>
+        <article class="content-card image-card service-nails">
+            <span>Nails</span>
+            <h2>Manicure and pedicure</h2>
+            <p>Choose express manicures, classic polish, nail care, and hand treatments.</p>
+        </article>
+        <article class="content-card image-card service-facial">
+            <span>Facial</span>
+            <h2>Skin and glow treatments</h2>
+            <p>Find facials designed for hydration, cleansing, brightening, and recovery.</p>
+        </article>
+    </div>
+
+    <div class="section-cta">
+        <div>
+            <h2>One unified booking experience</h2>
+            <p class="muted">Choose by service, compare connected merchants, or open the merchant QR booking flow.</p>
+        </div>
+        <a class="button secondary" href="/merchants">View merchant directory</a>
+    </div>
+</section>
 
 <section class="section">
     <div class="section-heading">
