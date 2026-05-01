@@ -94,16 +94,28 @@ app.post('/merchant/products', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/products/:productId/edit', requireRole('merchant'), merchantDashboardController.showEditProduct);
 app.post('/merchant/products/:productId', requireRole('merchant'), merchantDashboardController.updateProduct);
 app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
+app.get('/merchant/promotions', requireRole('merchant'), merchantDashboardController.listPromotions);
+app.get('/merchant/promotions/new', requireRole('merchant'), merchantDashboardController.showNewPromotion);
+app.post('/merchant/promotions', requireRole('merchant'), merchantDashboardController.createPromotion);
+app.get('/merchant/promotions/:promotionId/edit', requireRole('merchant'), merchantDashboardController.showEditPromotion);
+app.post('/merchant/promotions/:promotionId', requireRole('merchant'), merchantDashboardController.updatePromotion);
+app.post('/merchant/promotions/:promotionId/delete', requireRole('merchant'), merchantDashboardController.deletePromotion);
 app.get('/merchant/:merchantId', allowGuestOrCustomer, merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
 app.get('/admin/services', requireRole('admin'), adminController.listServices);
+app.get('/admin/promotions', requireRole('admin'), adminController.listPromotions);
+app.get('/admin/promotions/new', requireRole('admin'), adminController.showNewPromotion);
 app.get('/admin/services/new', requireRole('admin'), adminController.showNewService);
+app.post('/admin/promotions', requireRole('admin'), adminController.createPromotion);
 app.post('/admin/services', requireRole('admin'), adminController.createService);
 app.get('/admin/services/:serviceId/edit', requireRole('admin'), adminController.showEditService);
 app.post('/admin/services/:serviceId', requireRole('admin'), adminController.updateService);
 app.post('/admin/services/:serviceId/delete', requireRole('admin'), adminController.deleteService);
+app.get('/admin/promotions/:promotionId/edit', requireRole('admin'), adminController.showEditPromotion);
+app.post('/admin/promotions/:promotionId', requireRole('admin'), adminController.updatePromotion);
+app.post('/admin/promotions/:promotionId/delete', requireRole('admin'), adminController.deletePromotion);
 
 app.get('/about', allowGuestOrCustomer, (req, res) => {
     res.render('about', { title: 'About Us' });

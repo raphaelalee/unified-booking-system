@@ -27,14 +27,17 @@
                 <% if (currentUser && currentUser.role === 'admin') { %>
                     <a href="/admin">Dashboard</a>
                     <a href="/admin/services">Manage Services</a>
+                    <a href="/admin/promotions">Manage Promotions</a>
                     <a href="/admin/services/new">Add Service</a>
                     <a href="/admin/merchants/new">Add Merchant</a>
                     <a href="/profile">Profile</a>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <a href="/merchant">Dashboard</a>
                     <a href="/merchant/services">My Services</a>
+                    <a href="/merchant/promotions">My Promotions</a>
                     <a href="/merchant/products">My Products</a>
                     <a href="/merchant/services/new">Add Service</a>
+                    <a href="/merchant/promotions/new">Add Promotion</a>
                     <a href="/profile">Profile</a>
                 <% } else { %>
                     <a href="/">Home</a>

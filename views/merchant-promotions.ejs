@@ -1,0 +1,120 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const categoryOptions = [...new Set(promotions.map((promotion) => promotion.type).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const formatPromotionDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1>Manage promotions</h1>
+    <p><%= merchant.name %> can only manage promotions under this merchant profile.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="section-cta">
+        <div>
+            <h2>Promotion campaigns</h2>
+            <p class="muted"><%= promotions.length %> promotions currently linked to this merchant.</p>
+        </div>
+        <div class="inline-button-group">
+            <label>
+                <span class="sr-only">Filter by category</span>
+                <select class="js-merchant-promotion-category-filter">
+                    <option value="">All categories</option>
+                    <% categoryOptions.forEach((category) => { %>
+                        <option value="<%= category %>"><%= category.replace(/_/g, ' ') %></option>
+                    <% }) %>
+                </select>
+            </label>
+            <a class="button primary" href="/merchant/promotions/new">Add promotion</a>
+        </div>
+    </div>
+
+    <% if (promotions.length === 0) { %>
+        <div class="notice">
+            No promotions have been created yet. Add one to start running first-trial, happy hour, 1-for-1, or featured campaigns.
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% promotions.forEach((promotion) => { %>
+                <article class="service-catalog-card unified-service-card js-merchant-promotion-card" data-category="<%= promotion.type %>">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= promotion.type.replace(/_/g, ' ') %></span>
+                        <span class="service-price slim"><%= promotion.status %></span>
+                    </div>
+                    <div>
+                        <h3><%= promotion.title %></h3>
+                        <p class="muted">
+                            <%= promotion.serviceName || 'All merchant services' %> &middot;
+                            <%= promotion.discountType.replace(/_/g, ' ') %>
+                            <% if (promotion.discountValue !== null) { %>
+                                &middot; <%= promotion.discountValue %>
+                            <% } %>
+                        </p>
+                        <% if (promotion.description) { %>
+                            <p><%= promotion.description %></p>
+                        <% } %>
+                        <% if (promotion.terms) { %>
+                            <p class="muted"><%= promotion.terms %></p>
+                        <% } %>
+                    </div>
+                    <div class="availability-strip">
+                        <span>Starts <%= formatPromotionDate(promotion.startDate) %></span>
+                        <span>Ends <%= formatPromotionDate(promotion.endDate) %></span>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/merchant/promotions/<%= promotion.id %>/edit">Edit</a>
+                        <form action="/merchant/promotions/<%= promotion.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<script>
+    (() => {
+        const categoryFilter = document.querySelector('.js-merchant-promotion-category-filter');
+        const promotionCards = Array.from(document.querySelectorAll('.js-merchant-promotion-card'));
+
+        if (!categoryFilter || promotionCards.length === 0) {
+            return;
+        }
+
+        categoryFilter.addEventListener('change', () => {
+            const selectedCategory = categoryFilter.value.trim().toLowerCase();
+
+            promotionCards.forEach((card) => {
+                const category = (card.dataset.category || '').trim().toLowerCase();
+                const isVisible = !selectedCategory || category === selectedCategory;
+                card.style.display = isVisible ? '' : 'none';
+            });
+        });
+    })();
+</script>
+
+<%- include('partials/footer') %>

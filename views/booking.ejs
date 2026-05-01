@@ -11,7 +11,17 @@
     const selectedBookingService = requestedServiceId
         ? allBookingServices.find((service) => String(service.id) === requestedServiceId)
         : null;
+    const selectedBookingOption = selectedBookingService && requestedOptionId && Array.isArray(selectedBookingService.options)
+        ? selectedBookingService.options.find((option) => String(option.id) === requestedOptionId)
+        : null;
     const bookingServices = selectedBookingService ? [selectedBookingService] : allBookingServices;
+    const promoDisplayPrice = selectedPromotion && typeof selectedPromotion.price === 'number'
+        ? selectedPromotion.price
+        : null;
+    const promoOriginalPrice = selectedPromotion && typeof selectedPromotion.originalPrice === 'number'
+        ? selectedPromotion.originalPrice
+        : null;
+    const lockPromotionOption = Boolean(selectedPromotion && requestedOptionId);
 %>
 
 <section class="booking-hero">
@@ -23,6 +33,28 @@
         <span>Rating <%= merchant.rating %></span>
         <span><%= bookingServices.length %> service<%= bookingServices.length === 1 ? '' : 's' %></span>
     </div>
+    <% if (selectedPromotion) { %>
+        <div class="notice">
+            <p>
+                Booking with promotion:
+                <strong><%= selectedPromotion.campaignLabel || 'Promotion' %></strong>
+                <% if (selectedPromotion.title) { %>
+                    for <strong><%= selectedPromotion.title %></strong>
+                <% } %>
+            </p>
+            <p>
+                <% if (selectedPromotion.originalPrice) { %>
+                    Original price: $<%= selectedPromotion.originalPrice %>.
+                <% } %>
+                <% if (selectedPromotion.price) { %>
+                    Promo price: $<%= selectedPromotion.price %>.
+                <% } %>
+                <% if (selectedPromotion.discountPercent) { %>
+                    Savings: <%= selectedPromotion.discountPercent %>% off.
+                <% } %>
+            </p>
+        </div>
+    <% } %>
 </section>
 
 <section class="section booking-layout">
@@ -34,19 +66,39 @@
 
         <div class="service-list">
             <% bookingServices.forEach((service) => { %>
+                <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
+                <% const bookableItem = activeOption || service; %>
+                <% const displayPrice = promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price; %>
                 <article class="booking-service-card">
                     <div>
-                        <h3><%= service.name %></h3>
-                        <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
+                        <h3><%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %></h3>
+                        <p class="muted">
+                            <%= bookableItem.duration || service.duration %> &middot;
+                            <% if (promoOriginalPrice !== null && promoDisplayPrice !== null) { %>
+                                <span class="promotion-original-price">$<%= promoOriginalPrice %></span>
+                            <% } %>
+                            $<%= displayPrice %>
+                        </p>
                         <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <p class="muted">
-                                Options:
-                                <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
-                            </p>
+                            <% if (activeOption) { %>
+                                <p class="muted">
+                                    Selected option: <%= activeOption.name %>
+                                    <% if (promoDisplayPrice !== null) { %>
+                                        ($<%= promoDisplayPrice %>)
+                                    <% } else { %>
+                                        ($<%= activeOption.price %>)
+                                    <% } %>
+                                </p>
+                            <% } else { %>
+                                <p class="muted">
+                                    Options:
+                                    <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
+                                </p>
+                            <% } %>
                         <% } %>
-                        <p>Available: <%= service.slots.join(', ') %></p>
+                        <p>Available: <%= (bookableItem.slots || service.slots).join(', ') %></p>
                     </div>
-                    <span class="service-price">$<%= service.price %></span>
+                    <span class="service-price">$<%= displayPrice %></span>
                 </article>
             <% }) %>
         </div>
@@ -98,17 +150,21 @@
 
             <label>
                 Option
-                <select name="serviceOptionId" class="js-service-option-select">
+                <% if (lockPromotionOption) { %>
+                    <input type="hidden" name="serviceOptionId" value="<%= requestedOptionId %>">
+                <% } %>
+                <select name="<%= lockPromotionOption ? '' : 'serviceOptionId' %>" class="js-service-option-select" <%= lockPromotionOption ? 'disabled' : '' %>>
                     <option value="">Select an option</option>
                     <% bookingServices.forEach((service) => { %>
                         <% if (Array.isArray(service.options) && service.options.length > 0) { %>
                             <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
                                 <% service.options.forEach((option) => { %>
+                                    <% const isSelectedPromoOption = promoDisplayPrice !== null && requestedOptionId === String(option.id); %>
                                     <option
                                         value="<%= option.id %>"
                                         data-service-id="<%= service.id %>"
                                         <%= requestedOptionId === String(option.id) ? 'selected' : '' %>>
-                                        <%= option.name %> - <%= option.duration %> - $<%= option.price %>
+                                        <%= option.name %> - <%= option.duration %> - $<%= isSelectedPromoOption ? promoDisplayPrice : option.price %>
                                     </option>
                                 <% }) %>
                             </optgroup>

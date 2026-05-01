@@ -2,6 +2,7 @@ const QRCode = require('qrcode');
 const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const Promotion = require('../models/Promotion');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -23,6 +24,22 @@ function renderMerchantLookupError(res, error, merchant) {
     }
 
     return false;
+}
+
+function formatDateTimeLocalValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const pad = (part) => String(part).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function getServiceForm(body = {}) {
@@ -75,6 +92,85 @@ function getProductForm(body = {}) {
     };
 }
 
+function getPromotionForm(body = {}) {
+    return {
+        title: String(body.title || '').trim(),
+        serviceId: String(body.serviceId || '').trim(),
+        type: String(body.type || '').trim(),
+        discountType: String(body.discountType || '').trim(),
+        discountValue: String(body.discountValue || '').trim(),
+        startDate: String(body.startDate || '').trim(),
+        endDate: String(body.endDate || '').trim(),
+        status: String(body.status || '').trim(),
+        description: String(body.description || '').trim(),
+        terms: String(body.terms || '').trim()
+    };
+}
+
+function validatePromotionForm(form, merchant) {
+    const errors = [];
+    const serviceId = form.serviceId ? Number(form.serviceId) : null;
+    const discountValue = form.discountValue === '' ? null : Number(form.discountValue);
+    const startDate = form.startDate ? new Date(form.startDate) : null;
+    const endDate = form.endDate ? new Date(form.endDate) : null;
+    const merchantServiceIds = new Set((merchant.services || []).map((service) => Number(service.id)));
+
+    if (form.title.length < 2) {
+        errors.push('Promotion title must be at least 2 characters.');
+    }
+
+    if (!Promotion.PROMOTION_TYPES.includes(form.type)) {
+        errors.push('Please choose a valid promotion type.');
+    }
+
+    if (!Promotion.DISCOUNT_TYPES.includes(form.discountType)) {
+        errors.push('Please choose a valid discount type.');
+    }
+
+    if (serviceId !== null && (!Number.isInteger(serviceId) || !merchantServiceIds.has(serviceId))) {
+        errors.push('Please choose a valid service for this merchant.');
+    }
+
+    if (form.discountType !== 'tag_only') {
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            errors.push('Please enter a valid discount value.');
+        }
+    }
+
+    if (!(startDate instanceof Date) || Number.isNaN(startDate?.getTime())) {
+        errors.push('Please enter a valid promotion start date.');
+    }
+
+    if (!(endDate instanceof Date) || Number.isNaN(endDate?.getTime())) {
+        errors.push('Please enter a valid promotion end date.');
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+        errors.push('Promotion end date must be after the start date.');
+    }
+
+    if (!Promotion.PROMOTION_STATUSES.includes(form.status)) {
+        errors.push('Please choose a valid promotion status.');
+    }
+
+    return errors;
+}
+
+function buildPromotionPayload(form) {
+    return {
+        title: form.title,
+        serviceId: form.serviceId ? Number(form.serviceId) : null,
+        type: form.type,
+        discountType: form.discountType,
+        discountValue: form.discountType === 'tag_only' || form.discountValue === '' ? null : Number(form.discountValue),
+        startDate: form.startDate,
+        endDate: form.endDate,
+        status: form.status,
+        description: form.description,
+        terms: form.terms
+    };
+}
+
 function validateProductForm(form) {
     const errors = [];
     const price = Number(form.price);
@@ -99,93 +195,102 @@ function validateProductForm(form) {
     return errors;
 }
 
-function buildMerchantReports(merchant, bookings = [], bookingError = null) {
-    const safeBookings = bookingError ? [] : bookings || [];
-    const services = Array.isArray(merchant.services) ? merchant.services : [];
-    const serviceCount = services.length;
-    const slotCount = services.reduce((total, svc) => {
-        return total + ((Array.isArray(svc.slots) ? svc.slots.length : 0));
-    }, 0);
-    const bookingRevenue = safeBookings.reduce((total, booking) => {
-        return total + Number(booking.service_price || booking.price || 0);
-    }, 0);
-    const uniqueCustomers = new Set(safeBookings.map((booking) => {
-        return booking.customer_email || booking.email || booking.customerName || booking.customer_name;
-    })).size;
-    const averagePrice = serviceCount > 0
-        ? services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
-        : 0;
-    const topService = services.reduce((top, service) => {
-        const servicePrice = Number(service.price || 0);
-        return servicePrice > Number(top?.price || 0) ? service : top;
-    }, null);
-    const validationIssues = [];
-
-    if (!merchant.location && !merchant.address) {
-        validationIssues.push('Merchant location is not configured yet.');
-    }
-    if (serviceCount === 0) {
-        validationIssues.push('No services are active. Add a service to start booking customers.');
-    }
-    if (bookingError) {
-        validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
-    }
-
+function buildMerchantReports(merchant, bookings = [], hadError = false) {
     return {
-        stats: {
-            serviceCount,
-            slotCount,
-            bookingCount: safeBookings.length,
-            customerCount: uniqueCustomers,
-            bookingRevenue,
-            averagePrice
-        },
-        customerReport: {
-            totalCustomers: uniqueCustomers,
-            recentBookings: safeBookings.slice(0, 5)
-        },
-        merchantReport: {
-            categoryCount: new Set(services.map((service) => service.category || '')).size,
-            slotCount,
-            serviceCount,
-            topService
-        },
-        validationReport: {
-            issues: validationIssues,
-            status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
-        }
+        totalBookings: bookings.length,
+        recentBookings: Array.isArray(bookings) ? bookings.slice(0, 5) : [],
+        hasError: Boolean(hadError)
     };
 }
 
-function renderMerchantDashboard(req, res, merchant, options = {}) {
-    return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
-        if (bookingError) {
-            console.error(bookingError);
+function showServices(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
         }
 
-        const reports = buildMerchantReports(merchant, bookings, bookingError);
-        const success = Object.prototype.hasOwnProperty.call(options, 'success')
-            ? options.success
-            : req.session.merchantSuccess;
-        const error = Object.prototype.hasOwnProperty.call(options, 'error')
-            ? options.error
-            : req.session.merchantError;
+        return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
+            if (bookingError) {
+                console.error(bookingError);
+            }
 
-        req.session.merchantSuccess = null;
-        req.session.merchantError = null;
+            const safeBookings = bookingError ? [] : bookings || [];
+            const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
+            const slotCount = Array.isArray(merchant.services)
+                ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
+                : 0;
+            const bookingRevenue = safeBookings.reduce((total, booking) => {
+                return total + Number(booking.service_price || booking.price || 0);
+            }, 0);
+            const uniqueCustomers = new Set(safeBookings.map((booking) => booking.customer_email || booking.email || booking.customerName || booking.customer_name)).size;
+            const averagePrice = serviceCount > 0
+                ? merchant.services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
+                : 0;
+            const topService = Array.isArray(merchant.services)
+                ? merchant.services.reduce((top, service) => {
+                    const servicePrice = Number(service.price || 0);
+                    return servicePrice > Number(top?.price || 0) ? service : top;
+                }, null)
+                : null;
+            const validationIssues = [];
 
-        return res.status(options.status || 200).render('merchant-dashboard', {
-            title: 'Merchant Services',
-            merchant,
-            success,
-            error,
-            databaseError: Boolean(bookingError),
-            stats: reports.stats,
-            customerReport: reports.customerReport,
-            merchantReport: reports.merchantReport,
-            validationReport: reports.validationReport,
-            qrCodeDataUrl: options.qrCodeDataUrl || null,
-            qrBookingUrl: options.qrBookingUrl || null
+            if (!merchant.location && !merchant.address) {
+                validationIssues.push('Merchant location is not configured yet.');
+            }
+            if (serviceCount === 0) {
+                validationIssues.push('No services are active. Add a service to start booking customers.');
+            }
+            if (bookingError) {
+                validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
+            }
+
+            const reports = {
+                stats: {
+                    serviceCount,
+                    slotCount,
+                    bookingCount: safeBookings.length,
+                    customerCount: uniqueCustomers,
+                    bookingRevenue,
+                    averagePrice
+                },
+                customerReport: {
+                    totalCustomers: uniqueCustomers,
+                    recentBookings: safeBookings.slice(0, 5)
+                },
+                merchantReport: {
+                    categoryCount: Array.isArray(merchant.services)
+                        ? new Set(merchant.services.map((service) => service.category || '')).size
+                        : 0,
+                    slotCount,
+                    serviceCount,
+                    topService
+                },
+                validationReport: {
+                    issues: validationIssues,
+                    status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+                }
+            };
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-dashboard', {
+                title: 'Merchant Services',
+                merchant,
+                success,
+                error,
+                databaseError: Boolean(bookingError),
+                stats: reports.stats,
+                customerReport: reports.customerReport,
+                merchantReport: reports.merchantReport,
+                validationReport: reports.validationReport,
+                qrCodeDataUrl: null,
+                qrBookingUrl: null
+            });
         });
     });
 }
@@ -684,6 +789,243 @@ function deleteProduct(req, res) {
     });
 }
 
+function listPromotions(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Promotion.getByMerchantUserId(req.session.user.id, (promotionError, promotions) => {
+            if (promotionError) {
+                console.error(promotionError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Promotions Error',
+                    message: 'Promotions could not be loaded from the database.'
+                });
+            }
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-promotions', {
+                title: 'Merchant Promotions',
+                merchant,
+                promotions,
+                success,
+                error
+            });
+        });
+    });
+}
+
+function showNewPromotion(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return res.render('merchant-promotion-form', {
+            title: 'Add Promotion',
+            merchant,
+            promotion: null,
+            form: getPromotionForm({
+                status: 'draft',
+                discountType: 'percentage',
+                type: 'first_trial'
+            }),
+            promotionTypes: Promotion.PROMOTION_TYPES,
+            discountTypes: Promotion.DISCOUNT_TYPES,
+            statuses: Promotion.PROMOTION_STATUSES,
+            errors: []
+        });
+    });
+}
+
+function createPromotion(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        const form = getPromotionForm(req.body);
+        const errors = validatePromotionForm(form, merchant);
+
+        if (errors.length > 0) {
+            return res.status(400).render('merchant-promotion-form', {
+                title: 'Add Promotion',
+                merchant,
+                promotion: null,
+                form,
+                promotionTypes: Promotion.PROMOTION_TYPES,
+                discountTypes: Promotion.DISCOUNT_TYPES,
+                statuses: Promotion.PROMOTION_STATUSES,
+                errors
+            });
+        }
+
+        return Promotion.createForMerchant(req.session.user.id, buildPromotionPayload(form), (createError, result) => {
+            if (createError) {
+                console.error(createError);
+                return res.status(500).render('merchant-promotion-form', {
+                    title: 'Add Promotion',
+                    merchant,
+                    promotion: null,
+                    form,
+                    promotionTypes: Promotion.PROMOTION_TYPES,
+                    discountTypes: Promotion.DISCOUNT_TYPES,
+                    statuses: Promotion.PROMOTION_STATUSES,
+                    errors: ['Promotion could not be created. Please try again.']
+                });
+            }
+
+            if (!result || result.affectedRows === 0) {
+                return res.status(403).render('error', {
+                    title: 'Merchant Not Assigned',
+                    message: 'Your merchant account needs an admin-created salon before promotions can be created.'
+                });
+            }
+
+            req.session.merchantSuccess = 'Promotion created successfully.';
+            return res.redirect('/merchant/promotions');
+        });
+    });
+}
+
+function showEditPromotion(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Promotion.findForMerchant(req.session.user.id, req.params.promotionId, (promotionError, promotion) => {
+            if (promotionError) {
+                console.error(promotionError);
+                return res.status(500).render('error', {
+                    title: 'Promotion Not Found',
+                    message: 'Promotion data could not be loaded.'
+                });
+            }
+
+            if (!promotion) {
+                return res.status(404).render('error', {
+                    title: 'Promotion Not Found',
+                    message: 'This promotion does not belong to your merchant account.'
+                });
+            }
+
+            return res.render('merchant-promotion-form', {
+                title: 'Edit Promotion',
+                merchant,
+                promotion,
+                form: {
+                    title: promotion.title,
+                    serviceId: promotion.serviceId ? String(promotion.serviceId) : '',
+                    type: promotion.type,
+                    discountType: promotion.discountType,
+                    discountValue: promotion.discountValue === null ? '' : String(promotion.discountValue),
+                    startDate: formatDateTimeLocalValue(promotion.startDate),
+                    endDate: formatDateTimeLocalValue(promotion.endDate),
+                    status: promotion.status,
+                    description: promotion.description || '',
+                    terms: promotion.terms || ''
+                },
+                promotionTypes: Promotion.PROMOTION_TYPES,
+                discountTypes: Promotion.DISCOUNT_TYPES,
+                statuses: Promotion.PROMOTION_STATUSES,
+                errors: []
+            });
+        });
+    });
+}
+
+function updatePromotion(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Promotion.findForMerchant(req.session.user.id, req.params.promotionId, (promotionError, promotion) => {
+            if (promotionError) {
+                console.error(promotionError);
+                return res.status(500).render('error', {
+                    title: 'Promotion Not Found',
+                    message: 'Promotion data could not be loaded.'
+                });
+            }
+
+            if (!promotion) {
+                return res.status(404).render('error', {
+                    title: 'Promotion Not Found',
+                    message: 'This promotion does not belong to your merchant account.'
+                });
+            }
+
+            const form = getPromotionForm(req.body);
+            const errors = validatePromotionForm(form, merchant);
+
+            if (errors.length > 0) {
+                return res.status(400).render('merchant-promotion-form', {
+                    title: 'Edit Promotion',
+                    merchant,
+                    promotion,
+                    form,
+                    promotionTypes: Promotion.PROMOTION_TYPES,
+                    discountTypes: Promotion.DISCOUNT_TYPES,
+                    statuses: Promotion.PROMOTION_STATUSES,
+                    errors
+                });
+            }
+
+            return Promotion.updateForMerchant(req.session.user.id, promotion.id, buildPromotionPayload(form), (updateError, result) => {
+                if (updateError) {
+                    console.error(updateError);
+                    return res.status(500).render('merchant-promotion-form', {
+                        title: 'Edit Promotion',
+                        merchant,
+                        promotion,
+                        form,
+                        promotionTypes: Promotion.PROMOTION_TYPES,
+                        discountTypes: Promotion.DISCOUNT_TYPES,
+                        statuses: Promotion.PROMOTION_STATUSES,
+                        errors: ['Promotion could not be updated. Please try again.']
+                    });
+                }
+
+                req.session.merchantSuccess = result.affectedRows > 0 ? 'Promotion updated successfully.' : null;
+                req.session.merchantError = result.affectedRows > 0 ? null : 'Promotion could not be updated.';
+                return res.redirect('/merchant/promotions');
+            });
+        });
+    });
+}
+
+function deletePromotion(req, res) {
+    return Promotion.deleteForMerchant(req.session.user.id, req.params.promotionId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Promotion could not be deleted.';
+            return res.redirect('/merchant/promotions');
+        }
+
+        const deleted = Boolean(result && result.affectedRows > 0);
+        req.session.merchantSuccess = deleted ? 'Promotion deleted successfully.' : null;
+        req.session.merchantError = deleted ? null : 'Promotion could not be deleted.';
+        return res.redirect('/merchant/promotions');
+    });
+}
+
 module.exports = {
     showServices,
     generateQr,
@@ -697,5 +1039,11 @@ module.exports = {
     createProduct,
     showEditProduct,
     updateProduct,
-    deleteProduct
+    deleteProduct,
+    listPromotions,
+    showNewPromotion,
+    createPromotion,
+    showEditPromotion,
+    updatePromotion,
+    deletePromotion
 };

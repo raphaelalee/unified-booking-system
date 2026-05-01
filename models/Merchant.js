@@ -77,16 +77,6 @@ const merchants = [
                     { id: 10303, name: 'Gel Manicure', duration: '60 mins', price: 55, slots: ['1:00 PM', '5:00 PM'] },
                     { id: 10304, name: 'Manicure & Pedicure', duration: '75 mins', price: 68, slots: ['11:30 AM', '3:30 PM'] }
                 ]
-            },
-            {
-                id: 104,
-                name: 'QR Test Beauty Booking',
-                duration: '30 mins',
-                price: 20,
-                slots: ['9:00 AM', '12:30 PM', '6:30 PM'],
-                options: [
-                    { id: 10401, name: 'Standard Beauty Booking', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }
-                ]
             }
         ]
     },

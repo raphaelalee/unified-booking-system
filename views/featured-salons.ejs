@@ -46,7 +46,7 @@
                                 <h2><%= salon.name %></h2>
                                 <p class="muted"><%= salon.location %> &middot; <%= salon.category %></p>
                             </div>
-                            <a class="button primary" href="/merchants/<%= salon.id %>">View salon</a>
+                            <a class="button primary" href="<%= salon.publicPath || ('/merchants/' + salon.id) %>">View salon</a>
                         </div>
 
                         <p class="promotion-rating featured-rating">&#9733;&#9733;&#9733;&#9733;&#9733; <span>(<%= salon.reviewCount %> reviews)</span></p>

@@ -1,0 +1,95 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1><%= promotion ? 'Edit promotion' : 'Add promotion' %></h1>
+    <p><%= merchant.name %> can only manage promotions under this merchant profile.</p>
+</section>
+
+<section class="section compact">
+    <form class="login-form service-admin-form" action="<%= promotion ? `/merchant/promotions/${promotion.id}` : '/merchant/promotions' %>" method="POST">
+        <% if (errors.length > 0) { %>
+            <div class="notice error">
+                <% errors.forEach((error) => { %>
+                    <p><%= error %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <label>
+            Promotion title
+            <input type="text" name="title" value="<%= form.title %>" placeholder="Weekday Happy Hour Facial" required>
+        </label>
+
+        <label>
+            Linked service
+            <select name="serviceId">
+                <option value="">All merchant services</option>
+                <% (merchant.services || []).forEach((service) => { %>
+                    <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
+                        <%= service.name %>
+                    </option>
+                <% }) %>
+            </select>
+        </label>
+
+        <label>
+            Promotion type
+            <select name="type" required>
+                <% promotionTypes.forEach((type) => { %>
+                    <option value="<%= type %>" <%= form.type === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
+                <% }) %>
+            </select>
+        </label>
+
+        <label>
+            Discount type
+            <select name="discountType" required>
+                <% discountTypes.forEach((type) => { %>
+                    <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
+                <% }) %>
+            </select>
+        </label>
+
+        <label>
+            Discount value
+            <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20">
+        </label>
+
+        <label>
+            Start date
+            <input type="datetime-local" name="startDate" value="<%= form.startDate %>" required>
+        </label>
+
+        <label>
+            End date
+            <input type="datetime-local" name="endDate" value="<%= form.endDate %>" required>
+        </label>
+
+        <label>
+            Status
+            <select name="status" required>
+                <% statuses.forEach((status) => { %>
+                    <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                <% }) %>
+            </select>
+        </label>
+
+        <label>
+            Description
+            <textarea name="description" placeholder="Explain what the promotion covers"><%= form.description %></textarea>
+        </label>
+
+        <label>
+            Terms
+            <textarea name="terms" placeholder="Valid weekdays only, once per customer, etc."><%= form.terms %></textarea>
+        </label>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit"><%= promotion ? 'Update promotion' : 'Create promotion' %></button>
+            <a class="button secondary" href="/merchant/promotions">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

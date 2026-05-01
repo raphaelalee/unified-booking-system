@@ -12,11 +12,6 @@
         value: region,
         count: offers.filter((offer) => offer.merchantLocation === region).length
     }));
-    const campaignOptions = [...new Set(offers.map((offer) => offer.campaignLabel))].map((campaign) => ({
-        label: campaign,
-        value: campaign,
-        count: offers.filter((offer) => offer.campaignLabel === campaign).length
-    }));
     const categoryOptions = [...new Set(offers.map((offer) => offer.serviceCategory))].map((category) => ({
         label: category,
         value: category,
@@ -66,17 +61,6 @@
             </div>
 
             <div class="filter-group">
-                <h3>Campaigns</h3>
-                <% campaignOptions.forEach((option) => { %>
-                    <label class="filter-line">
-                        <input type="checkbox" data-filter-group="campaign" value="<%= option.value %>">
-                        <span><%= option.label %></span>
-                        <strong><%= option.count %></strong>
-                    </label>
-                <% }) %>
-            </div>
-
-            <div class="filter-group">
                 <h3>Categories</h3>
                 <% categoryOptions.forEach((option) => { %>
                     <label class="filter-line">
@@ -117,7 +101,7 @@
                     data-category="<%= offer.serviceCategory %>"
                 >
                     <div class="promotion-offer-image promotion-offer-image-<%= offer.merchantId %>">
-                        <span class="promotion-badge">10% cashback</span>
+                        <span class="promotion-badge"><%= offer.cashbackPercent %>% cashback</span>
                         <span class="promotion-badge secondary">-<%= offer.discountPercent %>%</span>
                     </div>
 
@@ -159,5 +143,5 @@
     </div>
 </section>
 
-<script src="/js/promotions-filters.js?v=1"></script>
+<script src="/js/promotions-filters.js?v=2"></script>
 <%- include('partials/footer') %>
