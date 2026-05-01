@@ -7,8 +7,10 @@ const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
+const gameController = require('./controllers/gameController');
+const receiptController = require('./controllers/receiptController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
-const { allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
+const { allowGuestOrCustomer, requireCustomer, requireRole, allowBookingViewer } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
 

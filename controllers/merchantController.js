@@ -1487,6 +1487,14 @@ async function showPayment(req, res) {
         cartItemId,
         cartCheckout
     });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).render('error', {
+            title: 'Payment Error',
+            message: 'An error occurred while loading payment.'
+        });
+    }
+
 }
 
 function confirmPayment(req, res) {
@@ -1502,6 +1510,51 @@ function confirmPayment(req, res) {
         merchantName: req.body.merchantName,
         serviceName: req.body.serviceName
     });
+}
+
+function completeNetsPayment(req, res) {
+    try {
+        return res.render('payment-success', {
+            title: 'Payment Successful',
+            amount: req.body.amount || req.query.amount,
+            merchantName: req.body.merchantName || req.query.merchantName,
+            serviceName: req.body.serviceName || req.query.serviceName
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).render('error', {
+            title: 'Nets Payment Error',
+            message: 'An error occurred processing the Nets payment.'
+        });
+    }
+}
+
+function failNetsPayment(req, res) {
+    return res.redirect('/nets-qr/fail');
+}
+
+function showNetsFail(req, res) {
+    return res.render('netsQRfail', { title: 'Nets Payment Failed' });
+}
+
+function showPaymentSuccess(req, res) {
+    return res.render('payment-success', {
+        title: 'Payment Successful',
+        amount: req.query.amount || null,
+        merchantName: req.query.merchantName || null,
+        serviceName: req.query.serviceName || null
+    });
+}
+
+function streamNetsPaymentStatus(req, res) {
+    const txn = req.params.txnRetrievalRef;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const data = JSON.stringify({ txnRetrievalRef: txn, status: 'unknown' });
+    res.write(`data: ${data}\n\n`);
+    res.end();
 }
 
 module.exports = {
