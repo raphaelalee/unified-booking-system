@@ -1,0 +1,95 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const activePrizes = prizes.filter((prize) => prize.status === 'active');
+    const totalWeight = prizes.reduce((sum, prize) => sum + Number(prize.weight || 0), 0);
+    const prizeTypeLabel = (type) => String(type || '').replace(/_/g, ' ');
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Portal</p>
+    <h1>Game rewards for <%= merchant.name %>.</h1>
+    <p>Create voucher and benefit rewards that customers can win from the Vaniday rewards game.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="portal-summary-panel dashboard-kpi-grid game-kpi-grid">
+        <div class="portal-stat">
+            <span>Rewards</span>
+            <strong><%= prizes.length %></strong>
+            <small>Total contributed</small>
+        </div>
+        <div class="portal-stat">
+            <span>Active</span>
+            <strong><%= activePrizes.length %></strong>
+            <small>Visible in game pool</small>
+        </div>
+        <div class="portal-stat">
+            <span>Draw Weight</span>
+            <strong><%= totalWeight %></strong>
+            <small>Relative chance share</small>
+        </div>
+        <div class="portal-stat">
+            <span>Merchant</span>
+            <strong><%= merchant.services.length %></strong>
+            <small>Listed services</small>
+        </div>
+    </div>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Prize Pool</p>
+            <h2>Your customer game rewards</h2>
+            <p class="muted">Admin controls the game rules. You control the rewards linked to your own merchant profile.</p>
+        </div>
+        <a class="button primary" href="/merchant/rewards-game/prizes/new">Add reward</a>
+    </div>
+
+    <% if (prizes.length === 0) { %>
+        <div class="notice">
+            <p>No merchant rewards have been created yet. Add a voucher or booking benefit to join the customer game pool.</p>
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% prizes.forEach((prize) => { %>
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= prizeTypeLabel(prize.prizeType) %></span>
+                        <span class="service-price slim"><%= prize.status %></span>
+                    </div>
+                    <div>
+                        <h3><%= prize.title %></h3>
+                        <p class="muted">
+                            <%= prize.salonName %>
+                            <% if (prize.rewardValue !== null) { %>
+                                &middot; Value <%= prize.rewardValue %>
+                            <% } %>
+                        </p>
+                        <% if (prize.description) { %>
+                            <p><%= prize.description %></p>
+                        <% } %>
+                    </div>
+                    <div class="availability-strip">
+                        <span>Weight <%= prize.weight %></span>
+                        <span><%= prize.status === 'active' ? 'Playable' : 'Hidden' %></span>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/merchant/rewards-game/prizes/<%= prize.id %>/edit">Edit</a>
+                        <form action="/merchant/rewards-game/prizes/<%= prize.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

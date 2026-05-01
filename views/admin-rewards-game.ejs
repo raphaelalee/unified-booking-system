@@ -1,0 +1,141 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const formatMoney = (value) => Number(value || 0).toFixed(2);
+    const activePrizes = prizes.filter((prize) => prize.status === 'active');
+    const merchantPrizeCount = prizes.filter((prize) => prize.salonId).length;
+    const totalWeight = prizes.reduce((sum, prize) => sum + Number(prize.weight || 0), 0);
+    const prizeTypeLabel = (type) => String(type || '').replace(/_/g, ' ');
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>Rewards game control.</h1>
+    <p>Set the weekly play rules, spend bonus criteria, and platform rewards customers can win.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="portal-summary-panel dashboard-kpi-grid game-kpi-grid">
+        <div class="portal-stat">
+            <span>Status</span>
+            <strong><%= settings.isEnabled ? 'Active' : 'Paused' %></strong>
+            <small>Customer play access</small>
+        </div>
+        <div class="portal-stat">
+            <span>Weekly Plays</span>
+            <strong><%= settings.weeklyFreePlays %></strong>
+            <small>Collates when unused</small>
+        </div>
+        <div class="portal-stat">
+            <span>Active Prizes</span>
+            <strong><%= activePrizes.length %></strong>
+            <small><%= merchantPrizeCount %> merchant prizes</small>
+        </div>
+        <div class="portal-stat">
+            <span>Prize Weight</span>
+            <strong><%= totalWeight %></strong>
+            <small>Weighted draw pool</small>
+        </div>
+    </div>
+
+    <div class="game-admin-layout">
+        <form class="account-panel account-form" action="/admin/rewards-game/settings" method="POST">
+            <div class="account-panel-header">
+                <div>
+                    <p class="eyebrow">Game Rules</p>
+                    <h2>Customer play criteria</h2>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <label>
+                    Weekly free plays
+                    <input type="number" name="weeklyFreePlays" min="0" step="1" value="<%= settings.weeklyFreePlays %>" required>
+                </label>
+                <label>
+                    Spend amount for bonus play
+                    <input type="number" name="spendPerBonusPlay" min="1" step="0.01" value="<%= settings.spendPerBonusPlay %>" required>
+                </label>
+                <label>
+                    Bonus plays per spend tier
+                    <input type="number" name="bonusPlaysPerThreshold" min="0" step="1" value="<%= settings.bonusPlaysPerThreshold %>" required>
+                </label>
+                <label class="checkbox-field">
+                    <input type="checkbox" name="isEnabled" <%= settings.isEnabled ? 'checked' : '' %>>
+                    <span>Allow customers to play</span>
+                </label>
+            </div>
+
+            <div class="account-form-actions">
+                <button class="button primary" type="submit">Save game rules</button>
+            </div>
+        </form>
+
+        <aside class="dashboard-report-card">
+            <p class="eyebrow">Control Split</p>
+            <h2>Who manages what</h2>
+            <div class="report-metric-list">
+                <p><span>Admin</span><strong>Rules and glints</strong></p>
+                <p><span>Merchants</span><strong>Vouchers and benefits</strong></p>
+                <p><span>Customers</span><strong>Play only</strong></p>
+            </div>
+        </aside>
+    </div>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Prize Pool</p>
+            <h2><%= prizes.length %> rewards</h2>
+            <p class="muted">Admin can manage all rewards, including merchant-contributed rewards.</p>
+        </div>
+        <a class="button primary" href="/admin/rewards-game/prizes/new">Add prize</a>
+    </div>
+
+    <% if (prizes.length === 0) { %>
+        <div class="notice">
+            <p>No game prizes have been created yet.</p>
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% prizes.forEach((prize) => { %>
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= prize.salonId ? prize.salonName : 'Platform' %></span>
+                        <span class="service-price slim"><%= prize.status %></span>
+                    </div>
+                    <div>
+                        <h3><%= prize.title %></h3>
+                        <p class="muted">
+                            <%= prizeTypeLabel(prize.prizeType) %>
+                            <% if (prize.rewardValue !== null) { %>
+                                &middot; <%= prize.rewardValue %>
+                            <% } %>
+                        </p>
+                        <% if (prize.description) { %>
+                            <p><%= prize.description %></p>
+                        <% } %>
+                    </div>
+                    <div class="availability-strip">
+                        <span>Weight <%= prize.weight %></span>
+                        <span><%= prize.salonName %></span>
+                    </div>
+                    <div class="service-card-actions">
+                        <a class="button secondary full" href="/admin/rewards-game/prizes/<%= prize.id %>/edit">Edit</a>
+                        <form action="/admin/rewards-game/prizes/<%= prize.id %>/delete" method="POST">
+                            <button class="button secondary full danger-button" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

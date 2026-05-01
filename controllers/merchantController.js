@@ -4,6 +4,7 @@ const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const Transaction = require('../models/Transaction');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const {
     getMerchantScanPath,
@@ -1400,22 +1401,55 @@ function showPayment(req, res) {
         merchantName,
         serviceName,
         cartItemId,
-        cartCheckout
+        cartCheckout,
+        selectedItemIds: [],
+        fulfilment: '',
+        pickupMerchantId: '',
+        deliveryAddress: '',
+        deliveryUnit: '',
+        deliveryPostal: '',
+        deliveryPhone: ''
     });
 }
 
 function confirmPayment(req, res) {
-    if (req.body.cartCheckout === 'true') {
-        req.session.cart = [];
-    } else if (req.body.cartItemId) {
-        req.session.cart = (req.session.cart || []).filter((item) => String(item.id) !== String(req.body.cartItemId));
+    const amount = Number(req.body.amount || 0);
+    const selectedIds = (req.body.selectedItemIds || '').toString().split(',').filter(Boolean);
+    const cart = req.session.cart || [];
+    const paidItems = req.body.cartCheckout === 'true'
+        ? cart.filter((item) => selectedIds.length === 0 || selectedIds.includes(String(item.id)))
+        : cart.filter((item) => String(item.id) === String(req.body.cartItemId));
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).render('error', {
+            title: 'Payment Error',
+            message: 'Payment amount must be greater than zero.'
+        });
     }
 
-    return res.render('payment-success', {
-        title: 'Payment Successful',
-        amount: req.body.amount,
-        merchantName: req.body.merchantName,
-        serviceName: req.body.serviceName
+    return Transaction.createPaidTransaction(req.session.user.id, amount, 'card', paidItems, (transactionError) => {
+        if (transactionError) {
+            console.error(transactionError);
+            return res.status(500).render('error', {
+                title: 'Payment Error',
+                message: 'Payment could not be recorded. Please try again.'
+            });
+        }
+
+        if (req.body.cartCheckout === 'true') {
+            req.session.cart = selectedIds.length === 0
+                ? []
+                : cart.filter((item) => !selectedIds.includes(String(item.id)));
+        } else if (req.body.cartItemId) {
+            req.session.cart = cart.filter((item) => String(item.id) !== String(req.body.cartItemId));
+        }
+
+        return res.render('payment-success', {
+            title: 'Payment Successful',
+            amount: req.body.amount,
+            merchantName: req.body.merchantName,
+            serviceName: req.body.serviceName
+        });
     });
 }
 

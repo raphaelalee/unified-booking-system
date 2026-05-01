@@ -1,0 +1,96 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow"><%= allowSalonChoice ? 'Admin Portal' : 'Merchant Portal' %></p>
+    <h1><%= title %>.</h1>
+    <p><%= allowSalonChoice ? 'Create platform rewards or attach rewards to a merchant.' : 'Create a reward customers can win from your merchant.' %></p>
+</section>
+
+<section class="section compact">
+    <% if (errors && errors.length > 0) { %>
+        <div class="notice error">
+            <% errors.forEach((message) => { %>
+                <p><%= message %></p>
+            <% }) %>
+        </div>
+    <% } %>
+
+    <form class="account-panel account-form service-admin-form" action="<%= actionPath %>" method="POST">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Prize Details</p>
+                <h2>Reward setup</h2>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <% if (allowSalonChoice) { %>
+                <label>
+                    Reward owner
+                    <select name="salonId">
+                        <option value="">Platform prize</option>
+                        <% salons.forEach((salon) => { %>
+                            <option value="<%= salon.salon_id %>" <%= String(form.salonId || '') === String(salon.salon_id) ? 'selected' : '' %>>
+                                <%= salon.salon_name %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </label>
+            <% } else { %>
+                <label>
+                    Merchant
+                    <input type="text" value="<%= merchant.name %>" readonly>
+                </label>
+            <% } %>
+
+            <label>
+                Prize type
+                <select name="prizeType" required>
+                    <% prizeTypes.forEach((type) => { %>
+                        <option value="<%= type %>" <%= form.prizeType === type ? 'selected' : '' %>>
+                            <%= type.replace(/_/g, ' ') %>
+                        </option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label>
+                Title
+                <input type="text" name="title" value="<%= form.title || '' %>" maxlength="120" placeholder="Example: $5 Beauty Voucher" required>
+            </label>
+
+            <label>
+                Reward value
+                <input type="number" name="rewardValue" min="0" step="1" value="<%= form.rewardValue || '' %>" placeholder="Optional amount or points">
+            </label>
+
+            <label>
+                Draw weight
+                <input type="number" name="weight" min="1" step="1" value="<%= form.weight || '10' %>" required>
+            </label>
+
+            <label>
+                Status
+                <select name="status" required>
+                    <% statuses.forEach((status) => { %>
+                        <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>>
+                            <%= status %>
+                        </option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label class="full-width-field">
+                Description
+                <textarea name="description" rows="4" maxlength="255" placeholder="Short reward details customers can understand."><%= form.description || '' %></textarea>
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Save reward</button>
+            <a class="button secondary" href="<%= cancelPath %>">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

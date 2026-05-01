@@ -26,8 +26,6 @@
                 service.merchantLocation,
                 service.merchantCategory,
                 service.merchantPromotion,
-                service.merchantPosSystem,
-                service.merchantBookingSystem,
                 service.merchantIntegrationStatus
             ].join(' ').toLowerCase();
 
@@ -38,18 +36,17 @@
 
 <section class="page-title services-unified-hero">
     <div>
-        <p class="eyebrow">Services & Booking Portal</p>
-        <h1>All merchants, services, prices and booking systems in one place.</h1>
+        <p class="eyebrow">Services</p>
+        <h1>Browse available beauty and wellness services.</h1>
         <p>
-            Compare salon, spa, nail, facial and grooming services from connected merchants.
-            Check availability, promotions and POS booking integrations before booking.
+            Compare treatments, prices, time slots and promotions from Vaniday merchants before booking.
         </p>
         <form class="portal-search services-search" action="/services" method="GET">
             <input
                 type="search"
                 name="search"
                 value="<%= serviceSearch %>"
-                placeholder="Search services, merchants, location, promotion, POS, or booking system"
+                placeholder="Search services, merchants, locations, or promotions"
             >
             <button class="button primary" type="submit">Search</button>
         </form>
@@ -76,45 +73,14 @@
 </section>
 
 <section class="section compact">
-    <div class="content-grid">
-        <article class="content-card image-card service-hair">
-            <span>Hair</span>
-            <h2>Cut, colour and styling</h2>
-            <p>Book haircuts, blowouts, styling, colour refreshes, and treatment sessions.</p>
-        </article>
-        <article class="content-card image-card service-spa">
-            <span>Spa</span>
-            <h2>Massage and body care</h2>
-            <p>Relax with aromatherapy massage, body scrubs, and wellness treatments.</p>
-        </article>
-        <article class="content-card image-card service-nails">
-            <span>Nails</span>
-            <h2>Manicure and pedicure</h2>
-            <p>Choose express manicures, classic polish, nail care, and hand treatments.</p>
-        </article>
-        <article class="content-card image-card service-facial">
-            <span>Facial</span>
-            <h2>Skin and glow treatments</h2>
-            <p>Find facials designed for hydration, cleansing, brightening, and recovery.</p>
-        </article>
-    </div>
-
-    <div class="section-cta">
-        <div>
-            <h2>One unified booking experience</h2>
-            <p class="muted">Choose by service, compare connected merchants, or open the merchant QR booking flow.</p>
-        </div>
-        <a class="button secondary" href="/merchants">View merchant directory</a>
-    </div>
-
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Unified Service Catalog</p>
-        <h2>Services, availability, pricing and promotions</h2>
+    <div class="section-heading services-list-heading">
+        <p class="eyebrow">Service Catalog</p>
+        <h2>Available services</h2>
     </div>
 
     <% if (filteredServices.length === 0) { %>
         <div class="notice">
-            No individual services matched your search. Try hair, facial, spa, nails, massage, barber, POS, or booking.
+            No services matched your search. Try hair, facial, spa, nails, massage, barber, or a location.
         </div>
     <% } else { %>
         <div class="service-catalog-grid unified-service-grid">
@@ -133,23 +99,27 @@
                     <div>
                         <h3><%= service.name %></h3>
                         <p class="muted"><%= service.merchantName %> &middot; <%= service.merchantLocation %></p>
-                        <p><%= service.duration %> &middot; $<%= service.price %></p>
+                        <p class="service-duration-line"><%= service.duration %></p>
                         <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <p class="muted">
-                                Options:
-                                <%= service.options.map((option) => option.name).join(', ') %>
-                            </p>
+                            <div class="service-option-list">
+                                <% service.options.slice(0, 4).forEach((option) => { %>
+                                    <span><%= option.name %></span>
+                                <% }) %>
+                            </div>
                         <% } %>
                     </div>
-                    <div class="availability-strip">
-                        <% (service.slots || []).forEach((slot) => { %>
-                            <span><%= slot %></span>
-                        <% }) %>
-                    </div>
-                    <p class="promotion"><%= service.merchantPromotion %></p>
-                    <div class="system-list compact">
-                        <p><span>POS</span><strong><%= service.merchantPosSystem || 'Merchant POS' %></strong></p>
-                        <p><span>Booking</span><strong><%= service.merchantBookingSystem || 'Vaniday Booking' %></strong></p>
+                    <div class="service-card-footer">
+                        <div>
+                            <span class="service-card-label">Available slots</span>
+                            <div class="availability-strip compact-slots">
+                                <% (service.slots || []).slice(0, 3).forEach((slot) => { %>
+                                    <span><%= slot %></span>
+                                <% }) %>
+                            </div>
+                        </div>
+                        <% if (service.merchantPromotion) { %>
+                            <p class="promotion"><%= service.merchantPromotion %></p>
+                        <% } %>
                     </div>
                     <div class="service-card-actions">
                         <a class="button primary full" href="<%= serviceBookingPath %>">Book this service</a>
@@ -159,58 +129,12 @@
         </div>
     <% } %>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Connected Merchants</p>
-        <h2>POS and booking integrations</h2>
-    </div>
-
-    <% if (serviceMerchants.length === 0) { %>
-        <div class="notice">
-            No merchants found. Try searching for hair, facial, spa, barber, POS, booking, or a location.
+    <div class="section-cta services-directory-cta">
+        <div>
+            <h2>Prefer browsing by merchant?</h2>
+            <p class="muted">Open the merchant directory to compare salons, ratings and full service menus.</p>
         </div>
-    <% } %>
-
-    <div class="merchant-list">
-        <% serviceMerchants.forEach((merchant) => { %>
-            <%
-                const merchantServices = Array.isArray(merchant.services) ? merchant.services : [];
-                const merchantSlots = merchantServices.reduce((total, service) => total + ((service.slots || []).length), 0);
-            %>
-            <article class="merchant-row unified-merchant-row">
-                <div class="merchant-thumb merchant-thumb-<%= merchant.id %>">
-                    <span><%= merchant.category %></span>
-                </div>
-                <div>
-                    <div class="merchant-title-row">
-                        <div class="portal-card-header">
-                            <p class="tag"><%= merchant.category %></p>
-                            <span class="sync-pill"><%= merchant.integrationStatus || 'Synced' %></span>
-                        </div>
-                        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
-                            <button class="heart-button <%= serviceFavouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
-                                <%- serviceFavouriteIds.includes(merchant.id) ? '&hearts;' : '&#9825;' %>
-                            </button>
-                        </form>
-                    </div>
-                    <h2><%= merchant.name %></h2>
-                    <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
-                    <p><%= merchant.description %></p>
-                    <div class="system-list compact merchant-system-list">
-                        <p><span>POS</span><strong><%= merchant.posSystem || 'Merchant POS' %></strong></p>
-                        <p><span>Booking</span><strong><%= merchant.bookingSystem || 'Vaniday Booking' %></strong></p>
-                    </div>
-                    <p class="promotion"><%= merchant.promotion %></p>
-                </div>
-                <div class="merchant-actions">
-                    <div class="portal-card-metrics compact">
-                        <span><strong><%= merchantServices.length %></strong> services</span>
-                        <span><strong><%= merchantSlots %></strong> slots</span>
-                    </div>
-                    <a class="button primary" href="/merchants/<%= merchant.id %>">View services</a>
-                    <a class="text-link" href="/merchants/<%= merchant.id %>">View merchant</a>
-                </div>
-            </article>
-        <% }) %>
+        <a class="button secondary" href="/merchants">View merchant directory</a>
     </div>
 </section>
 
