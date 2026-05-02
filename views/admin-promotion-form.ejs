@@ -47,7 +47,7 @@
 
         <label>
             Promotion type
-            <select name="type" required>
+            <select name="type" class="js-promotion-type" required>
                 <% promotionTypes.forEach((type) => { %>
                     <option value="<%= type %>" <%= form.type === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
                 <% }) %>
@@ -70,13 +70,41 @@
 
         <label>
             Start date
-            <input type="datetime-local" name="startDate" value="<%= form.startDate %>" required>
+            <input type="date" name="startDate" class="js-promotion-start" value="<%= form.startDate %>" required>
         </label>
 
         <label>
             End date
-            <input type="datetime-local" name="endDate" value="<%= form.endDate %>" required>
+            <input type="date" name="endDate" class="js-promotion-end" value="<%= form.endDate %>" required>
         </label>
+
+        <label class="js-regular-slots-group">
+            Slots
+            <input
+                type="text"
+                name="slots"
+                class="js-promotion-slots-input"
+                value="<%= form.slots || '' %>"
+                placeholder="10:00, 14:00, 17:00">
+        </label>
+
+        <label class="js-happy-hour-slots-group" style="display:none;">
+            Happy Hour slot
+            <select class="js-happy-hour-slots-select">
+                <option value="">Select a fixed slot</option>
+                <option value="10:00">10:00 AM</option>
+                <option value="11:00">11:00 AM</option>
+                <option value="12:00">12:00 PM</option>
+                <option value="13:00">1:00 PM</option>
+                <option value="14:00">2:00 PM</option>
+                <option value="15:00">3:00 PM</option>
+                <option value="16:00">4:00 PM</option>
+            </select>
+        </label>
+
+        <p class="muted js-happy-hour-note" style="display:none;">
+            Happy Hour promotions use fixed booking slots between 10:00 AM and 4:00 PM, and can only run on weekdays.
+        </p>
 
         <label>
             Status
@@ -103,5 +131,76 @@
         </div>
     </form>
 </section>
+
+<script>
+    (() => {
+        const typeField = document.querySelector('.js-promotion-type');
+        const startField = document.querySelector('.js-promotion-start');
+        const endField = document.querySelector('.js-promotion-end');
+        const note = document.querySelector('.js-happy-hour-note');
+        const slotsField = document.querySelector('.js-promotion-slots-input');
+        const regularSlotsGroup = document.querySelector('.js-regular-slots-group');
+        const happyHourSlotsGroup = document.querySelector('.js-happy-hour-slots-group');
+        const happyHourSlotsSelect = document.querySelector('.js-happy-hour-slots-select');
+
+        if (!typeField || !startField || !endField || !note || !slotsField || !regularSlotsGroup || !happyHourSlotsGroup || !happyHourSlotsSelect) {
+            return;
+        }
+
+        const isWeekday = (date) => {
+            const day = date.getDay();
+            return day >= 1 && day <= 5;
+        };
+
+        const validateField = (field) => {
+            if (typeField.value !== 'happy_hour') {
+                field.setCustomValidity('');
+                return;
+            }
+
+            if (!field.value) {
+                field.setCustomValidity('');
+                return;
+            }
+
+            const date = new Date(field.value);
+
+            if (Number.isNaN(date.getTime())) {
+                field.setCustomValidity('');
+                return;
+            }
+
+            if (!isWeekday(date)) {
+                field.setCustomValidity('Happy Hour promotions must be scheduled on weekdays only.');
+                return;
+            }
+
+            field.setCustomValidity('');
+        };
+
+        const syncHappyHourState = () => {
+            const isHappyHour = typeField.value === 'happy_hour';
+            note.style.display = isHappyHour ? '' : 'none';
+            regularSlotsGroup.style.display = isHappyHour ? 'none' : '';
+            happyHourSlotsGroup.style.display = isHappyHour ? '' : 'none';
+            if (isHappyHour && !slotsField.value.trim()) {
+                slotsField.value = '10:00';
+            }
+            if (isHappyHour) {
+                happyHourSlotsSelect.value = slotsField.value.trim();
+            }
+            validateField(startField);
+            validateField(endField);
+        };
+
+        typeField.addEventListener('change', syncHappyHourState);
+        startField.addEventListener('input', () => validateField(startField));
+        endField.addEventListener('input', () => validateField(endField));
+        happyHourSlotsSelect.addEventListener('change', () => {
+            slotsField.value = happyHourSlotsSelect.value;
+        });
+        syncHappyHourState();
+    })();
+</script>
 
 <%- include('partials/footer') %>

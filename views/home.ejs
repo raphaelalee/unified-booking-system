@@ -2,18 +2,17 @@
 
 <section class="hero">
     <div class="hero-content">
-        <p class="eyebrow">Multi-merchant booking portal</p>
-        <h1>One place to compare and book trusted merchants.</h1>
+        <p class="eyebrow">Beauty bookings and rewards</p>
+        <h1>Vaniday</h1>
         <p class="hero-text">
-            Browse salons, spas, and grooming merchants connected through B2B POS and booking systems.
-            View services, availability, prices, and promotions before confirming your appointment.
+            A refined place to discover beauty, spa, grooming, products, rewards, and appointment times.
         </p>
         <div class="hero-actions">
             <a class="button primary" href="/services">Explore services</a>
             <a class="button secondary" href="/merchants">View merchants</a>
         </div>
     </div>
-    <div class="hero-visual" aria-label="Salon products and wellness ambience"></div>
+    <div class="hero-visual" aria-label="Luxury beauty product editorial"></div>
 </section>
 
 <%
@@ -126,14 +125,18 @@
 </section>
 
 <section class="section">
-    <div class="section-heading">
-        <p class="eyebrow">Featured merchants</p>
-        <h2>Popular Vaniday partners</h2>
+    <div class="editorial-section-heading">
+        <div>
+            <p class="eyebrow">Featured merchants</p>
+            <h2>Selected Vaniday partners</h2>
+        </div>
+        <a class="text-link" href="/merchants">View directory</a>
     </div>
 
-    <div class="merchant-grid">
-        <% merchants.forEach((merchant) => { %>
+    <div class="merchant-grid home-editorial-grid">
+        <% merchants.forEach((merchant, index) => { %>
             <article class="merchant-card">
+                <div class="merchant-card-image merchant-thumb-<%= merchant.id %>" aria-hidden="true"></div>
                 <div>
                     <p class="tag"><%= merchant.category %></p>
                     <h3><%= merchant.name %></h3>

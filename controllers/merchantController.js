@@ -66,11 +66,13 @@ function getPromotionQueryParams(promotion = null) {
 
     return {
         source: 'promotions',
+        promotionId: promotion.promotionId || promotion.id,
         promoCampaign: promotion.campaignLabel,
         promoTitle: promotion.title || promotion.name,
         promoPrice: promotion.price,
         promoOriginalPrice: promotion.originalPrice,
-        promoDiscountPercent: promotion.discountPercent
+        promoDiscountPercent: promotion.discountPercent,
+        promoSlots: promotion.allowedSlots || ''
     };
 }
 
@@ -79,6 +81,7 @@ function getPromotionSelection(query = {}) {
         return null;
     }
 
+    const promotionId = Number(query.promotionId);
     const campaignLabel = (query.promoCampaign || '').trim();
     const title = (query.promoTitle || '').trim();
     const price = Number(query.promoPrice);
@@ -90,12 +93,18 @@ function getPromotionSelection(query = {}) {
     }
 
     return {
+        promotionId: Number.isFinite(promotionId) ? promotionId : null,
         campaignLabel,
         title,
         price: Number.isFinite(price) ? price : null,
         originalPrice: Number.isFinite(originalPrice) ? originalPrice : null,
-        discountPercent: Number.isFinite(discountPercent) ? discountPercent : null
+        discountPercent: Number.isFinite(discountPercent) ? discountPercent : null,
+        allowedSlots: String(query.promoSlots || '').trim()
     };
+}
+
+function isHappyHourPromotion(selectedPromotion = null) {
+    return String(selectedPromotion?.campaignLabel || '').trim().toLowerCase() === 'happy hour';
 }
 
 function getSelectedService(merchant, serviceId) {
@@ -152,14 +161,62 @@ function getBookingServices(merchant, selectedService = null) {
     return selectedService ? [selectedService] : services;
 }
 
+function filterSlotsToHappyHour(slots = []) {
+    return (Array.isArray(slots) ? slots : []).filter((slot) => {
+        const minutes = extractMinutesFromTime(slot);
+        return minutes !== null && minutes >= 600 && minutes <= 960;
+    });
+}
+
+function parseAllowedSlots(value = '') {
+    return String(value).split(',').map((slot) => slot.trim()).filter(Boolean);
+}
+
+function filterSlotsByPromotion(slots = [], selectedPromotion = null) {
+    const allowedSlots = parseAllowedSlots(selectedPromotion?.allowedSlots || '');
+
+    if (allowedSlots.length > 0) {
+        return (Array.isArray(slots) ? slots : []).filter((slot) => allowedSlots.includes(String(slot).trim()));
+    }
+
+    if (isHappyHourPromotion(selectedPromotion)) {
+        return filterSlotsToHappyHour(slots);
+    }
+
+    return Array.isArray(slots) ? slots : [];
+}
+
+function applyPromotionAvailability(merchant, selectedPromotion = null) {
+    if (!selectedPromotion) {
+        return merchant;
+    }
+
+    const services = (Array.isArray(merchant.services) ? merchant.services : []).map((service) => ({
+        ...service,
+        slots: filterSlotsByPromotion(service.slots, selectedPromotion),
+        options: Array.isArray(service.options)
+            ? service.options.map((option) => ({
+                ...option,
+                slots: filterSlotsByPromotion(option.slots, selectedPromotion)
+            }))
+            : service.options
+    }));
+
+    return {
+        ...merchant,
+        services
+    };
+}
+
 function renderBookingPage(req, res, merchant, options = {}) {
+    const selectedPromotion = options.selectedPromotion || getPromotionSelection(req.query);
+    const bookingMerchant = applyPromotionAvailability(merchant, selectedPromotion);
     const requestedServiceId = options.form?.serviceId || req.query.serviceId;
     const requestedServiceOptionId = options.form?.serviceOptionId || req.query.serviceOptionId;
-    const selectedService = getSelectedService(merchant, requestedServiceId);
+    const selectedService = getSelectedService(bookingMerchant, requestedServiceId);
     const selectedServiceOption = selectedService
         ? getSelectedServiceOption(selectedService, requestedServiceOptionId)
         : null;
-    const selectedPromotion = options.selectedPromotion || getPromotionSelection(req.query);
 
     if (requestedServiceId && !selectedService) {
         return res.status(404).render('error', {
@@ -180,7 +237,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         ...(selectedService ? { serviceId: selectedService.id } : {}),
         ...(selectedServiceOption ? { serviceOptionId: selectedServiceOption.id } : {})
     };
-    const scopedServices = getBookingServices(merchant, selectedService);
+    const scopedServices = getBookingServices(bookingMerchant, selectedService);
     const useSecureQr = options.secureQr || Boolean(req.params.token || req.query.token);
     const bookingPath = appendQueryParams(
         useSecureQr
@@ -197,7 +254,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
 
     return res.status(options.status || 200).render('booking', {
         title: `Book ${merchant.name}`,
-        merchant,
+        merchant: bookingMerchant,
         scopedServices,
         errors: options.errors || [],
         form,
@@ -297,6 +354,140 @@ function validateBooking(merchant, form) {
         email,
         phone
     };
+}
+
+function normalizeBookingDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+function isWeekdayDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return false;
+    }
+
+    const day = date.getDay();
+    return day >= 1 && day <= 5;
+}
+
+function extractMinutesFromTime(value) {
+    if (!value) {
+        return null;
+    }
+
+    const rawValue = String(value).trim().toUpperCase();
+    const meridiemMatch = rawValue.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/);
+
+    if (meridiemMatch) {
+        let hours = Number(meridiemMatch[1]);
+        const minutes = Number(meridiemMatch[2]);
+        const meridiem = meridiemMatch[3];
+
+        if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+            return null;
+        }
+
+        if (meridiem === 'PM' && hours < 12) {
+            hours += 12;
+        } else if (meridiem === 'AM' && hours === 12) {
+            hours = 0;
+        }
+
+        return (hours * 60) + minutes;
+    }
+
+    const parts = rawValue.split(':');
+    const hours = Number(parts[0]);
+    const minutes = Number(parts[1]);
+
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+        return null;
+    }
+
+    return (hours * 60) + minutes;
+}
+
+function validatePromotionForBooking(req, selectedPromotion, validation, callback) {
+    if (!selectedPromotion?.promotionId) {
+        callback(null, null);
+        return;
+    }
+
+    return Promotion.findActivePublicById(selectedPromotion.promotionId, (promotionError, promotion) => {
+        if (promotionError) {
+            callback(promotionError);
+            return;
+        }
+
+        if (!promotion) {
+            callback(null, { error: 'This promotion is no longer active.' });
+            return;
+        }
+
+        if (String(promotion.salonId) !== String(validation.service.salonId || validation.service.salon_id || req.params.merchantId)) {
+            callback(null, { error: 'This promotion does not belong to the selected merchant.' });
+            return;
+        }
+
+        if (promotion.serviceId && String(promotion.serviceId) !== String(validation.service.id)) {
+            callback(null, { error: 'This promotion does not apply to the selected service.' });
+            return;
+        }
+
+        const bookingDate = normalizeBookingDate(req.body.bookingDate);
+        const promoStart = normalizeBookingDate(promotion.startDate);
+        const promoEnd = normalizeBookingDate(promotion.endDate);
+
+        if (!bookingDate || !promoStart || !promoEnd || bookingDate < promoStart || bookingDate > promoEnd) {
+            callback(null, { error: 'This promotion is not valid for the selected booking date.' });
+            return;
+        }
+
+        const allowedSlots = parseAllowedSlots(promotion.allowedSlots || '');
+
+        if (allowedSlots.length > 0 && !allowedSlots.includes(String(req.body.bookingTime || '').trim())) {
+            callback(null, { error: 'This booking time is not available for the selected promotion.' });
+            return;
+        }
+
+        if (promotion.type === 'happy_hour' && !isWeekdayDate(bookingDate)) {
+            callback(null, { error: 'Happy Hour promotions can only be booked on weekdays.' });
+            return;
+        }
+
+        if (promotion.type === 'happy_hour') {
+            const bookingMinutes = extractMinutesFromTime(req.body.bookingTime);
+
+            if (bookingMinutes === null || bookingMinutes < 600 || bookingMinutes > 960) {
+                callback(null, { error: 'Happy Hour promotions can only be booked between 10:00 AM and 4:00 PM.' });
+                return;
+            }
+        }
+
+        if (promotion.type === 'first_trial') {
+            return Promotion.hasUserRedeemedPromotion(req.session.user.id, promotion.id, (redemptionError, hasRedeemed) => {
+                if (redemptionError) {
+                    callback(redemptionError);
+                    return;
+                }
+
+                if (hasRedeemed) {
+                    callback(null, { error: 'You have already used this First Trial promotion.' });
+                    return;
+                }
+
+                callback(null, promotion);
+            });
+        }
+
+        callback(null, promotion);
+    });
 }
 
 function showHome(req, res) {
@@ -477,12 +668,14 @@ function buildPublicPromotionOffer(promotion, service) {
             getMerchantScanPath(promotion.salonId),
             {
                 source: 'promotions',
+                promotionId: promotion.id,
                 serviceId: service.id,
                 promoCampaign: getPromotionLabel(promotion.type),
                 promoTitle: promotion.title,
                 promoPrice: pricing.price,
                 promoOriginalPrice: pricing.originalPrice,
-                promoDiscountPercent: pricing.discountPercent
+                promoDiscountPercent: pricing.discountPercent,
+                promoSlots: promotion.allowedSlots || ''
             }
         )
     };
@@ -994,62 +1187,95 @@ function saveQrBooking(req, res) {
         });
     }
 
-    const bookingData = {
-        userId: req.session.user.id,
-        merchantId: merchant.id,
-        merchantName: merchant.name,
-        serviceId: validation.service.id,
-        serviceName: validation.serviceName,
-        customerName: validation.customerName,
-        email: validation.email,
-        phone: validation.phone,
-        bookingDate: req.body.bookingDate,
-        bookingTime: req.body.bookingTime,
-        qrCodeToken: req.params.qrToken
-    };
-
-    Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (lookupError, exists) => {
-        if (lookupError) {
-            console.error(lookupError);
+    return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
+        if (promotionValidationError) {
+            console.error(promotionValidationError);
             return renderBookingPage(req, res, merchant, {
                 status: 500,
-                errors: ['Booking availability could not be checked. Please try again.'],
+                errors: ['Promotion eligibility could not be checked. Please try again.'],
                 form: req.body
             });
         }
 
-        if (exists) {
+        if (promotionRecord?.error) {
             return renderBookingPage(req, res, merchant, {
                 status: 400,
-                errors: ['This slot is already booked. Please choose another time.'],
+                errors: [promotionRecord.error],
                 form: req.body
             });
         }
 
-        return Booking.createInDatabase(bookingData, (error, result) => {
-            if (error) {
-                console.error(error);
+        const bookingData = {
+            userId: req.session.user.id,
+            merchantId: merchant.id,
+            merchantName: merchant.name,
+            serviceId: validation.service.id,
+            serviceName: validation.serviceName,
+            customerName: validation.customerName,
+            email: validation.email,
+            phone: validation.phone,
+            bookingDate: req.body.bookingDate,
+            bookingTime: req.body.bookingTime,
+            qrCodeToken: req.params.qrToken
+        };
+
+        return Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (lookupError, exists) => {
+            if (lookupError) {
+                console.error(lookupError);
                 return renderBookingPage(req, res, merchant, {
                     status: 500,
-                    errors: ['Booking could not be saved. Please try again.'],
+                    errors: ['Booking availability could not be checked. Please try again.'],
                     form: req.body
                 });
             }
 
-            req.session.lastBookingId = result.insertId;
+            if (exists) {
+                return renderBookingPage(req, res, merchant, {
+                    status: 400,
+                    errors: ['This slot is already booked. Please choose another time.'],
+                    form: req.body
+                });
+            }
 
-            return res.render('booking-success', {
-                title: 'Booking Confirmed',
-                merchant,
-                service: {
-                    ...validation.service,
-                    name: validation.serviceName,
-                    duration: validation.bookableItem.duration,
-                    price: validation.bookableItem.price
-                },
-                bookingId: result.insertId,
-                bookingDate: req.body.bookingDate,
-                bookingTime: req.body.bookingTime
+            return Booking.createInDatabase(bookingData, (error, result) => {
+                if (error) {
+                    console.error(error);
+                    return renderBookingPage(req, res, merchant, {
+                        status: 500,
+                        errors: ['Booking could not be saved. Please try again.'],
+                        form: req.body
+                    });
+                }
+
+                const finishSuccess = () => res.render('booking-success', {
+                    title: 'Booking Confirmed',
+                    merchant,
+                    service: {
+                        ...validation.service,
+                        name: validation.serviceName,
+                        duration: validation.bookableItem.duration,
+                        price: validation.bookableItem.price
+                    },
+                    bookingDate: req.body.bookingDate,
+                    bookingTime: req.body.bookingTime
+                });
+
+                if (promotionRecord?.id) {
+                    return Promotion.createRedemption({
+                        promotionId: promotionRecord.id,
+                        userId: req.session.user.id,
+                        bookingId: result?.insertId || null,
+                        status: 'used'
+                    }, (redemptionError) => {
+                        if (redemptionError) {
+                            console.error(redemptionError);
+                        }
+
+                        return finishSuccess();
+                    });
+                }
+
+                return finishSuccess();
             });
         });
     });
@@ -1101,66 +1327,101 @@ function saveSecureScanBooking(req, res) {
             });
         }
 
-        const bookingData = {
-            userId: req.session.user.id,
-            merchantId: merchant.id,
-            merchantName: merchant.name,
-            serviceId: validation.service.id,
-            serviceName: validation.serviceName,
-            customerName: validation.customerName,
-            email: validation.email,
-            phone: validation.phone,
-            bookingDate: req.body.bookingDate,
-            bookingTime: req.body.bookingTime,
-            qrCodeToken: req.query.token
-        };
-
-        return Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (bookingError, exists) => {
-            if (bookingError) {
-                console.error(bookingError);
+        return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
+            if (promotionValidationError) {
+                console.error(promotionValidationError);
                 return renderBookingPage(req, res, merchant, {
                     status: 500,
-                    errors: ['Booking availability could not be checked. Please try again.'],
+                    errors: ['Promotion eligibility could not be checked. Please try again.'],
                     form: req.body,
                     secureQr: true
                 });
             }
 
-            if (exists) {
+            if (promotionRecord?.error) {
                 return renderBookingPage(req, res, merchant, {
                     status: 400,
-                    errors: ['This slot is already booked. Please choose another time.'],
+                    errors: [promotionRecord.error],
                     form: req.body,
                     secureQr: true
                 });
             }
 
-            return Booking.createInDatabase(bookingData, (error, result) => {
-                if (error) {
-                    console.error(error);
+            const bookingData = {
+                userId: req.session.user.id,
+                merchantId: merchant.id,
+                merchantName: merchant.name,
+                serviceId: validation.service.id,
+                serviceName: validation.serviceName,
+                customerName: validation.customerName,
+                email: validation.email,
+                phone: validation.phone,
+                bookingDate: req.body.bookingDate,
+                bookingTime: req.body.bookingTime,
+                qrCodeToken: req.query.token
+            };
+
+            return Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (bookingError, exists) => {
+                if (bookingError) {
+                    console.error(bookingError);
                     return renderBookingPage(req, res, merchant, {
                         status: 500,
-                        errors: ['Booking could not be saved. Please try again.'],
+                        errors: ['Booking availability could not be checked. Please try again.'],
                         form: req.body,
                         secureQr: true
                     });
                 }
 
-                req.session.lastBookingId = result.insertId;
+                if (exists) {
+                    return renderBookingPage(req, res, merchant, {
+                        status: 400,
+                        errors: ['This slot is already booked. Please choose another time.'],
+                        form: req.body,
+                        secureQr: true
+                    });
+                }
 
-                return res.render('booking-success', {
-                    title: 'Booking Confirmed',
-                    merchant,
-                    service: {
-                        ...validation.service,
-                        name: validation.serviceName,
-                        duration: validation.bookableItem.duration,
-                        price: validation.bookableItem.price
-                    },
-                    bookingId: result.insertId,
-                    bookingDate: req.body.bookingDate,
-                    bookingTime: req.body.bookingTime,
-                    anotherBookingPath: getSecureBookingPath(merchant)
+                return Booking.createInDatabase(bookingData, (error, result) => {
+                    if (error) {
+                        console.error(error);
+                        return renderBookingPage(req, res, merchant, {
+                            status: 500,
+                            errors: ['Booking could not be saved. Please try again.'],
+                            form: req.body,
+                            secureQr: true
+                        });
+                    }
+
+                    const finishSuccess = () => res.render('booking-success', {
+                        title: 'Booking Confirmed',
+                        merchant,
+                        service: {
+                            ...validation.service,
+                            name: validation.serviceName,
+                            duration: validation.bookableItem.duration,
+                            price: validation.bookableItem.price
+                        },
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: req.body.bookingTime,
+                        anotherBookingPath: getSecureBookingPath(merchant)
+                    });
+
+                    if (promotionRecord?.id) {
+                        return Promotion.createRedemption({
+                            promotionId: promotionRecord.id,
+                            userId: req.session.user.id,
+                            bookingId: result?.insertId || null,
+                            status: 'used'
+                        }, (redemptionError) => {
+                            if (redemptionError) {
+                                console.error(redemptionError);
+                            }
+
+                            return finishSuccess();
+                        });
+                    }
+
+                    return finishSuccess();
                 });
             });
         });

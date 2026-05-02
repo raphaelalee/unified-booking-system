@@ -87,6 +87,12 @@
                                     &middot; <%= promotion.discountValue %>
                                 <% } %>
                             </p>
+                            <p class="muted">
+                                Redeemed <%= promotion.redemptionCount %> time<%= promotion.redemptionCount === 1 ? '' : 's' %>
+                                <% if (promotion.totalRedemptions !== promotion.redemptionCount) { %>
+                                    &middot; <%= promotion.totalRedemptions %> total record<%= promotion.totalRedemptions === 1 ? '' : 's' %>
+                                <% } %>
+                            </p>
                             <% if (promotion.description) { %>
                                 <p class="muted"><%= promotion.description %></p>
                             <% } %>

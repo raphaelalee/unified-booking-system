@@ -1,0 +1,111 @@
+<%- include('partials/header', { title }) %>
+
+<section class="section compact reward-shop-page">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <section class="reward-shop-daily-card">
+        <p class="reward-shop-kicker reward-shop-kicker-light">VaniGlints Rewards Page</p>
+
+        <div class="reward-shop-daily-balance">
+            <span class="reward-shop-coin" aria-hidden="true">V</span>
+            <strong><%= glintsBalance %></strong>
+            <span class="reward-shop-daily-arrow" aria-hidden="true">&#8250;</span>
+        </div>
+
+        <div class="reward-shop-daily-panel">
+            <div class="reward-shop-streak-grid">
+                <% dailyRewards.forEach((reward, index) => { %>
+                    <article class="reward-shop-streak-day <%= reward.isCurrent ? 'is-today' : '' %> <%= reward.isClaimed ? 'is-claimed' : '' %> <%= index === 6 ? 'is-highlight' : '' %>">
+                        <span class="reward-shop-streak-points">+<%= reward.points %></span>
+                        <span class="reward-shop-coin reward-shop-coin-small" aria-hidden="true">V</span>
+                        <strong><%= reward.label %></strong>
+                    </article>
+                <% }) %>
+            </div>
+
+            <div class="reward-shop-daily-cta-wrap">
+                <% if (rewardWallet && rewardWallet.hasClaimedToday) { %>
+                    <button class="reward-shop-daily-cta is-claimed" type="button" disabled>Next claim is tomorrow</button>
+                <% } else { %>
+                    <form action="/reward-shop/claim" method="POST">
+                        <button class="reward-shop-daily-cta" type="submit">
+                            Claim now (+<%= rewardWallet ? rewardWallet.nextRewardValue : 10 %>)
+                        </button>
+                    </form>
+                <% } %>
+            </div>
+        </div>
+    </section>
+
+    <div class="reward-shop-shell">
+        <section class="reward-shop-hero">
+            <p class="reward-shop-kicker">Reward Shop</p>
+            <h1>Turn VaniGlints into booking vouchers.</h1>
+            <p class="reward-shop-copy">
+                Redeem your saved points for cash-offset vouchers. The higher your balance, the more value you can unlock for your next booking.
+            </p>
+
+            <div class="reward-shop-balance">
+                <span class="reward-shop-balance-icon" aria-hidden="true">V</span>
+                <div>
+                    <strong><%= glintsBalance %></strong>
+                    <span>Available VaniGlints</span>
+                </div>
+            </div>
+
+            <div class="reward-shop-rate">
+                <span>Conversion rate</span>
+                <strong>1,000 Glints = $1 SGD</strong>
+            </div>
+        </section>
+
+        <section class="reward-shop-panel">
+            <div class="reward-shop-panel-header">
+                <div>
+                    <p class="eyebrow">Redeemable tiers</p>
+                    <h2>Choose your voucher value</h2>
+                </div>
+                <a class="button secondary" href="/services">Book services</a>
+            </div>
+
+            <div class="reward-shop-grid">
+                <% offers.forEach((offer) => { %>
+                    <article class="reward-voucher-card <%= offer.canRedeem ? 'is-available' : 'is-locked' %>">
+                        <div class="reward-voucher-topline">
+                            <span class="reward-voucher-cost"><%= offer.glintsCost.toLocaleString('en-SG') %> Glints</span>
+                            <span class="reward-voucher-value">$<%= offer.voucherValue %></span>
+                        </div>
+
+                        <h3><%= offer.title %></h3>
+                        <p><%= offer.detail %></p>
+
+                        <div class="reward-voucher-meta">
+                            <% if (offer.canRedeem) { %>
+                                <span class="reward-status reward-status-ready">Ready to redeem</span>
+                                <button class="button primary full" type="button" disabled>Redeem next</button>
+                            <% } else { %>
+                                <span class="reward-status reward-status-locked">
+                                    Need <%= offer.remaining.toLocaleString('en-SG') %> more Glints
+                                </span>
+                                <button class="button secondary full" type="button" disabled>Locked</button>
+                            <% } %>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+
+            <div class="reward-shop-note">
+                <p>
+                    Reward vouchers are shown here first. The actual voucher redemption and checkout apply flow can be connected next.
+                </p>
+            </div>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>
