@@ -31,6 +31,9 @@
                 Open this merchant's booking page to view only its services and available slots.
             </p>
             <a class="button secondary full" href="<%= bookingUrl %>">Open booking page</a>
+            <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
+                <a class="button whatsapp-button full" href="<%= whatsappEnquiryUrl %>" target="_blank" rel="noopener">Ask on WhatsApp</a>
+            <% } %>
             <% if (typeof canGenerateQr !== 'undefined' && canGenerateQr) { %>
                 <a class="button primary full" href="/merchants/<%= merchant.id %>/qr">Open QR code</a>
             <% } %>

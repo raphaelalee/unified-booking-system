@@ -2,6 +2,50 @@ const db = require('../db');
 
 const bookings = [];
 
+function normalizeTimeForDatabase(value) {
+    if (!value) {
+        return value;
+    }
+
+    const rawValue = String(value).trim().toUpperCase();
+    const match = rawValue.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/);
+
+    if (!match) {
+        return value;
+    }
+
+    let hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const seconds = Number(match[3] || 0);
+    const meridiem = match[4];
+
+    if (
+        !Number.isInteger(hours)
+        || !Number.isInteger(minutes)
+        || !Number.isInteger(seconds)
+        || hours < 0
+        || hours > 23
+        || minutes < 0
+        || minutes > 59
+        || seconds < 0
+        || seconds > 59
+    ) {
+        return value;
+    }
+
+    if (meridiem === 'PM' && hours < 12) {
+        hours += 12;
+    } else if (meridiem === 'AM' && hours === 12) {
+        hours = 0;
+    }
+
+    return [
+        String(hours).padStart(2, '0'),
+        String(minutes).padStart(2, '0'),
+        String(seconds).padStart(2, '0')
+    ].join(':');
+}
+
 function create(bookingData) {
     const booking = {
         id: bookings.length + 1,
@@ -87,7 +131,7 @@ function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookin
         LIMIT 1
     `;
 
-    db.query(sql, [serviceId, merchantId, bookingDate, bookingTime], (error, results) => {
+    db.query(sql, [serviceId, merchantId, bookingDate, normalizeTimeForDatabase(bookingTime)], (error, results) => {
         if (error) {
             callback(error);
             return;
@@ -114,7 +158,7 @@ function createInDatabase(bookingData, callback) {
         bookingData.merchantId,
         bookingData.serviceId,
         bookingData.bookingDate,
-        bookingData.bookingTime,
+        normalizeTimeForDatabase(bookingData.bookingTime),
         bookingData.status || 'pending',
         bookingData.qrCodeToken || null
     ];

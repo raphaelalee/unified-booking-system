@@ -205,6 +205,15 @@
 
             <button class="button primary full" type="submit">Confirm booking</button>
         </form>
+
+        <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
+            <div class="whatsapp-booking-panel">
+                <p class="eyebrow">WhatsApp booking</p>
+                <h3>Need help choosing a slot?</h3>
+                <p class="muted">Start a guided WhatsApp enquiry with the selected merchant.</p>
+                <a class="button whatsapp-button full" href="<%= whatsappEnquiryUrl %>" target="_blank" rel="noopener">Continue on WhatsApp</a>
+            </div>
+        <% } %>
     </aside>
 </section>
 
