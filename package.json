@@ -11,6 +11,8 @@
     "express-session": "^1.19.0",
     "mysql2": "^3.22.3",
     "openai": "^6.35.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "qrcode": "^1.5.4",
     "stripe": "^22.1.0"
   }

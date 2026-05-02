@@ -1214,6 +1214,49 @@ h3 {
     margin-top: 10px;
 }
 
+.auth-divider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    height: 1px;
+    background: var(--line);
+}
+
+.google-login-button {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    box-shadow: none;
+}
+
+.google-login-button:hover {
+    background: #f8fafc;
+    color: var(--ink);
+}
+
+.google-mark {
+    display: inline-grid;
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: #4285f4;
+    background: #fff;
+    font-weight: 900;
+}
+
 .reward-panel {
     padding: 26px;
     display: grid;
@@ -8009,6 +8052,72 @@ textarea {
     .games-hero-scene {
         min-height: 300px;
     }
+}
+
+.login-form .auth-divider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.login-form .auth-divider::before,
+.login-form .auth-divider::after {
+    content: "";
+    height: 1px;
+    background: var(--line);
+}
+
+.login-form .google-login-button {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    box-shadow: none;
+}
+
+.login-form .google-login-button:hover,
+.login-form .google-login-button:focus-visible {
+    background: #f8fafc;
+    color: var(--ink);
+}
+
+.login-form .google-mark {
+    display: inline-grid;
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: #4285f4;
+    background: #fff;
+    font-weight: 900;
+}
+
+.whatsapp-button {
+    background: #128c7e;
+    color: #fff;
+    border-color: #128c7e;
+}
+
+.whatsapp-button:hover,
+.whatsapp-button:focus-visible {
+    background: #075e54;
+    color: #fff;
+    border-color: #075e54;
+}
+
+.whatsapp-booking-panel {
+    display: grid;
+    gap: 10px;
+    padding: 18px;
+    border: 1px solid rgba(18, 140, 126, 0.24);
+    border-radius: 8px;
+    background: rgba(18, 140, 126, 0.08);
 }
 
 /* Sandy editorial visual system. Keep this as the final presentation layer. */

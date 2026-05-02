@@ -34,6 +34,40 @@ function appendQueryParams(path, params = {}) {
     return `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
 }
 
+function getWhatsAppNumber() {
+    return String(process.env.WHATSAPP_BOOKING_PHONE || '').replace(/[^\d]/g, '');
+}
+
+function getWhatsAppUrl(message) {
+    const text = encodeURIComponent(message);
+    const phone = getWhatsAppNumber();
+
+    if (phone) {
+        return `https://wa.me/${phone}?text=${text}`;
+    }
+
+    return `https://wa.me/?text=${text}`;
+}
+
+function buildWhatsAppBookingMessage({ merchant, service = null, bookingDate = '', bookingTime = '', customerName = '', phone = '', bookingUrl = '' }) {
+    const lines = [
+        `Hi ${merchant.name}, I would like to make a booking enquiry through Vaniday.`,
+        service ? `Service: ${service.name || service.service_name}` : 'Service: Please advise available services',
+        bookingDate ? `Date: ${bookingDate}` : 'Date: Please advise availability',
+        bookingTime ? `Time: ${bookingTime}` : 'Time: Please advise availability',
+        customerName ? `Name: ${customerName}` : '',
+        phone ? `Phone: ${phone}` : '',
+        bookingUrl ? `Booking page: ${bookingUrl}` : '',
+        'Please confirm if this slot is available. Thank you.'
+    ];
+
+    return lines.filter(Boolean).join('\n');
+}
+
+function getWhatsAppEnquiryUrl(merchant, service = null, bookingUrl = '') {
+    return getWhatsAppUrl(buildWhatsAppBookingMessage({ merchant, service, bookingUrl }));
+}
+
 function getBookingPath(merchant, service = null) {
     const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
     return `/booking/${merchant.id}/${merchant.qrToken}${serviceQuery}`;
@@ -215,22 +249,19 @@ function renderBookingPage(req, res, merchant, options = {}) {
         ? getSelectedServiceOption(selectedService, requestedServiceOptionId)
         : null;
 
+    const form = getPrefilledBookingForm(req, options.form || {});
+
     if (requestedServiceId && !selectedService) {
-        return res.status(404).render('error', {
-            title: 'Service Not Found',
-            message: 'This service does not belong to the selected merchant.'
-        });
+        delete form.serviceId;
+        delete form.serviceOptionId;
     }
 
     if (requestedServiceOptionId && selectedService && !selectedServiceOption) {
-        return res.status(404).render('error', {
-            title: 'Service Option Not Found',
-            message: 'This service option does not belong to the selected service.'
-        });
+        delete form.serviceOptionId;
     }
 
-    const form = {
-        ...getPrefilledBookingForm(req, options.form || {}),
+    const sanitizedForm = {
+        ...form,
         ...(selectedService ? { serviceId: selectedService.id } : {}),
         ...(selectedServiceOption ? { serviceOptionId: selectedServiceOption.id } : {})
     };
@@ -254,12 +285,13 @@ function renderBookingPage(req, res, merchant, options = {}) {
         merchant: bookingMerchant,
         scopedServices,
         errors: options.errors || [],
-        form,
+        form: sanitizedForm,
         selectedPromotion,
         selectedServiceId: selectedService ? selectedService.id : null,
         bookingPath,
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
+        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, selectedService, bookingUrl),
         todayDate: getTodayInputValue()
     });
 }
@@ -290,7 +322,8 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
         form: getPrefilledBookingForm(req, options.form || {}),
         todayDate: getTodayInputValue(),
         bookingUrl,
-        encodedBookingUrl: encodeURIComponent(bookingUrl)
+        encodedBookingUrl: encodeURIComponent(bookingUrl),
+        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl)
     });
 }
 
@@ -1062,24 +1095,35 @@ function showMerchantQr(req, res) {
 }
 
 function showBookingPage(req, res) {
-    const merchant = Merchant.findById(req.params.merchantId);
+    const tokenMerchant = Merchant.findById(req.params.merchantId);
 
-    if (!merchant) {
+    if (!tokenMerchant) {
         return res.status(404).render('error', {
             title: 'Merchant Not Found',
             message: 'The merchant booking page could not be found.'
         });
     }
 
-    if (rejectInvalidQrToken(req, res, merchant)) {
+    if (rejectInvalidQrToken(req, res, tokenMerchant)) {
         return null;
     }
 
     if (!req.params.qrToken) {
-        return res.redirect(getBookingPath(merchant, getSelectedService(merchant, req.query.serviceId)));
+        return res.redirect(getBookingPath(tokenMerchant, getSelectedService(tokenMerchant, req.query.serviceId)));
     }
 
-    return renderBookingPage(req, res, merchant);
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, databaseMerchant) => {
+        if (error) {
+            console.error(error);
+            return renderBookingPage(req, res, tokenMerchant);
+        }
+
+        const merchant = databaseMerchant
+            ? { ...tokenMerchant, ...databaseMerchant, qrToken: tokenMerchant.qrToken }
+            : tokenMerchant;
+
+        return renderBookingPage(req, res, merchant);
+    });
 }
 
 function showPublicMerchantBooking(req, res) {
@@ -1134,16 +1178,16 @@ function showSecureScanBooking(req, res) {
 }
 
 function saveQrBooking(req, res) {
-    const merchant = Merchant.findById(req.params.merchantId);
+    const tokenMerchant = Merchant.findById(req.params.merchantId);
 
-    if (!merchant) {
+    if (!tokenMerchant) {
         return res.status(404).render('error', {
             title: 'Merchant Not Found',
             message: 'The merchant booking page could not be found.'
         });
     }
 
-    if (rejectInvalidQrToken(req, res, merchant)) {
+    if (rejectInvalidQrToken(req, res, tokenMerchant)) {
         return null;
     }
 
@@ -1154,25 +1198,33 @@ function saveQrBooking(req, res) {
         });
     }
 
-    const validation = validateBooking(merchant, req.body);
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (merchantLookupError, databaseMerchant) => {
+        if (merchantLookupError) {
+            console.error(merchantLookupError);
+        }
 
-    if (validation.errors.length > 0) {
-        return renderBookingPage(req, res, merchant, {
-            status: 400,
-            errors: validation.errors,
-            form: req.body
-        });
-    }
+        const merchant = databaseMerchant
+            ? { ...tokenMerchant, ...databaseMerchant, qrToken: tokenMerchant.qrToken }
+            : tokenMerchant;
+        const validation = validateBooking(merchant, req.body);
 
-    if (!req.session.user) {
-        return renderBookingPage(req, res, merchant, {
-            status: 401,
-            errors: ['Please log in before confirming a booking.'],
-            form: req.body
-        });
-    }
+        if (validation.errors.length > 0) {
+            return renderBookingPage(req, res, merchant, {
+                status: 400,
+                errors: validation.errors,
+                form: req.body
+            });
+        }
 
-    return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
+        if (!req.session.user) {
+            return renderBookingPage(req, res, merchant, {
+                status: 401,
+                errors: ['Please log in before confirming a booking.'],
+                form: req.body
+            });
+        }
+
+        return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
         if (promotionValidationError) {
             console.error(promotionValidationError);
             return renderBookingPage(req, res, merchant, {
@@ -1242,7 +1294,16 @@ function saveQrBooking(req, res) {
                         price: validation.bookableItem.price
                     },
                     bookingDate: req.body.bookingDate,
-                    bookingTime: req.body.bookingTime
+                    bookingTime: req.body.bookingTime,
+                    whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
+                        merchant,
+                        service: { name: validation.serviceName },
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: req.body.bookingTime,
+                        customerName: validation.customerName,
+                        phone: validation.phone,
+                        bookingUrl: getBookingUrl(req, merchant, validation.service)
+                    }))
                 });
 
                 if (promotionRecord?.id) {
@@ -1263,6 +1324,7 @@ function saveQrBooking(req, res) {
                 return finishSuccess();
             });
         });
+    });
     });
 }
 
@@ -1388,7 +1450,16 @@ function saveSecureScanBooking(req, res) {
                         },
                         bookingDate: req.body.bookingDate,
                         bookingTime: req.body.bookingTime,
-                        anotherBookingPath: getSecureBookingPath(merchant)
+                        anotherBookingPath: getSecureBookingPath(merchant),
+                        whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
+                            merchant,
+                            service: { name: validation.serviceName },
+                            bookingDate: req.body.bookingDate,
+                            bookingTime: req.body.bookingTime,
+                            customerName: validation.customerName,
+                            phone: validation.phone,
+                            bookingUrl: getSecureBookingUrl(req, merchant, validation.service)
+                        }))
                     });
 
                     if (promotionRecord?.id) {

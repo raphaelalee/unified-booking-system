@@ -9,6 +9,9 @@
     </p>
     <div class="hero-actions">
         <a class="button primary" href="/payment?amount=<%= service.price %>&service=<%= encodeURIComponent(service.name) %>&merchant=<%= encodeURIComponent(merchant.name) %>">Proceed to payment</a>
+        <% if (typeof whatsappConfirmationUrl !== 'undefined' && whatsappConfirmationUrl) { %>
+            <a class="button whatsapp-button" href="<%= whatsappConfirmationUrl %>" target="_blank" rel="noopener">Send WhatsApp confirmation</a>
+        <% } %>
         <a class="button secondary" href="<%= typeof anotherBookingPath !== 'undefined' ? anotherBookingPath : '/merchant/' + merchant.id %>">Create another booking</a>
     </div>
 </section>

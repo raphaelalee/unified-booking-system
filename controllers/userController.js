@@ -1,4 +1,7 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const Merchant = require('../models/Merchant');
 const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
@@ -126,6 +129,103 @@ function getRoleLabel(role) {
     return 'Customer';
 }
 
+function completeLogin(req, res, user, message = 'You are logged in.') {
+    req.session.user = buildSessionUser(user);
+    req.session.profile = {
+        name: user.name,
+        email: user.email,
+        phone: user.phone || ''
+    };
+    req.session.profileSuccess = message;
+
+    return res.redirect(getDashboardPath(req.session.user.role));
+}
+
+let googleAuthConfigured = false;
+
+function hasGoogleAuthConfig() {
+    return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
+function createGoogleCustomer(profile, callback) {
+    const email = String(profile.emails?.[0]?.value || '').trim().toLowerCase();
+    const name = profile.displayName || email.split('@')[0] || 'Vaniday Customer';
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+
+    return bcrypt.hash(randomPassword, 12, (hashError, passwordHash) => {
+        if (hashError) {
+            callback(hashError);
+            return;
+        }
+
+        return User.create({ name, email, phone: null, password: passwordHash, role: 'customer' }, (createError, result) => {
+            if (createError) {
+                if (createError.code === 'ER_DUP_ENTRY') {
+                    return User.findByEmail(email, callback);
+                }
+
+                callback(createError);
+                return;
+            }
+
+            const referralCode = generateReferralCode(result.insertId);
+            return User.updateReferralCode(result.insertId, referralCode, (referralError) => {
+                if (referralError) {
+                    callback(referralError);
+                    return;
+                }
+
+                return RewardShop.initializeForUser(result.insertId, (rewardError) => {
+                    if (rewardError) {
+                        callback(rewardError);
+                        return;
+                    }
+
+                    return User.findById(result.insertId, callback);
+                });
+            });
+        });
+    });
+}
+
+function configureGoogleAuth() {
+    if (googleAuthConfigured || !hasGoogleAuthConfig()) {
+        return;
+    }
+
+    passport.use(new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
+        state: true
+    }, (accessToken, refreshToken, profile, done) => {
+        const email = String(profile.emails?.[0]?.value || '').trim().toLowerCase();
+        const isVerified = profile.emails?.[0]?.verified !== false
+            && profile._json?.email_verified !== false;
+
+        if (!email || !isVerified) {
+            done(null, false, { message: 'Google did not return a verified email address.' });
+            return;
+        }
+
+        return User.findByEmail(email, (lookupError, user) => {
+            if (lookupError) {
+                done(lookupError);
+                return;
+            }
+
+            if (user) {
+                done(null, user);
+                return;
+            }
+
+            return createGoogleCustomer(profile, done);
+        });
+    }));
+
+    googleAuthConfigured = true;
+}
+
 function getRewardShopOffers() {
     return [
         {
@@ -240,25 +340,48 @@ function loginUser(req, res) {
                 return res.redirect('/login');
             }
 
-            req.session.user = buildSessionUser(user);
-            req.session.profile = {
-                name: user.name,
-                email: user.email,
-                phone: user.phone || ''
-            };
-            req.session.profileSuccess = 'You are logged in.';
-
-            if (req.session.user.role === 'admin') {
-                return res.redirect('/admin');
-            }
-
-            if (req.session.user.role === 'merchant') {
-                return res.redirect('/merchant');
-            }
-
-            return res.redirect('/profile');
+            return completeLogin(req, res, user);
         });
     });
+}
+
+function startGoogleLogin(req, res, next) {
+    configureGoogleAuth();
+
+    if (!hasGoogleAuthConfig()) {
+        req.session.loginError = 'Google login is not configured yet.';
+        return res.redirect('/login');
+    }
+
+    return passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        prompt: 'select_account',
+        session: false
+    })(req, res, next);
+}
+
+function handleGoogleCallback(req, res, next) {
+    configureGoogleAuth();
+
+    if (!hasGoogleAuthConfig()) {
+        req.session.loginError = 'Google login is not configured yet.';
+        return res.redirect('/login');
+    }
+
+    return passport.authenticate('google', { session: false }, (error, user, info) => {
+        if (error) {
+            console.error(error);
+            req.session.loginError = 'Google login failed. Please try again.';
+            return res.redirect('/login');
+        }
+
+        if (!user) {
+            req.session.loginError = info?.message || 'Google login failed. Please try again.';
+            return res.redirect('/login');
+        }
+
+        return completeLogin(req, res, user, 'You are logged in with Google.');
+    })(req, res, next);
 }
 
 function showSignup(req, res) {
@@ -625,6 +748,8 @@ function logoutUser(req, res) {
 module.exports = {
     showLogin,
     loginUser,
+    startGoogleLogin,
+    handleGoogleCallback,
     showSignup,
     signupUser,
     showProfile,

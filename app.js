@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const path = require('path');
+const passport = require('passport');
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
@@ -28,6 +29,7 @@ app.use(session({
     resave: false,
     saveUninitialized: true
 }));
+app.use(passport.initialize());
 
 app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);
@@ -64,6 +66,8 @@ app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);
 app.post('/rewards-game/flappy/finish', requireCustomer, gameController.finishFlappyGame);
 app.get('/login', userController.showLogin);
 app.post('/login', userController.loginUser);
+app.get('/auth/google', userController.startGoogleLogin);
+app.get('/auth/google/callback', userController.handleGoogleCallback);
 app.get('/signup', userController.showSignup);
 app.post('/signup', userController.signupUser);
 app.post('/logout', userController.logoutUser);
