@@ -761,13 +761,15 @@ function getPromotionServiceForSalon(promotion, servicesBySalon) {
 function loadPublicPromotionOffers(callback) {
     return Promotion.getActivePublic((promotionError, promotions) => {
         if (promotionError) {
-            callback(promotionError);
+            console.error(promotionError);
+            callback(null, buildPromotionOffers());
             return;
         }
 
         return MerchantService.getAllServices((serviceError, services) => {
             if (serviceError) {
-                callback(serviceError);
+                console.error(serviceError);
+                callback(null, buildPromotionOffers());
                 return;
             }
 
@@ -794,7 +796,7 @@ function loadPublicPromotionOffers(callback) {
                 .filter(Boolean)
                 .sort((left, right) => right.discountPercent - left.discountPercent);
 
-            callback(null, offers);
+            callback(null, offers.length > 0 ? offers : buildPromotionOffers());
         });
     });
 }

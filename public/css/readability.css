@@ -1,0 +1,160 @@
+/* Final contrast fixes. Loaded last so older page-specific white text cannot win. */
+:root {
+    --readable-ink: #263b2b;
+    --readable-text: #425846;
+    --readable-muted: #5c705f;
+    --readable-panel: #fbfdf9;
+    --readable-soft: #e5eddf;
+}
+
+body:not(.flappy-page) {
+    color: var(--readable-text) !important;
+}
+
+.page-title,
+.page-title:not(.games-hero):not(.services-shop-hero),
+.hero,
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero,
+.services-shop-hero,
+.games-hero {
+    background:
+        radial-gradient(circle at 82% 24%, rgba(136, 158, 122, 0.24), transparent 25%),
+        linear-gradient(120deg, #fbfdf9 0%, #edf4e9 54%, #dde8d7 100%) !important;
+    color: var(--readable-ink) !important;
+    text-shadow: none !important;
+}
+
+.page-title *,
+.hero *,
+.booking-hero *,
+.portal-hero *,
+.membership-hero *,
+.reward-shop-hero *,
+.about-hero *,
+.services-shop-hero *,
+.games-hero * {
+    text-shadow: none !important;
+}
+
+.page-title .eyebrow,
+.page-title h1,
+.page-title p,
+.hero .eyebrow,
+.hero h1,
+.hero p,
+.hero .hero-text,
+.booking-hero .eyebrow,
+.booking-hero h1,
+.booking-hero p,
+.portal-hero .eyebrow,
+.portal-hero h1,
+.portal-hero p,
+.membership-hero .eyebrow,
+.membership-hero h1,
+.membership-hero p,
+.reward-shop-hero .eyebrow,
+.reward-shop-hero h1,
+.reward-shop-hero p,
+.about-hero .eyebrow,
+.about-hero h1,
+.about-hero p,
+.services-shop-hero .eyebrow,
+.services-shop-hero h1,
+.services-shop-hero p,
+.games-hero .eyebrow,
+.games-hero h1,
+.games-hero p {
+    color: var(--readable-ink) !important;
+}
+
+.page-title p,
+.hero p,
+.booking-hero p,
+.portal-hero p,
+.membership-hero p,
+.reward-shop-hero p,
+.about-hero p,
+.services-shop-hero p,
+.games-hero p,
+.muted {
+    color: var(--readable-muted) !important;
+}
+
+.nav {
+    position: relative;
+    z-index: 1000;
+}
+
+.nav-dropdown {
+    position: relative !important;
+    z-index: 1001 !important;
+}
+
+.nav-dropdown-trigger {
+    color: var(--readable-ink) !important;
+    text-decoration: none !important;
+}
+
+.nav-dropdown-menu {
+    z-index: 2000 !important;
+    min-width: 300px !important;
+    padding: 8px !important;
+    border: 1px solid rgba(38, 59, 43, 0.2) !important;
+    background: var(--readable-panel) !important;
+    box-shadow: 0 22px 50px rgba(38, 59, 43, 0.2) !important;
+}
+
+.nav-dropdown-menu a {
+    display: flex !important;
+    min-height: 46px !important;
+    align-items: center !important;
+    padding: 12px 16px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    color: var(--readable-ink) !important;
+    font-weight: 800 !important;
+    text-decoration: none !important;
+}
+
+.nav-dropdown-menu a:hover,
+.nav-dropdown-menu a:focus-visible {
+    background: var(--readable-soft) !important;
+    color: var(--readable-ink) !important;
+    outline: none !important;
+}
+
+.giftcard-preview,
+.giftcard-preview h2,
+.giftcard-preview p,
+.giftcard-preview span {
+    color: var(--readable-ink) !important;
+}
+
+.giftcard-preview {
+    border: 1px solid rgba(38, 59, 43, 0.16) !important;
+    background:
+        radial-gradient(circle at 76% 20%, rgba(139, 161, 130, 0.24), transparent 28%),
+        linear-gradient(135deg, #f9fbf7, #e4ecdf) !important;
+}
+
+.giftcard-options article,
+.giftcard-feature-card,
+.filter-card,
+.promotion-offer-card,
+.promotions-results-count {
+    color: var(--readable-text) !important;
+}
+
+.giftcard-options h2,
+.giftcard-feature-card h2,
+.filter-card h2,
+.filter-card h3,
+.promotion-offer-card h2,
+.promotion-offer-card h3 {
+    color: var(--readable-ink) !important;
+}

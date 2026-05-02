@@ -12,6 +12,8 @@
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.3",
     "openai": "^6.35.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "pdfkit": "^0.18.0",
     "puppeteer": "^24.42.0",
     "qrcode": "^1.5.4",
