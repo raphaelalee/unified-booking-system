@@ -1,0 +1,295 @@
+/* Final global green theme override. Loaded last on purpose. */
+:root {
+    --ink: #3f5140;
+    --text: #687b71;
+    --muted: #7f9188;
+    --cream: #f4f7f3;
+    --linen: #e6eee2;
+    --surface: #fbfdf9;
+    --clay: #40543f;
+    --clay-dark: #2f4330;
+    --sage: #8fa182;
+    --sage-soft: #e4eadf;
+    --teal: #40543f;
+    --line: rgba(64, 84, 63, 0.16);
+    --shadow: 0 22px 58px rgba(63, 81, 64, 0.12);
+    --sand-ink: var(--ink);
+    --sand-espresso: var(--clay-dark);
+    --sand-bark: var(--ink);
+    --sand-stone: var(--muted);
+    --sand-line: var(--line);
+    --sand-paper: var(--cream);
+    --sand-cream: var(--surface);
+    --sand-wash: var(--linen);
+    --sand-olive: var(--sage);
+    --sand-shadow: var(--shadow);
+}
+
+body:not(.flappy-page) {
+    color: var(--text) !important;
+    background:
+        radial-gradient(circle at 53% 42%, rgba(150, 171, 137, 0.24), transparent 28%),
+        linear-gradient(180deg, #f6f8f4 0%, #edf4eb 48%, #f8faf7 100%) !important;
+    background-attachment: fixed;
+}
+
+body:not(.flappy-page)::before,
+body:not(.flappy-page) main::before,
+body:not(.flappy-page) main::after,
+.hero::before,
+.hero::after,
+.page-title:not(.games-hero):not(.services-shop-hero)::before,
+.booking-hero::before,
+.portal-hero::before,
+.membership-hero::before,
+.reward-shop-hero::before,
+.about-hero::before {
+    display: none !important;
+}
+
+body:not(.flappy-page) main,
+.site-header,
+.site-footer {
+    width: 100% !important;
+    max-width: none !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+}
+
+body:not(.flappy-page) main {
+    margin-top: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.site-header {
+    margin-top: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(64, 84, 63, 0.14) !important;
+    background: rgba(246, 248, 244, 0.94) !important;
+    color: var(--ink) !important;
+    box-shadow: 0 10px 30px rgba(63, 81, 64, 0.08) !important;
+}
+
+.nav {
+    width: min(1200px, calc(100% - 44px));
+    margin: 0 auto;
+}
+
+.brand,
+.nav-links,
+.nav-action,
+.nav-tools,
+.text-button {
+    color: var(--ink) !important;
+}
+
+.brand-mark {
+    background: var(--ink) !important;
+    color: var(--surface) !important;
+}
+
+.nav-links a,
+.nav-support-links a,
+.nav-account-links a,
+.nav-dropdown-trigger,
+.signup-text-link,
+.profile-icon-link,
+.nav-role-pill {
+    border: 1px solid rgba(64, 84, 63, 0.18) !important;
+    border-radius: 999px !important;
+    background: rgba(228, 234, 223, 0.86) !important;
+    color: var(--ink) !important;
+    box-shadow: none !important;
+}
+
+.hero,
+.page-title:not(.games-hero):not(.services-shop-hero),
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero,
+.services-shop-hero,
+.games-hero {
+    width: 100% !important;
+    min-height: 360px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background:
+        radial-gradient(circle at 52% 100%, rgba(142, 165, 126, 0.26), transparent 26%),
+        linear-gradient(90deg, rgba(248, 251, 247, 0.97), rgba(222, 233, 216, 0.9)) !important;
+    color: var(--ink) !important;
+    box-shadow: none !important;
+}
+
+.page-title:not(.games-hero):not(.services-shop-hero),
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero {
+    padding: 76px max(28px, calc((100vw - 1120px) / 2)) 58px !important;
+    display: grid !important;
+    align-content: center !important;
+}
+
+.page-title .eyebrow,
+.page-title h1,
+.page-title p,
+.booking-hero .eyebrow,
+.booking-hero h1,
+.booking-hero p,
+.portal-hero .eyebrow,
+.portal-hero h1,
+.portal-hero p,
+.hero .eyebrow,
+.hero h1,
+.hero .hero-text {
+    color: var(--ink) !important;
+    text-shadow: none !important;
+}
+
+.page-title h1,
+.booking-hero h1,
+.portal-hero h1,
+.hero h1 {
+    max-width: 760px !important;
+    font-size: clamp(3rem, 5.8vw, 5.4rem) !important;
+    line-height: 0.95 !important;
+}
+
+.section,
+.section.compact,
+.services-shop-section,
+.games-page-section,
+.profile-page,
+.portal-page,
+.cart-page,
+.auth-shell,
+.payment-page,
+.receipt-section {
+    margin: 0 !important;
+    padding: 58px max(28px, calc((100vw - 1120px) / 2)) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+}
+
+.button.primary,
+.auth-form button,
+.portal-search button,
+.services-search button,
+.cart-checkout-button,
+.admin-action-button,
+.merchant-action-button,
+#payment-submit-button {
+    border-color: var(--clay-dark) !important;
+    background: var(--clay-dark) !important;
+    color: var(--surface) !important;
+}
+
+input,
+select,
+textarea,
+.search-bar,
+.portal-search,
+.services-search {
+    border-color: rgba(64, 84, 63, 0.2) !important;
+    background: rgba(251, 253, 249, 0.88) !important;
+    color: var(--ink) !important;
+    box-shadow: none !important;
+}
+
+.merchant-card,
+.merchant-row,
+.product-card,
+.service-catalog-card,
+.service-shop-card,
+.promotion-offer-card,
+.reward-voucher-card,
+.dashboard-report-card,
+.dashboard-mini-list,
+.account-panel,
+.booking-form-panel,
+.booking-services-panel,
+.portal-summary-panel,
+.portal-stat,
+.cashback-panel,
+.giftcard-feature-card,
+.membership-reward-card,
+.cart-card,
+.checkout-card,
+.profile-card,
+.profile-panel,
+.auth-card,
+.notice,
+.section-cta,
+.game-play-card,
+.game-rule-card,
+.game-result-card,
+.cart-line-item,
+.cart-control-bar,
+.cart-checkout-panel,
+.payment-form,
+.payment-summary-card,
+.receipt-card,
+.receipt-qr-panel,
+.empty-state,
+.login-form,
+.login-benefits {
+    border: 1px solid rgba(64, 84, 63, 0.16) !important;
+    border-radius: 8px !important;
+    background: rgba(251, 253, 249, 0.86) !important;
+    color: var(--text) !important;
+    box-shadow: 0 18px 48px rgba(63, 81, 64, 0.08) !important;
+}
+
+.portal-stat,
+.payment-method-card.is-selected,
+.fulfilment-choice.active {
+    background: rgba(224, 232, 219, 0.9) !important;
+}
+
+.tag,
+.promotion,
+.payment-fulfilment-pill,
+.cart-toolbar-counts span {
+    background: rgba(228, 234, 223, 0.94) !important;
+    color: var(--ink) !important;
+    border-color: rgba(64, 84, 63, 0.16) !important;
+}
+
+.muted,
+.payment-method-card small,
+.cart-cashback-card small,
+.payment-cashback-card small,
+.fulfilment-choice small {
+    color: var(--muted) !important;
+}
+
+.site-footer {
+    margin-bottom: 0 !important;
+    background: var(--clay-dark) !important;
+    color: rgba(251, 253, 249, 0.76) !important;
+}
+
+@media (max-width: 900px) {
+    .nav {
+        width: calc(100% - 24px);
+    }
+
+    .section,
+    .section.compact,
+    .cart-page,
+    .payment-page,
+    .receipt-section,
+    .page-title:not(.games-hero):not(.services-shop-hero),
+    .booking-hero,
+    .portal-hero {
+        padding-right: 22px !important;
+        padding-left: 22px !important;
+    }
+}

@@ -54,6 +54,7 @@ app.get('/promotions/one-for-one', allowGuestOrCustomer, (req, res) => {
 app.get('/promotions/featured-salons', allowGuestOrCustomer, merchantController.showFeaturedSalons);
 app.get('/merchants', allowGuestOrCustomer, merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
+app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
 app.post('/reward-shop/claim', requireCustomer, userController.claimRewardShopDaily);
 app.get('/membership', requireCustomer, (req, res) => {

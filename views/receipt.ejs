@@ -19,18 +19,18 @@
     <% } %>
 </section>
 
-<section class="section compact">
+<section class="section compact receipt-section">
     <div class="receipt-layout">
         <article class="receipt-card">
             <div class="receipt-meta-grid">
                 <p><span>User</span><strong><%= receipt.userName %></strong></p>
-                <p><span>ID</span><strong><%= receipt.displayId || receipt.id %></strong></p>
+                <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
                 <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
                 <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
             </div>
 
-            <div class="admin-table-wrap">
-                <table class="admin-table">
+            <div class="admin-table-wrap receipt-table-wrap">
+                <table class="admin-table receipt-table">
                     <thead>
                         <tr>
                             <th>Item / service</th>
@@ -75,7 +75,7 @@
             <p class="eyebrow">Check-in QR</p>
             <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="Check-in QR code for receipt <%= receipt.id %>">
             <p class="muted">Scan this QR code at the merchant counter to verify the signed check-in token.</p>
-            <p class="qr-link"><%= checkinUrl %></p>
+            <a class="qr-link" href="<%= checkinUrl %>"><%= checkinUrl %></a>
         </aside>
     </div>
 </section>

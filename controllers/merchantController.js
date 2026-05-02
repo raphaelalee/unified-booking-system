@@ -117,6 +117,19 @@ function getSelectedService(merchant, serviceId) {
     return services.find((service) => String(service.id) === String(serviceId)) || null;
 }
 
+function getServiceByOptionId(merchant, serviceOptionId) {
+    if (!serviceOptionId) {
+        return null;
+    }
+
+    const services = Array.isArray(merchant.services) ? merchant.services : [];
+
+    return services.find((service) => {
+        return Array.isArray(service.options)
+            && service.options.some((option) => String(option.id) === String(serviceOptionId));
+    }) || null;
+}
+
 function getServiceOptions(service) {
     return Array.isArray(service?.options) && service.options.length > 0
         ? service.options
@@ -211,14 +224,21 @@ function applyPromotionAvailability(merchant, selectedPromotion = null) {
 function renderBookingPage(req, res, merchant, options = {}) {
     const selectedPromotion = options.selectedPromotion || getPromotionSelection(req.query);
     const bookingMerchant = applyPromotionAvailability(merchant, selectedPromotion);
-    const requestedServiceId = options.form?.serviceId || req.query.serviceId;
-    const requestedServiceOptionId = options.form?.serviceOptionId || req.query.serviceOptionId;
-    const selectedService = getSelectedService(bookingMerchant, requestedServiceId);
+    const rawServiceId = options.form?.serviceId || req.query.serviceId;
+    const rawServiceOptionId = options.form?.serviceOptionId || req.query.serviceOptionId;
+    const serviceFromId = getSelectedService(bookingMerchant, rawServiceId);
+    const serviceFromOptionId = getServiceByOptionId(bookingMerchant, rawServiceId);
+    const selectedService = serviceFromId || serviceFromOptionId;
+    const shouldDefaultFirstOption = !options.form && selectedService && getServiceOptions(selectedService).length > 0;
+    const requestedServiceId = selectedService ? selectedService.id : rawServiceId;
+    const requestedServiceOptionId = rawServiceOptionId
+        || (serviceFromOptionId ? rawServiceId : '')
+        || (shouldDefaultFirstOption ? getServiceOptions(selectedService)[0].id : '');
     const selectedServiceOption = selectedService
         ? getSelectedServiceOption(selectedService, requestedServiceOptionId)
         : null;
 
-    if (requestedServiceId && !selectedService) {
+    if (rawServiceId && !selectedService) {
         return res.status(404).render('error', {
             title: 'Service Not Found',
             message: 'This service does not belong to the selected merchant.'
@@ -243,13 +263,19 @@ function renderBookingPage(req, res, merchant, options = {}) {
         useSecureQr
             ? getSecureBookingPath(merchant, selectedService)
             : getBookingPath(merchant, selectedService),
-        getPromotionQueryParams(selectedPromotion)
+        {
+            serviceOptionId: selectedServiceOption ? selectedServiceOption.id : '',
+            ...getPromotionQueryParams(selectedPromotion)
+        }
     );
     const bookingUrl = appendQueryParams(
         useSecureQr
             ? getSecureBookingUrl(req, merchant, selectedService)
             : getBookingUrl(req, merchant, selectedService),
-        getPromotionQueryParams(selectedPromotion)
+        {
+            serviceOptionId: selectedServiceOption ? selectedServiceOption.id : '',
+            ...getPromotionQueryParams(selectedPromotion)
+        }
     );
 
     return res.status(options.status || 200).render('booking', {
@@ -1518,7 +1544,7 @@ function addProductToCart(req, res) {
                 id: Date.now(),
                 type: 'Product',
                 merchantId: product.salonId || null,
-                merchantName: product.category,
+                merchantName: product.salonName || product.category,
                 serviceId: product.id,
                 serviceName: product.name,
                 duration: product.description,
@@ -1603,6 +1629,21 @@ function checkout(req, res) {
     const useCashback = req.body.redeemCashback === 'on';
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
+    const pickupMerchants = selectedItems
+        .filter((item) => item.merchantId && item.merchantName)
+        .reduce((options, item) => {
+            const merchantId = String(item.merchantId);
+            if (!options.has(merchantId)) {
+                options.set(merchantId, item.merchantName);
+            }
+            return options;
+        }, new Map());
+    const selectedPickupName = pickupMerchantId && pickupMerchantId !== 'any'
+        ? (pickupMerchants.get(String(pickupMerchantId)) || pickupMerchantId)
+        : null;
+    const fulfilmentMerchantName = fulfilment === 'pickup'
+        ? (selectedPickupName || 'Any merchant')
+        : 'Delivery';
 
     req.session.pendingPayments = req.session.pendingPayments || {};
     req.session.pendingPayments[checkoutId] = {
@@ -1610,9 +1651,7 @@ function checkout(req, res) {
         receiptId: checkoutId,
         userId: req.session.user.id,
         userName,
-        merchantName: fulfilment === 'pickup'
-            ? (pickupMerchantId === 'any' ? 'Any merchant' : pickupMerchantId || 'Vaniday')
-            : 'Delivery',
+        merchantName: fulfilmentMerchantName,
         serviceName: 'Cart checkout',
         amount,
         items: selectedItems.map((item) => ({
@@ -1629,6 +1668,7 @@ function checkout(req, res) {
         useCashback,
         fulfilment,
         pickupMerchantId,
+        pickupMerchantName: selectedPickupName || '',
         deliveryAddress,
         deliveryUnit,
         deliveryPostal,
@@ -1643,9 +1683,7 @@ function checkout(req, res) {
         return res.render('payment', {
             title: 'Payment',
             amount,
-            merchantName: fulfilment === 'pickup'
-                ? (pickupMerchantId === 'any' ? 'Any merchant' : pickupMerchantId || 'Vaniday')
-                : 'Delivery',
+            merchantName: fulfilmentMerchantName,
             serviceName: 'Cart checkout',
             cartItemId: '',
             cartCheckout: true,

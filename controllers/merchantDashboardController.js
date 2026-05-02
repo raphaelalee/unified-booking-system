@@ -236,20 +236,19 @@ function buildMerchantReports(merchant, bookings = [], hadError = false) {
     };
 }
 
-function showServices(req, res) {
-    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
-        const handled = renderMerchantLookupError(res, lookupError, merchant);
-
-        if (handled) {
-            return handled;
+function renderMerchantDashboard(req, res, merchant, options = {}) {
+    return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
+        if (bookingError) {
+            console.error(bookingError);
         }
 
-        return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
-            if (bookingError) {
-                console.error(bookingError);
+        return Promotion.getByMerchantUserId(req.session.user.id, (promotionError, promotions) => {
+            if (promotionError) {
+                console.error(promotionError);
             }
 
             const safeBookings = bookingError ? [] : bookings || [];
+            const safePromotions = promotionError ? [] : promotions || [];
             const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
             const slotCount = Array.isArray(merchant.services)
                 ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
@@ -278,6 +277,9 @@ function showServices(req, res) {
             if (bookingError) {
                 validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
             }
+            if (promotionError) {
+                validationIssues.push('Promotion records could not be loaded, so campaign reporting is temporarily limited.');
+            }
 
             const reports = {
                 stats: {
@@ -286,7 +288,8 @@ function showServices(req, res) {
                     bookingCount: safeBookings.length,
                     customerCount: uniqueCustomers,
                     bookingRevenue,
-                    averagePrice
+                    averagePrice,
+                    promotionCount: safePromotions.length
                 },
                 customerReport: {
                     totalCustomers: uniqueCustomers,
@@ -306,23 +309,24 @@ function showServices(req, res) {
                 }
             };
 
-            const success = req.session.merchantSuccess;
-            const error = req.session.merchantError;
+            const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
+            const error = options.error !== undefined ? options.error : req.session.merchantError;
             req.session.merchantSuccess = null;
             req.session.merchantError = null;
 
-            return res.render('merchant-dashboard', {
+            return res.status(options.status || 200).render('merchant-dashboard', {
                 title: 'Merchant Services',
                 merchant,
                 success,
                 error,
-                databaseError: Boolean(bookingError),
+                databaseError: Boolean(bookingError || promotionError),
                 stats: reports.stats,
                 customerReport: reports.customerReport,
                 merchantReport: reports.merchantReport,
                 validationReport: reports.validationReport,
-                qrCodeDataUrl: null,
-                qrBookingUrl: null
+                promotions: safePromotions,
+                qrCodeDataUrl: options.qrCodeDataUrl || null,
+                qrBookingUrl: options.qrBookingUrl || null
             });
         });
     });

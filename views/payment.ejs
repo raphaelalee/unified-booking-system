@@ -1,20 +1,25 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
+<section class="page-title payment-title">
     <p class="eyebrow">Payment</p>
     <h1>Complete your payment.</h1>
     <p>Pay securely for your Vaniday booking or product order.</p>
 </section>
 
-<section class="section compact">
-    <div class="login-layout">
+<section class="section compact payment-page">
+    <div class="payment-layout">
         <%
             const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
                 ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0))
                 : 0;
             const paymentAmountDue = Math.max(Number(amount || 0) - paymentCashbackEstimate, 0);
+            const fulfilmentLabel = fulfilment === 'delivery'
+                ? 'Delivery'
+                : fulfilment === 'pickup'
+                    ? 'Pick up'
+                    : '';
         %>
-        <form class="login-form" action="/payment" method="POST">
+        <form class="login-form payment-form" action="/payment" method="POST">
             <input type="hidden" name="amount" value="<%= amount %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
             <input type="hidden" name="serviceName" value="<%= serviceName %>">
@@ -38,14 +43,17 @@
                 <div class="notice error"><p><%= error %></p></div>
             <% } %>
 
-            <div>
+            <div class="payment-form-header">
                 <p class="eyebrow">Payment method</p>
                 <h2>$<%= paymentAmountDue.toFixed(2) %></h2>
                 <p class="muted"><%= serviceName %> &middot; <%= merchantName %></p>
+                <% if (fulfilmentLabel) { %>
+                    <p class="payment-fulfilment-pill"><%= fulfilmentLabel %></p>
+                <% } %>
             </div>
 
             <% if (typeof cartCheckout !== 'undefined' && cartCheckout && typeof useCashback !== 'undefined' && useCashback) { %>
-                <div class="loyalty-redemption-card">
+                <div class="loyalty-redemption-card payment-cashback-card">
                     <span>
                         <strong>Cashback selected from cart</strong>
                         <small>
@@ -56,7 +64,7 @@
                     </span>
                 </div>
             <% } else if (!(typeof cartCheckout !== 'undefined' && cartCheckout)) { %>
-                <div class="loyalty-redemption-card">
+                <div class="loyalty-redemption-card payment-cashback-card">
                     <% if (typeof loyalty !== 'undefined' && loyalty && Number(loyalty.wallet.cashbackBalance || 0) > 0) { %>
                     <label>
                         <input type="checkbox" name="redeemCashback" value="on">
@@ -79,7 +87,7 @@
 
             <fieldset class="payment-methods">
                 <legend class="eyebrow">Choose payment</legend>
-                <label class="payment-method-card featured">
+                <label class="payment-method-card featured is-selected">
                     <input type="radio" name="paymentMethod" value="apple_pay" checked>
                     <span class="payment-method-icon">AP</span>
                     <span>
@@ -121,7 +129,7 @@
                 </label>
             </fieldset>
 
-            <div id="card-payment-fields">
+            <div id="card-payment-fields" class="payment-card-fields">
                 <p class="eyebrow">Card details</p>
                 <label>
                     Cardholder name
@@ -145,23 +153,34 @@
                 </div>
             </div>
 
-            <p id="nets-payment-note" class="muted" style="display:none;">
+            <p id="nets-payment-note" class="muted payment-note" style="display:none;">
                 Continue to generate a NETS QR code for this payment.
             </p>
-            <p id="wallet-payment-note" class="muted">
+            <p id="wallet-payment-note" class="muted payment-note">
                 Continue to complete this prototype wallet payment.
             </p>
-            <p id="stripe-payment-note" class="muted" style="display:none;">
+            <p id="stripe-payment-note" class="muted payment-note" style="display:none;">
                 Continue to complete this prototype Stripe payment.
             </p>
 
             <button id="payment-submit-button" class="button primary full" type="submit">Continue with Apple Pay</button>
         </form>
 
-        <aside class="login-benefits">
+        <aside class="login-benefits payment-summary-card">
             <p class="eyebrow">Payment summary</p>
             <h2><%= merchantName %></h2>
             <p><%= serviceName %></p>
+            <% if (fulfilmentLabel) { %>
+                <div class="payment-detail-list">
+                    <p><span>Fulfilment</span><strong><%= fulfilmentLabel %></strong></p>
+                    <% if (fulfilment === 'pickup') { %>
+                        <p><span>Pickup merchant</span><strong><%= merchantName %></strong></p>
+                    <% } %>
+                    <% if (fulfilment === 'delivery' && deliveryAddress) { %>
+                        <p><span>Delivery address</span><strong><%= deliveryAddress %><% if (deliveryUnit) { %>, <%= deliveryUnit %><% } %></strong></p>
+                    <% } %>
+                </div>
+            <% } %>
             <div class="cart-totals">
                 <p><span>Subtotal</span><strong>$<%= Number(amount).toFixed(2) %></strong></p>
                 <% if (paymentCashbackEstimate > 0) { %>
@@ -185,6 +204,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function syncPaymentMethod() {
         const selected = methodInputs.find((input) => input.checked)?.value || 'apple_pay';
+        document.querySelectorAll('.payment-method-card').forEach((card) => {
+            const input = card.querySelector('input[name="paymentMethod"]');
+            card.classList.toggle('is-selected', input && input.checked);
+        });
         if (cardFields) cardFields.style.display = selected === 'card' ? '' : 'none';
         if (netsNote) netsNote.style.display = selected === 'nets' ? '' : 'none';
         if (stripeNote) stripeNote.style.display = selected === 'stripe' ? '' : 'none';
