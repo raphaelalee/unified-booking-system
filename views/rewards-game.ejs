@@ -20,15 +20,47 @@
     const prizeTypeLabel = (type) => String(type || '').replace(/_/g, ' ');
     const gameEnabled = wallet.settings.isEnabled;
     const canPlay = gameEnabled && wallet.playBalance > 0;
+    const spendThreshold = Number(wallet.settings.spendPerBonusPlay || 0);
+    const spendToNext = Number(wallet.spendToNextPlay || 0);
+    const spendProgress = spendThreshold > 0
+        ? Math.max(0, Math.min(100, Math.round(((spendThreshold - spendToNext) / spendThreshold) * 100)))
+        : 100;
 %>
 
-<section class="page-title">
-    <p class="eyebrow">Customer Rewards</p>
-    <h1>Play and win Vaniday rewards.</h1>
-    <p>Unused weekly plays are saved for you, and paid purchases unlock extra chances automatically.</p>
+<section class="page-title games-hero">
+    <div class="games-hero-copy">
+        <p class="eyebrow">Customer Rewards</p>
+        <h1>Play Flappy Rewards and collect Vaniday benefits.</h1>
+        <p>Unused weekly plays are saved for you, and paid purchases unlock extra chances automatically.</p>
+        <div class="games-hero-actions">
+            <% if (canPlay) { %>
+                <a class="button primary js-launch-flappy" href="/rewards-game/flappy">Play now</a>
+            <% } else { %>
+                <button class="button primary" type="button" disabled>No plays available</button>
+            <% } %>
+            <a class="button secondary" href="/reward-shop">Open reward shop</a>
+        </div>
+    </div>
+
+    <div class="games-hero-scene" aria-hidden="true">
+        <div class="games-cloud cloud-one"></div>
+        <div class="games-cloud cloud-two"></div>
+        <div class="games-cloud cloud-three"></div>
+        <span class="games-coin coin-one">V</span>
+        <span class="games-coin coin-two">V</span>
+        <span class="games-coin coin-three">V</span>
+        <span class="flappy-launch-pipe pipe-left"></span>
+        <span class="flappy-launch-pipe pipe-right"></span>
+        <span class="flappy-launch-bird"></span>
+        <div class="games-prize-ticket">
+            <span>Play balance</span>
+            <strong><%= wallet.playBalance %></strong>
+            <small>reward draw<%= wallet.playBalance === 1 ? '' : 's' %> ready</small>
+        </div>
+    </div>
 </section>
 
-<section class="section compact">
+<section class="section compact games-page-section">
     <% if (error) { %>
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
@@ -57,23 +89,23 @@
         </div>
     <% } %>
 
-    <div class="portal-summary-panel dashboard-kpi-grid game-kpi-grid">
-        <div class="portal-stat">
+    <div class="portal-summary-panel dashboard-kpi-grid game-kpi-grid games-kpi-strip">
+        <div class="portal-stat game-kpi-card">
             <span>Play Balance</span>
             <strong><%= wallet.playBalance %></strong>
             <small>Available chances</small>
         </div>
-        <div class="portal-stat">
+        <div class="portal-stat game-kpi-card">
             <span>Weekly Free Plays</span>
             <strong><%= wallet.settings.weeklyFreePlays %></strong>
             <small>Unused plays collate</small>
         </div>
-        <div class="portal-stat">
+        <div class="portal-stat game-kpi-card">
             <span>Paid Spend</span>
             <strong>$<%= formatMoney(wallet.totalSpend) %></strong>
             <small>Tracked from completed payments</small>
         </div>
-        <div class="portal-stat">
+        <div class="portal-stat game-kpi-card">
             <span>Next Bonus</span>
             <strong>$<%= formatMoney(wallet.spendToNextPlay) %></strong>
             <small>Spend needed for another chance</small>
@@ -83,16 +115,26 @@
     <div class="game-layout">
         <article class="game-play-card flappy-launch-card">
             <div class="flappy-launch-scene" aria-hidden="true">
+                <span class="games-coin launch-coin-one">V</span>
+                <span class="games-coin launch-coin-two">V</span>
+                <span class="games-cloud launch-cloud-one"></span>
+                <span class="games-cloud launch-cloud-two"></span>
                 <span class="flappy-launch-bird"></span>
                 <span class="flappy-launch-pipe pipe-left"></span>
                 <span class="flappy-launch-pipe pipe-right"></span>
+                <span class="flappy-launch-ground"></span>
             </div>
-            <div>
+            <div class="game-play-copy">
                 <p class="eyebrow"><%= gameEnabled ? 'Game Active' : 'Paused' %></p>
                 <h2>Flappy Rewards</h2>
                 <p class="muted">
                     Launch the game on its own page, clear as many pipes as you can, and win a reward when each try ends.
                 </p>
+                <div class="game-play-highlights">
+                    <span>Weekly plays stack</span>
+                    <span>Spend unlocks tries</span>
+                    <span>Merchant prizes included</span>
+                </div>
             </div>
             <% if (canPlay) { %>
                 <a class="button primary full js-launch-flappy" href="/rewards-game/flappy">Launch Flappy Rewards</a>
@@ -109,13 +151,26 @@
                 <p><span>Spend tier</span><strong>$<%= formatMoney(wallet.settings.spendPerBonusPlay) %></strong></p>
                 <p><span>Tier reward</span><strong><%= wallet.settings.bonusPlaysPerThreshold %> play<%= wallet.settings.bonusPlaysPerThreshold === 1 ? '' : 's' %></strong></p>
             </div>
+            <div class="game-progress-card">
+                <div>
+                    <span>Spend progress</span>
+                    <strong><%= spendProgress %>%</strong>
+                </div>
+                <div class="game-progress-bar" aria-hidden="true">
+                    <span style="width: <%= spendProgress %>%;"></span>
+                </div>
+                <p class="muted">$<%= formatMoney(wallet.spendToNextPlay) %> more spend unlocks the next bonus chance.</p>
+            </div>
             <p class="muted">Admin controls the game rules. Merchants can add their own voucher or benefit prizes.</p>
         </aside>
     </div>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Reward History</p>
-        <h2>Recent wins</h2>
+    <div class="section-heading profile-heading game-history-heading">
+        <div>
+            <p class="eyebrow">Reward History</p>
+            <h2>Recent wins</h2>
+        </div>
+        <a class="text-link" href="/reward-shop">Spend VaniGlints</a>
     </div>
 
     <% if (plays.length === 0) { %>
@@ -152,19 +207,21 @@
 
 <script>
     (() => {
-        const launchLink = document.querySelector('.js-launch-flappy');
+        const launchLinks = document.querySelectorAll('.js-launch-flappy');
         const overlay = document.querySelector('.game-launch-overlay');
 
-        if (!launchLink || !overlay) {
+        if (launchLinks.length === 0 || !overlay) {
             return;
         }
 
-        launchLink.addEventListener('click', (event) => {
-            event.preventDefault();
-            overlay.classList.add('is-visible');
-            window.setTimeout(() => {
-                window.location.href = launchLink.href;
-            }, 720);
+        launchLinks.forEach((launchLink) => {
+            launchLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                overlay.classList.add('is-visible');
+                window.setTimeout(() => {
+                    window.location.href = launchLink.href;
+                }, 720);
+            });
         });
     })();
 </script>

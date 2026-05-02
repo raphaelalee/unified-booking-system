@@ -26,56 +26,140 @@
                 service.merchantLocation,
                 service.merchantCategory,
                 service.merchantPromotion,
-                service.merchantIntegrationStatus
+                service.merchantIntegrationStatus,
+                ...(Array.isArray(service.options) ? service.options.map((option) => option.name) : [])
             ].join(' ').toLowerCase();
 
             return text.includes(serviceSearch.toLowerCase());
         })
         : allServices;
+    const serviceVisuals = [
+        {
+            key: 'hair',
+            label: 'Hair studio',
+            search: 'hair',
+            className: 'service-visual-hair',
+            aliases: ['hair', 'colour', 'styling']
+        },
+        {
+            key: 'facial',
+            label: 'Facial glow',
+            search: 'facial',
+            className: 'service-visual-facial',
+            aliases: ['facial', 'hydrating', 'cleansing']
+        },
+        {
+            key: 'nails',
+            label: 'Nail bar',
+            search: 'nail',
+            className: 'service-visual-nails',
+            aliases: ['nail', 'manicure', 'pedicure']
+        },
+        {
+            key: 'spa',
+            label: 'Spa escape',
+            search: 'spa',
+            className: 'service-visual-spa',
+            aliases: ['spa', 'massage', 'body', 'scrub', 'wrap', 'reflexology']
+        },
+        {
+            key: 'barber',
+            label: 'Barber chair',
+            search: 'barber',
+            className: 'service-visual-barber',
+            aliases: ['barber', 'beard', 'haircut', 'fade', 'shave', 'groom']
+        }
+    ];
+    const getServiceVisual = (service, index = 0) => {
+        const optionText = Array.isArray(service.options)
+            ? service.options.map((option) => option.name).join(' ')
+            : '';
+        const text = [
+            service.name,
+            service.merchantCategory,
+            service.merchantName,
+            optionText
+        ].join(' ').toLowerCase();
+
+        return serviceVisuals.find((visual) => {
+            return visual.aliases.some((alias) => text.includes(alias));
+        }) || serviceVisuals[index % serviceVisuals.length];
+    };
+    const chipMap = new Map();
+    allServices.forEach((service, index) => {
+        const visual = getServiceVisual(service, index);
+        const chip = chipMap.get(visual.key) || {
+            label: visual.label,
+            search: visual.search,
+            className: visual.className,
+            count: 0
+        };
+
+        chip.count += 1;
+        chipMap.set(visual.key, chip);
+    });
+    const serviceChips = Array.from(chipMap.values());
+    const heroService = filteredServices[0] || allServices[0] || {};
+    const heroVisual = getServiceVisual(heroService, 0);
 %>
 
-<section class="page-title services-unified-hero">
-    <div>
+<section class="page-title services-unified-hero services-shop-hero">
+    <div class="services-hero-copy">
         <p class="eyebrow">Services</p>
-        <h1>Browse available beauty and wellness services.</h1>
+        <h1>Book beauty treatments like a curated shop.</h1>
         <p>
-            Compare treatments, prices, time slots and promotions from Vaniday merchants before booking.
+            Browse trusted merchants, compare prices at a glance, and jump straight into the booking flow.
         </p>
         <form class="portal-search services-search" action="/services" method="GET">
             <input
                 type="search"
                 name="search"
                 value="<%= serviceSearch %>"
-                placeholder="Search services, merchants, locations, or promotions"
+                placeholder="Search hair, facial, spa, nails, barber, location..."
             >
             <button class="button primary" type="submit">Search</button>
         </form>
     </div>
 
-    <aside class="portal-summary-panel services-summary-panel" aria-label="Services and merchant summary">
-        <div class="portal-stat">
-            <span>Merchants</span>
-            <strong><%= stats.merchantCount %></strong>
+    <aside class="services-hero-showcase" aria-label="Services summary">
+        <div class="services-hero-image <%= heroVisual.className %>" aria-hidden="true"></div>
+        <div class="services-hero-overlay">
+            <span><%= filteredServices.length %> services</span>
+            <strong>From $<%= stats.startingPrice %></strong>
         </div>
-        <div class="portal-stat">
-            <span>Services</span>
-            <strong><%= filteredServices.length %></strong>
-        </div>
-        <div class="portal-stat">
-            <span>Open slots</span>
-            <strong><%= stats.slotCount %></strong>
-        </div>
-        <div class="portal-stat">
-            <span>From</span>
-            <strong>$<%= stats.startingPrice %></strong>
+        <div class="services-hero-stat-row">
+            <span><strong><%= stats.merchantCount %></strong> merchants</span>
+            <span><strong><%= stats.slotCount %></strong> slots</span>
+            <span><strong><%= stats.promotionCount %></strong> promos</span>
         </div>
     </aside>
 </section>
 
-<section class="section compact">
-    <div class="section-heading services-list-heading">
-        <p class="eyebrow">Service Catalog</p>
-        <h2>Available services</h2>
+<% if (serviceChips.length > 0) { %>
+    <nav class="services-discovery-strip" aria-label="Service categories">
+        <a class="services-filter-chip <%= !serviceSearch ? 'is-active' : '' %>" href="/services">
+            <span>All services</span>
+            <strong><%= allServices.length %></strong>
+        </a>
+        <% serviceChips.forEach((chip) => { %>
+            <a
+                class="services-filter-chip <%= serviceSearch.toLowerCase() === chip.search.toLowerCase() ? 'is-active' : '' %>"
+                href="/services?search=<%= encodeURIComponent(chip.search) %>"
+            >
+                <span><%= chip.label %></span>
+                <strong><%= chip.count %></strong>
+            </a>
+        <% }) %>
+    </nav>
+<% } %>
+
+<section class="section compact services-shop-section" id="service-catalog">
+    <div class="section-heading services-list-heading services-list-headline">
+        <div>
+            <p class="eyebrow">Service Catalog</p>
+            <h2>Available services</h2>
+        </div>
+        <p><%= filteredServices.length %> matches ready for booking</p>
     </div>
 
     <% if (filteredServices.length === 0) { %>
@@ -83,46 +167,71 @@
             No services matched your search. Try hair, facial, spa, nails, massage, barber, or a location.
         </div>
     <% } else { %>
-        <div class="service-catalog-grid unified-service-grid">
-            <% filteredServices.forEach((service) => { %>
+        <div class="service-catalog-grid unified-service-grid services-shop-grid">
+            <% filteredServices.forEach((service, index) => { %>
                 <%
                     const merchantQrToken = service.merchantQrToken || merchantTokenById[service.merchantId];
                     const serviceBookingPath = merchantQrToken
                         ? service.serviceBookingPath || `/booking/${service.merchantId}/${merchantQrToken}?serviceId=${service.id}`
                         : `/merchants/${service.merchantId}`;
+                    const serviceVisual = getServiceVisual(service, index);
+                    const serviceOptions = Array.isArray(service.options) ? service.options : [];
+                    const visibleOptions = serviceOptions.slice(0, 3);
+                    const remainingOptions = serviceOptions.length - visibleOptions.length;
+                    const serviceSlots = Array.isArray(service.slots) ? service.slots : [];
                 %>
-                <article class="service-catalog-card unified-service-card">
-                    <div class="portal-card-header">
-                        <span class="tag"><%= service.merchantCategory %></span>
-                        <span class="service-price slim">$<%= service.price %></span>
+                <article class="service-catalog-card unified-service-card service-shop-card" style="--card-index: <%= index %>;">
+                    <div class="service-card-image <%= serviceVisual.className %>">
+                        <span class="service-image-badge"><%= serviceVisual.label %></span>
+                        <span class="service-image-price">From $<%= service.price %></span>
                     </div>
-                    <div>
-                        <h3><%= service.name %></h3>
-                        <p class="muted"><%= service.merchantName %> &middot; <%= service.merchantLocation %></p>
-                        <p class="service-duration-line"><%= service.duration %></p>
-                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <div class="service-option-list">
-                                <% service.options.slice(0, 4).forEach((option) => { %>
+
+                    <div class="service-card-body">
+                        <div class="service-card-topline">
+                            <span class="tag"><%= service.merchantCategory %></span>
+                            <span class="service-rating-pill"><%= service.merchantRating %> rating</span>
+                        </div>
+
+                        <div>
+                            <h3><%= service.name %></h3>
+                            <p class="service-merchant-line">
+                                <span><%= service.merchantName %></span>
+                                <span><%= service.merchantLocation %></span>
+                            </p>
+                        </div>
+
+                        <div class="service-meta-pills" aria-label="Service details">
+                            <span><%= service.duration %></span>
+                            <% if (service.merchantPromotion) { %>
+                                <span><%= service.merchantPromotion %></span>
+                            <% } %>
+                        </div>
+
+                        <% if (visibleOptions.length > 0) { %>
+                            <div class="service-option-list service-option-preview">
+                                <% visibleOptions.forEach((option) => { %>
                                     <span><%= option.name %></span>
                                 <% }) %>
+                                <% if (remainingOptions > 0) { %>
+                                    <span>+<%= remainingOptions %> more</span>
+                                <% } %>
                             </div>
                         <% } %>
                     </div>
+
                     <div class="service-card-footer">
                         <div>
-                            <span class="service-card-label">Available slots</span>
+                            <span class="service-card-label">Next openings</span>
                             <div class="availability-strip compact-slots">
-                                <% (service.slots || []).slice(0, 3).forEach((slot) => { %>
+                                <% serviceSlots.slice(0, 3).forEach((slot) => { %>
                                     <span><%= slot %></span>
                                 <% }) %>
                             </div>
                         </div>
-                        <% if (service.merchantPromotion) { %>
-                            <p class="promotion"><%= service.merchantPromotion %></p>
-                        <% } %>
-                    </div>
-                    <div class="service-card-actions">
-                        <a class="button primary full" href="<%= serviceBookingPath %>">Book this service</a>
+                        <div class="service-shopping-actions">
+                            <a class="button primary full" href="<%= serviceBookingPath %>">Book now</a>
+                            <a class="button secondary full" href="/merchants/<%= service.merchantId %>">View merchant</a>
+                        </div>
                     </div>
                 </article>
             <% }) %>
