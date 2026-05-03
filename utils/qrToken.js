@@ -14,6 +14,16 @@ function signMerchantToken(merchantId) {
     return `${id}.${signature}`;
 }
 
+function signBookingCheckInToken(bookingId) {
+    const id = String(bookingId);
+    const signature = crypto
+        .createHmac('sha256', getSecret())
+        .update(`booking-check-in:${id}`)
+        .digest('base64url');
+
+    return `${id}.${signature}`;
+}
+
 function verifyMerchantToken(merchantId, token) {
     if (!merchantId || !token) {
         return false;
@@ -25,6 +35,31 @@ function verifyMerchantToken(merchantId, token) {
 
     return expectedBuffer.length === tokenBuffer.length
         && crypto.timingSafeEqual(expectedBuffer, tokenBuffer);
+}
+
+function verifyBookingCheckInToken(token) {
+    if (!token) {
+        return null;
+    }
+
+    const [bookingId] = String(token).split('.');
+
+    if (!bookingId || !/^\d+$/.test(bookingId)) {
+        return null;
+    }
+
+    const expected = signBookingCheckInToken(bookingId);
+    const expectedBuffer = Buffer.from(expected);
+    const tokenBuffer = Buffer.from(String(token));
+
+    if (
+        expectedBuffer.length !== tokenBuffer.length
+        || !crypto.timingSafeEqual(expectedBuffer, tokenBuffer)
+    ) {
+        return null;
+    }
+
+    return bookingId;
 }
 
 function getPublicBaseUrl(req) {
@@ -45,9 +80,21 @@ function getMerchantScanUrl(req, merchantId) {
     return `${getPublicBaseUrl(req)}${getMerchantScanPath(merchantId)}`;
 }
 
+function getBookingCheckInPath(bookingId) {
+    return `/merchant/check-in/${encodeURIComponent(signBookingCheckInToken(bookingId))}`;
+}
+
+function getBookingCheckInUrl(req, bookingId) {
+    return `${getPublicBaseUrl(req)}${getBookingCheckInPath(bookingId)}`;
+}
+
 module.exports = {
+    getBookingCheckInPath,
+    getBookingCheckInUrl,
     getMerchantScanPath,
     getMerchantScanUrl,
     signMerchantToken,
+    signBookingCheckInToken,
+    verifyBookingCheckInToken,
     verifyMerchantToken
 };

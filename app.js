@@ -104,7 +104,7 @@ app.post('/cart/remove/:itemId', requireCustomer, merchantController.removeFromC
 app.post('/cart/delete-selected', requireCustomer, merchantController.deleteSelectedCartItems);
 app.post('/merchants/:merchantId/favourite', requireCustomer, merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', requireRole('merchant'), merchantController.showMerchantQr);
-app.get('/scan/:merchantId', allowBookingViewer, merchantController.showSecureScanBooking);
+app.get('/scan/:merchantId', allowGuestOrCustomer, merchantController.showSecureScanBooking);
 app.post('/scan/:merchantId', requireCustomer, merchantController.saveSecureScanBooking);
 app.get('/book/:serviceId', requireCustomer, bookingController.showBookFallback);
 app.post('/book/:serviceId', requireCustomer, bookingController.createBooking);

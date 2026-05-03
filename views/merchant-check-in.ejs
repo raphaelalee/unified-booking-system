@@ -1,0 +1,36 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant check-in</p>
+    <h1>Booking verification</h1>
+    <p>Confirm the customer's appointment details before checking them in.</p>
+</section>
+
+<section class="section compact">
+    <% if (typeof success !== 'undefined' && success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+
+    <article class="dashboard-report-card">
+        <p class="eyebrow">Booking #<%= booking.id %></p>
+        <h2><%= booking.customer_name %></h2>
+        <div class="report-metric-list">
+            <p><span>Customer email</span><strong><%= booking.email %></strong></p>
+            <p><span>Merchant</span><strong><%= booking.merchant_name %></strong></p>
+            <p><span>Service</span><strong><%= booking.service_name %></strong></p>
+            <p><span>Date</span><strong><%= booking.booking_date %></strong></p>
+            <p><span>Time</span><strong><%= booking.booking_time %></strong></p>
+            <p><span>Status</span><strong><%= booking.status %></strong></p>
+        </div>
+
+        <% if (alreadyCheckedIn) { %>
+            <a class="button secondary" href="/merchant">Back to dashboard</a>
+        <% } else { %>
+            <form method="POST">
+                <button class="button primary" type="submit">Check in booking</button>
+            </form>
+        <% } %>
+    </article>
+</section>
+
+<%- include('partials/footer') %>

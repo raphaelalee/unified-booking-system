@@ -108,6 +108,37 @@ function getByMerchantUserId(userId, callback) {
     db.query(sql, [userId], callback);
 }
 
+function getCheckInDetails(bookingId, merchantUserId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            salons.salon_name AS merchant_name,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+            AND salons.merchant_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [bookingId, merchantUserId], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results[0] || null);
+    });
+}
+
 function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
     return bookings.some((booking) => {
         return booking.merchantId === Number(merchantId)
@@ -166,111 +197,6 @@ function createInDatabase(bookingData, callback) {
     db.query(sql, values, callback);
 }
 
-function createCustomerBooking(bookingData, callback) {
-    if (!bookingData.userId) {
-        callback(new Error('A logged-in user is required to create a booking.'));
-        return;
-    }
-
-    const sql = `
-        INSERT INTO bookings
-            (user_id, merchant_id, service_id, booking_date, timeslot, status)
-        VALUES (?, ?, ?, ?, ?, 'upcoming')
-    `;
-
-    const values = [
-        bookingData.userId,
-        bookingData.merchantId || null,
-        bookingData.serviceId,
-        bookingData.bookingDate,
-        normalizeTimeForDatabase(bookingData.bookingTime || null)
-    ];
-
-    db.query(sql, values, callback);
-}
-
-function getByUserId(userId, callback) {
-    const sql = `
-        SELECT
-            bookings.booking_id AS id,
-            bookings.booking_id AS booking_id,
-            bookings.user_id,
-            bookings.service_id,
-            bookings.booking_date,
-            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
-            bookings.status,
-            services.service_name,
-            services.price AS service_price,
-            salons.salon_name AS merchant_name,
-            salons.address AS merchant_location
-        FROM bookings
-        INNER JOIN services ON services.service_id = bookings.service_id
-        INNER JOIN salons ON salons.salon_id = services.salon_id
-        WHERE bookings.user_id = ?
-        ORDER BY bookings.booking_date DESC, bookings.booking_id DESC
-    `;
-
-    db.query(sql, [userId], callback);
-}
-
-function getReceiptById(id, callback) {
-    const sql = `
-        SELECT
-            bookings.booking_id AS id,
-            bookings.user_id,
-            bookings.booking_date,
-            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
-            bookings.status,
-            users.name AS customer_name,
-            users.email,
-            salons.salon_name AS merchant_name,
-            services.service_name,
-            services.price AS service_price
-        FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
-        INNER JOIN services ON services.service_id = bookings.service_id
-        INNER JOIN salons ON salons.salon_id = services.salon_id
-        WHERE bookings.booking_id = ?
-        LIMIT 1
-    `;
-
-    db.query(sql, [id], (error, rows) => {
-        if (error) {
-            callback(error);
-            return;
-        }
-
-        callback(null, rows[0] || null);
-    });
-}
-
-function markCompleted(bookingId, callback) {
-    const sql = `
-        UPDATE bookings
-        SET status = 'completed'
-        WHERE booking_id = ?
-    `;
-
-    db.query(sql, [bookingId], callback);
-}
-
-function attachTransaction(bookingId, transactionId, callback) {
-    const sql = `
-        UPDATE bookings
-        SET transaction_id = ?
-        WHERE booking_id = ?
-    `;
-
-    db.query(sql, [transactionId, bookingId], (error, result) => {
-        if (error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE')) {
-            callback(null, result);
-            return;
-        }
-
-        callback(error, result);
-    });
-}
-
 module.exports = {
     attachTransaction,
     create,
@@ -281,7 +207,7 @@ module.exports = {
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
-    markCompleted,
     hasExistingBooking,
-    hasExistingBookingInDatabase
+    hasExistingBookingInDatabase,
+    markCheckedIn
 };
