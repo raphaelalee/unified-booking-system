@@ -22,6 +22,10 @@
             };
 
             trigger.addEventListener('click', (event) => {
+                if (trigger.tagName.toLowerCase() === 'a') {
+                    return;
+                }
+
                 event.preventDefault();
                 setOpen(!dropdown.classList.contains('is-open'));
             });

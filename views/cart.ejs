@@ -1,12 +1,12 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
+<section class="page-title cart-title">
     <p class="eyebrow">Cart</p>
-    <h1>Your selected items.</h1>
-    <p>Review services and products before booking or checkout.</p>
+    <h1>Your cart.</h1>
+    <p>Choose the items to checkout, then pick how you want to receive them.</p>
 </section>
 
-<section class="section compact">
+<section class="section compact cart-page cart-workspace">
     <% if (typeof success !== 'undefined' && success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
@@ -21,112 +21,186 @@
             </div>
         </div>
     <% } else { %>
-        <div class="cart-layout">
-            <form id="cart-checkout-form" action="/checkout" method="POST">
-                <div class="cart-list">
-                    <div class="cart-select-all">
-                        <label>
-                            <input type="checkbox" id="select-all"> Select all
+        <%
+            const pickupMerchants = Array.from(cart.reduce((map, item) => {
+                if (item.merchantId && item.merchantName) {
+                    map.set(String(item.merchantId), {
+                        id: String(item.merchantId),
+                        name: item.merchantName
+                    });
+                }
+                return map;
+            }, new Map()).values());
+            const productCount = cart.filter((item) => item.type === 'Product').reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+            const serviceCount = cart.filter((item) => item.type !== 'Product').length;
+        %>
+
+        <div class="cart-layout cart-organized-layout">
+            <div class="cart-list cart-main-panel">
+                <div class="cart-toolbar cart-control-bar">
+                    <label class="cart-select-all">
+                        <input type="checkbox" id="select-all" checked>
+                        <span>Select all</span>
+                    </label>
+                    <div class="cart-toolbar-counts">
+                        <span><%= itemCount %> total item<%= itemCount === 1 ? '' : 's' %></span>
+                        <% if (serviceCount > 0) { %><span><%= serviceCount %> service<%= serviceCount === 1 ? '' : 's' %></span><% } %>
+                        <% if (productCount > 0) { %><span><%= productCount %> product<%= productCount === 1 ? '' : 's' %></span><% } %>
+                    </div>
+                </div>
+
+                <div class="cart-item-stack">
+                    <% cart.forEach((item) => { %>
+                        <% const bookingPath = item.merchantId ? `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}` : ''; %>
+                        <article class="cart-item compact cart-line-item">
+                            <input
+                                type="checkbox"
+                                class="cart-item-check"
+                                form="cart-checkout-form"
+                                name="selectedItemIds"
+                                value="<%= item.id %>"
+                                data-line-total="<%= Number(item.lineTotal || 0).toFixed(2) %>"
+                                data-quantity="<%= Number(item.quantity || 1) %>"
+                                data-merchant-id="<%= item.merchantId || '' %>"
+                                data-merchant-name="<%= item.merchantName || '' %>"
+                                checked
+                                aria-label="Select <%= item.serviceName %>">
+
+                            <div class="cart-item-copy">
+                                <p class="eyebrow"><%= item.type || 'Service' %><% if (item.merchantName) { %> / <%= item.merchantName %><% } %></p>
+                                <h2><%= item.serviceName %></h2>
+                                <p class="muted"><%= item.duration %></p>
+                                <div class="cart-item-meta">
+                                    <span><%= item.type === 'Product' ? `${item.quantity} x $${Number(item.price).toFixed(2)}` : 'Booking item' %></span>
+                                    <strong>$<%= Number(item.lineTotal).toFixed(2) %></strong>
+                                </div>
+                            </div>
+
+                            <div class="cart-item-actions">
+                                <% if (item.merchantId && item.type !== 'Product') { %>
+                                    <a class="button secondary" href="<%= bookingPath %>">Book time</a>
+                                <% } else if (item.type === 'Product') { %>
+                                    <form class="cart-quantity-form" action="/cart/update/<%= item.id %>" method="POST">
+                                        <div class="cart-quantity-controls" aria-label="Edit quantity for <%= item.serviceName %>">
+                                            <button class="quantity-button" type="submit" name="quantityDelta" value="-1" aria-label="Decrease quantity">-</button>
+                                            <input class="quantity-input" type="number" name="quantity" min="1" max="99" value="<%= item.quantity %>" aria-label="Quantity">
+                                            <button class="quantity-button" type="submit" name="quantityDelta" value="1" aria-label="Increase quantity">+</button>
+                                        </div>
+                                    </form>
+                                <% } %>
+
+                                <form class="remove-icon-form" action="/cart/remove/<%= item.id %>" method="POST">
+                                    <button class="remove-icon-button" type="submit" title="Remove <%= item.serviceName %>" aria-label="Remove <%= item.serviceName %>">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                            <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
+            </div>
+
+            <aside class="booking-panel cart-summary-card cart-checkout-panel">
+                <form id="cart-checkout-form" action="/checkout" method="POST">
+                    <div class="cart-summary-heading">
+                        <p class="eyebrow">Checkout</p>
+                        <h2 id="cart-summary-total">$<%= Number(total).toFixed(2) %></h2>
+                        <p class="muted"><span id="cart-summary-count"><%= itemCount %></span> selected item<span id="cart-summary-count-plural"><%= itemCount === 1 ? '' : 's' %></span></p>
+                    </div>
+
+                    <%
+                        const cashbackBalance = loyalty ? Number(loyalty.wallet.cashbackBalance || 0) : 0;
+                        const cashbackApplied = Math.min(cashbackBalance, Number(total || 0));
+                    %>
+                    <div class="loyalty-redemption-card cart-cashback-card">
+                        <% if (cashbackBalance > 0) { %>
+                            <label>
+                                <input id="cart-use-cashback" type="checkbox" name="redeemCashback" value="on" data-cashback-balance="<%= cashbackBalance.toFixed(2) %>" checked>
+                                <span>
+                                    <strong>Use cashback rewards</strong>
+                                    <small>Available $<%= cashbackBalance.toFixed(2) %>. Applying <span id="cart-cashback-copy">$<%= cashbackApplied.toFixed(2) %></span>.</small>
+                                </span>
+                            </label>
+                        <% } else { %>
+                            <span>
+                                <strong>No cashback available yet</strong>
+                                <small>Complete this checkout to earn rewards for your next purchase.</small>
+                            </span>
+                        <% } %>
+                    </div>
+
+                    <div class="cart-totals cart-summary-totals">
+                        <p><span>Subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
+                        <% if (cashbackApplied > 0) { %>
+                            <p><span>Cashback applied</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
+                        <% } %>
+                        <p class="cart-total-line"><span>Total due</span><strong id="cart-due-value">$<%= Math.max(Number(total || 0) - cashbackApplied, 0).toFixed(2) %></strong></p>
+                    </div>
+
+                    <div class="fulfilment-options cart-fulfilment-options">
+                        <label class="fulfilment-choice active">
+                            <input type="radio" name="fulfilment" value="pickup" checked>
+                            <span>
+                                Pick up
+                                <small>Collect selected items from a merchant.</small>
+                            </span>
+                        </label>
+                        <label class="fulfilment-choice">
+                            <input type="radio" name="fulfilment" value="delivery">
+                            <span>
+                                Delivery
+                                <small>Send products to your address.</small>
+                            </span>
                         </label>
                     </div>
-                    <% cart.forEach((item) => { %>
-                    <% const bookingPath = item.merchantId ? `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}` : ''; %>
-                    <article class="cart-item compact">
-                        <input type="checkbox" class="cart-item-check" name="selectedItemIds" value="<%= item.id %>" checked aria-label="Select <%= item.serviceName %>">
-                        <div class="cart-item-copy">
-                            <p class="eyebrow"><%= item.type || 'Service' %> &middot; <%= item.merchantName %></p>
-                            <h2><%= item.serviceName %></h2>
-                            <p class="muted"><%= item.duration %> &middot; $<%= Number(item.price).toFixed(2) %><%= item.type === 'Product' ? ' each' : '' %></p>
-                            <p class="muted">Quantity: <%= item.quantity %></p>
-                            <% if (item.quantity > 1) { %>
-                                <p class="line-total">Item total: $<%= Number(item.lineTotal).toFixed(2) %></p>
-                            <% } %>
-                        </div>
-                        <div class="cart-item-actions">
-                            <% if (item.merchantId) { %>
-                                <a class="button secondary" href="<%= bookingPath %>">Book now</a>
-                            <% } else { %>
-                                <form class="cart-quantity-form" action="/cart/update/<%= item.id %>" method="POST">
-                                    <div class="cart-quantity-controls" aria-label="Edit quantity for <%= item.serviceName %>">
-                                        <button class="quantity-button" type="submit" name="quantityDelta" value="-1" aria-label="Decrease quantity">-</button>
-                                        <input class="quantity-input" type="number" name="quantity" min="1" max="99" value="<%= item.quantity %>" aria-label="Quantity">
-                                        <button class="quantity-button" type="submit" name="quantityDelta" value="1" aria-label="Increase quantity">+</button>
-                                    </div>
-                                    <button class="button secondary" type="submit">Update</button>
-                                </form>
-                                <a class="button secondary" href="/payment?amount=<%= Number(item.lineTotal).toFixed(2) %>&service=<%= encodeURIComponent(item.serviceName) %>&merchant=<%= encodeURIComponent(item.merchantName) %>&cartItemId=<%= encodeURIComponent(item.id) %>">Pay now</a>
-                            <% } %>
-                            <form class="remove-icon-form" action="/cart/remove/<%= item.id %>" method="POST">
-                                <button class="remove-icon-button" type="submit" title="Remove <%= item.serviceName %>">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                        <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                </button>
-                            </form>
-                        </div>
-                    </article>
-                <% }) %>
-            </div>
-                <aside class="booking-panel">
-                    <p class="eyebrow">Summary</p>
-                    <h2>$<%= Number(total).toFixed(2) %></h2>
-                    <p class="muted"><%= itemCount %> item<%= itemCount === 1 ? '' : 's' %> in cart</p>
 
-                    <fieldset>
-                        <legend class="eyebrow">Fulfilment</legend>
-                        <label>
-                            <input type="radio" name="fulfilment" value="pickup" checked> Pick up
-                        </label>
-                        <label>
-                            <input type="radio" name="fulfilment" value="delivery"> Delivery
-                        </label>
-                    </fieldset>
-
-                    <div id="pickup-options" class="fulfilment-panel">
-                        <label>
+                    <div id="pickup-options" class="fulfilment-panel cart-pickup-panel">
+                        <label class="pickup-field">
                             Pickup merchant
-                            <select name="pickupMerchantId">
+                            <select id="pickup-merchant-select" name="pickupMerchantId">
                                 <option value="any">Any merchant</option>
-                                <% const merchants = Array.from(new Set(cart.map(i => i.merchantName).filter(Boolean))); merchants.forEach((m) => { %>
-                                    <option value="<%= m %>"><%= m %></option>
+                                <% pickupMerchants.forEach((merchant) => { %>
+                                    <option value="<%= merchant.id %>"><%= merchant.name %></option>
                                 <% }) %>
                             </select>
                         </label>
+                        <p class="muted" id="pickup-helper">Only merchants from your selected items are shown.</p>
                     </div>
 
-                    <div id="delivery-options" class="fulfilment-panel" style="display:none;">
-                        <label>
+                    <div id="delivery-options" class="fulfilment-panel cart-delivery-panel" style="display:none;">
+                        <label class="delivery-field">
                             Address
                             <input type="text" name="deliveryAddress" placeholder="123 Example St">
                         </label>
-                        <label>
+                        <label class="delivery-field">
                             Unit number
                             <input type="text" name="deliveryUnit" placeholder="#12-34">
                         </label>
-                        <label>
+                        <label class="delivery-field">
                             Postal code
                             <input type="text" name="deliveryPostal" placeholder="123456">
                         </label>
-                        <label>
+                        <label class="delivery-field">
                             Contact phone
                             <input type="text" name="deliveryPhone" placeholder="91234567">
                         </label>
                     </div>
 
                     <input type="hidden" name="_totalAmount" value="<%= Number(total).toFixed(2) %>">
-                    <form id="delete-selected-form" action="/cart/delete-selected" method="POST" style="margin:0">
-                        <input type="hidden" name="selectedItemIds" id="delete-selected-ids" value="">
-                        <button type="button" id="delete-selected-button" class="text-button">Delete selected</button>
-                    </form>
-                    <button class="button secondary full" type="submit">Proceed to payment</button>
-                    <a class="button primary full" href="/services">Add more services</a>
-                    <a class="text-link" href="/products">Shop products</a>
-                </aside>
-            </form>
+                    <button class="button primary full cart-checkout-button" type="submit">Checkout</button>
+                </form>
+
+                <div class="cart-summary-links">
+                    <a class="button secondary full" href="/services">Add services</a>
+                    <a class="button secondary full" href="/products">Shop products</a>
+                </div>
+            </aside>
         </div>
     <% } %>
 </section>
@@ -135,39 +209,125 @@
 document.addEventListener('DOMContentLoaded', function () {
     const selectAll = document.getElementById('select-all');
     const checks = Array.from(document.querySelectorAll('.cart-item-check'));
-    if (selectAll && checks.length) {
-        selectAll.addEventListener('change', function () {
-            checks.forEach(c => c.checked = selectAll.checked);
-        });
+    const summaryTotal = document.getElementById('cart-summary-total');
+    const summaryCount = document.getElementById('cart-summary-count');
+    const summaryCountPlural = document.getElementById('cart-summary-count-plural');
+    const subtotalValue = document.getElementById('cart-subtotal-value');
+    const cashbackValue = document.getElementById('cart-cashback-value');
+    const dueValue = document.getElementById('cart-due-value');
+    const cashbackCopy = document.getElementById('cart-cashback-copy');
+    const cashbackToggle = document.getElementById('cart-use-cashback');
+    const pickupSelect = document.getElementById('pickup-merchant-select');
+    const pickupHelper = document.getElementById('pickup-helper');
+
+    function formatMoney(value) {
+        return '$' + Number(value || 0).toFixed(2);
     }
 
+    function getSelectedChecks() {
+        return checks.filter((check) => check.checked);
+    }
+
+    function updatePickupMerchants() {
+        if (!pickupSelect) return;
+
+        const previousValue = pickupSelect.value;
+        const merchantMap = new Map();
+
+        getSelectedChecks().forEach((check) => {
+            const merchantId = check.dataset.merchantId;
+            const merchantName = check.dataset.merchantName;
+            if (merchantId && merchantName) {
+                merchantMap.set(merchantId, merchantName);
+            }
+        });
+
+        pickupSelect.innerHTML = '';
+        pickupSelect.add(new Option('Any merchant', 'any'));
+        merchantMap.forEach((name, id) => {
+            pickupSelect.add(new Option(name, id));
+        });
+
+        pickupSelect.value = merchantMap.has(previousValue) || previousValue === 'any' ? previousValue : 'any';
+
+        if (pickupHelper) {
+            pickupHelper.textContent = merchantMap.size > 0
+                ? 'Only merchants from your selected items are shown.'
+                : 'No selected item has a specific merchant, so any merchant can be used.';
+        }
+    }
+
+    function updateSummary() {
+        const selectedChecks = getSelectedChecks();
+        const subtotal = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.lineTotal || 0), 0);
+        const selectedQuantity = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.quantity || 1), 0);
+        const cashbackBalance = cashbackToggle ? Number(cashbackToggle.dataset.cashbackBalance || 0) : 0;
+        const cashbackApplied = cashbackToggle && cashbackToggle.checked
+            ? Math.min(cashbackBalance, subtotal)
+            : 0;
+        const due = Math.max(subtotal - cashbackApplied, 0);
+
+        if (summaryTotal) summaryTotal.textContent = formatMoney(due);
+        if (summaryCount) summaryCount.textContent = String(selectedQuantity);
+        if (summaryCountPlural) summaryCountPlural.textContent = selectedQuantity === 1 ? '' : 's';
+        if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
+        if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
+        if (dueValue) dueValue.textContent = formatMoney(due);
+        if (cashbackCopy) cashbackCopy.textContent = formatMoney(cashbackApplied);
+        updatePickupMerchants();
+    }
+
+    function syncSelectAll() {
+        if (!selectAll || !checks.length) return;
+        selectAll.checked = checks.every((check) => check.checked);
+        selectAll.indeterminate = checks.some((check) => check.checked) && !selectAll.checked;
+        updateSummary();
+    }
+
+    if (selectAll && checks.length) {
+        selectAll.addEventListener('change', function () {
+            checks.forEach((check) => {
+                check.checked = selectAll.checked;
+            });
+            updateSummary();
+        });
+        checks.forEach((check) => check.addEventListener('change', syncSelectAll));
+        syncSelectAll();
+    }
+
+    if (cashbackToggle) {
+        cashbackToggle.addEventListener('change', updateSummary);
+    }
+
+    const fulfilmentChoices = Array.from(document.querySelectorAll('.fulfilment-choice'));
     const fulfilmentRadios = Array.from(document.querySelectorAll('input[name="fulfilment"]'));
     const pickupPanel = document.getElementById('pickup-options');
     const deliveryPanel = document.getElementById('delivery-options');
-    fulfilmentRadios.forEach(r => r.addEventListener('change', function () {
-        if (this.value === 'delivery') {
-            deliveryPanel.style.display = '';
-            pickupPanel.style.display = 'none';
-        } else {
-            deliveryPanel.style.display = 'none';
-            pickupPanel.style.display = '';
-        }
-    }));
 
-    // Delete selected handling
-    const deleteButton = document.getElementById('delete-selected-button');
-    const deleteFormIds = document.getElementById('delete-selected-ids');
-    if (deleteButton) {
-        deleteButton.addEventListener('click', function () {
-            const selected = Array.from(document.querySelectorAll('.cart-item-check:checked')).map(i => i.value);
-            if (selected.length === 0) {
-                alert('Please select at least one item to delete.');
-                return;
+    function syncFulfilment() {
+        const selected = fulfilmentRadios.find((radio) => radio.checked)?.value || 'pickup';
+        fulfilmentChoices.forEach((choice) => {
+            const input = choice.querySelector('input[name="fulfilment"]');
+            choice.classList.toggle('active', input && input.checked);
+        });
+        if (pickupPanel) pickupPanel.style.display = selected === 'pickup' ? '' : 'none';
+        if (deliveryPanel) deliveryPanel.style.display = selected === 'delivery' ? '' : 'none';
+    }
+
+    fulfilmentRadios.forEach((radio) => radio.addEventListener('change', syncFulfilment));
+    syncFulfilment();
+
+    const checkoutForm = document.getElementById('cart-checkout-form');
+    if (checkoutForm) {
+        checkoutForm.addEventListener('submit', function (event) {
+            if (getSelectedChecks().length === 0) {
+                event.preventDefault();
+                alert('Please select at least one item to checkout.');
             }
-            deleteFormIds.value = selected.join(',');
-            document.getElementById('delete-selected-form').submit();
         });
     }
+
+    updateSummary();
 });
 </script>
 

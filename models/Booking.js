@@ -220,27 +220,16 @@ function createInDatabase(bookingData, callback) {
     db.query(sql, values, callback);
 }
 
-function markCheckedIn(bookingId, merchantUserId, callback) {
-    const sql = `
-        UPDATE bookings
-        INNER JOIN services ON services.service_id = bookings.service_id
-        INNER JOIN salons ON salons.salon_id = services.salon_id
-        SET bookings.status = 'checked_in'
-        WHERE bookings.booking_id = ?
-            AND salons.merchant_id = ?
-    `;
-
-    db.query(sql, [bookingId, merchantUserId], callback);
-}
-
 module.exports = {
+    attachTransaction,
     create,
+    createCustomerBooking,
     createInDatabase,
+    getByUserId,
+    getReceiptById,
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
-    getUpcomingByUserId,
-    getCheckInDetails,
     hasExistingBooking,
     hasExistingBookingInDatabase,
     markCheckedIn

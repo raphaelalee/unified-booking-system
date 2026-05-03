@@ -184,7 +184,15 @@ function getAll(searchTerm = '') {
                 service.name,
                 service.duration,
                 String(service.price),
-                ...(service.slots || [])
+                ...(service.slots || []),
+                ...(Array.isArray(service.options)
+                    ? service.options.flatMap((option) => [
+                        option.name,
+                        option.duration,
+                        String(option.price),
+                        ...(option.slots || [])
+                    ])
+                    : [])
             ])
         ].join(' ').toLowerCase();
 

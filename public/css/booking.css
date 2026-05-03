@@ -1,0 +1,76 @@
+/* Booking page polish. Loaded before the final green theme override. */
+.booking-layout {
+    grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr) !important;
+    gap: 28px !important;
+    align-items: start !important;
+}
+
+.booking-services-panel,
+.booking-form-panel {
+    overflow: hidden;
+}
+
+.booking-services-panel .section-heading h2 {
+    max-width: 100%;
+    margin: 0;
+    color: var(--ink);
+    font-size: clamp(2.4rem, 4.5vw, 4rem);
+    line-height: 0.95;
+}
+
+.booking-service-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+}
+
+.booking-service-card h3 {
+    margin: 0 0 10px;
+    color: var(--ink);
+    font-size: 1.6rem;
+    line-height: 1.15;
+}
+
+.booking-service-card p {
+    margin: 8px 0 0;
+}
+
+.booking-form-panel h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: clamp(2rem, 3.2vw, 2.8rem);
+    line-height: 1;
+}
+
+.booking-form {
+    display: grid;
+    gap: 18px;
+}
+
+.booking-form select,
+.booking-form input {
+    width: 100%;
+}
+
+.booking-form .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .booking-layout {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 620px) {
+    .booking-form .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .booking-service-card {
+        grid-template-columns: 1fr;
+    }
+}

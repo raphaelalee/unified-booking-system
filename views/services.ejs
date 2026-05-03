@@ -184,6 +184,16 @@
                     <div class="service-card-image <%= serviceVisual.className %>">
                         <span class="service-image-badge"><%= serviceVisual.label %></span>
                         <span class="service-image-price">From $<%= service.price %></span>
+                        <form class="service-heart-form" action="/merchants/<%= service.merchantId %>/favourite" method="POST">
+                            <button
+                                class="heart-button <%= serviceFavouriteIds.includes(service.merchantId) ? 'active' : '' %>"
+                                type="submit"
+                                aria-label="<%= serviceFavouriteIds.includes(service.merchantId) ? 'Remove saved merchant' : 'Save merchant' %> <%= service.merchantName %>"
+                                title="<%= serviceFavouriteIds.includes(service.merchantId) ? 'Saved merchant' : 'Save merchant' %>"
+                            >
+                                <%- serviceFavouriteIds.includes(service.merchantId) ? '&hearts;' : '&#9825;' %>
+                            </button>
+                        </form>
                     </div>
 
                     <div class="service-card-body">

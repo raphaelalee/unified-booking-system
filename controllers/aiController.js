@@ -47,3 +47,60 @@ exports.getBeautyAdvice = async (req, res) => {
         res.status(500).json({ success: false, message: "AI is currently resting!" });
     }
 };
+
+exports.generateProductCopy = async (req, res) => {
+    try {
+        const productName = String(req.body.productName || '').trim();
+
+        if (!process.env.GROQ_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                message: "AI is not configured yet."
+            });
+        }
+
+        if (productName.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a product name first."
+            });
+        }
+
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: [
+                        "You write concise beauty product copy for Vaniday merchants.",
+                        "Return only valid JSON with these string keys: description, ingredients, howToUse.",
+                        "Do not make medical claims. Keep ingredients plausible and non-prescription."
+                    ].join(" ")
+                },
+                {
+                    role: "user",
+                    content: `Product name: ${productName}`
+                }
+            ],
+            model: "llama-3.1-8b-instant",
+            temperature: 0.6,
+            max_completion_tokens: 260,
+            response_format: { type: "json_object" }
+        });
+
+        const raw = completion.choices?.[0]?.message?.content || '{}';
+        const generated = JSON.parse(raw);
+
+        return res.json({
+            success: true,
+            description: String(generated.description || '').trim(),
+            ingredients: String(generated.ingredients || '').trim(),
+            howToUse: String(generated.howToUse || generated.how_to_use || '').trim()
+        });
+    } catch (error) {
+        console.error("Product AI generation error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "AI could not generate product details right now."
+        });
+    }
+};

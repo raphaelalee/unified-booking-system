@@ -6,6 +6,9 @@ const Booking = require('../models/Booking');
 const Merchant = require('../models/Merchant');
 const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
+const Loyalty = require('../models/Loyalty');
+const PurchaseHistory = require('../models/PurchaseHistory');
+const Booking = require('../models/Booking');
 const { getCartItemCount } = require('../utils/cart');
 
 const membershipTiers = [
@@ -70,32 +73,87 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
         .filter(Boolean);
     const cart = req.session.cart || [];
     const cartItemCount = getCartItemCount(cart);
-    const rewardPoints = favourites.length * 50 + cartItemCount * 20;
-    const member = buildMember(rewardPoints);
     const referralCode = accountUser.referral_code || generateReferralCode(accountUser.user_id);
+    let upcomingBookings = [];
+    let pastBookings = [];
 
-    const customerExtras = {
-        favourites,
-        cartItemCount,
-        rewardPoints,
-        cashbackBalance: (rewardPoints / 100).toFixed(2),
-        member,
-        referral: buildCustomerReferral(member, referralCode)
-    };
+    function finishWithWallet(walletError, loyalty = null) {
+        const wallet = loyalty?.wallet || {};
+        const rewardPoints = walletError
+            ? 0
+            : Number(wallet.pointsBalance || 0);
+        const member = buildMember(rewardPoints);
+        const customerExtras = {
+            favourites,
+            cartItemCount,
+            rewardPoints,
+            cashbackBalance: walletError
+                ? '0.00'
+                : Number(wallet.cashbackBalance || 0).toFixed(2),
+            member,
+            loyalty,
+            referral: buildCustomerReferral(member, referralCode),
+            upcomingBookings,
+            pastBookings
+        };
 
-    if (accountUser.referral_code) {
-        callback(null, customerExtras);
-        return;
-    }
-
-    User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
-        if (error) {
-            callback(error, customerExtras);
+        if (accountUser.referral_code) {
+            callback(walletError, customerExtras);
             return;
         }
 
-        req.session.user.referralCode = referralCode;
-        callback(null, customerExtras);
+        User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
+            if (error) {
+                callback(error, customerExtras);
+                return;
+            }
+
+            req.session.user.referralCode = referralCode;
+            callback(walletError, customerExtras);
+        });
+    }
+
+    function loadWallet() {
+        Loyalty.getWalletView(accountUser.user_id, finishWithWallet);
+    }
+
+    PurchaseHistory.getByUserId(accountUser.user_id, (historyError, rows = []) => {
+        if (historyError) {
+            console.error(historyError);
+            loadWallet();
+            return;
+        }
+
+        const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
+        let index = 0;
+
+        function awardNext() {
+            if (index >= receipts.length) {
+                loadWallet();
+                return;
+            }
+
+            const receipt = receipts[index];
+            index += 1;
+            Loyalty.awardForReceipt(receipt, (awardError) => {
+                if (awardError) {
+                    console.error(awardError);
+                }
+
+                awardNext();
+            });
+        }
+
+        Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
+            if (bookingError) {
+                console.error(bookingError);
+            } else {
+                upcomingBookings = bookings.filter((booking) => booking.status === 'upcoming');
+                pastBookings = bookings.filter((booking) => booking.status === 'completed');
+            }
+
+            awardNext();
+        });
     });
 }
 
@@ -106,7 +164,10 @@ function getEmptyCustomerExtras() {
         rewardPoints: 0,
         cashbackBalance: '0.00',
         member: buildMember(0),
-        referral: null
+        loyalty: null,
+        referral: null,
+        upcomingBookings: [],
+        pastBookings: []
     };
 }
 
@@ -513,11 +574,14 @@ function showProfile(req, res) {
         const isCustomer = req.session.user.role === 'customer';
         const renderProfile = (customerExtras, customerExtraError = null) => {
             const success = req.session.profileSuccess;
-            const error = req.session.profileError
+            const error = req.session.profileError || req.session.loyaltyError
                 || (lookupError ? 'Account details could not be refreshed from the database.' : null)
                 || (customerExtraError ? 'Referral details could not be saved yet. Please refresh and try again.' : null);
             req.session.profileSuccess = null;
             req.session.profileError = null;
+            req.session.loyaltyError = null;
+            const loyaltySuccess = req.session.loyaltySuccess;
+            req.session.loyaltySuccess = null;
 
             return res.render('profile', {
                 title: 'Profile',
@@ -527,11 +591,14 @@ function showProfile(req, res) {
                 rewardPoints: customerExtras.rewardPoints,
                 cashbackBalance: customerExtras.cashbackBalance,
                 member: customerExtras.member,
+                loyalty: customerExtras.loyalty,
                 referral: customerExtras.referral,
+                upcomingBookings: customerExtras.upcomingBookings,
+                pastBookings: customerExtras.pastBookings,
                 isCustomer,
                 dashboardPath: getDashboardPath(req.session.user.role),
                 roleLabel: getRoleLabel(req.session.user.role),
-                success,
+                success: success || loyaltySuccess,
                 error
             });
         };

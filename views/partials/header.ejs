@@ -8,18 +8,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/styles.css?v=sandy-editorial-1">
+    <link rel="stylesheet" href="/css/cart.css?v=1">
+    <link rel="stylesheet" href="/css/payment.css?v=1">
+    <link rel="stylesheet" href="/css/receipt.css?v=1">
+    <link rel="stylesheet" href="/css/booking.css?v=1">
+    <link rel="stylesheet" href="/css/green-theme.css?v=1">
+    <link rel="stylesheet" href="/css/promotions.css?v=1">
+    <link rel="stylesheet" href="/css/readability.css?v=8">
 </head>
 <body>
     <header class="site-header">
         <nav class="nav">
-            <%
-                const brandHref = currentUser && currentUser.role === 'admin'
-                    ? '/admin'
-                    : currentUser && currentUser.role === 'merchant'
-                        ? '/merchant'
-                        : '/';
-            %>
-            <a class="brand" href="<%= brandHref %>">
+            <a class="brand" href="/">
                 <span class="brand-mark">V</span>
                 <span>Vaniday</span>
             </a>
@@ -29,6 +29,7 @@
                     <a href="/admin/services">Manage Services</a>
                     <a href="/admin/promotions">Manage Promotions</a>
                     <a href="/admin/rewards-game">Game Control</a>
+                    <a href="/admin/loyalty">Loyalty</a>
                     <a href="/admin/services/new">Add Service</a>
                     <a href="/admin/merchants/new">Add Merchant</a>
                     <a href="/profile">Profile</a>
@@ -42,14 +43,12 @@
                     <a href="/merchant/promotions/new">Add Promotion</a>
                     <a href="/profile">Profile</a>
                 <% } else { %>
-                    <a href="/">Home</a>
                     <a href="/services">Services</a>
-                    <a href="/merchants">Merchants</a>
                     <div class="nav-dropdown">
-                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
+                        <a class="nav-dropdown-trigger" href="/promotions" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
                             <span>Promotions</span>
                             <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
-                        </button>
+                        </a>
                         <div class="nav-dropdown-menu" id="promotions-menu" aria-label="Promotions menu">
                             <a href="/promotions">All Promotions</a>
                             <a href="/promotions/first-trial">First Trial</a>

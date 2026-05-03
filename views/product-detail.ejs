@@ -1,0 +1,54 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const productImages = {
+        'skin-serum': 'product-skin',
+        'hair-mask': 'product-hair',
+        'body-oil': 'product-body',
+        'lip-tint': 'product-lip',
+        'cream-cleanser': 'product-cleanser',
+        'room-mist': 'product-fragrance'
+    };
+    const productImageClass = productImages[product.id] || 'product-skin';
+    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+%>
+
+<section class="page-title">
+    <p class="eyebrow"><%= product.category %></p>
+    <h1><%= product.name %></h1>
+    <p>$<%= Number(product.price || 0).toFixed(2) %> &middot; <%= product.description %></p>
+</section>
+
+<section class="section compact product-detail-page">
+    <div class="product-detail-layout">
+        <div class="product-detail-image product-image <%= productImageClass %>" style="<%= productImageStyle %>"></div>
+
+        <article class="account-panel product-detail-card">
+            <div class="account-panel-header">
+                <div>
+                    <p class="eyebrow">Product details</p>
+                    <h2>Ingredients & how to use</h2>
+                </div>
+            </div>
+
+            <div class="product-detail-block">
+                <h3>Ingredients</h3>
+                <p><%= product.ingredients %></p>
+            </div>
+
+            <div class="product-detail-block">
+                <h3>How to use</h3>
+                <p><%= product.howToUse %></p>
+            </div>
+
+            <div class="product-card-actions">
+                <a class="button secondary full" href="/products">Back to products</a>
+                <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
+                    <button class="button primary full" type="submit">Add to cart</button>
+                </form>
+            </div>
+        </article>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

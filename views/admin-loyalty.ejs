@@ -1,0 +1,55 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Admin</p>
+    <h1>Loyalty settings.</h1>
+    <p>Control how customers earn points, cashback, and point-to-cashback redemptions.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
+
+    <form class="account-panel account-form" action="/admin/loyalty" method="POST">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Configurable rules</p>
+                <h2>Reward earning and redemption</h2>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <label>
+                Points per $1 paid
+                <input type="number" name="pointsPerDollar" min="0" step="0.01" value="<%= rules.pointsPerDollar %>" required>
+            </label>
+            <label>
+                Cashback percent
+                <input type="number" name="cashbackPercent" min="0" max="50" step="0.01" value="<%= rules.cashbackPercent %>" required>
+            </label>
+            <label>
+                Minimum points to redeem
+                <input type="number" name="minPointsToRedeem" min="1" step="1" value="<%= rules.minPointsToRedeem %>" required>
+            </label>
+            <label>
+                Cash value per point
+                <input type="number" name="pointsToCashRate" min="0.0001" step="0.0001" value="<%= rules.pointsToCashRate %>" required>
+            </label>
+        </div>
+
+        <label class="loyalty-toggle">
+            <input type="checkbox" name="isEnabled" <%= rules.isEnabled ? 'checked' : '' %>>
+            <span>Enable loyalty earning and redemption</span>
+        </label>
+
+        <div class="account-form-actions">
+            <button class="button primary" type="submit">Save loyalty rules</button>
+        </div>
+    </form>
+</section>
+
+<%- include('partials/footer') %>

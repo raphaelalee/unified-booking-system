@@ -84,7 +84,61 @@ function getPaidSpendByUserId(userId, callback) {
     });
 }
 
+function getOrderReceiptById(transactionId, userId, callback) {
+    const sql = `
+        SELECT
+            transactions.transaction_id AS id,
+            transactions.user_id,
+            transactions.total_amount,
+            transactions.payment_status,
+            transactions.payment_method,
+            transactions.created_at,
+            users.name AS customer_name,
+            products.name AS product_name,
+            order_items.quantity,
+            order_items.price_at_purchase
+        FROM transactions
+        INNER JOIN users ON users.user_id = transactions.user_id
+        INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+        INNER JOIN products ON products.product_id = order_items.product_id
+        WHERE transactions.transaction_id = ?
+            AND transactions.user_id = ?
+        ORDER BY order_items.order_item_id ASC
+    `;
+
+    db.query(sql, [transactionId, userId], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        if (!rows.length) {
+            callback(null, null);
+            return;
+        }
+
+        const first = rows[0];
+        callback(null, {
+            id: first.id,
+            userId: first.user_id,
+            userName: first.customer_name,
+            totalAmount: Number(first.total_amount || 0),
+            paymentStatus: first.payment_status || 'paid',
+            paymentMethod: first.payment_method || 'card',
+            createdAt: first.created_at,
+            items: rows.map((row) => ({
+                name: row.product_name,
+                type: 'Product',
+                quantity: Number(row.quantity || 1),
+                unitPrice: Number(row.price_at_purchase || 0),
+                lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0)
+            }))
+        });
+    });
+}
+
 module.exports = {
     createPaidTransaction,
+    getOrderReceiptById,
     getPaidSpendByUserId
 };

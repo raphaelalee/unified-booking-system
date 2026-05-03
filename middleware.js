@@ -20,6 +20,14 @@ function allowGuestOrCustomer(req, res, next) {
     return res.redirect(getRoleHome(req.session.user.role));
 }
 
+function allowBookingViewer(req, res, next) {
+    if (!req.session.user || req.session.user.role === 'customer' || req.session.user.role === 'merchant') {
+        return next();
+    }
+
+    return res.redirect(getRoleHome(req.session.user.role));
+}
+
 function requireCustomer(req, res, next) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -53,6 +61,7 @@ function requireRole(...roles) {
 }
 
 module.exports = {
+    allowBookingViewer,
     allowGuestOrCustomer,
     getRoleHome,
     requireCustomer,

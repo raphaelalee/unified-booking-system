@@ -1,0 +1,49 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Booking confirmed</p>
+    <h1>Confirmation sent.</h1>
+    <p>
+        We have sent your booking confirmation<% if (!emailSkipped) { %> to
+        <strong><%= booking.email %></strong><% } %>. Your check-in QR code is in the email.
+    </p>
+    <% if (emailSkipped) { %>
+        <div class="notice">
+            <p>Email sending is not configured or failed. Your booking was still created.</p>
+        </div>
+    <% } %>
+    <div class="hero-actions">
+        <a class="button primary" href="/profile">View my bookings</a>
+        <a class="button secondary" href="/services">Book another service</a>
+    </div>
+</section>
+
+<section class="section compact receipt-section">
+    <div class="receipt-layout">
+        <article class="receipt-card">
+            <div class="receipt-meta-grid">
+                <p><span>Booking ID</span><strong>#<%= booking.id %></strong></p>
+                <p><span>Service</span><strong><%= booking.serviceName %></strong></p>
+                <p><span>Merchant</span><strong><%= booking.merchantName %></strong></p>
+                <p>
+                    <span>Date/time</span>
+                    <strong>
+                        <%= booking.bookingDate %>
+                        <% if (booking.bookingTime) { %>
+                            at <%= booking.bookingTime %>
+                        <% } %>
+                    </strong>
+                </p>
+            </div>
+            <p class="muted">Use the QR code from your email when checking in at the merchant counter.</p>
+        </article>
+
+        <aside class="receipt-qr-panel">
+            <p class="eyebrow">Email QR preview</p>
+            <img class="qr-code" src="<%= booking.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= booking.id %>">
+            <p class="muted">This is the same QR code included in your booking email.</p>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

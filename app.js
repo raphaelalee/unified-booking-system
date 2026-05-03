@@ -7,12 +7,15 @@ const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
-const merchantDashboardController = require('./controllers/merchantDashboardController');
 const gameController = require('./controllers/gameController');
-const { allowGuestOrCustomer, requireCustomer, requireRole } = require('./middleware');
+const receiptController = require('./controllers/receiptController');
+const profileController = require('./controllers/profileController');
+const loyaltyController = require('./controllers/loyaltyController');
+const merchantDashboardController = require('./controllers/merchantDashboardController');
+const bookingController = require('./controllers/bookingController');
+const { allowGuestOrCustomer, requireCustomer, requireLogin, requireRole, allowBookingViewer } = require('./middleware');
 const Product = require('./models/Product');
 const { getCartItemCount } = require('./utils/cart');
-require('dotenv').config();
 
 const app = express();
 
@@ -37,6 +40,24 @@ app.use((req, res, next) => {
     next();
 });
 
+function requireMerchantJson(req, res, next) {
+    if (!req.session.user) {
+        return res.status(401).json({
+            success: false,
+            message: 'Please log in as a merchant before using the AI helper.'
+        });
+    }
+
+    if (req.session.user.role !== 'merchant') {
+        return res.status(403).json({
+            success: false,
+            message: 'Only merchant accounts can use the product AI helper.'
+        });
+    }
+
+    return next();
+}
+
 app.get('/', allowGuestOrCustomer, merchantController.showHome);
 app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
@@ -53,7 +74,7 @@ app.get('/promotions/one-for-one', allowGuestOrCustomer, (req, res) => {
 app.get('/promotions/featured-salons', allowGuestOrCustomer, merchantController.showFeaturedSalons);
 app.get('/merchants', allowGuestOrCustomer, merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
-app.get('/my-services', requireCustomer, userController.showMyServices);
+app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
 app.post('/reward-shop/claim', requireCustomer, userController.claimRewardShopDaily);
 app.get('/membership', requireCustomer, (req, res) => {
@@ -83,17 +104,19 @@ app.post('/cart/remove/:itemId', requireCustomer, merchantController.removeFromC
 app.post('/cart/delete-selected', requireCustomer, merchantController.deleteSelectedCartItems);
 app.post('/merchants/:merchantId/favourite', requireCustomer, merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', requireRole('merchant'), merchantController.showMerchantQr);
-app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
-app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
 app.get('/scan/:merchantId', allowGuestOrCustomer, merchantController.showSecureScanBooking);
 app.post('/scan/:merchantId', requireCustomer, merchantController.saveSecureScanBooking);
-app.get('/booking/:merchantId/:qrToken', allowGuestOrCustomer, merchantController.showBookingPage);
+app.get('/book/:serviceId', requireCustomer, bookingController.showBookFallback);
+app.post('/book/:serviceId', requireCustomer, bookingController.createBooking);
+app.get('/booking/confirm/:bookingId', bookingController.confirmBooking);
+app.get('/booking/:merchantId/:qrToken', allowBookingViewer, merchantController.showBookingPage);
 app.post('/booking/:merchantId/:qrToken', requireCustomer, merchantController.saveQrBooking);
-app.get('/booking/:merchantId', allowGuestOrCustomer, merchantController.showBookingPage);
+app.get('/booking/:merchantId', allowBookingViewer, merchantController.showBookingPage);
 app.post('/booking/:merchantId', requireCustomer, merchantController.saveQrBooking);
 app.get('/merchants/:id', allowGuestOrCustomer, merchantController.showMerchant);
 app.post('/merchants/:id/book', requireCustomer, merchantController.createBooking);
 app.post('/api/ai/chat', allowGuestOrCustomer, aiController.getBeautyAdvice);
+app.post('/api/ai/product-copy', requireMerchantJson, aiController.generateProductCopy);
 app.get('/merchant', requireRole('merchant'), merchantDashboardController.showServices);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
 app.post('/merchant/generate-qr', requireRole('merchant'), merchantDashboardController.generateQr);
@@ -137,6 +160,8 @@ app.get('/admin/promotions/:promotionId/edit', requireRole('admin'), adminContro
 app.post('/admin/promotions/:promotionId', requireRole('admin'), adminController.updatePromotion);
 app.post('/admin/promotions/:promotionId/delete', requireRole('admin'), adminController.deletePromotion);
 app.get('/admin/rewards-game', requireRole('admin'), gameController.showAdminGame);
+app.get('/admin/loyalty', requireRole('admin'), loyaltyController.showAdminRules);
+app.post('/admin/loyalty', requireRole('admin'), loyaltyController.updateAdminRules);
 app.post('/admin/rewards-game/settings', requireRole('admin'), gameController.updateAdminSettings);
 app.get('/admin/rewards-game/prizes/new', requireRole('admin'), gameController.showNewAdminPrize);
 app.post('/admin/rewards-game/prizes', requireRole('admin'), gameController.createAdminPrize);
@@ -166,13 +191,45 @@ app.get('/products', allowGuestOrCustomer, (req, res) => {
     });
 });
 
+app.get('/products/:productId', allowGuestOrCustomer, (req, res) => {
+    Product.findById(req.params.productId, (error, product) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Product Error',
+                message: 'Product details could not be loaded.'
+            });
+        }
+
+        if (!product) {
+            return res.status(404).render('error', {
+                title: 'Product Not Found',
+                message: 'The product could not be found.'
+            });
+        }
+
+        return res.render('product-detail', {
+            title: product.name,
+            product
+        });
+    });
+});
+
 app.post('/checkout', requireCustomer, merchantController.checkout);
 app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
+app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
+app.get('/receipt/:id', requireCustomer, receiptController.showReceipt);
+app.get('/receipt/:id/pdf', requireCustomer, receiptController.downloadReceiptPdf);
+app.get('/checkin/:id', receiptController.checkIn);
+app.post('/nets/complete', requireCustomer, merchantController.completeNetsPayment);
+app.post('/nets/complete-fail', requireCustomer, merchantController.failNetsPayment);
+app.get('/nets-qr/fail', requireCustomer, merchantController.showNetsFail);
+app.get('/sse/payment-status/:txnRetrievalRef', requireCustomer, merchantController.streamNetsPaymentStatus);
 
-app.get('/cashback', requireCustomer, (req, res) => {
-    res.render('cashback', { title: 'Cashback' });
-});
+app.get('/wallet', requireCustomer, loyaltyController.showWallet);
+app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
+app.get('/cashback', requireCustomer, loyaltyController.showCashback);
 
 app.get('/giftcards', requireCustomer, (req, res) => {
     res.render('giftcards', { title: 'Gift Cards' });

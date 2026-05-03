@@ -1,0 +1,17 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Booking confirmed</p>
+    <h1>Booking completed.</h1>
+    <p>
+        <strong><%= booking.service_name %></strong>
+        at <strong><%= booking.merchant_name %></strong>
+        has been marked as completed.
+    </p>
+    <div class="hero-actions">
+        <a class="button primary" href="/receipt/<%= booking.id %>">View booking</a>
+        <a class="button secondary" href="/services">Browse services</a>
+    </div>
+</section>
+
+<%- include('partials/footer') %>
