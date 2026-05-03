@@ -1,12 +1,15 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow"><%= roleLabel %> Profile</p>
-    <h1>Account settings.</h1>
-    <p>Keep your contact details and password up to date.</p>
-</section>
+<%
+    const profileUpcomingBookings = typeof upcomingBookings !== 'undefined' && Array.isArray(upcomingBookings)
+        ? upcomingBookings
+        : [];
+    const profilePastBookings = typeof pastBookings !== 'undefined' && Array.isArray(pastBookings)
+        ? pastBookings
+        : [];
+%>
 
-<section class="section compact account-settings-page">
+<section class="section compact account-settings-page profile-redesign-page">
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
@@ -14,8 +17,56 @@
         <div class="notice error"><%= error %></div>
     <% } %>
 
+    <div class="profile-page-heading">
+        <div>
+            <p class="eyebrow"><%= roleLabel %> Profile</p>
+            <h1>Account settings.</h1>
+            <p>Keep your contact details and password up to date.</p>
+        </div>
+        <a class="button secondary" href="<%= isCustomer ? '/services' : dashboardPath %>">&larr; Back</a>
+    </div>
+
+    <section class="profile-hero-card">
+        <div class="account-avatar profile-hero-avatar" aria-hidden="true">
+            <%= (profile.name || roleLabel || 'V').charAt(0).toUpperCase() %>
+        </div>
+
+        <div class="profile-hero-details">
+            <span class="account-role-chip"><%= roleLabel %></span>
+            <h2><%= profile.name %></h2>
+            <p><%= profile.email %></p>
+            <p><%= profile.phone || 'Phone not set' %></p>
+            <% if (isCustomer) { %>
+                <p>VaniGlints: <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</strong></p>
+                <p>Membership: <strong><%= member.tier %></strong></p>
+            <% } %>
+        </div>
+
+        <div class="profile-hero-actions">
+            <% if (isCustomer) { %>
+                <a class="button primary full" href="/services">Book services</a>
+                <a class="button secondary full" href="#wallet">Rewards wallet</a>
+            <% } else { %>
+                <a class="button primary full" href="<%= dashboardPath %>">Back to dashboard</a>
+            <% } %>
+            <form action="/logout" method="POST">
+                <button class="text-button full" type="submit">Log out</button>
+            </form>
+        </div>
+    </section>
+
+    <nav class="profile-tab-nav" aria-label="Profile sections">
+        <a href="#profile-details" data-profile-tab="profile-details">Profile</a>
+        <% if (isCustomer) { %>
+            <a href="#bookings" data-profile-tab="bookings">Bookings</a>
+            <a href="#wallet" data-profile-tab="wallet">Wallet</a>
+            <a href="#membership" data-profile-tab="membership">Rewards</a>
+        <% } %>
+        <a href="#settings" data-profile-tab="settings">Settings</a>
+    </nav>
+
     <div class="account-layout">
-        <aside class="account-summary-panel">
+        <aside class="account-summary-panel profile-side-summary">
             <div class="account-avatar" aria-hidden="true">
                 <%= (profile.name || roleLabel || 'V').charAt(0).toUpperCase() %>
             </div>
@@ -74,7 +125,7 @@
         </aside>
 
         <div class="account-main-stack">
-            <form class="account-panel account-form" action="/profile" method="POST">
+            <form id="profile-details" class="account-panel account-form profile-tab-panel" data-profile-panel="profile-details" action="/profile" method="POST">
                 <div class="account-panel-header">
                     <div>
                         <p class="eyebrow">Details</p>
@@ -104,7 +155,7 @@
                 </div>
             </form>
 
-            <form class="account-panel account-form" action="/profile/password" method="POST">
+            <form id="settings" class="account-panel account-form profile-tab-panel" data-profile-panel="settings" action="/profile/password" method="POST">
                 <div class="account-panel-header">
                     <div>
                         <p class="eyebrow">Security</p>
@@ -141,7 +192,72 @@
             </form>
 
             <% if (isCustomer) { %>
-                <section id="membership" class="account-panel account-membership-panel">
+                <section id="bookings" class="account-panel profile-tab-panel" data-profile-panel="bookings">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Bookings</p>
+                            <h2>Upcoming Bookings</h2>
+                        </div>
+                        <a class="button secondary" href="/services">Book services</a>
+                    </div>
+
+                    <% if (!profileUpcomingBookings.length) { %>
+                        <p class="muted">No upcoming bookings yet.</p>
+                    <% } else { %>
+                        <div class="saved-merchant-list">
+                            <% profileUpcomingBookings.forEach((booking) => { %>
+                                <article class="saved-merchant-row">
+                                    <div>
+                                        <strong><%= booking.service_name %></strong>
+                                        <span>
+                                            <%= booking.merchant_name %>
+                                            &middot;
+                                            <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
+                                            <% if (booking.booking_time) { %>
+                                                at <%= booking.booking_time %>
+                                            <% } %>
+                                        </span>
+                                    </div>
+                                    <a class="button secondary" href="/receipt/<%= booking.id %>">View QR</a>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </section>
+
+                <section class="account-panel profile-tab-panel" data-profile-panel="bookings">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">History</p>
+                            <h2>Past Bookings</h2>
+                        </div>
+                    </div>
+
+                    <% if (!profilePastBookings.length) { %>
+                        <p class="muted">No completed bookings yet.</p>
+                    <% } else { %>
+                        <div class="saved-merchant-list">
+                            <% profilePastBookings.forEach((booking) => { %>
+                                <article class="saved-merchant-row">
+                                    <div>
+                                        <strong><%= booking.service_name %></strong>
+                                        <span>
+                                            <%= booking.merchant_name %>
+                                            &middot;
+                                            <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
+                                            <% if (booking.booking_time) { %>
+                                                at <%= booking.booking_time %>
+                                            <% } %>
+                                        </span>
+                                    </div>
+                                    <a class="button secondary" href="/receipt/<%= booking.id %>">View</a>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </section>
+
+                <section id="membership" class="account-panel account-membership-panel profile-tab-panel" data-profile-panel="membership">
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Membership</p>
@@ -192,7 +308,7 @@
                     </div>
                 </section>
 
-                <section id="wallet" class="account-panel loyalty-profile-panel">
+                <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Wallet</p>
@@ -254,7 +370,7 @@
                 </section>
 
                 <% if (referral) { %>
-                    <section id="referral" class="account-panel account-referral-panel">
+                    <section id="referral" class="account-panel account-referral-panel profile-tab-panel" data-profile-panel="membership">
                         <div class="account-panel-header">
                             <div>
                                 <p class="eyebrow">Referral</p>
@@ -283,7 +399,7 @@
                 <% } %>
 
                 <% if (favourites.length > 0) { %>
-                    <section class="account-panel saved-merchants-panel">
+                    <section class="account-panel saved-merchants-panel profile-tab-panel" data-profile-panel="profile-details">
                         <div class="account-panel-header">
                             <div>
                                 <p class="eyebrow">Saved</p>
@@ -309,5 +425,44 @@
         </div>
     </div>
 </section>
+
+<script>
+    (() => {
+        const tabs = Array.from(document.querySelectorAll('[data-profile-tab]'));
+        const panels = Array.from(document.querySelectorAll('[data-profile-panel]'));
+
+        if (!tabs.length || !panels.length) {
+            return;
+        }
+
+        const defaultPanel = tabs[0].dataset.profileTab;
+        const showPanel = (panelName) => {
+            const targetPanel = panels.some((panel) => panel.dataset.profilePanel === panelName)
+                ? panelName
+                : defaultPanel;
+
+            panels.forEach((panel) => {
+                panel.hidden = panel.dataset.profilePanel !== targetPanel;
+            });
+
+            tabs.forEach((tab) => {
+                const isActive = tab.dataset.profileTab === targetPanel;
+                tab.classList.toggle('is-active', isActive);
+                tab.setAttribute('aria-current', isActive ? 'page' : 'false');
+            });
+        };
+
+        tabs.forEach((tab) => {
+            tab.addEventListener('click', (event) => {
+                event.preventDefault();
+                const panelName = tab.dataset.profileTab;
+                history.replaceState(null, '', `#${panelName}`);
+                showPanel(panelName);
+            });
+        });
+
+        showPanel(window.location.hash.replace('#', '') || defaultPanel);
+    })();
+</script>
 
 <%- include('partials/footer') %>

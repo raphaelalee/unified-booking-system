@@ -26,7 +26,9 @@ function buildBookingEmailText(booking) {
         `Service: ${booking.serviceName}`,
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
+        booking.checkinUrl ? `Check-in QR link: ${booking.checkinUrl}` : '',
         '',
+        'Your check-in QR code is included in this email. Show it at the merchant counter.',
         'Please contact the merchant if you need to reschedule or cancel.',
         '',
         'Thank you,',
@@ -41,6 +43,16 @@ function buildBookingEmailHtml(booking) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+
+    const qrBlock = booking.checkinUrl
+        ? `
+                                    <div style="margin-top:24px;padding:18px 20px;background:#f8fbf7;border:1px solid #cfe3d7;border-radius:10px;text-align:center;">
+                                        <p style="margin:0 0 12px;font-size:15px;font-weight:700;color:#213f32;">Check-in QR</p>
+                                        ${booking.qrCodeDataUrl ? `<img src="cid:booking-qr" alt="Booking check-in QR code" width="180" height="180" style="display:block;margin:0 auto 12px;border:0;">` : ''}
+                                        <p style="margin:0;font-size:13px;line-height:1.5;color:#496356;">Show this QR code when you arrive.</p>
+                                        <p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:#496356;word-break:break-all;">${escapeHtml(booking.checkinUrl)}</p>
+                                    </div>`
+        : '';
 
     return `
         <div style="margin:0;padding:0;background:#f5efe5;font-family:Arial,Helvetica,sans-serif;color:#241f1a;">
@@ -85,8 +97,10 @@ function buildBookingEmailHtml(booking) {
 
                                     <div style="margin-top:24px;padding:18px 20px;background:#ecf4ef;border:1px solid #cfe3d7;border-radius:10px;">
                                         <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#213f32;">Next step</p>
-                                        <p style="margin:0;font-size:14px;line-height:1.6;color:#496356;">Please contact the merchant if you need to reschedule or cancel. Keep this email for your appointment reference.</p>
+                                        <p style="margin:0;font-size:14px;line-height:1.6;color:#496356;">Keep this email for your appointment reference. Please contact the merchant if you need to reschedule or cancel.</p>
                                     </div>
+
+                                    ${qrBlock}
 
                                     <p style="margin:26px 0 0;font-size:14px;line-height:1.6;color:#5f5448;">Thank you,<br><strong>Vaniday</strong></p>
                                 </td>
@@ -124,12 +138,21 @@ async function sendBookingConfirmationEmail(booking) {
         }
     });
 
+    const qrAttachment = booking.qrCodeDataUrl
+        ? [{
+            filename: `booking-${booking.bookingId || 'qr'}.png`,
+            content: Buffer.from(String(booking.qrCodeDataUrl).split(',')[1] || '', 'base64'),
+            cid: 'booking-qr'
+        }]
+        : [];
+
     return transporter.sendMail({
         from: config.from,
         to: booking.email,
         subject: `Vaniday booking request: ${booking.serviceName}`,
         text: buildBookingEmailText(booking),
-        html: buildBookingEmailHtml(booking)
+        html: buildBookingEmailHtml(booking),
+        attachments: qrAttachment
     });
 }
 

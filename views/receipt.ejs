@@ -3,14 +3,22 @@
 <section class="page-title receipt-title">
     <p class="eyebrow"><%= receipt.type === 'booking' ? 'Booking receipt' : 'Order receipt' %></p>
     <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
-    <p>
-        <strong><%= receipt.userName %></strong> paid
-        <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
-        by <strong><%= receipt.paymentMethod %></strong>.
-        <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
-            Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
-        <% } %>
-    </p>
+    <% if (receipt.type === 'booking') { %>
+        <p>
+            <strong><%= receipt.userName %></strong> booked
+            <strong><%= receipt.items[0]?.name || 'a service' %></strong>.
+            Status: <strong><%= receipt.status %></strong>.
+        </p>
+    <% } else { %>
+        <p>
+            <strong><%= receipt.userName %></strong> paid
+            <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+            by <strong><%= receipt.paymentMethod %></strong>.
+            <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
+                Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+            <% } %>
+        </p>
+    <% } %>
     <% if (!pdfMode) { %>
         <div class="hero-actions">
             <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download PDF</a>
@@ -25,7 +33,7 @@
             <div class="receipt-meta-grid">
                 <p><span>User</span><strong><%= receipt.userName %></strong></p>
                 <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
-                <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
+                <p><span><%= receipt.type === 'booking' ? 'Status' : 'Payment method' %></span><strong><%= receipt.type === 'booking' ? receipt.status : receipt.paymentMethod %></strong></p>
                 <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
             </div>
 
@@ -72,9 +80,13 @@
         </article>
 
         <aside class="receipt-qr-panel">
-            <p class="eyebrow">Check-in QR</p>
+            <p class="eyebrow"><%= receipt.type === 'booking' ? 'Booking QR' : 'Check-in QR' %></p>
             <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="Check-in QR code for receipt <%= receipt.id %>">
-            <p class="muted">Scan this QR code at the merchant counter to verify the signed check-in token.</p>
+            <p class="muted">
+                <%= receipt.type === 'booking'
+                    ? 'Scan this QR code at the merchant counter to mark the booking as completed.'
+                    : 'Scan this QR code at the merchant counter to verify the signed check-in token.' %>
+            </p>
             <a class="qr-link" href="<%= checkinUrl %>"><%= checkinUrl %></a>
         </aside>
     </div>

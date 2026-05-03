@@ -14,19 +14,12 @@
     <link rel="stylesheet" href="/css/booking.css?v=1">
     <link rel="stylesheet" href="/css/green-theme.css?v=1">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
-    <link rel="stylesheet" href="/css/readability.css?v=1">
+    <link rel="stylesheet" href="/css/readability.css?v=8">
 </head>
 <body>
     <header class="site-header">
         <nav class="nav">
-            <%
-                const brandHref = currentUser && currentUser.role === 'admin'
-                    ? '/admin'
-                    : currentUser && currentUser.role === 'merchant'
-                        ? '/merchant'
-                        : '/';
-            %>
-            <a class="brand" href="<%= brandHref %>">
+            <a class="brand" href="/">
                 <span class="brand-mark">V</span>
                 <span>Vaniday</span>
             </a>
@@ -50,9 +43,7 @@
                     <a href="/merchant/promotions/new">Add Promotion</a>
                     <a href="/profile">Profile</a>
                 <% } else { %>
-                    <a href="/">Home</a>
                     <a href="/services">Services</a>
-                    <a href="/merchants">Merchants</a>
                     <div class="nav-dropdown">
                         <a class="nav-dropdown-trigger" href="/promotions" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
                             <span>Promotions</span>

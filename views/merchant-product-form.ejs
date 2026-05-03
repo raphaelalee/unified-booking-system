@@ -18,7 +18,30 @@
 
         <label>
             Product name
-            <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required>
+            <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required data-product-name-input>
+        </label>
+
+        <div class="ai-product-helper">
+            <div>
+                <p class="eyebrow">AI helper</p>
+                <p class="muted">Generate a description, ingredients, and usage steps from the product name.</p>
+            </div>
+            <button class="button secondary" type="button" data-generate-product-copy>Generate with AI</button>
+        </div>
+
+        <label>
+            Description
+            <textarea name="description" placeholder="Short customer-facing product description" data-product-description><%= form.description %></textarea>
+        </label>
+
+        <label>
+            Ingredients
+            <textarea name="ingredients" placeholder="Key ingredients, separated by commas" data-product-ingredients><%= form.ingredients %></textarea>
+        </label>
+
+        <label>
+            How to use
+            <textarea name="howToUse" placeholder="How customers should use this product" data-product-how-to-use><%= form.howToUse %></textarea>
         </label>
 
         <label>
@@ -42,5 +65,61 @@
         </div>
     </form>
 </section>
+
+<script>
+    (() => {
+        const button = document.querySelector('[data-generate-product-copy]');
+        const nameInput = document.querySelector('[data-product-name-input]');
+        const descriptionInput = document.querySelector('[data-product-description]');
+        const ingredientsInput = document.querySelector('[data-product-ingredients]');
+        const howToUseInput = document.querySelector('[data-product-how-to-use]');
+
+        if (!button || !nameInput || !descriptionInput || !ingredientsInput || !howToUseInput) {
+            return;
+        }
+
+        button.addEventListener('click', async () => {
+            const productName = nameInput.value.trim();
+
+            if (!productName) {
+                nameInput.focus();
+                return;
+            }
+
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Generating...';
+
+            try {
+                const response = await fetch('/api/ai/product-copy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productName })
+                });
+                const responseText = await response.text();
+                let data;
+
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    throw new Error('AI helper returned a page instead of JSON. Restart the server and try again.');
+                }
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'AI generation failed.');
+                }
+
+                descriptionInput.value = data.description || descriptionInput.value;
+                ingredientsInput.value = data.ingredients || ingredientsInput.value;
+                howToUseInput.value = data.howToUse || howToUseInput.value;
+            } catch (error) {
+                window.alert(error.message || 'AI could not generate product details right now.');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

@@ -39,14 +39,17 @@
                 <p class="tag"><%= product.category %></p>
                 <h2><%= product.name %></h2>
                 <p class="muted">$<%= product.price %> &middot; <%= product.description %></p>
-                <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
-                    <input type="hidden" name="productId" value="<%= product.id %>">
-                    <input type="hidden" name="productName" value="<%= product.name %>">
-                    <input type="hidden" name="productCategory" value="<%= product.category %>">
-                    <input type="hidden" name="productDescription" value="<%= product.description %>">
-                    <input type="hidden" name="productPrice" value="<%= product.price %>">
-                    <button class="button secondary full" type="submit">Add to cart</button>
-                </form>
+                <div class="product-card-actions">
+                    <a class="button secondary full" href="/products/<%= product.id %>">View product</a>
+                    <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
+                        <input type="hidden" name="productId" value="<%= product.id %>">
+                        <input type="hidden" name="productName" value="<%= product.name %>">
+                        <input type="hidden" name="productCategory" value="<%= product.category %>">
+                        <input type="hidden" name="productDescription" value="<%= product.description %>">
+                        <input type="hidden" name="productPrice" value="<%= product.price %>">
+                        <button class="button secondary full" type="submit">Add to cart</button>
+                    </form>
+                </div>
             </article>
         <% }) %>
     </div>

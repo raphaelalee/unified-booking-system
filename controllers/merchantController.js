@@ -206,7 +206,7 @@ function getSelectedServiceOption(service, serviceOptionId) {
 
 function getBookableSelection(service, serviceOptionId) {
     const options = getServiceOptions(service);
-    const selectedOption = getSelectedServiceOption(service, serviceOptionId);
+    const selectedOption = getSelectedServiceOption(service, serviceOptionId) || (!serviceOptionId && options.length > 0 ? options[0] : null);
 
     return {
         options,

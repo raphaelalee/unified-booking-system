@@ -7,6 +7,7 @@ const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const Booking = require('../models/Booking');
 const { getCartItemCount } = require('../utils/cart');
 
 const membershipTiers = [
@@ -72,6 +73,8 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     const cart = req.session.cart || [];
     const cartItemCount = getCartItemCount(cart);
     const referralCode = accountUser.referral_code || generateReferralCode(accountUser.user_id);
+    let upcomingBookings = [];
+    let pastBookings = [];
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -88,7 +91,9 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                 : Number(wallet.cashbackBalance || 0).toFixed(2),
             member,
             loyalty,
-            referral: buildCustomerReferral(member, referralCode)
+            referral: buildCustomerReferral(member, referralCode),
+            upcomingBookings,
+            pastBookings
         };
 
         if (accountUser.referral_code) {
@@ -138,7 +143,16 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
             });
         }
 
-        awardNext();
+        Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
+            if (bookingError) {
+                console.error(bookingError);
+            } else {
+                upcomingBookings = bookings.filter((booking) => booking.status === 'upcoming');
+                pastBookings = bookings.filter((booking) => booking.status === 'completed');
+            }
+
+            awardNext();
+        });
     });
 }
 
@@ -150,7 +164,9 @@ function getEmptyCustomerExtras() {
         cashbackBalance: '0.00',
         member: buildMember(0),
         loyalty: null,
-        referral: null
+        referral: null,
+        upcomingBookings: [],
+        pastBookings: []
     };
 }
 
@@ -576,6 +592,8 @@ function showProfile(req, res) {
                 member: customerExtras.member,
                 loyalty: customerExtras.loyalty,
                 referral: customerExtras.referral,
+                upcomingBookings: customerExtras.upcomingBookings,
+                pastBookings: customerExtras.pastBookings,
                 isCustomer,
                 dashboardPath: getDashboardPath(req.session.user.role),
                 roleLabel: getRoleLabel(req.session.user.role),

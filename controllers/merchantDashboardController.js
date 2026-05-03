@@ -86,7 +86,10 @@ function getProductForm(body = {}) {
         name: String(body.name || '').trim(),
         price: String(body.price || '').trim(),
         stockQuantity: String(body.stockQuantity || body.stock_quantity || '').trim(),
-        imageUrl: String(body.imageUrl || body.image_url || '').trim()
+        imageUrl: String(body.imageUrl || body.image_url || '').trim(),
+        description: String(body.description || '').trim(),
+        ingredients: String(body.ingredients || '').trim(),
+        howToUse: String(body.howToUse || body.how_to_use || '').trim()
     };
 }
 
@@ -226,6 +229,18 @@ function validateProductForm(form) {
     }
 
     return errors;
+}
+
+function buildProductPayload(form) {
+    return {
+        name: form.name,
+        price: Number(form.price),
+        stockQuantity: Number(form.stockQuantity),
+        imageUrl: form.imageUrl,
+        description: form.description || `${form.name} from Vaniday merchant.`,
+        ingredients: form.ingredients || 'Ingredients will be updated by the merchant.',
+        howToUse: form.howToUse || 'Use as directed by the merchant.'
+    };
 }
 
 function buildMerchantReports(merchant, bookings = [], hadError = false) {
@@ -680,12 +695,7 @@ function createProduct(req, res) {
             });
         }
 
-        return Product.createForMerchant(req.session.user.id, {
-            name: form.name,
-            price: Number(form.price),
-            stockQuantity: Number(form.stockQuantity),
-            imageUrl: form.imageUrl
-        }, (createError, result) => {
+        return Product.createForMerchant(req.session.user.id, buildProductPayload(form), (createError, result) => {
             if (createError) {
                 console.error(createError);
                 return res.status(500).render('merchant-product-form', {
@@ -742,7 +752,10 @@ function showEditProduct(req, res) {
                     name: product.name,
                     price: String(product.price),
                     stockQuantity: String(product.stockQuantity),
-                    imageUrl: product.imageUrl || ''
+                    imageUrl: product.imageUrl || '',
+                    description: product.description || '',
+                    ingredients: product.ingredients || '',
+                    howToUse: product.howToUse || ''
                 },
                 errors: []
             });
@@ -787,12 +800,7 @@ function updateProduct(req, res) {
                 });
             }
 
-            return Product.updateForMerchant(req.session.user.id, product.id, {
-                name: form.name,
-                price: Number(form.price),
-                stockQuantity: Number(form.stockQuantity),
-                imageUrl: form.imageUrl
-            }, (updateError, result) => {
+            return Product.updateForMerchant(req.session.user.id, product.id, buildProductPayload(form), (updateError, result) => {
                 if (updateError) {
                     console.error(updateError);
                     return res.status(500).render('merchant-product-form', {

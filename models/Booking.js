@@ -166,6 +166,53 @@ function createInDatabase(bookingData, callback) {
     db.query(sql, values, callback);
 }
 
+function createCustomerBooking(bookingData, callback) {
+    if (!bookingData.userId) {
+        callback(new Error('A logged-in user is required to create a booking.'));
+        return;
+    }
+
+    const sql = `
+        INSERT INTO bookings
+            (user_id, merchant_id, service_id, booking_date, timeslot, status)
+        VALUES (?, ?, ?, ?, ?, 'upcoming')
+    `;
+
+    const values = [
+        bookingData.userId,
+        bookingData.merchantId || null,
+        bookingData.serviceId,
+        bookingData.bookingDate,
+        normalizeTimeForDatabase(bookingData.bookingTime || null)
+    ];
+
+    db.query(sql, values, callback);
+}
+
+function getByUserId(userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_id AS booking_id,
+            bookings.user_id,
+            bookings.service_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            services.service_name,
+            services.price AS service_price,
+            salons.salon_name AS merchant_name,
+            salons.address AS merchant_location
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.user_id = ?
+        ORDER BY bookings.booking_date DESC, bookings.booking_id DESC
+    `;
+
+    db.query(sql, [userId], callback);
+}
+
 function getReceiptById(id, callback) {
     const sql = `
         SELECT
@@ -197,6 +244,16 @@ function getReceiptById(id, callback) {
     });
 }
 
+function markCompleted(bookingId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET status = 'completed'
+        WHERE booking_id = ?
+    `;
+
+    db.query(sql, [bookingId], callback);
+}
+
 function attachTransaction(bookingId, transactionId, callback) {
     const sql = `
         UPDATE bookings
@@ -217,11 +274,14 @@ function attachTransaction(bookingId, transactionId, callback) {
 module.exports = {
     attachTransaction,
     create,
+    createCustomerBooking,
     createInDatabase,
+    getByUserId,
     getReceiptById,
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
+    markCompleted,
     hasExistingBooking,
     hasExistingBookingInDatabase
 };

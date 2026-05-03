@@ -73,7 +73,8 @@ function mapBookingReceipt(row, req) {
             }
         ],
         totalAmount: Number(row.service_price || 0),
-        paymentMethod: 'Recorded payment',
+        paymentMethod: 'No payment required',
+        paymentStatus: row.status,
         paidAt: new Date().toISOString(),
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
@@ -169,7 +170,9 @@ async function buildReceiptViewModel(req, id) {
     }
 
     const token = signCheckinToken(receipt);
-    const checkinUrl = `${getPublicBaseUrl(req)}/checkin/${encodeURIComponent(receipt.id)}?token=${encodeURIComponent(token)}`;
+    const checkinUrl = receipt.type === 'booking'
+        ? `${getPublicBaseUrl(req)}/booking/confirm/${encodeURIComponent(receipt.id)}`
+        : `${getPublicBaseUrl(req)}/checkin/${encodeURIComponent(receipt.id)}?token=${encodeURIComponent(token)}`;
     const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
         errorCorrectionLevel: 'M',
         margin: 2,
