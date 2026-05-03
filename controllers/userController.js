@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const Booking = require('../models/Booking');
 const Merchant = require('../models/Merchant');
 const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
@@ -667,6 +668,27 @@ function showRewardShop(req, res) {
     });
 }
 
+function showMyServices(req, res) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    return Booking.getUpcomingByUserId(req.session.user.id, (error, bookings) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'My Services Error',
+                message: 'Your upcoming bookings could not be loaded.'
+            });
+        }
+
+        return res.render('my-services', {
+            title: 'My Services',
+            bookings: bookings || []
+        });
+    });
+}
+
 function claimRewardShopDaily(req, res) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -821,6 +843,7 @@ module.exports = {
     signupUser,
     showProfile,
     showRewardShop,
+    showMyServices,
     claimRewardShopDaily,
     updateProfile,
     updatePassword,

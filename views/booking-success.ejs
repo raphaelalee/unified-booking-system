@@ -2,16 +2,14 @@
 
 <section class="page-title">
     <p class="eyebrow">Booking confirmed</p>
-    <h1>Your booking request was saved.</h1>
+    <h1>Your booking has been confirmed.</h1>
     <p>
         <strong><%= service.name %></strong> at <strong><%= merchant.name %></strong>
         on <strong><%= bookingDate %></strong> at <strong><%= bookingTime %></strong>.
+        Please refer to your email for the confirmation details and check-in QR code.
     </p>
     <div class="hero-actions">
-        <a class="button primary" href="/payment?amount=<%= service.price %>&service=<%= encodeURIComponent(service.name) %>&merchant=<%= encodeURIComponent(merchant.name) %>">Proceed to payment</a>
-        <% if (typeof whatsappConfirmationUrl !== 'undefined' && whatsappConfirmationUrl) { %>
-            <a class="button whatsapp-button" href="<%= whatsappConfirmationUrl %>" target="_blank" rel="noopener">Send WhatsApp confirmation</a>
-        <% } %>
+        <a class="button primary" href="/my-services">View my services</a>
         <a class="button secondary" href="<%= typeof anotherBookingPath !== 'undefined' ? anotherBookingPath : '/merchant/' + merchant.id %>">Create another booking</a>
     </div>
 </section>

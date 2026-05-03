@@ -108,6 +108,29 @@ function getByMerchantUserId(userId, callback) {
     db.query(sql, [userId], callback);
 }
 
+function getUpcomingByUserId(userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            salons.salon_name AS merchant_name,
+            salons.address AS merchant_address,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.user_id = ?
+            AND bookings.booking_date >= CURDATE()
+            AND bookings.status <> 'cancelled'
+        ORDER BY bookings.booking_date ASC, bookings.timeslot ASC
+    `;
+
+    db.query(sql, [userId], callback);
+}
+
 function getCheckInDetails(bookingId, merchantUserId, callback) {
     const sql = `
         SELECT
@@ -207,6 +230,7 @@ module.exports = {
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
+    getCheckInDetails,
     hasExistingBooking,
     hasExistingBookingInDatabase,
     markCheckedIn
