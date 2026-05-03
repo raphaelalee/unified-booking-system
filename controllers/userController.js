@@ -8,7 +8,6 @@ const RewardShop = require('../models/RewardShop');
 const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
-const Booking = require('../models/Booking');
 const { getCartItemCount } = require('../utils/cart');
 
 const membershipTiers = [

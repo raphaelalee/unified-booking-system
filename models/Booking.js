@@ -220,6 +220,126 @@ function createInDatabase(bookingData, callback) {
     db.query(sql, values, callback);
 }
 
+function createCustomerBooking(bookingData, callback) {
+    createInDatabase(bookingData, callback);
+}
+
+function getByUserId(userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            salons.salon_name AS merchant_name,
+            salons.address AS merchant_address,
+            services.service_name,
+            services.price AS service_price,
+            CASE
+                WHEN bookings.status IN ('completed', 'checked_in', 'paid') THEN 'completed'
+                WHEN bookings.booking_date < CURDATE() THEN 'completed'
+                ELSE 'upcoming'
+            END AS booking_group
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.user_id = ?
+        ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
+    `;
+
+    db.query(sql, [userId], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows.map((row) => ({
+            ...row,
+            status: row.booking_group
+        })));
+    });
+}
+
+function getReceiptById(bookingId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            salons.salon_name AS merchant_name,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [bookingId], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results[0] || null);
+    });
+}
+
+function attachTransaction(bookingId, transactionId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET transaction_id = ?, status = 'paid'
+        WHERE booking_id = ?
+    `;
+
+    db.query(sql, [transactionId, bookingId], (error, result) => {
+        if (!error) {
+            callback(null, result);
+            return;
+        }
+
+        if (error.code !== 'ER_BAD_FIELD_ERROR') {
+            callback(error);
+            return;
+        }
+
+        db.query(
+            `UPDATE bookings SET status = 'paid' WHERE booking_id = ?`,
+            [bookingId],
+            callback
+        );
+    });
+}
+
+function markCompleted(bookingId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET status = 'completed'
+        WHERE booking_id = ?
+    `;
+
+    db.query(sql, [bookingId], callback);
+}
+
+function markCheckedIn(bookingId, merchantUserId, callback) {
+    const sql = `
+        UPDATE bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        SET bookings.status = 'checked_in'
+        WHERE bookings.booking_id = ?
+            AND salons.merchant_id = ?
+    `;
+
+    db.query(sql, [bookingId, merchantUserId], callback);
+}
+
 module.exports = {
     attachTransaction,
     create,
@@ -230,7 +350,10 @@ module.exports = {
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
+    getCheckInDetails,
+    getUpcomingByUserId,
     hasExistingBooking,
     hasExistingBookingInDatabase,
+    markCompleted,
     markCheckedIn
 };
