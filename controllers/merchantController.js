@@ -9,6 +9,8 @@ const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Loyalty = require('../models/Loyalty');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
+const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
+const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const {
     getMerchantScanPath,
     getMerchantScanUrl,
@@ -69,6 +71,32 @@ function buildWhatsAppBookingMessage({ merchant, service = null, bookingDate = '
 
 function getWhatsAppEnquiryUrl(merchant, service = null, bookingUrl = '') {
     return getWhatsAppUrl(buildWhatsAppBookingMessage({ merchant, service, bookingUrl }));
+}
+
+function notifyBookingByWhatsApp(booking) {
+    sendBookingNotification(booking).catch((error) => {
+        console.error('WhatsApp booking notification failed:', error.message);
+    });
+}
+
+function notifyBookingByEmail(booking) {
+    sendBookingConfirmationEmail(booking)
+        .then((result) => {
+            if (result?.skipped) {
+                console.log('Email booking confirmation skipped: SMTP is not configured or booking email is missing.');
+                return;
+            }
+
+            console.log(`Email booking confirmation sent to ${booking.email}.`);
+        })
+        .catch((error) => {
+            console.error('Email booking confirmation failed:', error.message);
+        });
+}
+
+function notifyBooking(booking) {
+    notifyBookingByWhatsApp(booking);
+    notifyBookingByEmail(booking);
 }
 
 function getBookingPath(merchant, service = null) {
@@ -1349,6 +1377,16 @@ function saveQrBooking(req, res) {
                     }))
                 });
 
+                notifyBooking({
+                    customerName: validation.customerName,
+                    email: validation.email,
+                    phone: validation.phone,
+                    merchantName: merchant.name,
+                    serviceName: validation.serviceName,
+                    bookingDate: req.body.bookingDate,
+                    bookingTime: req.body.bookingTime
+                });
+
                 if (promotionRecord?.id) {
                     return Promotion.createRedemption({
                         promotionId: promotionRecord.id,
@@ -1503,6 +1541,16 @@ function saveSecureScanBooking(req, res) {
                             phone: validation.phone,
                             bookingUrl: getSecureBookingUrl(req, merchant, validation.service)
                         }))
+                    });
+
+                    notifyBooking({
+                        customerName: validation.customerName,
+                        email: validation.email,
+                        phone: validation.phone,
+                        merchantName: merchant.name,
+                        serviceName: validation.serviceName,
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: req.body.bookingTime
                     });
 
                     if (promotionRecord?.id) {
