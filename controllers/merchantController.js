@@ -9,8 +9,10 @@ const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../util
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const {
+    getBookingCheckInUrl,
     getMerchantScanPath,
     getMerchantScanUrl,
+    verifyBookingCheckInToken,
     verifyMerchantToken
 } = require('../utils/qrToken');
 
@@ -94,6 +96,10 @@ function notifyBookingByEmail(booking) {
 function notifyBooking(booking) {
     notifyBookingByWhatsApp(booking);
     notifyBookingByEmail(booking);
+}
+
+function getInsertedBookingId(result) {
+    return result?.insertId || result?.[0]?.insertId || null;
 }
 
 function getBookingPath(merchant, service = null) {
@@ -1334,6 +1340,9 @@ function saveQrBooking(req, res) {
                     }))
                 });
 
+                const bookingId = getInsertedBookingId(result);
+                const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+
                 notifyBooking({
                     customerName: validation.customerName,
                     email: validation.email,
@@ -1341,14 +1350,15 @@ function saveQrBooking(req, res) {
                     merchantName: merchant.name,
                     serviceName: validation.serviceName,
                     bookingDate: req.body.bookingDate,
-                    bookingTime: req.body.bookingTime
+                    bookingTime: req.body.bookingTime,
+                    checkInUrl
                 });
 
                 if (promotionRecord?.id) {
                     return Promotion.createRedemption({
                         promotionId: promotionRecord.id,
                         userId: req.session.user.id,
-                        bookingId: result?.insertId || null,
+                        bookingId,
                         status: 'used'
                     }, (redemptionError) => {
                         if (redemptionError) {
@@ -1500,6 +1510,9 @@ function saveSecureScanBooking(req, res) {
                         }))
                     });
 
+                    const bookingId = getInsertedBookingId(result);
+                    const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+
                     notifyBooking({
                         customerName: validation.customerName,
                         email: validation.email,
@@ -1507,14 +1520,15 @@ function saveSecureScanBooking(req, res) {
                         merchantName: merchant.name,
                         serviceName: validation.serviceName,
                         bookingDate: req.body.bookingDate,
-                        bookingTime: req.body.bookingTime
+                        bookingTime: req.body.bookingTime,
+                        checkInUrl
                     });
 
                     if (promotionRecord?.id) {
                         return Promotion.createRedemption({
                             promotionId: promotionRecord.id,
                             userId: req.session.user.id,
-                            bookingId: result?.insertId || null,
+                            bookingId,
                             status: 'used'
                         }, (redemptionError) => {
                             if (redemptionError) {
@@ -1526,6 +1540,82 @@ function saveSecureScanBooking(req, res) {
                     }
 
                     return finishSuccess();
+                });
+            });
+        });
+    });
+}
+
+function loadCheckInBooking(req, res, callback) {
+    const bookingId = verifyBookingCheckInToken(req.params.token);
+
+    if (!bookingId) {
+        return res.status(403).render('error', {
+            title: 'Invalid Check-In QR',
+            message: 'This booking check-in QR code is invalid.'
+        });
+    }
+
+    return Booking.getCheckInDetails(bookingId, req.session.user.id, (error, booking) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Check-In Error',
+                message: 'Booking check-in details could not be loaded.'
+            });
+        }
+
+        if (!booking) {
+            return res.status(404).render('error', {
+                title: 'Booking Not Found',
+                message: 'This booking does not belong to your merchant account or no longer exists.'
+            });
+        }
+
+        return callback(bookingId, booking);
+    });
+}
+
+function showBookingCheckIn(req, res) {
+    return loadCheckInBooking(req, res, (bookingId, booking) => {
+        res.render('merchant-check-in', {
+            title: 'Booking Check-In',
+            booking,
+            alreadyCheckedIn: String(booking.status || '').toLowerCase() === 'checked_in'
+        });
+    });
+}
+
+function confirmBookingCheckIn(req, res) {
+    return loadCheckInBooking(req, res, (bookingId, booking) => {
+        if (String(booking.status || '').toLowerCase() === 'checked_in') {
+            return res.render('merchant-check-in', {
+                title: 'Booking Check-In',
+                booking,
+                alreadyCheckedIn: true,
+                success: 'This booking was already checked in.'
+            });
+        }
+
+        return Booking.markCheckedIn(bookingId, req.session.user.id, (error) => {
+            if (error) {
+                console.error(error);
+                return res.status(500).render('error', {
+                    title: 'Check-In Error',
+                    message: 'Booking could not be checked in. Please try again.'
+                });
+            }
+
+            return Booking.getCheckInDetails(bookingId, req.session.user.id, (lookupError, updatedBooking) => {
+                if (lookupError) {
+                    console.error(lookupError);
+                }
+
+                return res.render('merchant-check-in', {
+                    title: 'Booking Check-In',
+                    booking: updatedBooking || { ...booking, status: 'checked_in' },
+                    alreadyCheckedIn: true,
+                    success: 'Booking checked in successfully.'
                 });
             });
         });
@@ -1855,6 +1945,8 @@ module.exports = {
     showSecureScanBooking,
     saveQrBooking,
     saveSecureScanBooking,
+    showBookingCheckIn,
+    confirmBookingCheckIn,
     createBooking,
     addToCart,
     addProductToCart,

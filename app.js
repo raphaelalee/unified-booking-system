@@ -82,6 +82,8 @@ app.post('/cart/remove/:itemId', requireCustomer, merchantController.removeFromC
 app.post('/cart/delete-selected', requireCustomer, merchantController.deleteSelectedCartItems);
 app.post('/merchants/:merchantId/favourite', requireCustomer, merchantController.toggleFavouriteMerchant);
 app.get('/merchants/:merchantId/qr', requireRole('merchant'), merchantController.showMerchantQr);
+app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
+app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
 app.get('/scan/:merchantId', allowGuestOrCustomer, merchantController.showSecureScanBooking);
 app.post('/scan/:merchantId', requireCustomer, merchantController.saveSecureScanBooking);
 app.get('/booking/:merchantId/:qrToken', allowGuestOrCustomer, merchantController.showBookingPage);

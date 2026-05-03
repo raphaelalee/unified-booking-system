@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const QRCode = require('qrcode');
 
 function getEmailConfig() {
     return {
@@ -27,14 +28,16 @@ function buildBookingEmailText(booking) {
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
         '',
+        booking.checkInUrl ? `Check-in QR link for merchant scan: ${booking.checkInUrl}` : '',
+        booking.checkInUrl ? '' : '',
         'Please contact the merchant if you need to reschedule or cancel.',
         '',
         'Thank you,',
         'Vaniday'
-    ].join('\n');
+    ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
 }
 
-function buildBookingEmailHtml(booking) {
+function buildBookingEmailHtml(booking, qrCid = '') {
     const escapeHtml = (value) => String(value || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -83,6 +86,15 @@ function buildBookingEmailHtml(booking) {
                                         </tr>
                                     </table>
 
+                                    ${qrCid ? `
+                                    <div style="margin-top:24px;padding:20px;background:#fff;border:1px solid #ded2c3;border-radius:10px;text-align:center;">
+                                        <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#241f1a;">Merchant check-in QR</p>
+                                        <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#5f5448;">Show this QR code when you arrive. The merchant can scan it to verify and check in your booking.</p>
+                                        <img src="cid:${qrCid}" alt="Booking check-in QR code" width="220" height="220" style="display:block;margin:0 auto 12px;width:220px;height:220px;border:0;">
+                                        <a href="${escapeHtml(booking.checkInUrl)}" style="font-size:12px;line-height:1.5;color:#6f5a42;word-break:break-all;">${escapeHtml(booking.checkInUrl)}</a>
+                                    </div>
+                                    ` : ''}
+
                                     <div style="margin-top:24px;padding:18px 20px;background:#ecf4ef;border:1px solid #cfe3d7;border-radius:10px;">
                                         <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#213f32;">Next step</p>
                                         <p style="margin:0;font-size:14px;line-height:1.6;color:#496356;">Please contact the merchant if you need to reschedule or cancel. Keep this email for your appointment reference.</p>
@@ -111,6 +123,25 @@ async function sendBookingConfirmationEmail(booking) {
         return { skipped: true };
     }
 
+    const qrCid = booking.checkInUrl ? 'booking-check-in-qr@vaniday' : '';
+    const attachments = [];
+
+    if (booking.checkInUrl) {
+        const qrDataUrl = await QRCode.toDataURL(booking.checkInUrl, {
+            errorCorrectionLevel: 'M',
+            margin: 2,
+            width: 280
+        });
+        const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+
+        attachments.push({
+            filename: 'booking-check-in-qr.png',
+            content: Buffer.from(base64Data, 'base64'),
+            contentType: 'image/png',
+            cid: qrCid
+        });
+    }
+
     const transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
@@ -129,7 +160,8 @@ async function sendBookingConfirmationEmail(booking) {
         to: booking.email,
         subject: `Vaniday booking request: ${booking.serviceName}`,
         text: buildBookingEmailText(booking),
-        html: buildBookingEmailHtml(booking)
+        html: buildBookingEmailHtml(booking, qrCid),
+        attachments
     });
 }
 
