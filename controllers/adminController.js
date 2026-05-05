@@ -2,6 +2,8 @@ const bcrypt = require('bcrypt');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
+const RewardShop = require('../models/RewardShop');
+const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
 
 function getBookingAmount(booking) {
@@ -309,6 +311,107 @@ function buildPromotionPayload(form) {
         description: form.description,
         terms: form.terms
     };
+}
+
+function getRewardVoucherForm(body = {}) {
+    return {
+        title: String(body.title || '').trim(),
+        detail: String(body.detail || '').trim(),
+        glintsCost: String(body.glintsCost || '').trim(),
+        voucherValue: String(body.voucherValue || '').trim(),
+        status: String(body.status || 'active').trim(),
+        sortOrder: String(body.sortOrder || '0').trim()
+    };
+}
+
+function validateRewardVoucherForm(form) {
+    const errors = [];
+    const glintsCost = Number(form.glintsCost);
+    const voucherValue = Number(form.voucherValue);
+    const sortOrder = Number(form.sortOrder);
+
+    if (form.title.length < 2) {
+        errors.push('Voucher title must be at least 2 characters.');
+    }
+
+    if (form.detail.length < 2) {
+        errors.push('Voucher details must be at least 2 characters.');
+    }
+
+    if (!Number.isInteger(glintsCost) || glintsCost < 1) {
+        errors.push('Glints cost must be a whole number above 0.');
+    }
+
+    if (!Number.isFinite(voucherValue) || voucherValue <= 0) {
+        errors.push('Voucher value must be above 0.');
+    }
+
+    if (!RewardVoucher.STATUSES.includes(form.status)) {
+        errors.push('Please choose a valid voucher status.');
+    }
+
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+        errors.push('Sort order must be 0 or higher.');
+    }
+
+    return errors;
+}
+
+function buildRewardVoucherPayload(form) {
+    return {
+        title: form.title,
+        detail: form.detail,
+        glintsCost: Number(form.glintsCost),
+        voucherValue: Number(form.voucherValue),
+        status: form.status,
+        sortOrder: Number(form.sortOrder)
+    };
+}
+
+function renderRewardVoucherForm(res, options) {
+    return res.status(options.status || 200).render('admin-reward-voucher-form', {
+        title: options.title,
+        voucher: options.voucher || null,
+        form: options.form,
+        statuses: RewardVoucher.STATUSES,
+        errors: options.errors || []
+    });
+}
+
+function getRewardVoucherPersistenceError(error) {
+    if (error && error.code === 'ER_NO_SUCH_TABLE') {
+        return 'Reward shop voucher table is missing. Run database/20260506_create_reward_shop_vouchers.sql first.';
+    }
+
+    return 'Reward shop voucher could not be saved. Please try again.';
+}
+
+function getDailyRewardFormValues(body = {}) {
+    return RewardShop.DEFAULT_DAILY_REWARD_VALUES.map((fallbackValue, index) => {
+        return String(body[`day${index + 1}`] ?? fallbackValue).trim();
+    });
+}
+
+function validateDailyRewardForm(values) {
+    const errors = [];
+
+    values.forEach((value, index) => {
+        const points = Number(value);
+
+        if (!Number.isInteger(points) || points < 0) {
+            errors.push(`Day ${index + 1} points must be a whole number of 0 or higher.`);
+        }
+    });
+
+    return errors;
+}
+
+function getDailyRewardPersistenceError(error) {
+    if (error && error.code === 'ER_NO_SUCH_TABLE') {
+        return 'Daily reward settings table is missing. Run database/20260506_create_reward_shop_vouchers.sql first.';
+    }
+
+    return 'Daily reward points could not be saved. Please try again.';
 }
 
 function renderServiceForm(res, options) {
@@ -881,6 +984,202 @@ function deletePromotion(req, res) {
     });
 }
 
+function listRewardVouchers(req, res) {
+    return RewardVoucher.getAll((voucherError, vouchers = []) => {
+        if (voucherError) {
+            console.error(voucherError);
+            return res.status(500).render('error', {
+                title: 'Reward Shop Error',
+                message: 'Reward shop vouchers could not be loaded from the database.'
+            });
+        }
+
+        return RewardShop.getDailyRewardValues((dailyRewardError, dailyRewardValues = [], dailyRewardMeta = {}) => {
+            if (dailyRewardError) {
+                console.error(dailyRewardError);
+                return res.status(500).render('error', {
+                    title: 'Reward Shop Error',
+                    message: 'Daily reward points could not be loaded from the database.'
+                });
+            }
+
+            const success = req.session.adminSuccess;
+            const error = req.session.adminError;
+            req.session.adminSuccess = null;
+            req.session.adminError = null;
+            const isDatabaseBacked = !vouchers.some((voucher) => voucher.isDefault);
+            const isDailySettingsBacked = !dailyRewardMeta.isDefault;
+
+            return res.render('admin-reward-shop-vouchers', {
+                title: 'Manage Reward Shop',
+                vouchers,
+                dailyRewardValues,
+                isDatabaseBacked,
+                isDailySettingsBacked,
+                success,
+                error
+            });
+        });
+    });
+}
+
+function showNewRewardVoucher(req, res) {
+    return renderRewardVoucherForm(res, {
+        title: 'Add Reward Shop Voucher',
+        form: getRewardVoucherForm({
+            status: 'active',
+            sortOrder: '0'
+        })
+    });
+}
+
+function createRewardVoucher(req, res) {
+    const form = getRewardVoucherForm(req.body);
+    const errors = validateRewardVoucherForm(form);
+
+    if (errors.length > 0) {
+        return renderRewardVoucherForm(res, {
+            status: 400,
+            title: 'Add Reward Shop Voucher',
+            form,
+            errors
+        });
+    }
+
+    return RewardVoucher.create(buildRewardVoucherPayload(form), (createError) => {
+        if (createError) {
+            console.error(createError);
+            return renderRewardVoucherForm(res, {
+                status: 500,
+                title: 'Add Reward Shop Voucher',
+                form,
+                errors: [getRewardVoucherPersistenceError(createError)]
+            });
+        }
+
+        req.session.adminSuccess = 'Reward shop voucher created successfully.';
+        return res.redirect('/admin/reward-shop');
+    });
+}
+
+function showEditRewardVoucher(req, res) {
+    return RewardVoucher.findById(req.params.voucherId, (voucherError, voucher) => {
+        if (voucherError) {
+            console.error(voucherError);
+            return res.status(500).render('error', {
+                title: 'Reward Voucher Not Found',
+                message: getRewardVoucherPersistenceError(voucherError)
+            });
+        }
+
+        if (!voucher) {
+            return res.status(404).render('error', {
+                title: 'Reward Voucher Not Found',
+                message: 'The selected reward shop voucher could not be found.'
+            });
+        }
+
+        return renderRewardVoucherForm(res, {
+            title: 'Edit Reward Shop Voucher',
+            voucher,
+            form: {
+                title: voucher.title,
+                detail: voucher.detail,
+                glintsCost: String(voucher.glintsCost),
+                voucherValue: String(voucher.voucherValue),
+                status: voucher.status,
+                sortOrder: String(voucher.sortOrder)
+            }
+        });
+    });
+}
+
+function updateRewardVoucher(req, res) {
+    return RewardVoucher.findById(req.params.voucherId, (voucherError, voucher) => {
+        if (voucherError) {
+            console.error(voucherError);
+            return res.status(500).render('error', {
+                title: 'Reward Voucher Not Found',
+                message: getRewardVoucherPersistenceError(voucherError)
+            });
+        }
+
+        if (!voucher) {
+            return res.status(404).render('error', {
+                title: 'Reward Voucher Not Found',
+                message: 'The selected reward shop voucher could not be found.'
+            });
+        }
+
+        const form = getRewardVoucherForm(req.body);
+        const errors = validateRewardVoucherForm(form);
+
+        if (errors.length > 0) {
+            return renderRewardVoucherForm(res, {
+                status: 400,
+                title: 'Edit Reward Shop Voucher',
+                voucher,
+                form,
+                errors
+            });
+        }
+
+        return RewardVoucher.update(voucher.id, buildRewardVoucherPayload(form), (updateError) => {
+            if (updateError) {
+                console.error(updateError);
+                return renderRewardVoucherForm(res, {
+                    status: 500,
+                    title: 'Edit Reward Shop Voucher',
+                    voucher,
+                    form,
+                    errors: [getRewardVoucherPersistenceError(updateError)]
+                });
+            }
+
+            req.session.adminSuccess = 'Reward shop voucher updated successfully.';
+            return res.redirect('/admin/reward-shop');
+        });
+    });
+}
+
+function deleteRewardVoucher(req, res) {
+    return RewardVoucher.deleteById(req.params.voucherId, (deleteError, result) => {
+        if (deleteError) {
+            console.error(deleteError);
+            req.session.adminError = deleteError.code === 'ER_NO_SUCH_TABLE'
+                ? 'Reward shop voucher table is missing. Run database/20260506_create_reward_shop_vouchers.sql first.'
+                : 'Reward shop voucher could not be deleted.';
+            return res.redirect('/admin/reward-shop');
+        }
+
+        const deleted = Boolean(result && result.affectedRows > 0);
+        req.session.adminSuccess = deleted ? 'Reward shop voucher deleted successfully.' : null;
+        req.session.adminError = deleted ? null : 'Reward shop voucher could not be deleted.';
+        return res.redirect('/admin/reward-shop');
+    });
+}
+
+function updateDailyRewards(req, res) {
+    const values = getDailyRewardFormValues(req.body);
+    const errors = validateDailyRewardForm(values);
+
+    if (errors.length > 0) {
+        req.session.adminError = errors.join(' ');
+        return res.redirect('/admin/reward-shop');
+    }
+
+    return RewardShop.updateDailyRewardValues(values.map(Number), (updateError) => {
+        if (updateError) {
+            console.error(updateError);
+            req.session.adminError = getDailyRewardPersistenceError(updateError);
+            return res.redirect('/admin/reward-shop');
+        }
+
+        req.session.adminSuccess = 'Daily reward points updated successfully.';
+        return res.redirect('/admin/reward-shop');
+    });
+}
+
 module.exports = {
     showDashboard,
     showNewMerchant,
@@ -896,5 +1195,12 @@ module.exports = {
     listPromotions,
     showEditPromotion,
     updatePromotion,
-    deletePromotion
+    deletePromotion,
+    listRewardVouchers,
+    showNewRewardVoucher,
+    createRewardVoucher,
+    showEditRewardVoucher,
+    updateRewardVoucher,
+    deleteRewardVoucher,
+    updateDailyRewards
 };

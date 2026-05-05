@@ -15,6 +15,24 @@ function create(user, callback) {
     ], callback);
 }
 
+function findByReferralCode(referralCode, callback) {
+    const sql = `
+        SELECT user_id, referral_code
+        FROM users
+        WHERE referral_code = ? AND role = 'customer'
+        LIMIT 1
+    `;
+
+    db.query(sql, [referralCode], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results[0] || null);
+    });
+}
+
 function findByEmail(email, callback) {
     const sql = `
         SELECT user_id, name, email, phone, referral_code, password, role, glints_balance, created_at
@@ -81,6 +99,47 @@ function updateReferralCode(userId, referralCode, callback) {
     db.query(sql, [referralCode, userId], callback);
 }
 
+function setReferredByCode(userId, referralCode, callback) {
+    const sql = `
+        UPDATE users
+        SET referred_by_code = ?
+        WHERE user_id = ? AND role = 'customer'
+    `;
+
+    db.query(sql, [referralCode || null, userId], (error, result) => {
+        if (error && error.code === 'ER_BAD_FIELD_ERROR') {
+            callback(null, result);
+            return;
+        }
+
+        callback(error, result);
+    });
+}
+
+function getReferralStats(referralCode, callback) {
+    const sql = `
+        SELECT COUNT(*) AS successful_referrals
+        FROM users
+        WHERE referred_by_code = ?
+    `;
+
+    db.query(sql, [referralCode], (error, rows) => {
+        if (error && error.code === 'ER_BAD_FIELD_ERROR') {
+            callback(null, { successfulReferrals: 0 });
+            return;
+        }
+
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, {
+            successfulReferrals: Number(rows[0]?.successful_referrals || 0)
+        });
+    });
+}
+
 function getDashboardSummary(callback) {
     const roleSql = `
         SELECT role, COUNT(*) AS count, COALESCE(SUM(glints_balance), 0) AS glints_total
@@ -122,10 +181,13 @@ function getDashboardSummary(callback) {
 
 module.exports = {
     create,
+    findByReferralCode,
     findByEmail,
     findById,
     updateProfile,
     updatePassword,
     updateReferralCode,
+    setReferredByCode,
+    getReferralStats,
     getDashboardSummary
 };

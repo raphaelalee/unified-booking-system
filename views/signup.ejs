@@ -43,6 +43,11 @@
                 <input type="password" name="confirmPassword" placeholder="Re-enter password" required>
             </label>
 
+            <label>
+                Referral code <span class="muted">(optional)</span>
+                <input type="text" name="referralCode" value="<%= form.referralCode || '' %>" placeholder="VANI0001" autocomplete="off">
+            </label>
+
             <button class="button primary full" type="submit">Create account</button>
             <p class="auth-switch">Already have an account? <a class="text-link" href="/login">Log in</a></p>
         </form>

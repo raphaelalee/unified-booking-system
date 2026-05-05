@@ -1,5 +1,7 @@
 <%- include('partials/header', { title }) %>
 
+<% const showClaimPop = Boolean(success && success.startsWith('Claimed ')); %>
+
 <section class="section compact reward-shop-page">
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
@@ -8,7 +10,7 @@
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
 
-    <section class="reward-shop-daily-card">
+    <section class="reward-shop-daily-card <%= showClaimPop ? 'has-claim-pop' : '' %>">
         <p class="reward-shop-kicker reward-shop-kicker-light">VaniGlints Rewards Page</p>
 
         <div class="reward-shop-daily-balance">
@@ -16,6 +18,10 @@
             <strong><%= glintsBalance %></strong>
             <span class="reward-shop-daily-arrow" aria-hidden="true">&#8250;</span>
         </div>
+
+        <% if (showClaimPop) { %>
+            <span class="reward-shop-claim-pop" aria-hidden="true">V</span>
+        <% } %>
 
         <div class="reward-shop-daily-panel">
             <div class="reward-shop-streak-grid">

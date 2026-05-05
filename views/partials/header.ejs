@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=1">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=8">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=5">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=13">
 </head>
 <body>
     <header class="site-header">
@@ -29,6 +29,7 @@
                     <a href="/admin">Dashboard</a>
                     <a href="/admin/services">Manage Services</a>
                     <a href="/admin/promotions">Manage Promotions</a>
+                    <a href="/admin/reward-shop">Reward Shop</a>
                     <a href="/admin/rewards-game">Game Control</a>
                     <a href="/admin/loyalty">Loyalty</a>
                     <a href="/admin/services/new">Add Service</a>
@@ -46,10 +47,10 @@
                 <% } else { %>
                     <a href="/services">Services</a>
                     <div class="nav-dropdown">
-                        <a class="nav-dropdown-trigger" href="/promotions" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
                             <span>Promotions</span>
                             <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
-                        </a>
+                        </button>
                         <div class="nav-dropdown-menu" id="promotions-menu" aria-label="Promotions menu">
                             <a href="/promotions">All Promotions</a>
                             <a href="/promotions/first-trial">First Trial</a>

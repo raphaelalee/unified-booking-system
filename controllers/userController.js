@@ -5,6 +5,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const Booking = require('../models/Booking');
 const Merchant = require('../models/Merchant');
 const RewardShop = require('../models/RewardShop');
+const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
@@ -50,9 +51,10 @@ function generateReferralCode(userId) {
     return `VANI${String(userId).padStart(4, '0')}`;
 }
 
-function buildCustomerReferral(member, referralCode) {
+function buildCustomerReferral(member, referralCode, stats = {}) {
     const reward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
     const discount = member.tier === 'Platinum' ? 15 : 10;
+    const successfulReferrals = Number(stats.successfulReferrals || 0);
     const mailSubject = encodeURIComponent('Join Vaniday with my referral code');
     const mailBody = encodeURIComponent(`Use my Vaniday referral code ${referralCode} to get $${discount} off your first booking.`);
 
@@ -61,6 +63,9 @@ function buildCustomerReferral(member, referralCode) {
         link: `https://www.vaniday.com/ref/${referralCode}`,
         reward,
         discount,
+        successfulReferrals,
+        earnedGlints: successfulReferrals * reward,
+        nextReward: reward,
         mailto: `mailto:?subject=${mailSubject}&body=${mailBody}`
     };
 }
@@ -82,33 +87,39 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
             ? 0
             : Number(wallet.pointsBalance || 0);
         const member = buildMember(rewardPoints);
-        const customerExtras = {
-            favourites,
-            cartItemCount,
-            rewardPoints,
-            cashbackBalance: walletError
-                ? '0.00'
-                : Number(wallet.cashbackBalance || 0).toFixed(2),
-            member,
-            loyalty,
-            referral: buildCustomerReferral(member, referralCode),
-            upcomingBookings,
-            pastBookings
-        };
+        User.getReferralStats(referralCode, (statsError, referralStats = {}) => {
+            if (statsError) {
+                console.error(statsError);
+            }
 
-        if (accountUser.referral_code) {
-            callback(walletError, customerExtras);
-            return;
-        }
+            const customerExtras = {
+                favourites,
+                cartItemCount,
+                rewardPoints,
+                cashbackBalance: walletError
+                    ? '0.00'
+                    : Number(wallet.cashbackBalance || 0).toFixed(2),
+                member,
+                loyalty,
+                referral: buildCustomerReferral(member, referralCode, referralStats),
+                upcomingBookings,
+                pastBookings
+            };
 
-        User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
-            if (error) {
-                callback(error, customerExtras);
+            if (accountUser.referral_code) {
+                callback(walletError, customerExtras);
                 return;
             }
 
-            req.session.user.referralCode = referralCode;
-            callback(walletError, customerExtras);
+            User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
+                if (error) {
+                    callback(error, customerExtras);
+                    return;
+                }
+
+                req.session.user.referralCode = referralCode;
+                callback(walletError, customerExtras);
+            });
         });
     }
 
@@ -287,41 +298,10 @@ function configureGoogleAuth() {
     googleAuthConfigured = true;
 }
 
-function getRewardShopOffers() {
-    return [
-        {
-            id: 'glints-1000',
-            glintsCost: 1000,
-            voucherValue: 1,
-            title: '$1 Off Booking',
-            detail: 'Best for stacking up small cashback-style redemptions.'
-        },
-        {
-            id: 'glints-5000',
-            glintsCost: 5000,
-            voucherValue: 5,
-            title: '$5 Off Booking',
-            detail: 'A stronger offset for weekday treatments and quick services.'
-        },
-        {
-            id: 'glints-10000',
-            glintsCost: 10000,
-            voucherValue: 10,
-            title: '$10 Off Booking',
-            detail: 'Ideal for premium facials, massages, and bundled appointments.'
-        },
-        {
-            id: 'glints-15000',
-            glintsCost: 15000,
-            voucherValue: 15,
-            title: '$15 Off Booking',
-            detail: 'Higher-value reward for larger bookings and platform promos.'
-        }
-    ];
-}
-
 function getDailyRewardTrack(wallet) {
-    const values = RewardShop.DAILY_REWARD_VALUES;
+    const values = Array.isArray(wallet?.rewardValues) && wallet.rewardValues.length > 0
+        ? wallet.rewardValues
+        : RewardShop.DEFAULT_DAILY_REWARD_VALUES;
     const currentDay = Number(wallet?.currentDay || 0);
 
     return values.map((points, index) => ({
@@ -446,12 +426,17 @@ function handleGoogleCallback(req, res, next) {
 }
 
 function showSignup(req, res) {
-    if (req.session.user) {
+    const referralCodeFromQuery = String(req.query.ref || '').trim().toUpperCase();
+
+    if (req.session.user && !referralCodeFromQuery) {
         return res.redirect(getDashboardPath(req.session.user.role));
     }
 
     const error = req.session.signupError;
-    const form = req.session.signupForm || {};
+    const form = {
+        ...(req.session.signupForm || {}),
+        referralCode: req.session.signupForm?.referralCode || referralCodeFromQuery
+    };
     req.session.signupError = null;
     req.session.signupForm = null;
 
@@ -462,22 +447,29 @@ function showSignup(req, res) {
     });
 }
 
+function openReferralSignup(req, res) {
+    const referralCode = String(req.params.referralCode || '').trim().toUpperCase();
+    return res.redirect(`/signup${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`);
+}
+
 function signupUser(req, res) {
     const name = (req.body.name || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
     const phone = (req.body.phone || '').trim();
     const password = req.body.password || '';
     const confirmPassword = req.body.confirmPassword || '';
+    const enteredReferralCode = (req.body.referralCode || '').trim().toUpperCase();
+    const signupForm = { name, email, phone, referralCode: enteredReferralCode };
 
     if (name.length < 2 || !isValidEmail(email) || !/^[689]\d{7}$/.test(phone)) {
         req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
-        req.session.signupForm = { name, email, phone };
+        req.session.signupForm = signupForm;
         return res.redirect('/signup');
     }
 
     if (password.length < 4 || password !== confirmPassword) {
         req.session.signupError = 'Password must be at least 4 characters and match the confirmation.';
-        req.session.signupForm = { name, email, phone };
+        req.session.signupForm = signupForm;
         return res.redirect('/signup');
     }
 
@@ -485,13 +477,13 @@ function signupUser(req, res) {
         if (lookupError) {
             console.error(lookupError);
             req.session.signupError = 'Account could not be created. Please try again.';
-            req.session.signupForm = { name, email, phone };
+            req.session.signupForm = signupForm;
             return res.redirect('/signup');
         }
 
         if (existingUser) {
             req.session.signupError = 'An account already exists with that email.';
-            req.session.signupForm = { name, email, phone };
+            req.session.signupForm = signupForm;
             return res.redirect('/signup');
         }
 
@@ -499,7 +491,7 @@ function signupUser(req, res) {
             if (hashError) {
                 console.error(hashError);
                 req.session.signupError = 'Account could not be created. Please try again.';
-                req.session.signupForm = { name, email, phone };
+                req.session.signupForm = signupForm;
                 return res.redirect('/signup');
             }
 
@@ -509,7 +501,7 @@ function signupUser(req, res) {
                     req.session.signupError = createError.code === 'ER_DUP_ENTRY'
                         ? 'An account already exists with that email.'
                         : 'Account could not be created. Please try again.';
-                    req.session.signupForm = { name, email, phone };
+                    req.session.signupForm = signupForm;
                     return res.redirect('/signup');
                 }
 
@@ -533,13 +525,36 @@ function signupUser(req, res) {
                         return res.redirect('/profile');
                     }
 
-                    return RewardShop.initializeForUser(result.insertId, (rewardError) => {
+                    const finishSignup = () => RewardShop.initializeForUser(result.insertId, (rewardError) => {
                         if (rewardError) {
                             console.error(rewardError);
                         }
 
                         req.session.profileSuccess = 'Account created successfully.';
                         return res.redirect('/profile');
+                    });
+
+                    if (!enteredReferralCode || enteredReferralCode === referralCode) {
+                        return finishSignup();
+                    }
+
+                    return User.findByReferralCode(enteredReferralCode, (lookupReferralError, referrer) => {
+                        if (lookupReferralError) {
+                            console.error(lookupReferralError);
+                            return finishSignup();
+                        }
+
+                        if (!referrer || Number(referrer.user_id) === Number(result.insertId)) {
+                            return finishSignup();
+                        }
+
+                        return User.setReferredByCode(result.insertId, enteredReferralCode, (trackReferralError) => {
+                            if (trackReferralError) {
+                                console.error(trackReferralError);
+                            }
+
+                            return finishSignup();
+                        });
                     });
                 });
             });
@@ -644,24 +659,30 @@ function showRewardShop(req, res) {
                 });
             }
 
-            const offers = getRewardShopOffers().map((offer) => ({
-                ...offer,
-                canRedeem: glintsBalance >= offer.glintsCost,
-                remaining: Math.max(offer.glintsCost - glintsBalance, 0)
-            }));
-            const success = req.session.rewardShopSuccess || null;
-            const error = req.session.rewardShopError || null;
-            req.session.rewardShopSuccess = null;
-            req.session.rewardShopError = null;
+            return RewardVoucher.getActive((voucherError, voucherOffers = []) => {
+                if (voucherError) {
+                    console.error(voucherError);
+                }
 
-            return res.render('reward-shop', {
-                title: 'Reward Shop',
-                glintsBalance,
-                offers,
-                success,
-                error,
-                rewardWallet,
-                dailyRewards: getDailyRewardTrack(rewardWallet)
+                const offers = (voucherError ? RewardVoucher.DEFAULT_REWARD_VOUCHERS : voucherOffers).map((offer) => ({
+                    ...offer,
+                    canRedeem: glintsBalance >= offer.glintsCost,
+                    remaining: Math.max(offer.glintsCost - glintsBalance, 0)
+                }));
+                const success = req.session.rewardShopSuccess || null;
+                const error = req.session.rewardShopError || null;
+                req.session.rewardShopSuccess = null;
+                req.session.rewardShopError = null;
+
+                return res.render('reward-shop', {
+                    title: 'Reward Shop',
+                    glintsBalance,
+                    offers,
+                    success,
+                    error,
+                    rewardWallet,
+                    dailyRewards: getDailyRewardTrack(rewardWallet)
+                });
             });
         });
     });
@@ -839,6 +860,7 @@ module.exports = {
     startGoogleLogin,
     handleGoogleCallback,
     showSignup,
+    openReferralSignup,
     signupUser,
     showProfile,
     showRewardShop,

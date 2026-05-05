@@ -1,6 +1,45 @@
 const db = require('../db');
 
-const DAILY_REWARD_VALUES = [10, 10, 20, 20, 30, 50, 100];
+const DEFAULT_DAILY_REWARD_VALUES = [10, 10, 20, 20, 30, 50, 100];
+
+function isMissingTable(error) {
+    return error && error.code === 'ER_NO_SUCH_TABLE';
+}
+
+function normalizeDailyRewardValues(rows = []) {
+    const values = [...DEFAULT_DAILY_REWARD_VALUES];
+
+    rows.forEach((row) => {
+        const dayNumber = Number(row.day_number);
+        const points = Number(row.points);
+
+        if (Number.isInteger(dayNumber) && dayNumber >= 1 && dayNumber <= values.length
+            && Number.isInteger(points) && points >= 0) {
+            values[dayNumber - 1] = points;
+        }
+    });
+
+    return values;
+}
+
+function getDailyRewardValues(callback) {
+    db.query(
+        'SELECT day_number, points FROM daily_reward_settings ORDER BY day_number ASC',
+        (error, rows) => {
+            if (isMissingTable(error)) {
+                callback(null, DEFAULT_DAILY_REWARD_VALUES, { isDefault: true });
+                return;
+            }
+
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, normalizeDailyRewardValues(rows), { isDefault: false });
+        }
+    );
+}
 
 function getTodayDateString() {
     return new Intl.DateTimeFormat('en-CA', {
@@ -30,12 +69,6 @@ function formatDateOnly(value) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
-}
-
-function getPreviousDateString(dateString) {
-    const date = new Date(`${dateString}T00:00:00+08:00`);
-    date.setDate(date.getDate() - 1);
-    return formatDateOnly(date);
 }
 
 function ensureWallet(userId, callback) {
@@ -77,19 +110,27 @@ function getWallet(userId, callback) {
             return;
         }
 
-        const today = getTodayDateString();
-        const lastClaimDate = formatDateOnly(wallet.last_claim_date);
-        const hasClaimedToday = lastClaimDate === today;
-        const currentDay = Number(wallet.current_day || 0);
+        return getDailyRewardValues((rewardError, rewardValues) => {
+            if (rewardError) {
+                callback(rewardError);
+                return;
+            }
 
-        callback(null, {
-            userId,
-            cycleStartDate: formatDateOnly(wallet.cycle_start_date) || today,
-            currentDay,
-            lastClaimDate,
-            hasClaimedToday,
-            nextRewardValue: DAILY_REWARD_VALUES[Math.min(currentDay, DAILY_REWARD_VALUES.length - 1)],
-            rewardValues: DAILY_REWARD_VALUES
+            const today = getTodayDateString();
+            const lastClaimDate = formatDateOnly(wallet.last_claim_date);
+            const hasClaimedToday = lastClaimDate === today;
+            const currentDay = Number(wallet.current_day || 0);
+            const nextRewardIndex = currentDay >= rewardValues.length ? 0 : currentDay;
+
+            callback(null, {
+                userId,
+                cycleStartDate: formatDateOnly(wallet.cycle_start_date) || today,
+                currentDay,
+                lastClaimDate,
+                hasClaimedToday,
+                nextRewardValue: rewardValues[nextRewardIndex],
+                rewardValues
+            });
         });
     });
 }
@@ -112,85 +153,108 @@ function claimDailyReward(userId, callback) {
             return;
         }
 
-        const previousDate = getPreviousDateString(today);
-        const currentDay = Number(wallet.current_day || 0);
-        const nextDay = lastClaimDate === previousDate
-            ? Math.min(currentDay + 1, DAILY_REWARD_VALUES.length)
-            : 1;
-        const rewardValue = DAILY_REWARD_VALUES[nextDay - 1];
-
-        db.getConnection((connectionError, connection) => {
-            if (connectionError) {
-                callback(connectionError);
+        return getDailyRewardValues((rewardError, rewardValues) => {
+            if (rewardError) {
+                callback(rewardError);
                 return;
             }
 
-            connection.beginTransaction((transactionError) => {
-                if (transactionError) {
-                    connection.release();
-                    callback(transactionError);
+            const currentDay = Number(wallet.current_day || 0);
+            const nextDay = currentDay >= rewardValues.length ? 1 : currentDay + 1;
+            const rewardValue = rewardValues[nextDay - 1];
+
+            db.getConnection((connectionError, connection) => {
+                if (connectionError) {
+                    callback(connectionError);
                     return;
                 }
 
-                connection.query(
-                    `
-                        UPDATE daily_reward_wallets
-                        SET cycle_start_date = ?,
-                            current_day = ?,
-                            last_claim_date = ?
-                        WHERE user_id = ?
-                    `,
-                    [
-                        nextDay === 1 ? today : formatDateOnly(wallet.cycle_start_date) || today,
-                        nextDay,
-                        today,
-                        userId
-                    ],
-                    (walletUpdateError) => {
-                        if (walletUpdateError) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                callback(walletUpdateError);
-                            });
-                        }
+                connection.beginTransaction((transactionError) => {
+                    if (transactionError) {
+                        connection.release();
+                        callback(transactionError);
+                        return;
+                    }
 
-                        connection.query(
-                            'UPDATE users SET glints_balance = COALESCE(glints_balance, 0) + ? WHERE user_id = ?',
-                            [rewardValue, userId],
-                            (userUpdateError) => {
-                                if (userUpdateError) {
-                                    return connection.rollback(() => {
-                                        connection.release();
-                                        callback(userUpdateError);
-                                    });
-                                }
-
-                                return connection.commit((commitError) => {
+                    connection.query(
+                        `
+                            UPDATE daily_reward_wallets
+                            SET cycle_start_date = ?,
+                                current_day = ?,
+                                last_claim_date = ?
+                            WHERE user_id = ?
+                        `,
+                        [
+                            nextDay === 1 ? today : formatDateOnly(wallet.cycle_start_date) || today,
+                            nextDay,
+                            today,
+                            userId
+                        ],
+                        (walletUpdateError) => {
+                            if (walletUpdateError) {
+                                return connection.rollback(() => {
                                     connection.release();
-
-                                    if (commitError) {
-                                        callback(commitError);
-                                        return;
-                                    }
-
-                                    callback(null, {
-                                        alreadyClaimed: false,
-                                        rewardValue,
-                                        currentDay: nextDay
-                                    });
+                                    callback(walletUpdateError);
                                 });
                             }
-                        );
-                    }
-                );
+
+                            connection.query(
+                                'UPDATE users SET glints_balance = COALESCE(glints_balance, 0) + ? WHERE user_id = ?',
+                                [rewardValue, userId],
+                                (userUpdateError) => {
+                                    if (userUpdateError) {
+                                        return connection.rollback(() => {
+                                            connection.release();
+                                            callback(userUpdateError);
+                                        });
+                                    }
+
+                                    return connection.commit((commitError) => {
+                                        connection.release();
+
+                                        if (commitError) {
+                                            callback(commitError);
+                                            return;
+                                        }
+
+                                        callback(null, {
+                                            alreadyClaimed: false,
+                                            rewardValue,
+                                            currentDay: nextDay
+                                        });
+                                    });
+                                }
+                            );
+                        }
+                    );
+                });
             });
         });
     });
 }
 
+function updateDailyRewardValues(values, callback) {
+    const normalizedValues = DEFAULT_DAILY_REWARD_VALUES.map((fallbackValue, index) => {
+        const points = Number(values[index]);
+        return Number.isInteger(points) && points >= 0 ? points : fallbackValue;
+    });
+    const rows = normalizedValues.map((points, index) => [index + 1, points]);
+
+    const sql = `
+        INSERT INTO daily_reward_settings (day_number, points)
+        VALUES ?
+        ON DUPLICATE KEY UPDATE points = VALUES(points)
+    `;
+
+    db.query(sql, [rows], callback);
+}
+
 module.exports = {
-    DAILY_REWARD_VALUES,
+    DAILY_REWARD_VALUES: DEFAULT_DAILY_REWARD_VALUES,
+    DEFAULT_DAILY_REWARD_VALUES,
     initializeForUser,
     getWallet,
-    claimDailyReward
+    claimDailyReward,
+    getDailyRewardValues,
+    updateDailyRewardValues
 };

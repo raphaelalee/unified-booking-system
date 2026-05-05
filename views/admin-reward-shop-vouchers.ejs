@@ -1,0 +1,102 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const formatGlints = (value) => Number(value || 0).toLocaleString('en-SG');
+    const formatMoney = (value) => Number(value || 0).toLocaleString('en-SG', {
+        minimumFractionDigits: Number(value || 0) % 1 === 0 ? 0 : 2,
+        maximumFractionDigits: 2
+    });
+%>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Portal</p>
+    <h1>Manage reward shop.</h1>
+    <p>Adjust the daily points system and manage the VaniGlints voucher tiers shown on the customer reward shop page.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+    <% if (!isDatabaseBacked) { %>
+        <div class="notice">
+            <p>Default voucher tiers are showing. Run <strong>database/20260506_create_reward_shop_vouchers.sql</strong> to enable admin create, edit, and delete.</p>
+        </div>
+    <% } %>
+    <form class="account-panel account-form service-admin-form" action="/admin/reward-shop/daily-rewards" method="POST">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Daily Points System</p>
+                <h2>Adjust the 7-day streak rewards</h2>
+                <p class="muted">These values control the points customers see and receive when claiming once per day on the reward shop.</p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <% dailyRewardValues.forEach((points, index) => { %>
+                <label>
+                    Day <%= index + 1 %>
+                    <input type="number" name="day<%= index + 1 %>" min="0" step="1" value="<%= points %>" required>
+                </label>
+            <% }) %>
+        </div>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Save daily points</button>
+        </div>
+    </form>
+
+    <div class="section-cta">
+        <div>
+            <p class="eyebrow">Reward Shop</p>
+            <h2><%= vouchers.length %> voucher tiers</h2>
+            <p class="muted">Only active vouchers appear on the customer reward shop.</p>
+        </div>
+        <div class="admin-action-row">
+            <a class="button secondary" href="/admin">Back to admin</a>
+            <a class="button primary" href="/admin/reward-shop/new">Add voucher</a>
+        </div>
+    </div>
+
+    <% if (vouchers.length === 0) { %>
+        <div class="notice">
+            <p>No reward shop vouchers have been created yet.</p>
+        </div>
+    <% } else { %>
+        <div class="service-catalog-grid unified-service-grid">
+            <% vouchers.forEach((voucher) => { %>
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag"><%= voucher.status %></span>
+                        <span class="service-price slim">$<%= formatMoney(voucher.voucherValue) %></span>
+                    </div>
+                    <div>
+                        <h3><%= voucher.title %></h3>
+                        <p class="muted"><%= formatGlints(voucher.glintsCost) %> VaniGlints</p>
+                        <p><%= voucher.detail %></p>
+                    </div>
+                    <div class="availability-strip">
+                        <span>Sort <%= voucher.sortOrder %></span>
+                        <span><%= voucher.status === 'active' ? 'Visible to users' : 'Hidden from users' %></span>
+                    </div>
+                    <div class="service-card-actions">
+                        <% if (voucher.voucherId) { %>
+                            <a class="button secondary full" href="/admin/reward-shop/<%= voucher.id %>/edit">Edit</a>
+                            <form action="/admin/reward-shop/<%= voucher.id %>/delete" method="POST">
+                                <button class="button secondary full danger-button" type="submit">Delete</button>
+                            </form>
+                        <% } else { %>
+                            <button class="button secondary full" type="button" disabled>Edit unavailable</button>
+                            <button class="button secondary full" type="button" disabled>Delete unavailable</button>
+                        <% } %>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

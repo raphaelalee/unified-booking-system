@@ -395,6 +395,21 @@
                                 <span>Glints per successful referral</span>
                             </div>
                         </div>
+
+                        <div class="referral-mini-tracker">
+                            <div>
+                                <span>Successful referrals</span>
+                                <strong><%= referral.successfulReferrals || 0 %></strong>
+                            </div>
+                            <div>
+                                <span>VaniGlints earned</span>
+                                <strong><%= referral.earnedGlints || 0 %></strong>
+                            </div>
+                            <div>
+                                <span>Next referral reward</span>
+                                <strong>+<%= referral.nextReward || referral.reward %></strong>
+                            </div>
+                        </div>
                     </section>
                 <% } %>
 
