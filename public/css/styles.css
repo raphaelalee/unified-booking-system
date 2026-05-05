@@ -370,6 +370,33 @@ h3 {
     margin: 0 auto;
 }
 
+/* Site-wide page container to provide a wider, semi-transparent content area
+   while still showing edges of the background wallpaper. Adjusts responsively. */
+.page-container {
+    /* Fill the full viewport width so pages occupy the whole screen */
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    background: rgba(255, 250, 245, 0.98);
+    border-radius: 0;
+    padding: 20px 28px;
+    box-shadow: none;
+}
+
+/* Ensure inner sections take the full available width inside the container */
+.section,
+.page-title,
+.notice {
+    width: 100%;
+    margin: 0 auto;
+}
+
+@media (max-width: 720px) {
+    .page-container {
+        padding: 12px;
+    }
+}
+
 .section {
     padding: 68px 0;
 }

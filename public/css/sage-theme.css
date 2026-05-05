@@ -1,0 +1,1885 @@
+/* Light sage wellness theme. Visual-only layer loaded last. */
+:root {
+    --sage-ink: #334231;
+    --sage-strong: #4f6847;
+    --sage: #7f9670;
+    --sage-soft: #dfe8d4;
+    --sage-pale: #eef4e9;
+    --cream: #fbf7ed;
+    --paper: #fffdf7;
+    --linen: #f1e8d8;
+    --clay: #c5ad91;
+    --rose: #dec3b8;
+    --leaf-line: rgba(79, 104, 71, 0.18);
+    --leaf-shadow: 0 22px 56px rgba(79, 104, 71, 0.16);
+    --soft-shadow: 0 14px 34px rgba(79, 104, 71, 0.1);
+    --nature-bg: url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=2200&q=82");
+    --hero-img: url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1400&q=84");
+    --portrait-img: url("https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=84");
+    --spa-img: url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1200&q=84");
+    --facial-img: url("https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=84");
+    --hair-img: url("https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1200&q=84");
+    --nails-img: url("https://images.unsplash.com/photo-1610992015732-2449b76344bc?auto=format&fit=crop&w=1200&q=84");
+    --barber-img: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=84");
+    --product-img: url("https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=84");
+}
+
+html {
+    background: var(--sage-pale);
+}
+
+body:not(.flappy-page) {
+    min-height: 100vh;
+    color: var(--sage-ink);
+    background:
+        radial-gradient(circle at 8% 8%, rgba(255, 253, 247, 0.9) 0 12rem, transparent 12.2rem),
+        radial-gradient(circle at 92% 22%, rgba(223, 232, 212, 0.88) 0 13rem, transparent 13.2rem),
+        linear-gradient(180deg, rgba(238, 244, 233, 0.9), rgba(251, 247, 237, 0.92)),
+        var(--nature-bg) !important;
+    background-attachment: fixed;
+    background-position: center;
+    background-size: cover;
+    font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+body:not(.flappy-page)::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: -1;
+    height: 18rem;
+    background:
+        linear-gradient(135deg, rgba(127, 150, 112, 0.42), rgba(223, 232, 212, 0.72));
+    clip-path: ellipse(78% 70% at 50% 0%);
+    pointer-events: none;
+}
+
+body:not(.flappy-page)::after {
+    content: "";
+    position: fixed;
+    right: 3vw;
+    top: 8rem;
+    z-index: -1;
+    width: min(24vw, 340px);
+    aspect-ratio: 1;
+    border: 2px solid rgba(127, 150, 112, 0.3);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+body:not(.flappy-page) main,
+.site-header,
+.site-footer {
+    width: min(1760px, calc(100% - 56px)) !important;
+    margin-right: auto !important;
+    margin-left: auto !important;
+}
+
+body:not(.flappy-page) main {
+    margin-top: 0 !important;
+    overflow: hidden;
+    border: 1px solid rgba(127, 150, 112, 0.18);
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    background: rgba(251, 247, 237, 0.96) !important;
+    box-shadow: var(--leaf-shadow);
+}
+
+.page-container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+.site-header {
+    margin-top: 22px !important;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border: 1px solid rgba(127, 150, 112, 0.18);
+    border-radius: 8px 8px 0 0;
+    background: rgba(255, 253, 247, 0.92) !important;
+    color: var(--sage-ink);
+    box-shadow: 0 18px 46px rgba(79, 104, 71, 0.12);
+    backdrop-filter: blur(18px);
+}
+
+.nav {
+    min-height: 88px;
+    padding: 16px 28px;
+    gap: 18px;
+}
+
+.brand {
+    color: var(--sage-ink);
+    font-family: "Cormorant Garamond", serif;
+    font-size: clamp(1.55rem, 2vw, 2.25rem);
+    font-weight: 700;
+}
+
+.brand-mark {
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgba(255, 253, 247, 0.8);
+    background: var(--sage-strong);
+    color: var(--paper);
+    box-shadow: none;
+}
+
+.nav-links,
+.nav-tools,
+.nav-support-links,
+.nav-account-links,
+.nav-commerce-links {
+    gap: 10px;
+}
+
+.nav-links {
+    justify-content: center;
+}
+
+.nav-links a,
+.nav-support-links a,
+.nav-account-links a,
+.nav-dropdown-trigger,
+.nav-role-pill,
+.text-button,
+.signup-text-link {
+    min-height: 44px;
+    padding: 11px 20px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 999px;
+    background: rgba(238, 244, 233, 0.82);
+    color: var(--sage-ink);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: none;
+}
+
+.nav-links a:hover,
+.nav-support-links a:hover,
+.nav-account-links a:hover,
+.nav-dropdown-trigger:hover,
+.text-button:hover,
+.signup-text-link:hover {
+    border-color: var(--sage-strong);
+    background: var(--sage-strong);
+    color: var(--paper);
+    transform: translateY(-1px);
+}
+
+.nav-dropdown-menu {
+    border: 1px solid var(--leaf-line);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.98);
+    box-shadow: var(--soft-shadow);
+}
+
+.profile-icon-link,
+.bag-link {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.login-icon {
+    background:
+        radial-gradient(circle at 50% 35%, var(--sage-strong) 0 19%, transparent 20%),
+        radial-gradient(ellipse at 50% 86%, var(--sage-strong) 0 30%, transparent 31%),
+        rgba(223, 232, 212, 0.86) !important;
+}
+
+.bag-icon {
+    border-color: var(--sage-strong);
+}
+
+.bag-count {
+    color: var(--sage-ink);
+}
+
+body:not(.flappy-page) .hero,
+.hero {
+    min-height: 720px;
+    padding: clamp(40px, 5vw, 86px) !important;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.86fr);
+    gap: clamp(30px, 5vw, 80px);
+    align-items: center;
+    border: 0;
+    border-radius: 0;
+    background:
+        linear-gradient(120deg, rgba(255, 253, 247, 0.96), rgba(223, 232, 212, 0.88)),
+        var(--nature-bg) !important;
+    background-position: center;
+    background-size: cover;
+    box-shadow: none;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: auto -6% -18%;
+    z-index: 0;
+    height: 46%;
+    background: rgba(127, 150, 112, 0.2);
+    border-radius: 50% 50% 0 0;
+    pointer-events: none;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    right: clamp(34px, 7vw, 120px);
+    top: clamp(56px, 8vw, 130px);
+    z-index: 0;
+    width: min(280px, 22vw);
+    aspect-ratio: 0.75;
+    border: 9px solid var(--paper);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(127, 150, 112, 0.18)),
+        var(--facial-img);
+    background-position: center;
+    background-size: cover;
+    box-shadow: var(--leaf-shadow);
+    transform: rotate(5deg);
+}
+
+.hero-content {
+    order: 1;
+    position: relative;
+    z-index: 1;
+    min-height: auto;
+    max-width: 820px;
+    padding: clamp(34px, 5vw, 72px);
+    justify-items: start;
+    text-align: left;
+    border: 1px solid rgba(127, 150, 112, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.82) !important;
+    color: var(--sage-ink);
+    box-shadow: var(--leaf-shadow);
+}
+
+body:not(.flappy-page) .hero-visual,
+.hero-visual {
+    order: 2;
+    position: relative;
+    z-index: 1;
+    display: block !important;
+    width: min(560px, 100%);
+    min-height: 560px;
+    justify-self: center;
+    border: 10px solid var(--paper);
+    border-radius: 48% 48% 8px 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.18), rgba(223, 232, 212, 0.2)),
+        var(--hero-img) !important;
+    background-position: center;
+    background-size: cover;
+    box-shadow: var(--leaf-shadow);
+    filter: sepia(0.1) saturate(0.86) contrast(0.96) brightness(1.06);
+}
+
+.hero-visual::after {
+    content: "";
+    position: absolute;
+    left: -56px;
+    bottom: 38px;
+    width: 128px;
+    height: 176px;
+    border: 8px solid var(--paper);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(127, 150, 112, 0.16)),
+        var(--portrait-img);
+    background-position: center;
+    background-size: cover;
+    box-shadow: var(--soft-shadow);
+    transform: rotate(-7deg);
+}
+
+.hero .eyebrow,
+.hero h1,
+.hero .hero-text,
+.hero p {
+    color: var(--sage-ink) !important;
+}
+
+.hero h1 {
+    max-width: 720px;
+    margin: 0;
+    color: var(--sage-strong) !important;
+    font-size: clamp(5rem, 9vw, 10rem);
+    line-height: 0.82;
+    letter-spacing: 0;
+}
+
+.hero-text {
+    max-width: 620px;
+    color: #66765f !important;
+    font-size: clamp(1rem, 1.2vw, 1.22rem);
+    line-height: 1.85;
+}
+
+.page-title,
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero,
+.services-shop-hero,
+.games-hero,
+.services-unified-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.page-title:not(.services-shop-hero):not(.games-hero),
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero {
+    min-height: 380px;
+    padding: clamp(54px, 6vw, 96px);
+    display: grid;
+    align-content: center;
+    background:
+        linear-gradient(110deg, rgba(255, 253, 247, 0.92), rgba(223, 232, 212, 0.84)),
+        var(--spa-img) !important;
+    background-position: center;
+    background-size: cover;
+    color: var(--sage-ink);
+}
+
+.page-title:not(.services-shop-hero):not(.games-hero)::after,
+.booking-hero::after,
+.portal-hero::after,
+.membership-hero::after,
+.reward-shop-hero::after,
+.about-hero::after {
+    content: "";
+    position: absolute;
+    right: clamp(26px, 7vw, 112px);
+    top: clamp(30px, 5vw, 70px);
+    width: min(300px, 24vw);
+    aspect-ratio: 0.82;
+    border: 9px solid var(--paper);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(127, 150, 112, 0.16)),
+        var(--portrait-img);
+    background-position: center;
+    background-size: cover;
+    box-shadow: var(--leaf-shadow);
+    transform: rotate(4deg);
+}
+
+.page-title > *,
+.booking-hero > *,
+.portal-hero > *,
+.membership-hero > *,
+.reward-shop-hero > *,
+.about-hero > * {
+    position: relative;
+    z-index: 1;
+    max-width: 780px;
+}
+
+.page-title h1,
+.booking-hero h1,
+.portal-hero h1,
+.membership-hero h1,
+.reward-shop-hero h1,
+.about-hero h1,
+.section-heading h2,
+.editorial-section-heading h2,
+.profile-heading h2,
+.profile-page-heading h1,
+.account-panel h2,
+.dashboard-report-card h2,
+.product-card h2,
+.merchant-row h2,
+.service-catalog-card h3,
+.auth-card h1 {
+    color: var(--sage-strong);
+    font-family: "Cormorant Garamond", serif;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.page-title h1,
+.booking-hero h1,
+.portal-hero h1,
+.membership-hero h1,
+.reward-shop-hero h1,
+.about-hero h1 {
+    font-size: clamp(3.5rem, 6.4vw, 6.6rem);
+    line-height: 0.9;
+}
+
+.page-title p,
+.booking-hero p,
+.portal-hero p,
+.membership-hero p,
+.reward-shop-hero p,
+.about-hero p,
+.page-title .eyebrow {
+    color: #66765f !important;
+}
+
+.page-container > .page-title.auth-page-title {
+    min-height: 420px;
+    grid-template-columns: minmax(0, 0.62fr) minmax(260px, 0.38fr);
+    align-items: center;
+    background:
+        linear-gradient(105deg, rgba(238, 244, 233, 0.96) 0%, rgba(255, 253, 247, 0.92) 58%, rgba(223, 232, 212, 0.86) 100%),
+        var(--hero-img) !important;
+    background-position: center;
+    background-size: cover;
+    color: var(--sage-ink) !important;
+}
+
+.page-container > .page-title.auth-page-title::after {
+    opacity: 1;
+    width: min(310px, 24vw);
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(127, 150, 112, 0.16)),
+        var(--portrait-img) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.page-container > .page-title.auth-page-title .eyebrow,
+.page-container > .page-title.auth-page-title h1,
+.page-container > .page-title.auth-page-title p {
+    color: var(--sage-ink) !important;
+    text-shadow: none !important;
+}
+
+.page-container > .page-title.auth-page-title h1 {
+    max-width: 720px;
+}
+
+.page-container > .page-title.auth-page-title > * {
+    grid-column: 1;
+}
+
+.login-layout {
+    align-items: stretch;
+}
+
+.login-form,
+.login-benefits {
+    border: 1px solid var(--leaf-line);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9) !important;
+    box-shadow: var(--soft-shadow);
+}
+
+.login-benefits {
+    background:
+        linear-gradient(145deg, rgba(255, 253, 247, 0.9), rgba(223, 232, 212, 0.82)),
+        var(--spa-img) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.login-benefits h2,
+.login-benefits li,
+.login-benefits p {
+    color: var(--sage-ink) !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero),
+body:not(.flappy-page) .page-container > .booking-hero,
+body:not(.flappy-page) .page-container > .portal-hero,
+body:not(.flappy-page) .page-container > .membership-hero,
+body:not(.flappy-page) .page-container > .reward-shop-hero,
+body:not(.flappy-page) .page-container > .about-hero {
+    background:
+        linear-gradient(110deg, rgba(255, 253, 247, 0.92), rgba(223, 232, 212, 0.84)),
+        var(--spa-img) !important;
+    color: var(--sage-ink) !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) .eyebrow,
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) h1,
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) p,
+body:not(.flappy-page) .page-container > .booking-hero .eyebrow,
+body:not(.flappy-page) .page-container > .booking-hero h1,
+body:not(.flappy-page) .page-container > .booking-hero p,
+body:not(.flappy-page) .page-container > .portal-hero .eyebrow,
+body:not(.flappy-page) .page-container > .portal-hero h1,
+body:not(.flappy-page) .page-container > .portal-hero p,
+body:not(.flappy-page) .page-container > .membership-hero .eyebrow,
+body:not(.flappy-page) .page-container > .membership-hero h1,
+body:not(.flappy-page) .page-container > .membership-hero p,
+body:not(.flappy-page) .page-container > .reward-shop-hero .eyebrow,
+body:not(.flappy-page) .page-container > .reward-shop-hero h1,
+body:not(.flappy-page) .page-container > .reward-shop-hero p,
+body:not(.flappy-page) .page-container > .about-hero .eyebrow,
+body:not(.flappy-page) .page-container > .about-hero h1,
+body:not(.flappy-page) .page-container > .about-hero p {
+    color: var(--sage-ink) !important;
+    text-shadow: none !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) h1,
+body:not(.flappy-page) .page-container > .booking-hero h1,
+body:not(.flappy-page) .page-container > .portal-hero h1,
+body:not(.flappy-page) .page-container > .membership-hero h1,
+body:not(.flappy-page) .page-container > .reward-shop-hero h1,
+body:not(.flappy-page) .page-container > .about-hero h1 {
+    color: var(--sage-strong) !important;
+}
+
+.services-shop-hero,
+.games-hero,
+.services-unified-hero {
+    min-height: 560px;
+    padding: clamp(42px, 5vw, 82px) !important;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
+    align-items: center;
+    gap: clamp(28px, 4vw, 62px);
+    background:
+        linear-gradient(105deg, rgba(238, 244, 233, 0.96), rgba(255, 253, 247, 0.82)),
+        var(--nature-bg) !important;
+    background-position: center;
+    background-size: cover;
+    color: var(--sage-ink);
+}
+
+.services-hero-copy,
+.games-hero-copy,
+.services-unified-hero > div:first-child {
+    padding: 0 !important;
+    color: var(--sage-ink);
+}
+
+.services-hero-copy h1,
+.games-hero-copy h1,
+.services-unified-hero h1 {
+    color: var(--sage-strong) !important;
+    font-size: clamp(3.8rem, 6.8vw, 6.8rem);
+    line-height: 0.88;
+}
+
+.services-hero-copy p,
+.games-hero-copy p,
+.services-unified-hero p,
+.services-hero-copy .eyebrow,
+.games-hero-copy .eyebrow {
+    color: #66765f !important;
+}
+
+.services-hero-showcase,
+.games-hero-scene,
+.services-summary-panel {
+    min-height: 420px;
+    border: 10px solid var(--paper);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(127, 150, 112, 0.16)),
+        var(--facial-img) !important;
+    background-position: center;
+    background-size: cover;
+    filter: saturate(1.04);
+    box-shadow: var(--leaf-shadow);
+}
+
+.games-hero-scene,
+.flappy-launch-scene,
+.flappy-side-scene {
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.28), rgba(127, 150, 112, 0.16)),
+        var(--nature-bg) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.section,
+.section.compact,
+.services-shop-section,
+.games-page-section,
+.profile-page,
+.portal-page,
+.cart-page,
+.auth-shell {
+    margin: 0;
+    padding: clamp(54px, 5vw, 92px) clamp(28px, 4vw, 72px);
+    background: var(--cream) !important;
+}
+
+.section:nth-of-type(even),
+.portal-page:nth-of-type(even),
+.profile-page:nth-of-type(even) {
+    background: var(--sage-pale) !important;
+}
+
+.section-heading,
+.editorial-section-heading,
+.profile-heading,
+.profile-page-heading,
+.services-list-heading,
+.game-history-heading,
+.auth-card,
+.notice,
+.section-cta,
+.portal-summary-panel,
+.dashboard-kpi-grid,
+.game-layout,
+.game-admin-layout,
+.game-history-list,
+.membership-grid,
+.reward-shop-grid,
+.cart-layout,
+.checkout-layout,
+.booking-layout,
+.profile-layout,
+.account-layout,
+.merchant-layout,
+.admin-layout,
+.reporting-grid,
+.services-discovery-strip,
+.service-catalog-grid,
+.merchant-grid,
+.merchant-list,
+.product-grid,
+.promotion-grid,
+.feature-grid,
+.content-grid,
+.profile-summary-grid,
+.cashback-grid,
+.giftcard-grid {
+    width: min(1500px, 100%);
+    margin-right: auto;
+    margin-left: auto;
+}
+
+.section-heading,
+.editorial-section-heading,
+.profile-heading,
+.profile-page-heading,
+.services-list-heading,
+.game-history-heading {
+    margin-bottom: 34px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--leaf-line);
+}
+
+.editorial-section-heading,
+.section-cta,
+.profile-page-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.eyebrow,
+.tag,
+.promotion,
+.service-card-label,
+.service-rating-pill,
+.account-role-chip,
+.nav-role-pill,
+.portal-stat span,
+.dashboard-mini-list span {
+    color: var(--sage);
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.muted,
+.section-heading p,
+.editorial-section-heading p,
+.profile-heading p,
+p {
+    color: #728069;
+}
+
+.button,
+button.button,
+a.button,
+.text-link,
+.profile-tab,
+.auth-form button,
+.portal-search button,
+.services-search button,
+.cart-checkout-button,
+.admin-action-button,
+.merchant-action-button {
+    border-radius: 999px;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.button.primary,
+.auth-form button,
+.portal-search button,
+.services-search button,
+.cart-checkout-button,
+.admin-action-button,
+.merchant-action-button {
+    border: 1px solid var(--sage-strong);
+    background: var(--sage-strong);
+    color: var(--paper);
+    box-shadow: none;
+}
+
+.button.secondary,
+.button.ghost,
+.text-link,
+.profile-tab,
+.hero .button.secondary {
+    border: 1px solid rgba(79, 104, 71, 0.22);
+    background: rgba(255, 253, 247, 0.62);
+    color: var(--sage-ink);
+    box-shadow: none;
+}
+
+.button:hover,
+button.button:hover,
+a.button:hover,
+.text-link:hover,
+.auth-form button:hover,
+.portal-search button:hover,
+.services-search button:hover {
+    transform: translateY(-2px);
+}
+
+input,
+select,
+textarea,
+.search-bar,
+.portal-search,
+.services-search,
+.cart-quantity-controls,
+.fulfilment-choice,
+.account-summary-list div,
+.saved-merchant-row,
+.game-progress-card,
+.reward-shop-note,
+.reward-shop-rate {
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 253, 247, 0.78);
+    color: var(--sage-ink);
+    box-shadow: none;
+}
+
+textarea {
+    border-radius: 18px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--sage-strong);
+    box-shadow: 0 0 0 4px rgba(127, 150, 112, 0.18);
+}
+
+.merchant-card,
+.merchant-row,
+.product-card,
+.service-catalog-card,
+.unified-service-card,
+.service-shop-card,
+.promotion-offer-card,
+.reward-voucher-card,
+.dashboard-report-card,
+.dashboard-mini-list,
+.account-panel,
+.profile-hero-card,
+.account-summary-panel,
+.booking-form-panel,
+.booking-services-panel,
+.portal-summary-panel,
+.portal-stat,
+.cashback-panel,
+.giftcard-feature-card,
+.membership-reward-card,
+.cart-card,
+.checkout-card,
+.profile-card,
+.profile-panel,
+.auth-card,
+.notice,
+.section-cta,
+.game-play-card,
+.game-rule-card,
+.game-result-card,
+.content-card {
+    border: 1px solid var(--leaf-line);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.82);
+    color: var(--sage-ink);
+    box-shadow: var(--soft-shadow);
+}
+
+.merchant-card:hover,
+.merchant-row:hover,
+.product-card:hover,
+.service-shop-card:hover,
+.promotion-offer-card:hover,
+.reward-voucher-card:hover,
+.content-card:hover {
+    border-color: rgba(79, 104, 71, 0.35);
+    transform: translateY(-4px);
+    box-shadow: var(--leaf-shadow);
+}
+
+.content-grid,
+.merchant-grid,
+.product-grid,
+.promotion-grid,
+.reward-shop-grid,
+.service-catalog-grid,
+.feature-grid {
+    gap: clamp(18px, 2vw, 30px);
+}
+
+.content-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.content-card {
+    min-height: 330px;
+    padding: 28px;
+    display: grid;
+    align-content: end;
+    overflow: hidden;
+}
+
+.content-card.image-card,
+.merchant-card-image,
+.merchant-thumb,
+.product-image,
+.service-card-image,
+.promotion-image,
+.reward-voucher-visual,
+.about-image,
+.feature-image {
+    background-position: center;
+    background-size: cover;
+    filter: saturate(1.05) contrast(0.98);
+}
+
+.service-hair,
+.merchant-thumb-1,
+.service-visual-hair,
+.product-hair,
+.product-skincare {
+    background-image:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(79, 104, 71, 0.24)),
+        var(--hair-img) !important;
+}
+
+.service-spa,
+.merchant-thumb-2,
+.service-visual-spa,
+.product-body {
+    background-image:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(79, 104, 71, 0.24)),
+        var(--spa-img) !important;
+}
+
+.service-nails,
+.service-visual-nails,
+.product-lip,
+.product-makeup {
+    background-image:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(79, 104, 71, 0.24)),
+        var(--nails-img) !important;
+}
+
+.service-facial,
+.service-visual-facial,
+.product-cleanser {
+    background-image:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(79, 104, 71, 0.24)),
+        var(--facial-img) !important;
+}
+
+.merchant-thumb-3,
+.service-visual-barber,
+.product-fragrance {
+    background-image:
+        linear-gradient(180deg, rgba(127, 150, 112, 0.02), rgba(79, 104, 71, 0.24)),
+        var(--barber-img) !important;
+}
+
+.product-skin,
+.product-skincare,
+.product-cleanser {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.16)),
+        var(--product-img) !important;
+}
+
+.home-editorial-grid,
+.merchant-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.merchant-card {
+    min-height: 520px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 260px 1fr auto;
+}
+
+.merchant-card > div:not(.merchant-card-image),
+.merchant-card .card-footer {
+    padding: 24px;
+}
+
+.merchant-card-image,
+.service-card-image,
+.product-image {
+    min-height: 240px;
+    border-radius: 0;
+}
+
+.merchant-list {
+    display: grid;
+    gap: 22px;
+}
+
+.merchant-row {
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr) auto;
+    gap: 26px;
+    overflow: hidden;
+}
+
+.merchant-row:nth-child(even) {
+    grid-template-columns: auto minmax(0, 1fr) minmax(280px, 0.42fr);
+}
+
+.merchant-row:nth-child(even) .merchant-thumb {
+    order: 3;
+}
+
+.merchant-row:nth-child(even) .merchant-actions {
+    order: 1;
+}
+
+.merchant-row > div:not(.merchant-thumb),
+.merchant-actions {
+    padding: 26px;
+}
+
+.merchant-thumb {
+    min-height: 280px;
+    border-radius: 0;
+}
+
+.product-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.product-card {
+    overflow: hidden;
+    padding: 0;
+}
+
+.product-card .tag,
+.product-card h2,
+.product-card p,
+.product-card-actions {
+    margin-right: 24px;
+    margin-left: 24px;
+}
+
+.product-card-actions {
+    margin-bottom: 24px;
+}
+
+.product-card:nth-child(1),
+.product-card:nth-child(6n + 1) {
+    grid-column: span 2;
+}
+
+.service-catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.service-shop-card {
+    overflow: hidden;
+    background: rgba(255, 253, 247, 0.86);
+}
+
+.service-card-body,
+.service-card-footer,
+.product-card-body,
+.promotion-card-body,
+.reward-voucher-body {
+    background: rgba(255, 253, 247, 0.88);
+}
+
+.service-meta-pills span,
+.availability-strip span,
+.compact-slots span,
+.service-option-list span,
+.service-image-price,
+.promotion,
+.tag,
+.membership-pill,
+.reward-shop-rate,
+.cashback-badge,
+.services-filter-chip {
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 999px;
+    background: rgba(223, 232, 212, 0.74);
+    color: var(--sage-strong);
+    box-shadow: none;
+}
+
+.services-discovery-strip {
+    padding: 24px clamp(28px, 4vw, 72px);
+    overflow-x: auto;
+    background: var(--cream);
+}
+
+.services-filter-chip.is-active {
+    background: var(--sage-strong);
+    color: var(--paper);
+}
+
+.account-layout,
+.booking-layout,
+.cart-layout,
+.checkout-layout,
+.game-layout,
+.game-admin-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.36fr) minmax(0, 1fr);
+    gap: clamp(22px, 3vw, 42px);
+}
+
+.profile-hero-card {
+    width: min(1500px, 100%);
+    margin: 0 auto 28px;
+    padding: clamp(28px, 4vw, 48px);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(240px, 0.28fr);
+    gap: 28px;
+    align-items: center;
+    background:
+        linear-gradient(120deg, rgba(255, 253, 247, 0.92), rgba(223, 232, 212, 0.82)),
+        var(--facial-img) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.account-avatar,
+.profile-hero-avatar {
+    background: var(--sage-strong);
+    color: var(--paper);
+    box-shadow: none;
+}
+
+.portal-stat {
+    padding: 22px;
+    background: rgba(255, 253, 247, 0.78);
+}
+
+.portal-stat strong {
+    color: var(--sage-strong);
+    font-family: "Cormorant Garamond", serif;
+    font-size: clamp(2.1rem, 4vw, 4rem);
+}
+
+.games-cloud {
+    background: rgba(255, 253, 247, 0.86);
+    box-shadow: none;
+}
+
+.games-coin,
+.reward-shop-coin,
+.reward-shop-balance-icon {
+    background: var(--sage-strong);
+    color: var(--paper);
+    box-shadow: none;
+}
+
+.game-launch-overlay,
+.flappy-transition,
+.flappy-return-transition,
+.flappy-page {
+    background:
+        linear-gradient(180deg, rgba(223, 232, 212, 0.8), rgba(255, 253, 247, 0.72)),
+        var(--nature-bg) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.flappy-stage-panel,
+.flappy-side-panel {
+    border: 1px solid rgba(127, 150, 112, 0.26);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9);
+    color: var(--sage-ink);
+    box-shadow: var(--leaf-shadow);
+}
+
+table,
+.table-card,
+.admin-table,
+.merchant-table {
+    border: 1px solid var(--leaf-line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 253, 247, 0.84);
+}
+
+th {
+    background: rgba(223, 232, 212, 0.84);
+    color: var(--sage-ink);
+}
+
+td {
+    border-color: var(--leaf-line);
+}
+
+.site-footer {
+    margin-bottom: 32px;
+    padding: 28px;
+    border: 1px solid rgba(127, 150, 112, 0.2);
+    border-radius: 0 0 8px 8px;
+    background:
+        linear-gradient(135deg, rgba(255, 253, 247, 0.96), rgba(223, 232, 212, 0.9)) !important;
+    color: var(--sage-ink);
+    box-shadow: var(--leaf-shadow);
+}
+
+.site-footer a,
+.site-footer p,
+.site-footer h2,
+.site-footer h3 {
+    color: var(--sage-ink) !important;
+}
+
+.ai-chatbot-toggle,
+.ai-chatbot-form button {
+    border-radius: 999px;
+    background: var(--sage-strong);
+    color: var(--paper);
+}
+
+.ai-chatbot-panel,
+.ai-chatbot-message.bot {
+    border: 1px solid var(--leaf-line);
+    border-radius: 8px;
+    background: var(--paper);
+}
+
+.ai-chatbot-message.user {
+    border-radius: 8px;
+    background: var(--sage-strong);
+    color: var(--paper);
+}
+
+.hero-content,
+.hero-visual,
+.page-title,
+.merchant-card,
+.merchant-row,
+.product-card,
+.service-shop-card,
+.promotion-offer-card,
+.reward-voucher-card,
+.dashboard-report-card,
+.account-panel,
+.booking-form-panel,
+.booking-services-panel {
+    animation: sageRise 620ms ease both;
+}
+
+@keyframes sageRise {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1180px) {
+    .content-grid,
+    .product-grid,
+    .service-catalog-grid,
+    .home-editorial-grid,
+    .merchant-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .merchant-row,
+    .merchant-row:nth-child(even) {
+        grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
+    }
+
+    .merchant-row:nth-child(even) .merchant-thumb,
+    .merchant-row:nth-child(even) .merchant-actions {
+        order: initial;
+    }
+
+    .merchant-actions {
+        grid-column: 1 / -1;
+        padding-top: 0;
+    }
+}
+
+@media (max-width: 980px) {
+    body:not(.flappy-page) main,
+    .site-header,
+    .site-footer {
+        width: calc(100% - 28px) !important;
+    }
+
+    .hero,
+    .services-shop-hero,
+    .games-hero,
+    .services-unified-hero,
+    .account-layout,
+    .booking-layout,
+    .cart-layout,
+    .checkout-layout,
+    .game-layout,
+    .game-admin-layout,
+    .profile-hero-card {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-content {
+        order: 1;
+    }
+
+    .hero-visual {
+        order: 2;
+        width: min(560px, 100%);
+        min-height: 420px;
+    }
+
+    .page-title::after,
+    .booking-hero::after,
+    .portal-hero::after,
+    .membership-hero::after,
+    .reward-shop-hero::after,
+    .about-hero::after {
+        opacity: 0.24;
+    }
+}
+
+@media (max-width: 720px) {
+    body:not(.flappy-page) main,
+    .site-header,
+    .site-footer {
+        width: calc(100% - 16px) !important;
+    }
+
+    .site-header {
+        margin-top: 8px !important;
+        position: static;
+    }
+
+    .nav {
+        padding: 14px;
+    }
+
+    .hero,
+    .services-shop-hero,
+    .games-hero,
+    .services-unified-hero,
+    .section,
+    .section.compact {
+        padding: 38px 20px !important;
+    }
+
+    .hero h1,
+    .page-title h1,
+    .booking-hero h1,
+    .portal-hero h1,
+    .membership-hero h1,
+    .reward-shop-hero h1,
+    .about-hero h1,
+    .services-hero-copy h1,
+    .games-hero-copy h1,
+    .services-unified-hero h1 {
+        font-size: clamp(3rem, 15vw, 4.8rem);
+    }
+
+    .hero-content {
+        padding: 30px;
+    }
+
+    .hero-visual {
+        min-height: 340px;
+    }
+
+    .hero-visual::after,
+    .hero::after,
+    .page-title::after,
+    .booking-hero::after,
+    .portal-hero::after,
+    .membership-hero::after,
+    .reward-shop-hero::after,
+    .about-hero::after {
+        display: none;
+    }
+
+    .content-grid,
+    .product-grid,
+    .service-catalog-grid,
+    .home-editorial-grid,
+    .merchant-grid,
+    .merchant-row,
+    .merchant-row:nth-child(even) {
+        grid-template-columns: 1fr;
+    }
+
+    .product-card:nth-child(1),
+    .product-card:nth-child(6n + 1) {
+        grid-column: auto;
+    }
+
+    .editorial-section-heading,
+    .section-cta,
+    .profile-page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-content,
+    .hero-visual,
+    .page-title,
+    .merchant-card,
+    .merchant-row,
+    .product-card,
+    .service-shop-card,
+    .promotion-offer-card,
+    .reward-voucher-card,
+    .dashboard-report-card,
+    .account-panel,
+    .booking-form-panel,
+    .booking-services-panel {
+        animation: none;
+    }
+}
+
+/* Final spacious readability pass. Keeps the same HTML and app logic, but unifies every route. */
+:root {
+    --sage-readable: #2f3f2f;
+    --sage-muted-readable: #5f705b;
+    --sage-panel: rgba(255, 253, 247, 0.94);
+    --sage-panel-soft: rgba(238, 244, 233, 0.92);
+}
+
+body:not(.flappy-page) main,
+.site-header,
+.site-footer {
+    width: min(1920px, calc(100% - 28px)) !important;
+    max-width: none !important;
+}
+
+body:not(.flappy-page) main {
+    overflow: visible;
+    background:
+        linear-gradient(180deg, rgba(251, 247, 237, 0.98), rgba(238, 244, 233, 0.98)) !important;
+}
+
+.page-container {
+    min-height: 72vh;
+}
+
+.nav {
+    width: min(1680px, 100%);
+    margin: 0 auto;
+}
+
+.section,
+.section.compact,
+.services-shop-section,
+.games-page-section,
+.profile-page,
+.portal-page,
+.cart-page,
+.auth-shell {
+    width: 100% !important;
+    padding: clamp(56px, 5vw, 96px) clamp(32px, 5vw, 112px) !important;
+}
+
+.section-heading,
+.editorial-section-heading,
+.profile-heading,
+.profile-page-heading,
+.services-list-heading,
+.game-history-heading,
+.auth-card,
+.notice,
+.section-cta,
+.portal-summary-panel,
+.dashboard-kpi-grid,
+.dashboard-report-grid,
+.admin-table-wrap,
+.game-layout,
+.game-admin-layout,
+.game-history-list,
+.membership-grid,
+.reward-shop-grid,
+.cart-layout,
+.checkout-layout,
+.booking-layout,
+.profile-layout,
+.account-layout,
+.merchant-layout,
+.admin-layout,
+.reporting-grid,
+.services-discovery-strip,
+.service-catalog-grid,
+.merchant-grid,
+.merchant-list,
+.product-grid,
+.promotion-grid,
+.feature-grid,
+.content-grid,
+.profile-summary-grid,
+.cashback-grid,
+.giftcard-grid,
+.login-layout,
+.history-list,
+.wallet-layout,
+.payment-layout,
+.receipt-layout {
+    width: min(1700px, 100%) !important;
+    max-width: none !important;
+}
+
+body:not(.flappy-page) .page-container > .hero {
+    min-height: 700px;
+    padding: clamp(58px, 6vw, 108px) clamp(44px, 6vw, 126px) !important;
+    grid-template-columns: minmax(420px, 0.92fr) minmax(460px, 0.78fr);
+    gap: clamp(38px, 6vw, 112px);
+}
+
+body:not(.flappy-page) .hero-content {
+    max-width: 920px;
+    padding: clamp(44px, 5vw, 78px);
+}
+
+body:not(.flappy-page) .hero h1 {
+    font-size: clamp(5.6rem, 8.4vw, 10.8rem);
+}
+
+body:not(.flappy-page) .hero-text {
+    max-width: 760px;
+    color: var(--sage-readable) !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero),
+body:not(.flappy-page) .page-container > .booking-hero,
+body:not(.flappy-page) .page-container > .portal-hero,
+body:not(.flappy-page) .page-container > .membership-hero,
+body:not(.flappy-page) .page-container > .reward-shop-hero,
+body:not(.flappy-page) .page-container > .about-hero {
+    min-height: clamp(340px, 34vw, 520px);
+    padding: clamp(56px, 6vw, 104px) clamp(40px, 6vw, 126px) !important;
+    display: grid;
+    grid-template-columns: minmax(0, 0.62fr) minmax(300px, 0.38fr);
+    align-content: center;
+    gap: 28px;
+    background:
+        linear-gradient(105deg, rgba(255, 253, 247, 0.96), rgba(238, 244, 233, 0.9)),
+        var(--nature-bg) !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) > *,
+body:not(.flappy-page) .page-container > .booking-hero > *,
+body:not(.flappy-page) .page-container > .portal-hero > *,
+body:not(.flappy-page) .page-container > .membership-hero > *,
+body:not(.flappy-page) .page-container > .reward-shop-hero > *,
+body:not(.flappy-page) .page-container > .about-hero > * {
+    grid-column: 1 !important;
+    max-width: 860px;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) .eyebrow,
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) h1,
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) p,
+body:not(.flappy-page) .page-container > .booking-hero .eyebrow,
+body:not(.flappy-page) .page-container > .booking-hero h1,
+body:not(.flappy-page) .page-container > .booking-hero p,
+body:not(.flappy-page) .page-container > .portal-hero .eyebrow,
+body:not(.flappy-page) .page-container > .portal-hero h1,
+body:not(.flappy-page) .page-container > .portal-hero p,
+body:not(.flappy-page) .page-container > .membership-hero .eyebrow,
+body:not(.flappy-page) .page-container > .membership-hero h1,
+body:not(.flappy-page) .page-container > .membership-hero p,
+body:not(.flappy-page) .page-container > .reward-shop-hero .eyebrow,
+body:not(.flappy-page) .page-container > .reward-shop-hero h1,
+body:not(.flappy-page) .page-container > .reward-shop-hero p,
+body:not(.flappy-page) .page-container > .about-hero .eyebrow,
+body:not(.flappy-page) .page-container > .about-hero h1,
+body:not(.flappy-page) .page-container > .about-hero p {
+    color: var(--sage-readable) !important;
+    text-shadow: none !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) h1,
+body:not(.flappy-page) .page-container > .booking-hero h1,
+body:not(.flappy-page) .page-container > .portal-hero h1,
+body:not(.flappy-page) .page-container > .membership-hero h1,
+body:not(.flappy-page) .page-container > .reward-shop-hero h1,
+body:not(.flappy-page) .page-container > .about-hero h1 {
+    color: var(--sage-strong) !important;
+    font-size: clamp(3.8rem, 6vw, 7.4rem);
+    line-height: 0.92;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) p,
+body:not(.flappy-page) .page-container > .booking-hero p,
+body:not(.flappy-page) .page-container > .portal-hero p,
+body:not(.flappy-page) .page-container > .membership-hero p,
+body:not(.flappy-page) .page-container > .reward-shop-hero p,
+body:not(.flappy-page) .page-container > .about-hero p {
+    max-width: 760px;
+    color: var(--sage-muted-readable) !important;
+    font-size: clamp(1rem, 1.2vw, 1.2rem);
+    line-height: 1.8;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero)::after,
+body:not(.flappy-page) .page-container > .booking-hero::after,
+body:not(.flappy-page) .page-container > .portal-hero::after,
+body:not(.flappy-page) .page-container > .membership-hero::after,
+body:not(.flappy-page) .page-container > .reward-shop-hero::after,
+body:not(.flappy-page) .page-container > .about-hero::after {
+    right: clamp(44px, 7vw, 140px);
+    top: 50%;
+    width: min(390px, 28vw);
+    transform: translateY(-50%) rotate(3deg);
+    opacity: 0.72;
+}
+
+.services-shop-hero,
+.games-hero,
+.services-unified-hero {
+    min-height: 560px;
+    grid-template-columns: minmax(420px, 0.56fr) minmax(440px, 0.44fr) !important;
+    padding: clamp(56px, 6vw, 108px) clamp(40px, 6vw, 126px) !important;
+}
+
+.services-hero-copy h1,
+.games-hero-copy h1,
+.services-unified-hero h1 {
+    max-width: 880px;
+    color: var(--sage-strong) !important;
+    font-size: clamp(4rem, 6.6vw, 7.2rem);
+}
+
+.services-hero-copy p,
+.games-hero-copy p,
+.services-unified-hero p {
+    color: var(--sage-muted-readable) !important;
+}
+
+.services-hero-overlay,
+.services-hero-stat-row span,
+.service-image-badge,
+.service-image-price,
+.merchant-thumb span,
+.featured-salon-hero,
+.promotion-image-overlay,
+.product-image-overlay,
+.game-prize-badge {
+    background: var(--sage-panel) !important;
+    color: var(--sage-readable) !important;
+    text-shadow: none !important;
+}
+
+.dashboard-kpi-grid,
+.portal-summary-panel.dashboard-kpi-grid,
+.merchant-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 18px;
+}
+
+.dashboard-report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 22px;
+    margin-top: 28px;
+}
+
+.service-catalog-grid,
+.unified-service-grid,
+.services-shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)) !important;
+    gap: 26px;
+}
+
+.product-grid,
+.promotion-grid,
+.reward-shop-grid,
+.feature-grid,
+.content-grid,
+.merchant-grid,
+.profile-summary-grid,
+.cashback-grid,
+.giftcard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+    gap: 26px;
+}
+
+.product-card:nth-child(1),
+.product-card:nth-child(6n + 1) {
+    grid-column: auto !important;
+}
+
+.merchant-row,
+.merchant-row:nth-child(even) {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.34fr) minmax(0, 1fr) minmax(220px, 0.24fr) !important;
+    gap: 0;
+}
+
+.merchant-row:nth-child(even) .merchant-thumb,
+.merchant-row:nth-child(even) .merchant-actions {
+    order: initial !important;
+}
+
+.login-layout,
+.payment-layout,
+.checkout-layout,
+.booking-layout,
+.profile-layout,
+.account-layout,
+.cart-layout,
+.game-layout,
+.game-admin-layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 0.48fr) minmax(420px, 0.52fr);
+    gap: clamp(24px, 4vw, 48px);
+}
+
+.login-form,
+.service-admin-form,
+.payment-form,
+.booking-form-panel,
+.booking-services-panel,
+.account-panel,
+.profile-card,
+.profile-panel,
+.cart-card,
+.checkout-card,
+.dashboard-report-card,
+.portal-stat,
+.promo-panel,
+.qr-panel,
+.admin-table-wrap,
+.table-card,
+.notice,
+.section-cta {
+    padding: clamp(24px, 3vw, 38px) !important;
+    background: var(--sage-panel) !important;
+    color: var(--sage-readable) !important;
+}
+
+.login-form label,
+.service-admin-form label,
+.payment-form label,
+.account-form label,
+.booking-form-panel label {
+    color: var(--sage-readable) !important;
+    font-weight: 800;
+}
+
+.dashboard-report-card p,
+.dashboard-report-card li,
+.portal-stat small,
+.merchant-row p,
+.service-catalog-card p,
+.product-card p,
+.promotion-offer-card p,
+.reward-voucher-card p,
+.account-panel p,
+.profile-card p,
+.cart-card p,
+.checkout-card p,
+.booking-form-panel p,
+.booking-services-panel p,
+.notice p {
+    color: var(--sage-muted-readable) !important;
+}
+
+.dashboard-report-card h2,
+.portal-stat strong,
+.merchant-row h2,
+.service-catalog-card h3,
+.product-card h2,
+.promotion-offer-card h2,
+.reward-voucher-card h2,
+.account-panel h2,
+.profile-card h2,
+.cart-card h2,
+.checkout-card h2,
+.booking-form-panel h2,
+.booking-services-panel h2 {
+    color: var(--sage-strong) !important;
+}
+
+.button.primary,
+.auth-form button,
+.portal-search button,
+.services-search button,
+.cart-checkout-button,
+.admin-action-button,
+.merchant-action-button,
+.ai-chatbot-toggle,
+.ai-chatbot-form button {
+    background: var(--sage-strong) !important;
+    border-color: var(--sage-strong) !important;
+    color: var(--paper) !important;
+}
+
+.button.secondary,
+.button.ghost,
+.text-button,
+.text-link,
+.profile-tab,
+.google-login-button,
+.danger-button {
+    background: rgba(255, 253, 247, 0.78) !important;
+    border-color: rgba(79, 104, 71, 0.24) !important;
+    color: var(--sage-readable) !important;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    color: var(--sage-readable) !important;
+    background: rgba(255, 253, 247, 0.9) !important;
+}
+
+table,
+.admin-table,
+.merchant-table {
+    width: 100%;
+    color: var(--sage-readable) !important;
+}
+
+th,
+td,
+td span,
+td strong {
+    color: var(--sage-readable) !important;
+}
+
+.site-footer {
+    margin-bottom: 24px;
+}
+
+@media (max-width: 980px) {
+    body:not(.flappy-page) main,
+    .site-header,
+    .site-footer {
+        width: calc(100% - 16px) !important;
+    }
+
+    body:not(.flappy-page) .page-container > .hero,
+    body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero),
+    body:not(.flappy-page) .page-container > .booking-hero,
+    body:not(.flappy-page) .page-container > .portal-hero,
+    body:not(.flappy-page) .page-container > .membership-hero,
+    body:not(.flappy-page) .page-container > .reward-shop-hero,
+    body:not(.flappy-page) .page-container > .about-hero,
+    .services-shop-hero,
+    .games-hero,
+    .services-unified-hero,
+    .login-layout,
+    .payment-layout,
+    .checkout-layout,
+    .booking-layout,
+    .profile-layout,
+    .account-layout,
+    .cart-layout,
+    .game-layout,
+    .game-admin-layout,
+    .merchant-row,
+    .merchant-row:nth-child(even) {
+        grid-template-columns: 1fr !important;
+    }
+
+    body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero)::after,
+    body:not(.flappy-page) .page-container > .booking-hero::after,
+    body:not(.flappy-page) .page-container > .portal-hero::after,
+    body:not(.flappy-page) .page-container > .membership-hero::after,
+    body:not(.flappy-page) .page-container > .reward-shop-hero::after,
+    body:not(.flappy-page) .page-container > .about-hero::after {
+        display: none;
+    }
+}
+
+@media (max-width: 720px) {
+    .section,
+    .section.compact,
+    .services-shop-section,
+    .games-page-section,
+    .profile-page,
+    .portal-page,
+    .cart-page,
+    .auth-shell {
+        padding: 34px 18px !important;
+    }
+
+    body:not(.flappy-page) .page-container > .hero,
+    body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero),
+    body:not(.flappy-page) .page-container > .booking-hero,
+    body:not(.flappy-page) .page-container > .portal-hero,
+    body:not(.flappy-page) .page-container > .membership-hero,
+    body:not(.flappy-page) .page-container > .reward-shop-hero,
+    body:not(.flappy-page) .page-container > .about-hero,
+    .services-shop-hero,
+    .games-hero,
+    .services-unified-hero {
+        padding: 38px 20px !important;
+    }
+
+    body:not(.flappy-page) .hero h1,
+    body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero) h1,
+    body:not(.flappy-page) .page-container > .booking-hero h1,
+    body:not(.flappy-page) .page-container > .portal-hero h1,
+    body:not(.flappy-page) .page-container > .membership-hero h1,
+    body:not(.flappy-page) .page-container > .reward-shop-hero h1,
+    body:not(.flappy-page) .page-container > .about-hero h1,
+    .services-hero-copy h1,
+    .games-hero-copy h1,
+    .services-unified-hero h1 {
+        font-size: clamp(3rem, 14vw, 4.8rem);
+    }
+}
