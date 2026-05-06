@@ -48,9 +48,9 @@ function buildBookingEmailHtml(booking, qrCid = '') {
         ? `
                                     <div style="margin-top:24px;padding:18px 20px;background:#f8fbf7;border:1px solid #cfe3d7;border-radius:10px;text-align:center;">
                                         <p style="margin:0 0 12px;font-size:15px;font-weight:700;color:#213f32;">Check-in QR</p>
-                                        ${booking.qrCodeDataUrl ? `<img src="cid:booking-qr" alt="Booking check-in QR code" width="180" height="180" style="display:block;margin:0 auto 12px;border:0;">` : ''}
+                                        ${qrCid ? `<img src="cid:${qrCid}" alt="Booking check-in QR code" width="180" height="180" style="display:block;margin:0 auto 12px;width:180px;height:180px;border:0;">` : ''}
                                         <p style="margin:0;font-size:13px;line-height:1.5;color:#496356;">Show this QR code when you arrive.</p>
-                                        <p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:#496356;word-break:break-all;">${escapeHtml(booking.checkinUrl)}</p>
+                                        <a href="${escapeHtml(booking.checkinUrl)}" style="display:inline-block;margin:10px 0 0;font-size:12px;line-height:1.5;color:#496356;word-break:break-all;">${escapeHtml(booking.checkinUrl)}</a>
                                     </div>`
         : '';
 
@@ -95,15 +95,6 @@ function buildBookingEmailHtml(booking, qrCid = '') {
                                         </tr>
                                     </table>
 
-                                    ${qrCid ? `
-                                    <div style="margin-top:24px;padding:20px;background:#fff;border:1px solid #ded2c3;border-radius:10px;text-align:center;">
-                                        <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#241f1a;">Merchant check-in QR</p>
-                                        <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#5f5448;">Show this QR code when you arrive. The merchant can scan it to verify and check in your booking.</p>
-                                        <img src="cid:${qrCid}" alt="Booking check-in QR code" width="220" height="220" style="display:block;margin:0 auto 12px;width:220px;height:220px;border:0;">
-                                        <a href="${escapeHtml(booking.checkInUrl)}" style="font-size:12px;line-height:1.5;color:#6f5a42;word-break:break-all;">${escapeHtml(booking.checkInUrl)}</a>
-                                    </div>
-                                    ` : ''}
-
                                     <div style="margin-top:24px;padding:18px 20px;background:#ecf4ef;border:1px solid #cfe3d7;border-radius:10px;">
                                         <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#213f32;">Next step</p>
                                         <p style="margin:0;font-size:14px;line-height:1.6;color:#496356;">Keep this email for your appointment reference. Please contact the merchant if you need to reschedule or cancel.</p>
@@ -127,18 +118,26 @@ function buildBookingEmailHtml(booking, qrCid = '') {
     `;
 }
 
+function normalizeBookingEmail(booking) {
+    return {
+        ...booking,
+        checkinUrl: booking.checkinUrl || booking.checkInUrl || ''
+    };
+}
+
 async function sendBookingConfirmationEmail(booking) {
+    const normalizedBooking = normalizeBookingEmail(booking);
     const config = getEmailConfig();
 
-    if (!isConfigured(config) || !booking.email) {
+    if (!isConfigured(config) || !normalizedBooking.email) {
         return { skipped: true };
     }
 
-    const qrCid = booking.checkInUrl ? 'booking-check-in-qr@vaniday' : '';
+    const qrCid = normalizedBooking.checkinUrl ? 'booking-check-in-qr@vaniday' : '';
     const attachments = [];
 
-    if (booking.checkInUrl) {
-        const qrDataUrl = await QRCode.toDataURL(booking.checkInUrl, {
+    if (normalizedBooking.checkinUrl) {
+        const qrDataUrl = await QRCode.toDataURL(normalizedBooking.checkinUrl, {
             errorCorrectionLevel: 'M',
             margin: 2,
             width: 280
@@ -166,20 +165,13 @@ async function sendBookingConfirmationEmail(booking) {
         }
     });
 
-    const qrAttachment = booking.qrCodeDataUrl
-        ? [{
-            filename: `booking-${booking.bookingId || 'qr'}.png`,
-            content: Buffer.from(String(booking.qrCodeDataUrl).split(',')[1] || '', 'base64'),
-            cid: 'booking-qr'
-        }]
-        : [];
-
     return transporter.sendMail({
         from: config.from,
-        to: booking.email,
-        subject: `Vaniday booking request: ${booking.serviceName}`,
-        text: buildBookingEmailText(booking),
-        html: buildBookingEmailHtml(booking)
+        to: normalizedBooking.email,
+        subject: `Vaniday booking request: ${normalizedBooking.serviceName}`,
+        text: buildBookingEmailText(normalizedBooking),
+        html: buildBookingEmailHtml(normalizedBooking, qrCid),
+        attachments
     });
 }
 
