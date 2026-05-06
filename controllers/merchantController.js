@@ -375,6 +375,14 @@ function rejectInvalidQrToken(req, res, merchant) {
 function renderMerchantDetail(req, res, merchant, options = {}) {
     const bookingUrl = getBookingUrl(req, merchant);
     const favouriteIds = req.session.favouriteMerchantIds || [];
+    const source = String(req.query.from || '').trim().toLowerCase();
+    const backLinks = {
+        services: { url: '/services', label: 'Back to services' },
+        directory: { url: '/merchants', label: 'Back to merchants' },
+        home: { url: '/', label: 'Back to home' },
+        profile: { url: '/profile', label: 'Back to profile' }
+    };
+    const backLink = backLinks[source] || backLinks.services;
 
     return res.status(options.status || 200).render('merchant-detail', {
         title: merchant.name,
@@ -386,7 +394,9 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
         todayDate: getTodayInputValue(),
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
-        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl)
+        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
+        backUrl: backLink.url,
+        backLabel: backLink.label
     });
 }
 

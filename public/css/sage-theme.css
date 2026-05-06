@@ -14,14 +14,14 @@
     --leaf-shadow: 0 22px 56px rgba(79, 104, 71, 0.16);
     --soft-shadow: 0 14px 34px rgba(79, 104, 71, 0.1);
     --nature-bg: url("https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=2200&q=82");
-    --hero-img: url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1400&q=84");
+    --hero-img: url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1400&q=84");
     --portrait-img: url("https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=84");
-    --spa-img: url("https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1200&q=84");
+    --spa-img: url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=84");
     --facial-img: url("https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=84");
-    --hair-img: url("https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1200&q=84");
+    --hair-img: url("https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1200&q=84");
     --nails-img: url("https://images.unsplash.com/photo-1610992015732-2449b76344bc?auto=format&fit=crop&w=1200&q=84");
     --barber-img: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=84");
-    --product-img: url("https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=84");
+    --product-img: url("https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1200&q=84");
 }
 
 html {
@@ -2250,5 +2250,961 @@ td strong {
 @media (max-width: 720px) {
     .referral-mini-tracker {
         grid-template-columns: 1fr !important;
+    }
+}
+
+/* Page tidy pass: reduce cramped rows, remove pale-on-light text, and normalize shop/admin surfaces. */
+body:not(.flappy-page) {
+    color: var(--sage-readable) !important;
+}
+
+body:not(.flappy-page) p,
+body:not(.flappy-page) li,
+body:not(.flappy-page) small,
+body:not(.flappy-page) span,
+body:not(.flappy-page) label {
+    text-shadow: none !important;
+}
+
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero)::after,
+body:not(.flappy-page) .page-container > .booking-hero::after,
+body:not(.flappy-page) .page-container > .portal-hero::after,
+body:not(.flappy-page) .page-container > .membership-hero::after,
+body:not(.flappy-page) .page-container > .reward-shop-hero::after,
+body:not(.flappy-page) .page-container > .about-hero::after {
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(127, 150, 112, 0.16)),
+        var(--facial-img) !important;
+    background-position: center !important;
+    background-size: cover !important;
+}
+
+.search-bar,
+.portal-search,
+.services-search {
+    min-height: 64px !important;
+    padding: 8px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 10px !important;
+    border-radius: 999px !important;
+}
+
+.search-bar input,
+.portal-search input,
+.services-search input {
+    min-height: 48px !important;
+    padding: 0 18px !important;
+    border: 0 !important;
+}
+
+.search-bar .button,
+.portal-search .button,
+.services-search .button,
+.search-bar button,
+.portal-search button,
+.services-search button {
+    min-width: 124px !important;
+    min-height: 48px !important;
+}
+
+.merchant-list {
+    gap: 24px !important;
+}
+
+.merchant-row,
+.merchant-row:nth-child(even) {
+    min-height: 280px !important;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(210px, 250px) !important;
+    align-items: stretch !important;
+    background: var(--sage-panel) !important;
+}
+
+.merchant-row > div:not(.merchant-thumb),
+.merchant-actions {
+    min-width: 0 !important;
+    padding: 30px !important;
+}
+
+.merchant-title-row,
+.portal-card-header,
+.promotion-offer-topline,
+.reward-voucher-topline,
+.account-panel-header {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 18px !important;
+}
+
+.merchant-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    border-left: 1px solid rgba(79, 104, 71, 0.12) !important;
+}
+
+.merchant-actions .button,
+.merchant-actions .text-link,
+.service-card-actions .button,
+.product-card-actions .button,
+.product-card-actions button,
+.admin-action-row .button,
+.form-actions .button {
+    width: 100% !important;
+    min-height: 48px !important;
+    padding: 12px 18px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    white-space: normal !important;
+    text-align: center !important;
+    line-height: 1.2 !important;
+}
+
+.merchant-actions .text-link {
+    border-radius: 999px !important;
+    text-decoration: none !important;
+}
+
+.promotion-offer-image-1,
+.promotion-offer-image-21,
+.promotion-offer-image-30 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.2)),
+        var(--hair-img) !important;
+}
+
+.promotion-offer-image-2,
+.promotion-offer-image-22,
+.promotion-offer-image-31 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.2)),
+        var(--facial-img) !important;
+}
+
+.promotion-offer-image-3,
+.promotion-offer-image-23,
+.promotion-offer-image-32 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.2)),
+        var(--nails-img) !important;
+}
+
+.promotion-offer-image-4,
+.promotion-offer-image-5,
+.promotion-offer-image-24,
+.promotion-offer-image-25,
+.promotion-offer-image-26 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.2)),
+        var(--spa-img) !important;
+}
+
+.promotion-offer-image-6,
+.promotion-offer-image-27,
+.promotion-offer-image-28,
+.promotion-offer-image-29 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.2)),
+        var(--barber-img) !important;
+}
+
+.promotions-layout {
+    display: grid !important;
+    grid-template-columns: minmax(260px, 330px) minmax(0, 1fr) !important;
+    gap: 28px !important;
+    align-items: start !important;
+}
+
+.promotions-filters,
+.promotions-results,
+.filter-card {
+    min-width: 0 !important;
+}
+
+.filter-card,
+.promotions-results-count,
+.promotion-offer-card {
+    background: var(--sage-panel) !important;
+    color: var(--sage-readable) !important;
+}
+
+.filter-line,
+.filter-check,
+.filter-pill-row {
+    color: var(--sage-readable) !important;
+}
+
+.filter-line {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 12px !important;
+    align-items: center !important;
+}
+
+.promotion-offer-card {
+    display: grid !important;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) !important;
+    gap: 0 !important;
+    overflow: hidden !important;
+}
+
+.promotion-offer-image {
+    min-height: 250px !important;
+    border-radius: 0 !important;
+    background-position: center !important;
+    background-size: cover !important;
+}
+
+.promotion-offer-content {
+    padding: 30px !important;
+}
+
+.promotion-offer-meta {
+    align-items: center !important;
+}
+
+.promotion-price-block strong,
+.promotion-offer-card h2,
+.promotion-offer-card h3 {
+    color: var(--sage-strong) !important;
+}
+
+.promotion-badge {
+    background: var(--sage-panel) !important;
+    color: var(--sage-readable) !important;
+}
+
+.product-grid {
+    align-items: stretch !important;
+}
+
+.product-card {
+    min-height: 560px !important;
+    display: grid !important;
+    grid-template-rows: 250px auto auto 1fr auto !important;
+}
+
+.product-image {
+    min-height: 250px !important;
+}
+
+.product-card h2 {
+    min-height: 74px !important;
+}
+
+.product-card-actions,
+.service-card-actions,
+.admin-action-row,
+.form-actions {
+    display: flex !important;
+    gap: 12px !important;
+    flex-wrap: wrap !important;
+}
+
+.product-card-actions .button,
+.product-card-actions form {
+    flex: 1 1 150px !important;
+}
+
+.contact-layout,
+.map-panel,
+.contact-info-panel {
+    min-width: 0 !important;
+}
+
+.contact-layout {
+    width: min(1500px, 100%) !important;
+    margin: 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(320px, 0.42fr) minmax(420px, 0.58fr) !important;
+    gap: 28px !important;
+}
+
+.contact-info-panel,
+.map-panel {
+    padding: 30px !important;
+    border: 1px solid rgba(79, 104, 71, 0.16) !important;
+    border-radius: 10px !important;
+    background: var(--sage-panel) !important;
+    box-shadow: var(--soft-shadow) !important;
+}
+
+.map-panel iframe {
+    min-height: 430px !important;
+    border-radius: 8px !important;
+}
+
+.reward-shop-page .reward-shop-hero {
+    background:
+        linear-gradient(145deg, rgba(255, 253, 247, 0.96), rgba(223, 232, 212, 0.88)) !important;
+    color: var(--sage-readable) !important;
+}
+
+.reward-shop-page .reward-shop-kicker,
+.reward-shop-page .reward-shop-hero h1,
+.reward-shop-page .reward-shop-copy,
+.reward-shop-page .reward-shop-balance strong,
+.reward-shop-page .reward-shop-balance span,
+.reward-shop-page .reward-shop-rate span,
+.reward-shop-page .reward-shop-rate strong {
+    color: var(--sage-readable) !important;
+}
+
+.reward-shop-page .reward-shop-balance,
+.reward-shop-page .reward-shop-rate {
+    background: rgba(238, 244, 233, 0.86) !important;
+}
+
+.reward-shop-page .reward-shop-balance-icon {
+    background: var(--sage-strong) !important;
+    color: var(--paper) !important;
+}
+
+.notice.success,
+.notice.error {
+    border-color: rgba(79, 104, 71, 0.18) !important;
+    color: var(--sage-readable) !important;
+}
+
+.notice.error {
+    background: rgba(255, 246, 242, 0.96) !important;
+}
+
+.notice.success {
+    background: rgba(238, 244, 233, 0.96) !important;
+}
+
+@media (max-width: 980px) {
+    .promotions-layout,
+    .promotion-offer-card,
+    .merchant-row,
+    .merchant-row:nth-child(even),
+    .contact-layout {
+        grid-template-columns: 1fr !important;
+    }
+
+    .merchant-actions {
+        border-left: 0 !important;
+        border-top: 1px solid rgba(79, 104, 71, 0.12) !important;
+    }
+}
+
+@media (max-width: 700px) {
+    .search-bar,
+    .portal-search,
+    .services-search {
+        grid-template-columns: 1fr !important;
+        border-radius: 18px !important;
+    }
+
+    .product-card-actions,
+    .service-card-actions,
+    .admin-action-row,
+    .form-actions {
+        flex-direction: column !important;
+    }
+}
+
+/* Final visual correction pass: lighter nature imagery, calmer headings, and cleaner logged-in pages. */
+body:not(.flappy-page) .page-container > .hero h1 {
+    font-size: clamp(4.8rem, 7.2vw, 9rem) !important;
+    line-height: 0.9 !important;
+}
+
+.services-unified-hero h1 {
+    font-size: clamp(3.4rem, 4.8vw, 5.8rem) !important;
+    line-height: 0.98 !important;
+}
+
+.section-heading h2,
+.editorial-section-heading h2,
+.services-list-heading h2,
+.game-history-heading h2,
+.profile-page-heading h1,
+.account-panel h2,
+.dashboard-report-card h2,
+.section-cta h2 {
+    line-height: 1.05 !important;
+}
+
+.editorial-section-heading h2,
+.services-list-heading h2,
+.game-history-heading h2,
+.section-heading h2 {
+    font-size: clamp(2.4rem, 4vw, 4.8rem) !important;
+}
+
+body:not(.flappy-page) .hero-visual,
+body:not(.flappy-page) .hero-visual::after,
+body:not(.flappy-page) .page-container > .page-title:not(.services-shop-hero):not(.games-hero)::after,
+body:not(.flappy-page) .page-container > .booking-hero::after,
+body:not(.flappy-page) .page-container > .portal-hero::after,
+body:not(.flappy-page) .page-container > .membership-hero::after,
+body:not(.flappy-page) .page-container > .reward-shop-hero::after,
+body:not(.flappy-page) .page-container > .about-hero::after,
+.content-card.image-card,
+.merchant-card-image,
+.merchant-thumb,
+.product-image,
+.service-card-image,
+.promotion-offer-image,
+.about-image {
+    filter: sepia(0.08) saturate(0.82) contrast(0.96) brightness(1.05) !important;
+}
+
+.promotion-offer-image-1,
+.merchant-thumb-1,
+.merchant-card-image.merchant-thumb-1 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.1), rgba(79, 104, 71, 0.2)),
+        var(--facial-img) !important;
+}
+
+.promotion-offer-image-2,
+.merchant-thumb-2,
+.merchant-card-image.merchant-thumb-2 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.1), rgba(79, 104, 71, 0.2)),
+        var(--spa-img) !important;
+}
+
+.promotion-offer-image-3,
+.merchant-thumb-3,
+.merchant-card-image.merchant-thumb-3 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.1), rgba(79, 104, 71, 0.2)),
+        var(--barber-img) !important;
+}
+
+.page-title:not(.services-shop-hero):not(.games-hero),
+.booking-hero,
+.portal-hero,
+.membership-hero,
+.reward-shop-hero,
+.about-hero {
+    background:
+        linear-gradient(105deg, rgba(255, 253, 247, 0.97), rgba(238, 244, 233, 0.92)),
+        var(--nature-bg) !important;
+}
+
+.login-form a,
+.auth-form a,
+.profile-tab-nav a,
+.account-summary-list a,
+.muted a,
+.text-link,
+.filter-clear-button {
+    color: var(--sage-strong) !important;
+    font-weight: 800 !important;
+}
+
+.login-form a:hover,
+.auth-form a:hover,
+.profile-tab-nav a:hover,
+.account-summary-list a:hover,
+.muted a:hover,
+.text-link:hover,
+.filter-clear-button:hover {
+    color: var(--sage-ink) !important;
+}
+
+.profile-hero-card,
+.profile-tab-nav,
+.account-summary-panel,
+.account-panel,
+.reward-shop-page .reward-shop-shell,
+.wallet-layout,
+.cashback-grid,
+.giftcard-grid,
+.cart-layout,
+.history-list {
+    width: min(1700px, 100%) !important;
+    max-width: none !important;
+}
+
+.profile-hero-card {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) minmax(220px, 300px) !important;
+    gap: 24px !important;
+    align-items: center !important;
+}
+
+.profile-hero-actions {
+    align-items: stretch !important;
+}
+
+.profile-tab-nav {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    justify-content: center !important;
+}
+
+.profile-tab-nav a {
+    min-height: 44px !important;
+    padding: 11px 18px !important;
+    border: 1px solid rgba(79, 104, 71, 0.16) !important;
+    border-radius: 999px !important;
+    background: rgba(238, 244, 233, 0.8) !important;
+    text-decoration: none !important;
+}
+
+.saved-merchant-row,
+.wallet-mini-history p,
+.loyalty-rule-strip p,
+.referral-metrics > div {
+    min-width: 0 !important;
+    background: rgba(238, 244, 233, 0.58) !important;
+    border-color: rgba(79, 104, 71, 0.14) !important;
+}
+
+.password-requirements span,
+.account-role-chip,
+.membership-tier-badge,
+.tag,
+.promotion-offer-tags span,
+.service-meta-pills span,
+.compact-slots span,
+.availability-strip span {
+    color: var(--sage-readable) !important;
+    text-shadow: none !important;
+}
+
+@media (max-width: 980px) {
+    .profile-hero-card {
+        grid-template-columns: 1fr !important;
+    }
+
+    body:not(.flappy-page) .page-container > .hero h1,
+    .services-unified-hero h1 {
+        font-size: clamp(3.5rem, 13vw, 5.4rem) !important;
+    }
+}
+
+/* Evaluation polish: page reveal, gentle interaction motion, and login/logout transition. */
+@keyframes vanidayPageReveal {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes vanidayFloatIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.985);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes vanidaySpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+body:not(.flappy-page) main {
+    animation: vanidayPageReveal 520ms ease both;
+}
+
+body:not(.flappy-page) .hero-content,
+body:not(.flappy-page) .hero-visual,
+body:not(.flappy-page) .page-title > *,
+body:not(.flappy-page) .service-catalog-card,
+body:not(.flappy-page) .merchant-row,
+body:not(.flappy-page) .product-card,
+body:not(.flappy-page) .promotion-offer-card,
+body:not(.flappy-page) .account-panel,
+body:not(.flappy-page) .dashboard-report-card,
+body:not(.flappy-page) .portal-stat {
+    animation: vanidayFloatIn 560ms ease both;
+}
+
+body:not(.flappy-page) .service-catalog-card:nth-child(2),
+body:not(.flappy-page) .merchant-row:nth-child(2),
+body:not(.flappy-page) .product-card:nth-child(2),
+body:not(.flappy-page) .promotion-offer-card:nth-child(2),
+body:not(.flappy-page) .dashboard-report-card:nth-child(2),
+body:not(.flappy-page) .portal-stat:nth-child(2) {
+    animation-delay: 70ms;
+}
+
+body:not(.flappy-page) .service-catalog-card:nth-child(3),
+body:not(.flappy-page) .merchant-row:nth-child(3),
+body:not(.flappy-page) .product-card:nth-child(3),
+body:not(.flappy-page) .promotion-offer-card:nth-child(3),
+body:not(.flappy-page) .dashboard-report-card:nth-child(3),
+body:not(.flappy-page) .portal-stat:nth-child(3) {
+    animation-delay: 120ms;
+}
+
+body:not(.flappy-page) .button,
+body:not(.flappy-page) .text-button,
+body:not(.flappy-page) .signup-text-link,
+body:not(.flappy-page) .nav-links a,
+body:not(.flappy-page) .nav-dropdown-trigger,
+body:not(.flappy-page) .profile-icon-link,
+body:not(.flappy-page) .bag-link,
+body:not(.flappy-page) .service-catalog-card,
+body:not(.flappy-page) .merchant-row,
+body:not(.flappy-page) .product-card,
+body:not(.flappy-page) .promotion-offer-card,
+body:not(.flappy-page) .reward-voucher-card {
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease,
+        border-color 180ms ease,
+        background-color 180ms ease,
+        color 180ms ease !important;
+}
+
+body:not(.flappy-page) .service-catalog-card:hover,
+body:not(.flappy-page) .merchant-row:hover,
+body:not(.flappy-page) .product-card:hover,
+body:not(.flappy-page) .promotion-offer-card:hover,
+body:not(.flappy-page) .reward-voucher-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 22px 46px rgba(79, 104, 71, 0.14) !important;
+}
+
+.page-transition-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    pointer-events: none;
+    opacity: 0;
+    background:
+        radial-gradient(circle at 50% 35%, rgba(255, 253, 247, 0.96), rgba(238, 244, 233, 0.92) 56%, rgba(127, 150, 112, 0.24));
+    backdrop-filter: blur(18px);
+    transition: opacity 220ms ease;
+}
+
+.page-transition-overlay.is-visible {
+    opacity: 1;
+}
+
+.page-transition-card {
+    width: min(420px, 100%);
+    min-height: 190px;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 10px;
+    background: rgba(255, 253, 247, 0.9);
+    color: var(--sage-readable);
+    box-shadow: var(--leaf-shadow);
+}
+
+.page-transition-mark {
+    width: 58px;
+    height: 58px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--sage-strong);
+    color: var(--paper);
+    font-family: "Cormorant Garamond", serif;
+    font-size: 2.2rem;
+    font-weight: 700;
+}
+
+.page-transition-spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(79, 104, 71, 0.16);
+    border-top-color: var(--sage-strong);
+    border-radius: 50%;
+    animation: vanidaySpin 760ms linear infinite;
+}
+
+.page-transition-card strong {
+    color: var(--sage-readable);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+form.is-submitting button[type="submit"] {
+    opacity: 0.82;
+    pointer-events: none;
+}
+
+.merchant-info-page {
+    display: grid;
+    gap: 28px;
+}
+
+.merchant-info-back-row {
+    padding-inline: clamp(18px, 5vw, 64px);
+}
+
+.merchant-info-hero {
+    width: min(100%, 1480px);
+    min-height: clamp(420px, 58vh, 680px);
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: stretch;
+    gap: clamp(22px, 3vw, 48px);
+    margin-inline: auto;
+    padding: clamp(22px, 4vw, 56px);
+    border: 1px solid rgba(104, 112, 88, 0.18);
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(255, 252, 244, 0.94), rgba(229, 231, 214, 0.82)),
+        var(--paper);
+    box-shadow: 0 28px 70px rgba(74, 80, 61, 0.12);
+}
+
+.merchant-info-copy {
+    display: grid;
+    align-content: center;
+    gap: 22px;
+    max-width: 760px;
+}
+
+.merchant-info-copy h1 {
+    max-width: 780px;
+    color: var(--sage-readable);
+    font-size: clamp(4rem, 9vw, 8.8rem);
+    line-height: 0.86;
+}
+
+.merchant-info-copy p:not(.eyebrow) {
+    max-width: 680px;
+    color: var(--sage-muted);
+    font-size: clamp(1rem, 1.4vw, 1.25rem);
+}
+
+.merchant-info-meta,
+.merchant-info-summary,
+.merchant-fact-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.merchant-info-meta span,
+.merchant-info-summary span,
+.merchant-fact-grid div {
+    border: 1px solid rgba(104, 112, 88, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 252, 244, 0.72);
+    color: var(--sage-readable);
+    padding: 10px 16px;
+    font-weight: 700;
+}
+
+.merchant-info-image {
+    min-height: 420px;
+    border-radius: 10px;
+    background-size: cover;
+    background-position: center;
+    filter: saturate(0.86) contrast(0.94);
+    box-shadow: inset 0 0 0 999px rgba(34, 31, 26, 0.12);
+}
+
+.merchant-info-grid {
+    width: min(100%, 1480px);
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+    gap: 24px;
+    margin-inline: auto;
+}
+
+.merchant-info-panel,
+.merchant-info-footer-panel,
+.merchant-workspace-card {
+    border: 1px solid rgba(104, 112, 88, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 252, 244, 0.88);
+    box-shadow: 0 18px 45px rgba(74, 80, 61, 0.09);
+}
+
+.merchant-info-panel {
+    display: grid;
+    align-content: start;
+    gap: 18px;
+    padding: clamp(22px, 3vw, 36px);
+}
+
+.merchant-info-panel h2,
+.merchant-info-services h2,
+.merchant-info-footer-panel h2,
+.merchant-workspace-card h2 {
+    color: var(--sage-readable);
+}
+
+.merchant-fact-grid div {
+    display: grid;
+    min-width: 150px;
+    border-radius: 10px;
+}
+
+.merchant-fact-grid span {
+    color: var(--sage-muted);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.merchant-fact-grid strong {
+    color: var(--sage-readable);
+}
+
+.merchant-info-highlight {
+    background:
+        linear-gradient(145deg, rgba(104, 112, 88, 0.16), rgba(255, 252, 244, 0.9)),
+        var(--paper);
+}
+
+.merchant-info-service-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+}
+
+.merchant-info-service-card {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-height: 270px;
+    padding: 22px;
+    border: 1px solid rgba(104, 112, 88, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 252, 244, 0.9);
+    box-shadow: 0 18px 42px rgba(74, 80, 61, 0.08);
+}
+
+.merchant-info-service-card h3 {
+    color: var(--sage-readable);
+}
+
+.merchant-info-footer-panel {
+    width: min(100%, 1480px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-inline: auto;
+    padding: clamp(22px, 3vw, 34px);
+}
+
+.merchant-workspace-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    margin-block: 26px;
+}
+
+.merchant-workspace-card {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-height: 250px;
+    padding: 22px;
+}
+
+.merchant-dashboard-qr {
+    margin-top: 24px;
+}
+
+.merchant-service-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 22px;
+}
+
+.merchant-service-toolbar {
+    align-items: center;
+}
+
+.merchant-service-grid .service-catalog-card {
+    min-height: 360px;
+}
+
+@media (max-width: 1080px) {
+    .merchant-info-hero,
+    .merchant-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-info-image {
+        min-height: 340px;
+    }
+
+    .merchant-workspace-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .merchant-info-hero {
+        padding: 20px;
+    }
+
+    .merchant-info-copy h1 {
+        font-size: clamp(3.2rem, 18vw, 5.5rem);
+    }
+
+    .merchant-info-footer-panel,
+    .merchant-service-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .merchant-workspace-grid,
+    .merchant-service-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:not(.flappy-page) main,
+    body:not(.flappy-page) .hero-content,
+    body:not(.flappy-page) .hero-visual,
+    body:not(.flappy-page) .page-title > *,
+    body:not(.flappy-page) .service-catalog-card,
+    body:not(.flappy-page) .merchant-row,
+    body:not(.flappy-page) .product-card,
+    body:not(.flappy-page) .promotion-offer-card,
+    body:not(.flappy-page) .account-panel,
+    body:not(.flappy-page) .dashboard-report-card,
+    body:not(.flappy-page) .portal-stat,
+    .page-transition-spinner {
+        animation: none !important;
+    }
+
+    body:not(.flappy-page) .button,
+    body:not(.flappy-page) .text-button,
+    body:not(.flappy-page) .signup-text-link,
+    body:not(.flappy-page) .nav-links a,
+    body:not(.flappy-page) .nav-dropdown-trigger,
+    body:not(.flappy-page) .profile-icon-link,
+    body:not(.flappy-page) .bag-link,
+    body:not(.flappy-page) .service-catalog-card,
+    body:not(.flappy-page) .merchant-row,
+    body:not(.flappy-page) .product-card,
+    body:not(.flappy-page) .promotion-offer-card,
+    body:not(.flappy-page) .reward-voucher-card,
+    .page-transition-overlay {
+        transition: none !important;
     }
 }

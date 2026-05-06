@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=1">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=8">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=13">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=18">
 </head>
 <body>
     <header class="site-header">
@@ -38,11 +38,9 @@
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <a href="/merchant">Dashboard</a>
                     <a href="/merchant/services">My Services</a>
+                    <a href="/merchant/products">My Products</a>
                     <a href="/merchant/promotions">My Promotions</a>
                     <a href="/merchant/rewards-game">Game Rewards</a>
-                    <a href="/merchant/products">My Products</a>
-                    <a href="/merchant/services/new">Add Service</a>
-                    <a href="/merchant/promotions/new">Add Promotion</a>
                     <a href="/profile">Profile</a>
                 <% } else { %>
                     <a href="/services">Services</a>
@@ -61,7 +59,6 @@
                     </div>
                     <a href="/products">Products</a>
                     <% if (currentUser && currentUser.role === 'customer') { %>
-                        <a href="/my-services">My Services</a>
                         <a href="/rewards-game">Games</a>
                         <a href="/reward-shop">Reward Shop</a>
                         <a href="/cashback">Cashback</a>

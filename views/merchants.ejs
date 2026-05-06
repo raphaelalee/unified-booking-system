@@ -39,8 +39,8 @@
                     <p class="promotion"><%= merchant.promotion %></p>
                 </div>
                 <div class="merchant-actions">
-                    <a class="button primary" href="/merchants/<%= merchant.id %>">View merchant</a>
-                    <a class="text-link" href="/merchants/<%= merchant.id %>">View services</a>
+                    <a class="button primary" href="/merchants/<%= merchant.id %>?from=directory">View merchant info</a>
+                    <a class="text-link" href="/booking/<%= merchant.id %>/<%= merchant.qrToken %>">Book services</a>
                 </div>
             </article>
         <% }) %>

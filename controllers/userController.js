@@ -688,27 +688,6 @@ function showRewardShop(req, res) {
     });
 }
 
-function showMyServices(req, res) {
-    if (!req.session.user) {
-        return res.redirect('/login');
-    }
-
-    return Booking.getUpcomingByUserId(req.session.user.id, (error, bookings) => {
-        if (error) {
-            console.error(error);
-            return res.status(500).render('error', {
-                title: 'My Services Error',
-                message: 'Your upcoming bookings could not be loaded.'
-            });
-        }
-
-        return res.render('my-services', {
-            title: 'My Services',
-            bookings: bookings || []
-        });
-    });
-}
-
 function claimRewardShopDaily(req, res) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -864,7 +843,6 @@ module.exports = {
     signupUser,
     showProfile,
     showRewardShop,
-    showMyServices,
     claimRewardShopDaily,
     updateProfile,
     updatePassword,

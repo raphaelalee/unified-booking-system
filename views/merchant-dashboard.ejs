@@ -1,27 +1,9 @@
 <%- include('partials/header', { title }) %>
 
-<%
-    const formatPromotionDate = (value) => {
-        const date = value instanceof Date ? value : new Date(value);
-
-        if (Number.isNaN(date.getTime())) {
-            return '';
-        }
-
-        return date.toLocaleString('en-SG', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-        });
-    };
-%>
-
-<section class="page-title">
+<section class="page-title merchant-dashboard-hero">
     <p class="eyebrow">Merchant Portal</p>
     <h1><%= merchant.name %></h1>
-    <p>Track your own customer bookings, merchant service performance, and validation issues without seeing other merchants' data.</p>
+    <p>Overview, customer reporting, merchant health, and QR access for your own merchant account.</p>
 </section>
 
 <section class="section compact">
@@ -103,6 +85,8 @@
                     <strong><%= merchantReport.topService.name %></strong>
                     <small>$<%= Number(merchantReport.topService.price).toFixed(2) %></small>
                 </div>
+            <% } else { %>
+                <p class="muted">Add services to build your merchant report.</p>
             <% } %>
         </article>
 
@@ -121,19 +105,44 @@
         </article>
     </div>
 
-    <div class="section-cta">
-        <div>
-            <h2>Services</h2>
-            <p class="muted"><%= merchant.services.length %> active services for <%= merchant.location %>.</p>
-        </div>
-        <a class="button primary" href="/merchant/services/new">Add service</a>
+    <div class="section-heading merchant-workspace-heading">
+        <p class="eyebrow">Merchant workspace</p>
+        <h2>Dedicated controls</h2>
+        <p class="muted">Each page now has one clear job, so dashboard reporting stays separate from editing tools.</p>
     </div>
 
-    <div class="promo-panel qr-panel">
+    <div class="merchant-workspace-grid">
+        <article class="merchant-workspace-card">
+            <p class="eyebrow">Services</p>
+            <h2>Menu, prices, and slots</h2>
+            <p class="muted">Use this page only for service listings and availability.</p>
+            <a class="button primary full" href="/merchant/services">Manage services</a>
+        </article>
+        <article class="merchant-workspace-card">
+            <p class="eyebrow">Products</p>
+            <h2>Retail catalogue</h2>
+            <p class="muted">Add or update products shown on the customer product page.</p>
+            <a class="button secondary full" href="/merchant/products">Manage products</a>
+        </article>
+        <article class="merchant-workspace-card">
+            <p class="eyebrow">Promotions</p>
+            <h2>Campaign offers</h2>
+            <p class="muted">Control discounts, first trials, happy hour, and featured campaigns.</p>
+            <a class="button secondary full" href="/merchant/promotions">Manage promotions</a>
+        </article>
+        <article class="merchant-workspace-card">
+            <p class="eyebrow">Rewards Game</p>
+            <h2>Game prizes</h2>
+            <p class="muted">Create reward prizes customers can win through the game.</p>
+            <a class="button secondary full" href="/merchant/rewards-game">Manage rewards</a>
+        </article>
+    </div>
+
+    <div class="promo-panel qr-panel merchant-dashboard-qr">
         <p class="eyebrow">Merchant QR</p>
         <h2>Shop booking QR</h2>
         <p class="muted">
-            This signed QR link is tied to merchant ID <%= merchant.id %> and opens only this merchant's services.
+            This signed QR link is tied to merchant ID <%= merchant.id %> and opens only this merchant's booking flow.
         </p>
         <form action="/merchant/generate-qr" method="POST">
             <button class="button primary" type="submit">Generate QR Code</button>
@@ -146,80 +155,6 @@
             <a class="text-link qr-link" href="<%= qrBookingUrl %>"><%= qrBookingUrl %></a>
         <% } %>
     </div>
-
-    <div class="service-catalog-grid unified-service-grid">
-        <% merchant.services.forEach((service) => { %>
-            <article class="service-catalog-card unified-service-card">
-                <div class="portal-card-header">
-                    <span class="tag"><%= service.category || merchant.category %></span>
-                    <span class="service-price slim">$<%= service.price %></span>
-                </div>
-                <div>
-                    <h3><%= service.name %></h3>
-                    <p class="muted"><%= service.duration %></p>
-                    <% if (service.description) { %>
-                        <p><%= service.description %></p>
-                    <% } %>
-                </div>
-                <div class="availability-strip">
-                    <% (service.slots || []).forEach((slot) => { %>
-                        <span><%= slot %></span>
-                    <% }) %>
-                </div>
-                <div class="service-card-actions">
-                    <a class="button secondary full" href="/merchant/services/<%= service.id %>/edit">Edit</a>
-                    <form action="/merchant/services/<%= service.id %>/delete" method="POST">
-                        <button class="button secondary full danger-button" type="submit">Delete</button>
-                    </form>
-                </div>
-            </article>
-        <% }) %>
-    </div>
-
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Merchant Promotions</p>
-        <h2>Current promotion campaigns</h2>
-    </div>
-
-    <% if (!Array.isArray(promotions) || promotions.length === 0) { %>
-        <div class="notice">
-            No promotions have been created yet. Add one to feature discounts, first trials, happy hour offers, or highlighted listings.
-        </div>
-    <% } else { %>
-        <div class="service-catalog-grid unified-service-grid">
-            <% promotions.forEach((promotion) => { %>
-                <article class="service-catalog-card unified-service-card">
-                    <div class="portal-card-header">
-                        <span class="tag"><%= promotion.type.replace(/_/g, ' ') %></span>
-                        <span class="service-price slim"><%= promotion.status %></span>
-                    </div>
-                    <div>
-                        <h3><%= promotion.title %></h3>
-                        <p class="muted">
-                            <%= promotion.serviceName || 'All merchant services' %> &middot;
-                            <%= promotion.discountType.replace(/_/g, ' ') %>
-                            <% if (promotion.discountValue !== null) { %>
-                                &middot; <%= promotion.discountValue %>
-                            <% } %>
-                        </p>
-                        <% if (promotion.description) { %>
-                            <p><%= promotion.description %></p>
-                        <% } %>
-                    </div>
-                    <div class="availability-strip">
-                        <span>Starts <%= formatPromotionDate(promotion.startDate) %></span>
-                        <span>Ends <%= formatPromotionDate(promotion.endDate) %></span>
-                    </div>
-                    <div class="service-card-actions">
-                        <a class="button secondary full" href="/merchant/promotions/<%= promotion.id %>/edit">Edit</a>
-                        <form action="/merchant/promotions/<%= promotion.id %>/delete" method="POST">
-                            <button class="button secondary full danger-button" type="submit">Delete</button>
-                        </form>
-                    </div>
-                </article>
-            <% }) %>
-        </div>
-    <% } %>
 </section>
 
 <%- include('partials/footer') %>

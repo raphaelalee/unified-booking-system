@@ -330,7 +330,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
             req.session.merchantError = null;
 
             return res.status(options.status || 200).render('merchant-dashboard', {
-                title: 'Merchant Services',
+                title: 'Merchant Dashboard',
                 merchant,
                 success,
                 error,
@@ -347,12 +347,30 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
     });
 }
 
+function renderMerchantServices(req, res, merchant, options = {}) {
+    const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
+    const error = options.error !== undefined ? options.error : req.session.merchantError;
+    req.session.merchantSuccess = null;
+    req.session.merchantError = null;
+
+    return res.status(options.status || 200).render('merchant-services', {
+        title: 'My Services',
+        merchant,
+        success,
+        error
+    });
+}
+
 function showServices(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
 
         if (handled) {
             return handled;
+        }
+
+        if (req.path === '/merchant/services') {
+            return renderMerchantServices(req, res, merchant);
         }
 
         return renderMerchantDashboard(req, res, merchant);

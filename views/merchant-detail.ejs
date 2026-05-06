@@ -1,167 +1,123 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const detailServices = Array.isArray(merchant.services) && merchant.services.length > 0
-        ? merchant.services
-        : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
+    const detailServices = Array.isArray(merchant.services) ? merchant.services : [];
+    const priceValues = detailServices.map((service) => Number(service.price)).filter((price) => Number.isFinite(price));
+    const startingPrice = priceValues.length > 0 ? Math.min(...priceValues) : 0;
+    const slotCount = detailServices.reduce((total, service) => total + (Array.isArray(service.slots) ? service.slots.length : 0), 0);
+    const categories = [...new Set(detailServices.map((service) => service.name).filter(Boolean))];
 %>
 
-<section class="page-title split">
-    <div>
-        <p class="eyebrow"><%= merchant.category %></p>
-        <h1><%= merchant.name %></h1>
-        <p><%= merchant.description %></p>
-        <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
-        <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
-            <button class="heart-button large <%= isFavourite ? 'active' : '' %>" type="submit">
-                <%- isFavourite ? '&hearts; Saved merchant' : '&#9825; Save merchant' %>
-            </button>
-        </form>
+<section class="merchant-info-page">
+    <div class="merchant-info-back-row">
+        <a class="text-link" href="<%= typeof backUrl !== 'undefined' ? backUrl : '/services' %>">
+            &larr; <%= typeof backLabel !== 'undefined' ? backLabel : 'Back to services' %>
+        </a>
     </div>
-    <div class="merchant-side-panels">
-        <div class="promo-panel">
-            <p class="eyebrow">Current promotion</p>
-            <strong><%= merchant.promotion %></strong>
-        </div>
 
-        <div class="promo-panel">
-            <p class="eyebrow">Booking link</p>
-            <h2>Book online</h2>
+    <section class="merchant-info-hero">
+        <div class="merchant-info-copy">
+            <p class="eyebrow"><%= merchant.category %></p>
+            <h1><%= merchant.name %></h1>
+            <p><%= merchant.description %></p>
+            <div class="merchant-info-meta">
+                <span><%= merchant.location %></span>
+                <span>Rating <%= merchant.rating %></span>
+                <span><%= detailServices.length %> services</span>
+            </div>
+        </div>
+        <aside class="merchant-info-image merchant-thumb-<%= merchant.id %>" aria-label="<%= merchant.name %>"></aside>
+    </section>
+
+    <section class="merchant-info-grid">
+        <article class="merchant-info-panel">
+            <p class="eyebrow">Merchant information</p>
+            <h2>About this partner</h2>
+            <p><%= merchant.description %></p>
+            <div class="merchant-fact-grid">
+                <div>
+                    <span>Location</span>
+                    <strong><%= merchant.location %></strong>
+                </div>
+                <div>
+                    <span>Category</span>
+                    <strong><%= merchant.category %></strong>
+                </div>
+                <div>
+                    <span>Rating</span>
+                    <strong><%= merchant.rating %></strong>
+                </div>
+                <div>
+                    <span>From</span>
+                    <strong><%= startingPrice > 0 ? '$' + startingPrice : 'View menu' %></strong>
+                </div>
+            </div>
+        </article>
+
+        <article class="merchant-info-panel merchant-info-highlight">
+            <p class="eyebrow">Current highlight</p>
+            <h2><%= merchant.promotion %></h2>
             <p class="muted">
-                Open this merchant's booking page to view only its services and available slots.
+                This page is for merchant information only. Use the services page when you want to choose a service and continue the booking flow.
             </p>
-            <a class="button secondary full" href="<%= bookingUrl %>">Open booking page</a>
-            <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
-                <a class="button whatsapp-button full" href="<%= whatsappEnquiryUrl %>" target="_blank" rel="noopener">Ask on WhatsApp</a>
-            <% } %>
-            <% if (typeof canGenerateQr !== 'undefined' && canGenerateQr) { %>
-                <a class="button primary full" href="/merchants/<%= merchant.id %>/qr">Open QR code</a>
-            <% } %>
-        </div>
-    </div>
-</section>
+            <a class="button secondary full" href="<%= typeof backUrl !== 'undefined' ? backUrl : '/services' %>">
+                <%= typeof backLabel !== 'undefined' ? backLabel : 'Back to services' %>
+            </a>
+        </article>
+    </section>
 
-<section class="section two-column">
-    <div>
+    <section class="section compact merchant-info-services">
         <div class="section-heading">
-            <p class="eyebrow">Services</p>
-            <h2>Availability and pricing</h2>
+            <p class="eyebrow">Service menu preview</p>
+            <h2>What this merchant offers</h2>
+            <p class="muted">
+                Read-only overview with service names, prices, durations, and available times.
+            </p>
         </div>
 
-        <div class="service-list">
-            <% detailServices.forEach((service) => { %>
-                <article class="service-card">
-                    <div>
+        <% if (detailServices.length === 0) { %>
+            <div class="notice">
+                <p>This merchant has not listed services yet.</p>
+            </div>
+        <% } else { %>
+            <div class="merchant-info-service-grid">
+                <% detailServices.forEach((service) => { %>
+                    <article class="merchant-info-service-card">
+                        <div class="portal-card-header">
+                            <span class="tag"><%= service.name %></span>
+                            <span class="service-price slim">$<%= service.price %></span>
+                        </div>
                         <h3><%= service.name %></h3>
-                        <p class="muted"><%= service.duration %> &middot; $<%= service.price %></p>
+                        <p class="muted"><%= service.duration %></p>
                         <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <p class="muted">
-                                Options:
-                                <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
+                            <p>
+                                <%= service.options.map((option) => option.name).join(', ') %>
                             </p>
                         <% } %>
-                        <p>Available: <%= service.slots.join(', ') %></p>
-                    </div>
-                    <form action="/cart/add/<%= merchant.id %>" method="POST">
-                        <input type="hidden" name="serviceId" value="<%= service.id %>">
-                        <button class="button secondary" type="submit">Add to cart</button>
-                    </form>
-                </article>
-            <% }) %>
-        </div>
-    </div>
-
-    <aside class="booking-panel">
-        <h2>Book appointment</h2>
-
-        <% if (errors.length > 0) { %>
-            <div class="notice error">
-                <% errors.forEach((error) => { %>
-                    <p><%= error %></p>
+                        <% if (Array.isArray(service.slots) && service.slots.length > 0) { %>
+                            <div class="availability-strip compact-slots">
+                                <% service.slots.forEach((slot) => { %>
+                                    <span><%= slot %></span>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </article>
                 <% }) %>
             </div>
         <% } %>
+    </section>
 
-        <form action="/merchants/<%= merchant.id %>/book" method="POST" class="booking-form">
-            <label>
-                Full name
-                <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name">
-            </label>
-
-            <label>
-                Email
-                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
-            </label>
-
-            <label>
-                Phone number
-                <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
-            </label>
-
-            <label>
-                Service
-                <select name="serviceId" class="js-service-select">
-                    <option value="">Select a service</option>
-                    <% detailServices.forEach((service) => { %>
-                        <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
-                            <%= service.name %> - $<%= service.price %>
-                        </option>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label>
-                Option
-                <select name="serviceOptionId" class="js-service-option-select">
-                    <option value="">Select an option</option>
-                    <% detailServices.forEach((service) => { %>
-                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <optgroup label="<%= service.name %>" data-service-id="<%= service.id %>">
-                                <% service.options.forEach((option) => { %>
-                                    <option
-                                        value="<%= option.id %>"
-                                        data-service-id="<%= service.id %>"
-                                        <%= String(form.serviceOptionId) === String(option.id) ? 'selected' : '' %>>
-                                        <%= option.name %> - <%= option.duration %> - $<%= option.price %>
-                                    </option>
-                                <% }) %>
-                            </optgroup>
-                        <% } %>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label>
-                Date
-                <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
-            </label>
-
-            <label>
-                Time slot
-                <select name="bookingTime" class="js-time-select">
-                    <option value="">Select a time</option>
-                    <% detailServices.forEach((service) => { %>
-                        <% const options = Array.isArray(service.options) && service.options.length > 0 ? service.options : [service]; %>
-                        <% options.forEach((option) => { %>
-                            <optgroup label="<%= service.name %><%= option.id !== service.id ? ' - ' + option.name : '' %>" data-service-id="<%= service.id %>" data-service-option-id="<%= option.id %>">
-                                <% option.slots.forEach((slot) => { %>
-                                    <option
-                                        value="<%= slot %>"
-                                        data-service-id="<%= service.id %>"
-                                        data-service-option-id="<%= option.id %>"
-                                        <%= form.bookingTime === slot ? 'selected' : '' %>>
-                                        <%= slot %>
-                                    </option>
-                                <% }) %>
-                            </optgroup>
-                        <% }) %>
-                    <% }) %>
-                </select>
-            </label>
-
-            <button class="button primary full" type="submit">Submit booking request</button>
-        </form>
-    </aside>
+    <section class="merchant-info-footer-panel">
+        <div>
+            <p class="eyebrow">At a glance</p>
+            <h2><%= merchant.name %></h2>
+        </div>
+        <div class="merchant-info-summary">
+            <span><strong><%= categories.length %></strong> categories</span>
+            <span><strong><%= slotCount %></strong> available times</span>
+            <span><strong><%= merchant.integrationStatus || 'Listed' %></strong> status</span>
+        </div>
+    </section>
 </section>
 
 <%- include('partials/footer') %>
