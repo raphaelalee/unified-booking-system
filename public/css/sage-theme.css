@@ -4096,6 +4096,879 @@ form.is-submitting button[type="submit"] {
     display: inline-block;
 }
 
+.merchant-appointment-dashboard .merchant-analytics-shell {
+    width: min(1280px, 100%);
+}
+
+.merchant-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merchant-kpi-card,
+.merchant-calendar-shell {
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.86);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.merchant-kpi-card {
+    min-height: 160px;
+    padding: 14px;
+    display: grid;
+    gap: 8px;
+    border-top-width: 4px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.merchant-kpi-card:hover,
+.merchant-calendar-booking:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px rgba(49, 69, 44, 0.11);
+}
+
+.merchant-kpi-card.accent-green { border-top-color: #4f6847; }
+.merchant-kpi-card.accent-orange { border-top-color: #df7c16; }
+.merchant-kpi-card.accent-yellow { border-top-color: #d4a017; }
+.merchant-kpi-card.accent-blue { border-top-color: #20899c; }
+
+.merchant-kpi-top,
+.merchant-calendar-legend,
+.merchant-appointment-list article,
+.merchant-checkin-metrics p {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.merchant-kpi-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.merchant-kpi-trend,
+.merchant-status-badge,
+.merchant-status-dot {
+    width: fit-content;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.merchant-kpi-trend.positive {
+    background: rgba(72, 151, 86, 0.14);
+    color: #3f7a4c;
+}
+
+.merchant-kpi-trend.negative {
+    background: rgba(166, 64, 50, 0.12);
+    color: #a64032;
+}
+
+.merchant-kpi-card > span,
+.merchant-kpi-card small,
+.merchant-appointment-list small,
+.merchant-calendar-booking small,
+.merchant-checkin-metrics span {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-kpi-card strong {
+    color: var(--sage-ink);
+    font-size: clamp(1.45rem, 2.5vw, 2.05rem);
+    line-height: 1;
+}
+
+.merchant-kpi-sparkline {
+    height: 30px;
+    display: flex;
+    align-items: end;
+    gap: 4px;
+}
+
+.merchant-kpi-sparkline i {
+    flex: 1;
+    min-height: 6px;
+    border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, rgba(72, 151, 86, 0.45), rgba(32, 137, 156, 0.18));
+}
+
+.merchant-calendar-shell {
+    padding: 16px;
+}
+
+.merchant-calendar-legend {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.merchant-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(150px, 1fr));
+    gap: 10px;
+    overflow-x: auto;
+}
+
+.merchant-calendar-day {
+    min-height: 280px;
+    padding: 10px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.45);
+}
+
+.merchant-calendar-day.is-drag-over {
+    outline: 2px dashed #20899c;
+    outline-offset: 2px;
+}
+
+.merchant-calendar-day header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.merchant-calendar-day header span,
+.merchant-calendar-booking span,
+.merchant-calendar-booking em {
+    color: var(--sage-readable);
+    font-style: normal;
+    font-weight: 800;
+}
+
+.merchant-calendar-day header strong,
+.merchant-calendar-booking strong,
+.merchant-appointment-list strong,
+.merchant-checkin-metrics strong {
+    color: var(--sage-ink);
+}
+
+.merchant-calendar-dropzone,
+.merchant-appointment-list,
+.merchant-checkin-metrics {
+    display: grid;
+    gap: 8px;
+}
+
+.merchant-calendar-empty {
+    margin: 0;
+    padding: 12px;
+    border: 1px dashed rgba(79, 104, 71, 0.18);
+    border-radius: 8px;
+    color: var(--sage-readable);
+    font-weight: 800;
+    text-align: center;
+}
+
+.merchant-calendar-booking {
+    position: relative;
+    min-width: 0;
+    padding: 10px;
+    display: grid;
+    gap: 6px;
+    border-left: 4px solid #d4a017;
+    border-radius: 8px;
+    background: #fffdf7;
+    color: inherit;
+    cursor: grab;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.merchant-calendar-booking.is-dragging {
+    opacity: 0.58;
+}
+
+.merchant-calendar-booking div {
+    display: grid;
+    gap: 2px;
+}
+
+.merchant-calendar-booking b {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: rgba(32, 137, 156, 0.14);
+    color: #20899c;
+    font-size: 0.68rem;
+}
+
+.merchant-calendar-booking.status-pending,
+.merchant-status-dot.status-pending,
+.merchant-status-badge.status-pending {
+    border-color: #d4a017;
+    background: rgba(212, 160, 23, 0.14);
+    color: #946b0e;
+}
+
+.merchant-calendar-booking.status-confirmed,
+.merchant-status-dot.status-confirmed,
+.merchant-status-badge.status-confirmed {
+    border-color: #20899c;
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+}
+
+.merchant-calendar-booking.status-checked_in,
+.merchant-status-dot.status-checked_in,
+.merchant-status-badge.status-checked_in {
+    border-color: #df7c16;
+    background: rgba(223, 124, 22, 0.13);
+    color: #a96018;
+}
+
+.merchant-calendar-booking.status-completed,
+.merchant-status-dot.status-completed,
+.merchant-status-badge.status-completed {
+    border-color: #4f6847;
+    background: rgba(72, 151, 86, 0.14);
+    color: #3f7a4c;
+}
+
+.merchant-calendar-booking.status-cancelled,
+.merchant-status-dot.status-cancelled,
+.merchant-status-badge.status-cancelled,
+.merchant-calendar-booking.status-no_show,
+.merchant-status-dot.status-no_show,
+.merchant-status-badge.status-no_show {
+    border-color: #a64032;
+    background: rgba(166, 64, 50, 0.12);
+    color: #a64032;
+}
+
+.merchant-appointment-lower-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+}
+
+.merchant-appointment-list article,
+.merchant-checkin-metrics p,
+.merchant-empty-state {
+    padding: 10px;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.45);
+}
+
+.merchant-appointment-list article {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.merchant-appointment-list em {
+    color: var(--sage-readable);
+    font-style: normal;
+    font-weight: 900;
+}
+
+.merchant-empty-state {
+    min-height: 140px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.merchant-empty-state span {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+    font-weight: 900;
+}
+
+.merchant-schedule-page .merchant-analytics-shell {
+    width: min(1320px, 100%);
+}
+
+.merchant-all-appointments-card {
+    padding: 16px;
+}
+
+.merchant-schedule-table-wrap {
+    overflow-x: auto;
+}
+
+.merchant-schedule-table td span {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.admin-analytics-page .merchant-analytics-shell {
+    width: min(1280px, 100%);
+}
+
+.admin-analytics-topbar .merchant-analytics-brand {
+    color: var(--sage-ink);
+}
+
+.admin-analytics-kpis {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-analytics-kpis small {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.admin-dashboard-lower-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.admin-merchant-overview-row {
+    grid-template-columns: minmax(0, 1fr) minmax(90px, auto);
+}
+
+.admin-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-records-card .admin-table-wrap {
+    margin-top: 0;
+}
+
+.admin-dashboard-v2 {
+    width: 100%;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr);
+    gap: 16px;
+    color: var(--sage-ink);
+}
+
+.admin-sidebar,
+.admin-panel,
+.admin-stat-card,
+.admin-dashboard-header {
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.88);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.admin-sidebar {
+    position: sticky;
+    top: 92px;
+    height: calc(100vh - 120px);
+    padding: 16px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 18px;
+}
+
+.admin-sidebar-brand {
+    color: var(--sage-ink);
+    font-size: 1.15rem;
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.admin-sidebar nav,
+.admin-sidebar-actions,
+.admin-main-panel,
+.admin-activity-feed,
+.admin-health-list,
+.admin-metric-stack,
+.admin-log-list {
+    display: grid;
+    gap: 10px;
+}
+
+.admin-sidebar nav a {
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--sage-readable);
+    font-weight: 900;
+    text-decoration: none;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.admin-sidebar nav a:hover {
+    transform: translateX(2px);
+    background: rgba(72, 151, 86, 0.12);
+    color: var(--sage-ink);
+}
+
+.admin-main-panel {
+    min-width: 0;
+}
+
+.admin-dashboard-header {
+    min-height: 112px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+}
+
+.admin-dashboard-header h1,
+.admin-panel-heading h2,
+.admin-merchant-card h3 {
+    margin: 0;
+    color: var(--sage-ink);
+}
+
+.admin-dashboard-header h1 {
+    font-size: clamp(1.7rem, 3vw, 2.5rem);
+}
+
+.admin-dashboard-header p {
+    max-width: 760px;
+    margin: 6px 0 0;
+    color: var(--sage-readable);
+    font-weight: 700;
+}
+
+.admin-notification-menu {
+    position: relative;
+}
+
+.admin-notification-menu summary {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 50%;
+    background: #fffdf7;
+    cursor: pointer;
+    list-style: none;
+}
+
+.admin-notification-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-notification-menu summary strong {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #a64032;
+    color: #fff;
+    font-size: 0.7rem;
+}
+
+.admin-bell {
+    color: #df7c16;
+    font-weight: 900;
+}
+
+.admin-notification-menu > div {
+    position: absolute;
+    top: 52px;
+    right: 0;
+    z-index: 5;
+    width: min(300px, 80vw);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: #fffdf7;
+    box-shadow: 0 18px 34px rgba(49, 69, 44, 0.14);
+}
+
+.admin-notification-menu a,
+.admin-notification-menu p {
+    margin: 0;
+    padding: 8px;
+    border-radius: 8px;
+    color: var(--sage-readable);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.admin-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-stat-card {
+    grid-column: span 2;
+    min-height: 164px;
+    padding: 14px;
+    display: grid;
+    gap: 8px;
+    border-top-width: 4px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-stat-card:hover,
+.admin-panel:hover,
+.admin-merchant-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px rgba(49, 69, 44, 0.1);
+}
+
+.admin-stat-card.accent-green { border-top-color: #4f6847; }
+.admin-stat-card.accent-blue { border-top-color: #20899c; }
+.admin-stat-card.accent-orange { border-top-color: #df7c16; }
+.admin-stat-card.accent-red { border-top-color: #a64032; }
+
+.admin-stat-card-top,
+.admin-panel-heading,
+.admin-merchant-card-top,
+.admin-booking-toolbar,
+.admin-export-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.admin-stat-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.admin-trend,
+.status-badge,
+.severity-tag,
+.verification-badge,
+.admin-live-pill,
+.admin-live-dot {
+    width: fit-content;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.admin-trend.positive {
+    background: rgba(72, 151, 86, 0.14);
+    color: #3f7a4c;
+}
+
+.admin-trend.negative,
+.status-cancelled,
+.severity-tag.red {
+    background: rgba(166, 64, 50, 0.12);
+    color: #a64032;
+}
+
+.admin-stat-label,
+.admin-stat-card small,
+.admin-panel-heading > span,
+.admin-metric-stack span,
+.admin-log-list small,
+.admin-merchant-card p,
+.admin-merchant-metrics span,
+.admin-activity-feed small {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.admin-stat-card strong {
+    color: var(--sage-ink);
+    font-size: clamp(1.6rem, 2.5vw, 2.15rem);
+    line-height: 1;
+}
+
+.admin-sparkline {
+    height: 32px;
+    display: flex;
+    align-items: end;
+    gap: 4px;
+}
+
+.admin-sparkline i {
+    flex: 1;
+    min-height: 6px;
+    border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, rgba(72, 151, 86, 0.45), rgba(32, 137, 156, 0.18));
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-panel {
+    min-width: 0;
+    padding: 16px;
+}
+
+.span-3 { grid-column: span 3; }
+.span-4 { grid-column: span 4; }
+.span-5 { grid-column: span 5; }
+.span-6 { grid-column: span 6; }
+.span-7 { grid-column: span 7; }
+.span-8 { grid-column: span 8; }
+
+.admin-panel-heading {
+    margin-bottom: 12px;
+    align-items: flex-start;
+}
+
+.admin-chart-box {
+    height: 280px;
+    min-height: 220px;
+}
+
+.admin-chart-box.small {
+    height: 220px;
+}
+
+.admin-live-pill,
+.admin-live-dot {
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+}
+
+.admin-activity-feed article,
+.admin-log-list article,
+.admin-health-list a,
+.admin-metric-stack p {
+    margin: 0;
+    padding: 10px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.45);
+    color: inherit;
+    text-decoration: none;
+}
+
+.admin-activity-feed article {
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.admin-activity-feed span {
+    grid-row: span 2;
+    width: 56px;
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(223, 124, 22, 0.1);
+    color: #a96018;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-align: center;
+}
+
+.admin-health-list a {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.severity-tag.green,
+.status-completed,
+.status-confirmed {
+    background: rgba(72, 151, 86, 0.14);
+    color: #3f7a4c;
+}
+
+.severity-tag.yellow,
+.status-pending,
+.status-checked_in {
+    background: rgba(212, 160, 23, 0.16);
+    color: #946b0e;
+}
+
+.admin-smart-widget,
+.admin-empty-state {
+    min-height: 142px;
+    display: grid;
+    align-content: center;
+    gap: 8px;
+}
+
+.admin-smart-widget strong {
+    color: var(--sage-ink);
+    font-size: 1.25rem;
+}
+
+.admin-metric-stack p {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.admin-metric-stack strong {
+    color: var(--sage-ink);
+}
+
+.admin-booking-toolbar {
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-filter-tabs button,
+.admin-row-actions button,
+.admin-merchant-actions button {
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9);
+    color: var(--sage-readable);
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.admin-filter-tabs button.active {
+    background: var(--sage-ink);
+    color: #fffdf7;
+}
+
+.admin-booking-toolbar input,
+.admin-booking-toolbar select {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-ink);
+    font-weight: 800;
+}
+
+.admin-booking-table th,
+.admin-booking-table td {
+    vertical-align: middle;
+}
+
+.admin-booking-table span {
+    color: var(--sage-readable);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.admin-row-actions,
+.admin-merchant-actions,
+.admin-quick-link-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-row-actions button:disabled,
+.admin-merchant-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.admin-merchant-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-merchant-card {
+    min-width: 0;
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.82);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.verification-badge {
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+}
+
+.admin-merchant-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.admin-merchant-metrics span {
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.6);
+}
+
+.admin-merchant-metrics strong {
+    display: block;
+    color: var(--sage-ink);
+}
+
+.admin-empty-state {
+    justify-items: center;
+    text-align: center;
+}
+
+.admin-empty-icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(32, 137, 156, 0.12);
+    color: #20899c;
+    font-weight: 900;
+}
+
+.admin-log-list.compact article {
+    padding: 9px;
+}
+
+@media print {
+    .site-header,
+    .site-footer,
+    .admin-sidebar,
+    .admin-notification-menu,
+    .admin-booking-toolbar,
+    .admin-export-actions,
+    .admin-row-actions {
+        display: none !important;
+    }
+
+    body:not(.flappy-page) main {
+        width: 100% !important;
+        box-shadow: none !important;
+    }
+
+    .admin-dashboard-v2 {
+        display: block;
+    }
+}
+
 @media (max-width: 900px) {
     .merchant-analytics-topbar,
     .merchant-dashboard-lower-grid {
@@ -4113,6 +4986,43 @@ form.is-submitting button[type="submit"] {
     .merchant-analytics-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .merchant-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .admin-analytics-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-v2 {
+        grid-template-columns: 1fr;
+        padding: 12px;
+    }
+
+    .admin-sidebar {
+        position: static;
+        height: auto;
+        grid-template-rows: auto;
+    }
+
+    .admin-sidebar nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .admin-stat-card,
+    .span-3,
+    .span-4,
+    .span-5,
+    .span-6,
+    .span-7,
+    .span-8 {
+        grid-column: span 6;
+    }
+
+    .admin-merchant-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 640px) {
@@ -4125,6 +5035,45 @@ form.is-submitting button[type="submit"] {
 
     .merchant-card-heading {
         flex-direction: column;
+    }
+
+    .merchant-kpi-grid,
+    .merchant-appointment-list article {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard-header,
+    .admin-panel-heading,
+    .admin-booking-toolbar,
+    .admin-health-list a,
+    .admin-metric-stack p {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-stat-card,
+    .span-3,
+    .span-4,
+    .span-5,
+    .span-6,
+    .span-7,
+    .span-8 {
+        grid-column: span 12;
+    }
+
+    .admin-sidebar nav,
+    .admin-merchant-grid,
+    .admin-merchant-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-responsive-table {
+        overflow-x: auto;
+    }
+
+    .admin-booking-toolbar input,
+    .admin-booking-toolbar select,
+    .admin-export-actions .button {
+        width: 100%;
     }
 }
 

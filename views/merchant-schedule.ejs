@@ -1,0 +1,167 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
+    const allBookings = appointments.allBookings || [];
+    const weekDays = appointments.weekDays || [];
+    const statusLabels = {
+        pending: 'pending',
+        confirmed: 'confirmed',
+        checked_in: 'checked-in',
+        completed: 'completed',
+        cancelled: 'cancelled',
+        no_show: 'no-show'
+    };
+%>
+
+<section class="section compact merchant-analytics-page merchant-appointment-dashboard merchant-schedule-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-analytics-topbar">
+            <a class="merchant-analytics-brand" href="/merchant"><%= merchant.name %></a>
+            <nav aria-label="Merchant schedule navigation">
+                <a href="/merchant">Dashboard</a>
+                <a href="/merchant/schedule">Calendar</a>
+                <a href="/merchant/services">Services</a>
+                <a href="/merchant/products">Inventory</a>
+                <a href="/merchant/promotions">Promotions</a>
+            </nav>
+            <span><%= allBookings.length %> appointment<%= allBookings.length === 1 ? '' : 's' %></span>
+        </header>
+
+        <% if (databaseError) { %>
+            <div class="notice error">
+                <p>Appointment records could not be loaded from the database.</p>
+            </div>
+        <% } %>
+
+        <section class="merchant-calendar-shell">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">Schedule</p>
+                    <h2>Appointment calendar</h2>
+                </div>
+                <div class="merchant-calendar-legend">
+                    <% Object.keys(statusLabels).forEach((status) => { %>
+                        <span class="merchant-status-dot status-<%= status %>"><%= statusLabels[status] %></span>
+                    <% }) %>
+                </div>
+            </div>
+
+            <div class="merchant-calendar-grid" data-merchant-calendar>
+                <% weekDays.forEach((day) => { %>
+                    <section class="merchant-calendar-day" data-calendar-day="<%= day.key %>">
+                        <header>
+                            <span><%= day.label %></span>
+                            <strong><%= day.day %></strong>
+                        </header>
+                        <div class="merchant-calendar-dropzone">
+                            <% if (!day.appointments.length) { %>
+                                <p class="merchant-calendar-empty">No appointments</p>
+                            <% } %>
+                            <% day.appointments.forEach((booking) => { %>
+                                <article class="merchant-calendar-booking status-<%= booking.status %>" draggable="true" data-booking-id="<%= booking.id %>">
+                                    <div>
+                                        <strong><%= booking.bookingTime || 'Time TBC' %></strong>
+                                        <span><%= booking.serviceName %></span>
+                                    </div>
+                                    <small><%= booking.customerName %></small>
+                                    <em><%= statusLabels[booking.status] || booking.status %></em>
+                                    <% if (['checked_in', 'completed'].includes(booking.status)) { %>
+                                        <b>QR</b>
+                                    <% } %>
+                                </article>
+                            <% }) %>
+                        </div>
+                    </section>
+                <% }) %>
+            </div>
+        </section>
+
+        <section class="merchant-orders-card merchant-all-appointments-card">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">All Appointments</p>
+                    <h2>Complete appointment list</h2>
+                </div>
+                <a class="button secondary" href="/merchant">Back to dashboard</a>
+            </div>
+
+            <% if (!allBookings.length) { %>
+                <div class="merchant-empty-state">
+                    <span>BK</span>
+                    <strong>No appointments yet</strong>
+                    <a class="text-button" href="/merchant/services">Review services</a>
+                </div>
+            <% } else { %>
+                <div class="admin-table-wrap merchant-schedule-table-wrap">
+                    <table class="admin-table merchant-schedule-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Customer</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>QR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% allBookings.forEach((booking) => { %>
+                                <tr>
+                                    <td>#<%= booking.id %></td>
+                                    <td><%= booking.bookingDate %></td>
+                                    <td><%= booking.bookingTime || 'Time TBC' %></td>
+                                    <td>
+                                        <strong><%= booking.customerName %></strong><br>
+                                        <span><%= booking.email || 'No email' %></span>
+                                    </td>
+                                    <td><%= booking.serviceName %></td>
+                                    <td><span class="merchant-status-badge status-<%= booking.status %>"><%= statusLabels[booking.status] || booking.status %></span></td>
+                                    <td><%= ['checked_in', 'completed'].includes(booking.status) ? 'Checked in' : 'Pending' %></td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </section>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const calendar = document.querySelector('[data-merchant-calendar]');
+        if (!calendar) return;
+
+        let draggedCard = null;
+
+        calendar.querySelectorAll('.merchant-calendar-booking').forEach((card) => {
+            card.addEventListener('dragstart', () => {
+                draggedCard = card;
+                card.classList.add('is-dragging');
+            });
+            card.addEventListener('dragend', () => {
+                card.classList.remove('is-dragging');
+                draggedCard = null;
+            });
+        });
+
+        calendar.querySelectorAll('.merchant-calendar-day').forEach((day) => {
+            day.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                day.classList.add('is-drag-over');
+            });
+            day.addEventListener('dragleave', () => day.classList.remove('is-drag-over'));
+            day.addEventListener('drop', () => {
+                day.classList.remove('is-drag-over');
+                if (!draggedCard) return;
+                const dropzone = day.querySelector('.merchant-calendar-dropzone');
+                dropzone.querySelector('.merchant-calendar-empty')?.remove();
+                dropzone.appendChild(draggedCard);
+            });
+        });
+    })();
+</script>
+
+<%- include('partials/footer') %>

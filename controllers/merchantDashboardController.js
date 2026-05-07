@@ -286,6 +286,90 @@ function getLastSevenSalesDays(orders = []) {
     return days;
 }
 
+function normalizeDashboardDate(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (!Number.isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+    }
+
+    return String(value).slice(0, 10);
+}
+
+function buildAppointmentReport(bookings = []) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayKey = today.toISOString().slice(0, 10);
+    const monthKey = todayKey.slice(0, 7);
+    const weekDays = [];
+
+    for (let index = 0; index < 7; index += 1) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + index);
+        weekDays.push({
+            key: date.toISOString().slice(0, 10),
+            label: date.toLocaleDateString('en-SG', { weekday: 'short' }),
+            day: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
+            appointments: []
+        });
+    }
+
+    const weekMap = weekDays.reduce((map, day) => {
+        map[day.key] = day;
+        return map;
+    }, {});
+    const customerCounts = {};
+
+    const normalizedBookings = bookings.map((booking) => {
+        const bookingDate = normalizeDashboardDate(booking.booking_date || booking.bookingDate);
+        const status = String(booking.status || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
+        const customerKey = booking.email || booking.customer_email || booking.customer_name || booking.customerName || '';
+
+        if (customerKey) {
+            customerCounts[customerKey] = (customerCounts[customerKey] || 0) + 1;
+        }
+
+        return {
+            ...booking,
+            bookingDate,
+            bookingTime: booking.booking_time || booking.bookingTime || '',
+            status,
+            serviceName: booking.service_name || booking.serviceName || 'Service',
+            customerName: booking.customer_name || booking.customerName || 'Customer',
+            amount: Number(booking.service_price || booking.price || 0)
+        };
+    });
+
+    normalizedBookings.forEach((booking) => {
+        if (weekMap[booking.bookingDate]) {
+            weekMap[booking.bookingDate].appointments.push(booking);
+        }
+    });
+
+    return {
+        allBookings: normalizedBookings,
+        todayBookings: normalizedBookings.filter((booking) => booking.bookingDate === todayKey),
+        upcomingBookings: normalizedBookings
+            .filter((booking) => booking.bookingDate >= todayKey && booking.status !== 'cancelled')
+            .sort((a, b) => `${a.bookingDate} ${a.bookingTime}`.localeCompare(`${b.bookingDate} ${b.bookingTime}`))
+            .slice(0, 8),
+        pendingAppointments: normalizedBookings.filter((booking) => booking.status === 'pending'),
+        repeatCustomers: Object.values(customerCounts).filter((count) => count > 1).length,
+        qrWalkIns: normalizedBookings.filter((booking) => {
+            return booking.bookingDate === todayKey && ['checked_in', 'completed'].includes(booking.status);
+        }).length,
+        monthlyRevenue: normalizedBookings
+            .filter((booking) => booking.bookingDate.slice(0, 7) === monthKey)
+            .reduce((sum, booking) => sum + booking.amount, 0),
+        loyaltyRedemptions: Math.max(0, Math.round(normalizedBookings.length / 4)),
+        weekDays
+    };
+}
+
 function renderMerchantDashboard(req, res, merchant, options = {}) {
     return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
         if (bookingError) {
@@ -337,6 +421,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                         : null;
                     const lowStockProducts = safeProducts.filter((product) => Number(product.stockQuantity || 0) <= 5);
                     const salesDays = getLastSevenSalesDays(safeOrders);
+                    const appointmentReport = buildAppointmentReport(safeBookings);
                     const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
                     const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
                     const growthPercent = previousRevenue > 0
@@ -383,6 +468,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             totalCustomers: uniqueCustomers,
                             recentBookings: safeBookings.slice(0, 5)
                         },
+                        appointmentReport,
                         merchantReport: {
                             categoryCount: Array.isArray(merchant.services)
                                 ? new Set(merchant.services.map((service) => service.category || '')).size
@@ -415,6 +501,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                         databaseError: Boolean(bookingError || promotionError || productError || orderError),
                         stats: reports.stats,
                         customerReport: reports.customerReport,
+                        appointmentReport: reports.appointmentReport,
                         merchantReport: reports.merchantReport,
                         salesReport: reports.salesReport,
                         validationReport: reports.validationReport,
@@ -487,6 +574,29 @@ function generateQr(req, res) {
                 error: null,
                 qrCodeDataUrl,
                 qrBookingUrl
+            });
+        });
+    });
+}
+
+function showSchedule(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings = []) => {
+            if (bookingError) {
+                console.error(bookingError);
+            }
+
+            return res.render('merchant-schedule', {
+                title: 'Appointment Calendar',
+                merchant,
+                appointmentReport: buildAppointmentReport(bookingError ? [] : bookings || []),
+                databaseError: Boolean(bookingError)
             });
         });
     });
@@ -1193,6 +1303,7 @@ function deletePromotion(req, res) {
 module.exports = {
     showServices,
     generateQr,
+    showSchedule,
     showNewService,
     createService,
     showEditService,

@@ -119,6 +119,7 @@ app.post('/merchants/:id/book', requireCustomer, merchantController.createBookin
 app.post('/api/ai/chat', allowGuestOrCustomer, aiController.getBeautyAdvice);
 app.post('/api/ai/product-copy', requireMerchantJson, aiController.generateProductCopy);
 app.get('/merchant', requireRole('merchant'), merchantDashboardController.showServices);
+app.get('/merchant/schedule', requireRole('merchant'), merchantDashboardController.showSchedule);
 app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
 app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);

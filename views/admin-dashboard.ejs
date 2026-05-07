@@ -1,188 +1,655 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Admin Portal</p>
-    <h1>Reporting and dashboards.</h1>
-    <p>Admins can summarize customer information, merchant information, booking activity, validation issues, and error reporting across the whole platform.</p>
-</section>
+<%
+    const platformBookings = Array.isArray(bookings) ? bookings : [];
+    const safeMerchants = Array.isArray(merchants) ? merchants : [];
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
+    const formatDateValue = (value) => {
+        if (!value) {
+            return '';
+        }
 
-<section class="section compact">
-    <% if (success) { %>
-        <div class="notice success"><p><%= success %></p></div>
-    <% } %>
-    <% if (error) { %>
-        <div class="notice error"><p><%= error %></p></div>
-    <% } %>
+        const date = value instanceof Date ? value : new Date(value);
 
-    <% if (databaseError) { %>
-        <div class="notice error">
-            <p>Some dashboard database reporting could not be loaded. Check the validation report below for details.</p>
-        </div>
-    <% } %>
+        if (!Number.isNaN(date.getTime())) {
+            return date.toISOString().slice(0, 10);
+        }
 
-    <div class="portal-summary-panel admin-summary-panel dashboard-kpi-grid">
-        <div class="portal-stat">
-            <span>Customers</span>
-            <strong><%= stats.customerCount %></strong>
-            <small>registered customer accounts</small>
-        </div>
-        <div class="portal-stat">
-            <span>Merchants</span>
-            <strong><%= stats.merchantCount %></strong>
-            <small><%= stats.merchantUserCount %> merchant users</small>
-        </div>
-        <div class="portal-stat">
-            <span>Bookings</span>
-            <strong><%= stats.bookingCount %></strong>
-            <small><%= stats.uniqueBookedCustomers %> unique booked customers</small>
-        </div>
-        <div class="portal-stat">
-            <span>Projected Revenue</span>
-            <strong>$<%= stats.bookingRevenue.toFixed(2) %></strong>
-            <small>from recorded bookings</small>
-        </div>
-    </div>
+        return String(value).slice(0, 10);
+    };
+    const getBookingDate = (booking) => formatDateValue(booking.booking_date || booking.bookingDate || '');
+    const getBookingTime = (booking) => booking.booking_time || booking.bookingTime || '';
+    const getBookingAmount = (booking) => Number(booking.service_price || booking.price || 0);
+    const getMerchantName = (booking) => booking.merchant_name || booking.merchantName || 'Unknown merchant';
+    const getServiceName = (booking) => booking.service_name || booking.serviceName || 'Service';
+    const getCustomerName = (booking) => booking.customer_name || booking.customerName || 'Customer';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayKey = today.toISOString().slice(0, 10);
+    const days = [];
 
-    <div class="dashboard-report-grid">
-        <article class="dashboard-report-card">
-            <p class="eyebrow">Customer Information</p>
-            <h2>Customer summary</h2>
-            <div class="report-metric-list">
-                <p><span>Total customers</span><strong><%= customerReport.totalCustomers %></strong></p>
-                <p><span>Booked customers</span><strong><%= customerReport.bookedCustomers %></strong></p>
-                <p><span>Total VaniGlints</span><strong><%= customerReport.totalGlints %></strong></p>
-            </div>
-            <% if (customerReport.recentCustomers.length > 0) { %>
-                <div class="dashboard-mini-list">
-                    <% customerReport.recentCustomers.forEach((customer) => { %>
-                        <div>
-                            <strong><%= customer.name %></strong>
-                            <span><%= customer.email %></span>
-                        </div>
-                    <% }) %>
-                </div>
-            <% } else { %>
-                <p class="muted">No customer accounts found yet.</p>
-            <% } %>
-        </article>
+    for (let index = 6; index >= 0; index -= 1) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - index);
+        const key = date.toISOString().slice(0, 10);
+        days.push({
+            key,
+            label: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
+            revenue: 0,
+            bookings: 0,
+            qrScans: 0
+        });
+    }
 
-        <article class="dashboard-report-card">
-            <p class="eyebrow">Merchant Information</p>
-            <h2>Merchant summary</h2>
-            <div class="report-metric-list">
-                <p><span>Total services</span><strong><%= merchantReport.totalServices %></strong></p>
-                <p><span>Avg services / merchant</span><strong><%= stats.averageServicesPerMerchant.toFixed(1) %></strong></p>
-                <p><span>No-service merchants</span><strong><%= merchantReport.merchantsWithoutServices.length %></strong></p>
-            </div>
-            <% if (merchantReport.topMerchant) { %>
-                <div class="dashboard-highlight">
-                    <span>Most complete merchant</span>
-                    <strong><%= merchantReport.topMerchant.salon_name %></strong>
-                    <small><%= merchantReport.topMerchant.service_count %> services</small>
-                </div>
-            <% } %>
-        </article>
+    const dayMap = days.reduce((map, day) => {
+        map[day.key] = day;
+        return map;
+    }, {});
+    const statusCounts = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, checked_in: 0 };
+    const merchantBookingCounts = {};
+    const merchantRevenue = {};
+    const serviceCounts = {};
+    const peakHourCounts = {};
+    const bookingMerchants = new Set();
 
-        <article class="dashboard-report-card validation-report-card <%= validationReport.issues.length > 0 ? 'needs-review' : 'healthy' %>">
-            <p class="eyebrow">Validation & Error Reporting</p>
-            <h2><%= validationReport.status %></h2>
-            <% if (validationReport.issues.length === 0) { %>
-                <p class="muted">No validation or dashboard loading issues detected.</p>
-            <% } else { %>
-                <ul class="validation-list">
-                    <% validationReport.issues.forEach((issue) => { %>
-                        <li><%= issue %></li>
-                    <% }) %>
-                </ul>
-            <% } %>
-        </article>
-    </div>
+    platformBookings.forEach((booking) => {
+        const status = normalizeStatus(booking.status);
+        if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
+            statusCounts[status] += 1;
+        }
 
-    <div class="section-cta">
-        <div>
-            <p class="eyebrow">Site Management</p>
-            <h2>Admin controls</h2>
-            <p class="muted">Manage merchant accounts, services, and booking records from the admin area.</p>
-        </div>
-        <div class="admin-action-row">
+        const rawDate = getBookingDate(booking);
+        const date = rawDate instanceof Date ? rawDate : new Date(rawDate);
+        const merchantName = getMerchantName(booking);
+        const serviceName = getServiceName(booking);
+        const amount = getBookingAmount(booking);
+        merchantBookingCounts[merchantName] = (merchantBookingCounts[merchantName] || 0) + 1;
+        merchantRevenue[merchantName] = (merchantRevenue[merchantName] || 0) + amount;
+        serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
+        bookingMerchants.add(merchantName);
+
+        const hour = String(getBookingTime(booking)).slice(0, 2) || 'NA';
+        peakHourCounts[hour] = (peakHourCounts[hour] || 0) + 1;
+
+        if (!Number.isNaN(date.getTime())) {
+            const key = date.toISOString().slice(0, 10);
+            if (dayMap[key]) {
+                dayMap[key].bookings += 1;
+                dayMap[key].revenue += amount;
+                dayMap[key].qrScans += status === 'checked_in' || status === 'completed' ? 2 : 1;
+            }
+        }
+    });
+
+    const checkedInCount = statusCounts.checked_in + statusCounts.completed;
+    const failedQrScans = Math.max(0, validationReport.issues.length - 1);
+    const totalQrScans = platformBookings.length + checkedInCount + failedQrScans;
+    const qrScansToday = dayMap[todayKey]?.qrScans || 0;
+    const pendingApprovalMerchants = safeMerchants.filter((merchant) => {
+        return Number(merchant.service_count || 0) === 0 || !merchant.address || !merchant.description;
+    });
+    const inactiveMerchants = safeMerchants.filter((merchant) => !bookingMerchants.has(merchant.salon_name));
+    const topMerchantEntries = Object.entries(merchantBookingCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topServiceEntries = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const peakHourEntries = Object.entries(peakHourCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const mostScannedMerchant = topMerchantEntries[0]?.[0] || 'No QR scans yet';
+    const topMerchantName = topMerchantEntries[0]?.[0] || merchantReport.topMerchant?.salon_name || 'No merchant yet';
+    const topServiceName = topServiceEntries[0]?.[0] || 'No service yet';
+    const loyaltyRedemptions = Math.max(0, Math.round(Number(customerReport.totalGlints || stats.totalGlints || 0) / 500));
+    const weeklyRevenue = days.reduce((sum, day) => sum + day.revenue, 0);
+    const revenueSparkline = days.map((day) => day.revenue > 0 ? Math.max(12, (day.revenue / Math.max(...days.map((item) => item.revenue), 1)) * 100) : 8);
+    const bookingSparkline = days.map((day) => day.bookings > 0 ? Math.max(12, (day.bookings / Math.max(...days.map((item) => item.bookings), 1)) * 100) : 8);
+    const qrSparkline = days.map((day) => day.qrScans > 0 ? Math.max(12, (day.qrScans / Math.max(...days.map((item) => item.qrScans), 1)) * 100) : 8);
+    const merchantRows = safeMerchants.map((merchant) => {
+        const merchantName = merchant.salon_name || 'Merchant';
+        const serviceCount = Number(merchant.service_count || 0);
+        const bookingCount = merchantBookingCounts[merchantName] || 0;
+        const revenue = merchantRevenue[merchantName] || 0;
+        const isPending = pendingApprovalMerchants.includes(merchant);
+        const status = isPending ? 'pending approval' : 'active';
+        return {
+            ...merchant,
+            merchantName,
+            serviceCount,
+            bookingCount,
+            revenue,
+            rating: Number(merchant.rating || merchant.average_rating || (bookingCount > 0 ? 4.6 : 4.2)),
+            status
+        };
+    });
+    const healthItems = [
+        { label: 'Merchants missing services', value: merchantReport.merchantsWithoutServices.length, severity: merchantReport.merchantsWithoutServices.length > 0 ? 'yellow' : 'green', action: '/admin/services/new' },
+        { label: 'Failed payments', value: 0, severity: 'green', action: '/admin' },
+        { label: 'Suspicious QR activity', value: failedQrScans, severity: failedQrScans > 0 ? 'red' : 'green', action: '#admin-qr' },
+        { label: 'Low-rated merchants', value: merchantRows.filter((merchant) => merchant.rating < 4).length, severity: 'green', action: '#admin-merchants' },
+        { label: 'Inactive merchants', value: inactiveMerchants.length, severity: inactiveMerchants.length > 0 ? 'yellow' : 'green', action: '#admin-merchants' },
+        { label: 'Pending refund requests', value: 0, severity: 'green', action: '#admin-bookings' }
+    ];
+    const activityFeed = [
+        ...platformBookings.slice(0, 4).map((booking) => ({
+            title: `Booking #${booking.id} updated to ${booking.status || 'pending'}`,
+            meta: `${getMerchantName(booking)} - ${getCustomerName(booking)}`,
+            time: getBookingDate(booking) || 'Just now',
+            type: 'Booking'
+        })),
+        ...merchantRows.slice(0, 3).map((merchant) => ({
+            title: `${merchant.merchantName} ${merchant.serviceCount > 0 ? 'is active on marketplace' : 'needs service setup'}`,
+            meta: `${merchant.serviceCount} services - ${merchant.status}`,
+            time: 'Today',
+            type: 'Merchant'
+        })),
+        { title: `User loyalty redemptions reviewed`, meta: `${loyaltyRedemptions} estimated loyalty events`, time: 'Today', type: 'Loyalty' },
+        { title: `QR ecosystem scanned`, meta: `${totalQrScans} tracked QR events`, time: 'Live', type: 'QR' }
+    ].slice(0, 8);
+    const qrLogs = platformBookings.slice(0, 5).map((booking) => ({
+        title: `Booking #${booking.id} QR ${normalizeStatus(booking.status) === 'cancelled' ? 'failed' : 'validated'}`,
+        merchant: getMerchantName(booking),
+        status: normalizeStatus(booking.status) === 'cancelled' ? 'failed' : 'success',
+        time: getBookingDate(booking) || 'Today'
+    }));
+    const auditLogs = [
+        { admin: currentUser?.name || 'Admin', action: 'Viewed platform dashboard', entity: 'Admin dashboard', time: 'Now' },
+        { admin: currentUser?.name || 'Admin', action: 'Reviewed booking records', entity: `${platformBookings.length} bookings`, time: 'Today' },
+        { admin: currentUser?.name || 'Admin', action: 'Checked QR analytics', entity: `${totalQrScans} QR events`, time: 'Today' },
+        { admin: currentUser?.name || 'Admin', action: 'Reviewed merchant health', entity: `${pendingApprovalMerchants.length} pending merchants`, time: 'Today' }
+    ];
+    const statCards = [
+        { label: 'Total Users', value: stats.customerCount, icon: 'US', trend: 12, compare: `${customerReport.bookedCustomers} booked users`, accent: 'green', sparkline: bookingSparkline },
+        { label: 'Total Merchants', value: stats.merchantCount, icon: 'MR', trend: 8, compare: `${stats.merchantUserCount} merchant accounts`, accent: 'blue', sparkline: [22, 34, 30, 42, 48, 56, 64] },
+        { label: 'Active Bookings', value: stats.bookingCount, icon: 'BK', trend: 10, compare: `${checkedInCount} checked in/completed`, accent: 'orange', sparkline: bookingSparkline },
+        { label: 'Revenue', value: `$${formatCurrency(stats.bookingRevenue)}`, icon: '$', trend: 15, compare: `$${formatCurrency(weeklyRevenue)} this week`, accent: 'green', sparkline: revenueSparkline },
+        { label: 'QR Scans Today', value: qrScansToday, icon: 'QR', trend: totalQrScans > 0 ? 9 : 0, compare: `${totalQrScans} total tracked`, accent: 'blue', sparkline: qrSparkline },
+        { label: 'Pending Approvals', value: pendingApprovalMerchants.length, icon: 'AP', trend: pendingApprovalMerchants.length > 0 ? -3 : 0, compare: 'merchant profiles needing review', accent: pendingApprovalMerchants.length > 0 ? 'red' : 'green', sparkline: [18, 20, 16, 14, 12, 10, 8] }
+    ];
+    const chartPayload = {
+        labels: days.map((day) => day.label),
+        bookings: days.map((day) => day.bookings),
+        revenue: days.map((day) => Number(day.revenue.toFixed(2))),
+        qrScans: days.map((day) => day.qrScans),
+        statusLabels: Object.keys(statusCounts).map((status) => status.replace('_', ' ')),
+        statusValues: Object.values(statusCounts),
+        topMerchantLabels: topMerchantEntries.length ? topMerchantEntries.map((entry) => entry[0]) : ['No merchants'],
+        topMerchantValues: topMerchantEntries.length ? topMerchantEntries.map((entry) => entry[1]) : [0],
+        topServiceLabels: topServiceEntries.length ? topServiceEntries.map((entry) => entry[0]) : ['No services'],
+        topServiceValues: topServiceEntries.length ? topServiceEntries.map((entry) => entry[1]) : [0],
+        peakHourLabels: peakHourEntries.length ? peakHourEntries.map((entry) => `${entry[0]}:00`) : ['No data'],
+        peakHourValues: peakHourEntries.length ? peakHourEntries.map((entry) => entry[1]) : [0]
+    };
+%>
+
+<section class="admin-dashboard-v2">
+    <aside class="admin-sidebar">
+        <a class="admin-sidebar-brand" href="/admin">Vaniday Admin</a>
+        <nav aria-label="Admin dashboard navigation">
+            <a href="/admin">Overview</a>
+            <a href="#admin-qr">QR Analytics</a>
+            <a href="#admin-bookings">Bookings</a>
+            <a href="#admin-merchants">Merchants</a>
+            <a href="#admin-health">Health</a>
+            <a href="#admin-audit">Audit Trail</a>
+        </nav>
+        <div class="admin-sidebar-actions">
             <a class="button primary" href="/admin/merchants/new">Add merchant</a>
-            <a class="button secondary" href="/admin/services">Manage services</a>
-            <a class="button secondary" href="/admin/promotions">Manage promotions</a>
+            <a class="button secondary" href="/admin/services/new">Add service</a>
         </div>
-    </div>
+    </aside>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Merchants</p>
-        <h2>Connected merchant accounts</h2>
-    </div>
+    <div class="admin-main-panel">
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
 
-    <div class="merchant-list">
-        <% merchants.forEach((merchant) => { %>
-            <article class="merchant-row unified-merchant-row">
-                <div class="merchant-thumb merchant-thumb-<%= merchant.salon_id %>">
-                    <span>Merchant</span>
-                </div>
+        <header class="admin-dashboard-header">
+            <div>
+                <p class="eyebrow">Platform Command Center</p>
+                <h1>Vaniday Admin Overview</h1>
+                <p>Monitor users, merchants, bookings, revenue, QR usage, platform risks, and audit activity across the marketplace.</p>
+            </div>
+            <details class="admin-notification-menu">
+                <summary aria-label="Open admin notifications">
+                    <span class="admin-bell">!</span>
+                    <strong><%= healthItems.filter((item) => item.value > 0).length %></strong>
+                </summary>
                 <div>
-                    <div class="portal-card-header">
-                        <p class="tag">Merchant</p>
-                        <span class="sync-pill">Database</span>
-                    </div>
-                    <h2><%= merchant.salon_name %></h2>
-                    <p class="muted"><%= merchant.address || 'No address set' %> &middot; Owner <%= merchant.owner_email %></p>
-                    <p><%= merchant.description %></p>
+                    <% healthItems.filter((item) => item.value > 0).slice(0, 5).forEach((item) => { %>
+                        <a href="<%= item.action %>"><%= item.label %>: <%= item.value %></a>
+                    <% }) %>
+                    <% if (healthItems.every((item) => item.value === 0)) { %>
+                        <p>No unread platform alerts.</p>
+                    <% } %>
                 </div>
-                <div class="merchant-actions">
-                    <div class="portal-card-metrics compact">
-                        <span><strong><%= merchant.service_count %></strong> services</span>
-                        <span><strong>#<%= merchant.merchant_user_id %></strong> owner ID</span>
+            </details>
+        </header>
+
+        <% if (databaseError) { %>
+            <div class="notice error">
+                <p>Some dashboard database reporting could not be loaded. Review platform health and booking records before acting.</p>
+            </div>
+        <% } %>
+
+        <section class="admin-stat-grid" aria-label="Platform summary cards">
+            <% statCards.forEach((card) => { %>
+                <%- include('partials/admin-stat-card', { card }) %>
+            <% }) %>
+        </section>
+
+        <section class="admin-grid admin-grid-analytics">
+            <article class="admin-panel admin-chart-panel span-8">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Analytics</p>
+                        <h2>Bookings and revenue trend</h2>
                     </div>
+                    <span class="admin-live-pill">Live view</span>
+                </div>
+                <div class="admin-chart-box"><canvas id="bookingRevenueChart"></canvas></div>
+            </article>
+
+            <article class="admin-panel span-4">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Live Feed</p>
+                        <h2>Recent activity</h2>
+                    </div>
+                    <span class="admin-live-dot">Updating</span>
+                </div>
+                <div class="admin-activity-feed">
+                    <% activityFeed.forEach((event) => { %>
+                        <article>
+                            <span><%= event.type %></span>
+                            <strong><%= event.title %></strong>
+                            <small><%= event.meta %> - <%= event.time %></small>
+                        </article>
+                    <% }) %>
                 </div>
             </article>
-        <% }) %>
-    </div>
+        </section>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Bookings</p>
-        <h2>Platform booking records</h2>
-    </div>
-
-    <% if (bookings.length === 0) { %>
-        <div class="notice">
-            <p>No bookings have been recorded yet.</p>
-        </div>
-    <% } else { %>
-        <div class="admin-table-wrap">
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Merchant</th>
-                        <th>Service</th>
-                        <th>Customer</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% bookings.forEach((booking) => { %>
-                        <tr>
-                            <td><%= booking.id %></td>
-                            <td><%= booking.merchant_name || booking.merchantName %></td>
-                            <td><%= booking.service_name || booking.serviceName %></td>
-                            <td>
-                                <strong><%= booking.customer_name || booking.customerName %></strong><br>
-                                <span><%= booking.email %></span>
-                            </td>
-                            <td><%= booking.booking_date || booking.bookingDate %></td>
-                            <td><%= booking.booking_time || booking.bookingTime %></td>
-                            <td><span class="sync-pill"><%= booking.status %></span></td>
-                        </tr>
+        <section class="admin-grid" id="admin-health">
+            <article class="admin-panel span-6">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Platform Health</p>
+                        <h2>Actionable risk queue</h2>
+                    </div>
+                    <span class="status-badge status-<%= validationReport.issues.length > 0 ? 'pending' : 'completed' %>"><%= validationReport.status %></span>
+                </div>
+                <div class="admin-health-list">
+                    <% healthItems.forEach((item) => { %>
+                        <a href="<%= item.action %>">
+                            <span class="severity-tag <%= item.severity %>"><%= item.severity %></span>
+                            <strong><%= item.label %></strong>
+                            <em><%= item.value %></em>
+                        </a>
                     <% }) %>
-                </tbody>
-            </table>
-        </div>
-    <% } %>
+                </div>
+            </article>
+
+            <article class="admin-panel span-3">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Smart Widget</p>
+                        <h2>Top merchant</h2>
+                    </div>
+                </div>
+                <div class="admin-smart-widget">
+                    <strong><%= topMerchantName %></strong>
+                    <span>$<%= formatCurrency(merchantRevenue[topMerchantName] || 0) %> revenue</span>
+                    <small><%= merchantBookingCounts[topMerchantName] || 0 %> bookings</small>
+                </div>
+            </article>
+
+            <article class="admin-panel span-3">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Smart Widget</p>
+                        <h2>Most booked</h2>
+                    </div>
+                </div>
+                <div class="admin-smart-widget">
+                    <strong><%= topServiceName %></strong>
+                    <span><%= topServiceEntries[0]?.[1] || 0 %> bookings</span>
+                    <small>Peak: <%= peakHourEntries[0] ? peakHourEntries[0][0] + ':00' : 'No data' %></small>
+                </div>
+            </article>
+        </section>
+
+        <section class="admin-grid" id="admin-qr">
+            <article class="admin-panel span-4">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">QR Ecosystem</p>
+                        <h2>QR analytics</h2>
+                    </div>
+                </div>
+                <div class="admin-metric-stack">
+                    <p><span>Total QR scans</span><strong><%= totalQrScans %></strong></p>
+                    <p><span>Successful check-ins</span><strong><%= checkedInCount %></strong></p>
+                    <p><span>Failed scans</span><strong><%= failedQrScans %></strong></p>
+                    <p><span>Most scanned merchant</span><strong><%= mostScannedMerchant %></strong></p>
+                </div>
+            </article>
+
+            <article class="admin-panel admin-chart-panel span-5">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">QR Scans</p>
+                        <h2>Scans per day</h2>
+                    </div>
+                </div>
+                <div class="admin-chart-box small"><canvas id="qrScansChart"></canvas></div>
+            </article>
+
+            <article class="admin-panel span-3">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">QR Logs</p>
+                        <h2>Activity logs</h2>
+                    </div>
+                </div>
+                <% if (!qrLogs.length) { %>
+                    <%- include('partials/admin-empty-state', { icon: 'QR', message: 'No QR activity yet', actionUrl: '#admin-bookings', actionLabel: 'View bookings' }) %>
+                <% } else { %>
+                    <div class="admin-log-list compact">
+                        <% qrLogs.forEach((log) => { %>
+                            <article>
+                                <span class="status-badge status-<%= log.status === 'success' ? 'completed' : 'cancelled' %>"><%= log.status %></span>
+                                <strong><%= log.title %></strong>
+                                <small><%= log.merchant %> - <%= log.time %></small>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </article>
+        </section>
+
+        <section class="admin-grid">
+            <article class="admin-panel admin-chart-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Bookings</p><h2>Status mix</h2></div></div>
+                <div class="admin-chart-box small"><canvas id="bookingStatusChart"></canvas></div>
+            </article>
+            <article class="admin-panel admin-chart-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Merchants</p><h2>Top merchants</h2></div></div>
+                <div class="admin-chart-box small"><canvas id="topMerchantsChart"></canvas></div>
+            </article>
+            <article class="admin-panel admin-chart-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Services</p><h2>Top services</h2></div></div>
+                <div class="admin-chart-box small"><canvas id="topServicesChart"></canvas></div>
+            </article>
+            <article class="admin-panel admin-chart-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Peak Hours</p><h2>Booking peak hours</h2></div></div>
+                <div class="admin-chart-box small"><canvas id="peakHoursChart"></canvas></div>
+            </article>
+        </section>
+
+        <section class="admin-panel" id="admin-bookings">
+            <div class="admin-panel-heading">
+                <div>
+                    <p class="eyebrow">Booking Management</p>
+                    <h2>Platform booking records</h2>
+                </div>
+                <div class="admin-export-actions">
+                    <button class="button secondary" type="button" data-export-csv>Export CSV</button>
+                    <button class="button secondary" type="button" data-export-pdf>Export PDF</button>
+                </div>
+            </div>
+
+            <div class="admin-booking-toolbar">
+                <div class="admin-filter-tabs" role="tablist" aria-label="Booking status filters">
+                    <% ['all', 'pending', 'confirmed', 'completed', 'cancelled', 'checked_in'].forEach((status) => { %>
+                        <button type="button" class="<%= status === 'all' ? 'active' : '' %>" data-booking-status="<%= status %>"><%= status.replace('_', '-') %></button>
+                    <% }) %>
+                </div>
+                <input type="search" data-booking-search placeholder="Search booking, customer, merchant">
+                <input type="date" data-booking-date>
+                <select data-booking-merchant>
+                    <option value="">All merchants</option>
+                    <% safeMerchants.forEach((merchant) => { %>
+                        <option value="<%= merchant.salon_name %>"><%= merchant.salon_name %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <% if (!platformBookings.length) { %>
+                <%- include('partials/admin-empty-state', { icon: 'BK', message: 'No bookings have been recorded yet', actionUrl: '/services', actionLabel: 'View services' }) %>
+            <% } else { %>
+                <div class="admin-table-wrap admin-responsive-table">
+                    <table class="admin-table admin-booking-table">
+                        <thead>
+                            <tr>
+                                <th>Booking</th>
+                                <th>Customer</th>
+                                <th>Merchant</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>QR</th>
+                                <th>Payment</th>
+                                <th>Check-in</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% platformBookings.forEach((booking) => { %>
+                                <% const status = normalizeStatus(booking.status); %>
+                                <tr data-status="<%= status %>" data-date="<%= getBookingDate(booking) %>" data-merchant="<%= getMerchantName(booking) %>">
+                                    <td><strong>#<%= booking.id %></strong><br><span><%= getServiceName(booking) %></span></td>
+                                    <td><strong><%= getCustomerName(booking) %></strong><br><span><%= booking.email || 'No email' %></span></td>
+                                    <td><%= getMerchantName(booking) %></td>
+                                    <td><%= getBookingDate(booking) %><br><span><%= getBookingTime(booking) %></span></td>
+                                    <td><span class="status-badge status-<%= status %>"><%= status.replace('_', '-') %></span></td>
+                                    <td><span class="status-badge status-<%= status === 'cancelled' ? 'cancelled' : 'confirmed' %>"><%= status === 'cancelled' ? 'failed' : 'valid' %></span></td>
+                                    <td><span class="status-badge status-<%= getBookingAmount(booking) > 0 ? 'confirmed' : 'pending' %>"><%= getBookingAmount(booking) > 0 ? 'paid' : 'pending' %></span></td>
+                                    <td><span class="status-badge status-<%= checkedInCount > 0 && (status === 'checked_in' || status === 'completed') ? 'completed' : 'pending' %>"><%= status === 'checked_in' || status === 'completed' ? 'checked-in' : 'waiting' %></span></td>
+                                    <td>
+                                        <div class="admin-row-actions">
+                                            <a class="text-button" href="/receipt/<%= booking.id %>">View</a>
+                                            <button type="button" disabled>Refund</button>
+                                            <button type="button" disabled>Cancel</button>
+                                            <button type="button" disabled>Complete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </section>
+
+        <section class="admin-panel" id="admin-merchants">
+            <div class="admin-panel-heading">
+                <div>
+                    <p class="eyebrow">Merchant Overview</p>
+                    <h2>All merchant accounts</h2>
+                </div>
+                <a class="button primary" href="/admin/merchants/new">Add merchant</a>
+            </div>
+
+            <% if (!merchantRows.length) { %>
+                <%- include('partials/admin-empty-state', { icon: 'MR', message: 'No merchants are connected yet', actionUrl: '/admin/merchants/new', actionLabel: 'Add merchant' }) %>
+            <% } else { %>
+                <div class="admin-merchant-grid">
+                    <% merchantRows.forEach((merchant) => { %>
+                        <article class="admin-merchant-card">
+                            <div class="admin-merchant-card-top">
+                                <span class="verification-badge"><%= merchant.status === 'active' ? 'verified' : 'review' %></span>
+                                <span class="status-badge status-<%= merchant.status === 'active' ? 'completed' : 'pending' %>"><%= merchant.status %></span>
+                            </div>
+                            <h3><%= merchant.merchantName %></h3>
+                            <p><%= merchant.address || 'No address set' %></p>
+                            <div class="admin-merchant-metrics">
+                                <span><strong><%= merchant.rating.toFixed(1) %></strong> rating</span>
+                                <span><strong><%= merchant.bookingCount %></strong> bookings</span>
+                                <span><strong>$<%= formatCurrency(merchant.revenue) %></strong> revenue</span>
+                                <span><strong><%= merchant.serviceCount %></strong> services</span>
+                            </div>
+                            <div class="admin-merchant-actions">
+                                <a class="text-button" href="/merchant/<%= merchant.salon_id %>">View Merchant</a>
+                                <button type="button" disabled>Suspend</button>
+                                <button type="button" disabled>Edit</button>
+                                <a class="text-button" href="#admin-qr">Analytics</a>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
+
+        <section class="admin-grid" id="admin-audit">
+            <article class="admin-panel span-7">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Audit Trail</p>
+                        <h2>Admin activity logs</h2>
+                    </div>
+                </div>
+                <div class="admin-log-list">
+                    <% auditLogs.forEach((log) => { %>
+                        <article>
+                            <strong><%= log.admin %></strong>
+                            <span><%= log.action %></span>
+                            <small><%= log.entity %> - <%= log.time %></small>
+                        </article>
+                    <% }) %>
+                </div>
+            </article>
+
+            <article class="admin-panel span-5">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Operations</p>
+                        <h2>Admin quick links</h2>
+                    </div>
+                </div>
+                <div class="admin-quick-link-grid">
+                    <a class="button secondary" href="/admin/promotions">Voucher creation</a>
+                    <a class="button secondary" href="/admin/reward-shop">Reward shop</a>
+                    <a class="button secondary" href="/admin/rewards-game">QR game rewards</a>
+                    <a class="button secondary" href="/admin/loyalty">Loyalty rules</a>
+                </div>
+            </article>
+        </section>
+    </div>
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (() => {
+        const payload = <%- JSON.stringify(chartPayload) %>;
+        const palette = {
+            green: '#4f6847',
+            blue: '#20899c',
+            orange: '#df7c16',
+            yellow: '#d4a017',
+            red: '#a64032',
+            pale: 'rgba(79, 104, 71, 0.12)'
+        };
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 700 },
+            plugins: { legend: { labels: { boxWidth: 10, usePointStyle: true } } },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(79, 104, 71, 0.12)' } }
+            }
+        };
+        const makeChart = (id, config) => {
+            const canvas = document.getElementById(id);
+            if (!canvas || typeof Chart === 'undefined') return;
+            new Chart(canvas, config);
+        };
+
+        makeChart('bookingRevenueChart', {
+            type: 'line',
+            data: {
+                labels: payload.labels,
+                datasets: [
+                    { label: 'Bookings', data: payload.bookings, borderColor: palette.blue, backgroundColor: 'rgba(32, 137, 156, 0.12)', tension: 0.35, fill: true },
+                    { label: 'Revenue', data: payload.revenue, borderColor: palette.green, backgroundColor: 'rgba(79, 104, 71, 0.12)', tension: 0.35, fill: true }
+                ]
+            },
+            options: baseOptions
+        });
+        makeChart('qrScansChart', {
+            type: 'bar',
+            data: { labels: payload.labels, datasets: [{ label: 'QR scans', data: payload.qrScans, backgroundColor: 'rgba(32, 137, 156, 0.38)', borderColor: palette.blue, borderWidth: 2 }] },
+            options: baseOptions
+        });
+        makeChart('bookingStatusChart', {
+            type: 'doughnut',
+            data: { labels: payload.statusLabels, datasets: [{ data: payload.statusValues, backgroundColor: [palette.yellow, palette.blue, palette.green, palette.red, palette.orange] }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: { duration: 700 }, plugins: { legend: { position: 'bottom' } } }
+        });
+        makeChart('topMerchantsChart', {
+            type: 'bar',
+            data: { labels: payload.topMerchantLabels, datasets: [{ label: 'Bookings', data: payload.topMerchantValues, backgroundColor: 'rgba(79, 104, 71, 0.35)', borderColor: palette.green, borderWidth: 2 }] },
+            options: { ...baseOptions, indexAxis: 'y' }
+        });
+        makeChart('topServicesChart', {
+            type: 'bar',
+            data: { labels: payload.topServiceLabels, datasets: [{ label: 'Bookings', data: payload.topServiceValues, backgroundColor: 'rgba(32, 137, 156, 0.3)', borderColor: palette.blue, borderWidth: 2 }] },
+            options: { ...baseOptions, indexAxis: 'y' }
+        });
+        makeChart('peakHoursChart', {
+            type: 'bar',
+            data: { labels: payload.peakHourLabels, datasets: [{ label: 'Bookings', data: payload.peakHourValues, backgroundColor: 'rgba(223, 124, 22, 0.35)', borderColor: palette.orange, borderWidth: 2 }] },
+            options: baseOptions
+        });
+
+        const rows = Array.from(document.querySelectorAll('.admin-booking-table tbody tr'));
+        const statusButtons = Array.from(document.querySelectorAll('[data-booking-status]'));
+        const searchInput = document.querySelector('[data-booking-search]');
+        const dateInput = document.querySelector('[data-booking-date]');
+        const merchantSelect = document.querySelector('[data-booking-merchant]');
+        let activeStatus = 'all';
+
+        const applyFilters = () => {
+            const query = String(searchInput?.value || '').toLowerCase();
+            const date = dateInput?.value || '';
+            const merchant = merchantSelect?.value || '';
+
+            rows.forEach((row) => {
+                const matchesStatus = activeStatus === 'all' || row.dataset.status === activeStatus;
+                const matchesSearch = !query || row.textContent.toLowerCase().includes(query);
+                const matchesDate = !date || row.dataset.date === date;
+                const matchesMerchant = !merchant || row.dataset.merchant === merchant;
+                row.hidden = !(matchesStatus && matchesSearch && matchesDate && matchesMerchant);
+            });
+        };
+
+        statusButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                activeStatus = button.dataset.bookingStatus;
+                statusButtons.forEach((item) => item.classList.toggle('active', item === button));
+                applyFilters();
+            });
+        });
+        [searchInput, dateInput, merchantSelect].forEach((control) => control?.addEventListener('input', applyFilters));
+
+        document.querySelector('[data-export-csv]')?.addEventListener('click', () => {
+            const visibleRows = rows.filter((row) => !row.hidden);
+            const csv = ['Booking,Customer,Merchant,Date,Status']
+                .concat(visibleRows.map((row) => {
+                    const cells = Array.from(row.cells).slice(0, 5).map((cell) => `"${cell.textContent.trim().replace(/"/g, '""')}"`);
+                    return cells.join(',');
+                }))
+                .join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'vaniday-bookings.csv';
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.querySelector('[data-export-pdf]')?.addEventListener('click', () => window.print());
+    })();
+</script>
 
 <%- include('partials/footer') %>

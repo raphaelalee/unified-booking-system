@@ -1,0 +1,18 @@
+<article class="admin-stat-card accent-<%= card.accent || 'green' %>">
+    <div class="admin-stat-card-top">
+        <span class="admin-stat-icon"><%= card.icon || 'V' %></span>
+        <span class="admin-trend <%= Number(card.trend || 0) >= 0 ? 'positive' : 'negative' %>">
+            <%= Number(card.trend || 0) >= 0 ? '+' : '' %><%= card.trend || 0 %>%
+        </span>
+    </div>
+    <span class="admin-stat-label"><%= card.label %></span>
+    <strong><%= card.value %></strong>
+    <small><%= card.compare || 'vs last week' %></small>
+    <% if (Array.isArray(card.sparkline) && card.sparkline.length > 0) { %>
+        <div class="admin-sparkline" aria-hidden="true">
+            <% card.sparkline.forEach((point) => { %>
+                <i style="height:<%= Math.max(8, Math.min(Number(point || 0), 100)) %>%"></i>
+            <% }) %>
+        </div>
+    <% } %>
+</article>

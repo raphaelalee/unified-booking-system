@@ -1,0 +1,7 @@
+<div class="admin-empty-state">
+    <span class="admin-empty-icon"><%= icon || 'V' %></span>
+    <strong><%= message %></strong>
+    <% if (typeof actionUrl !== 'undefined' && actionUrl && typeof actionLabel !== 'undefined' && actionLabel) { %>
+        <a class="text-button" href="<%= actionUrl %>"><%= actionLabel %></a>
+    <% } %>
+</div>

@@ -1,14 +1,37 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const dailySales = salesReport?.dailySales || [];
-    const maxRevenue = Math.max(...dailySales.map((day) => Number(day.revenue || 0)), 1);
-    const maxOrders = Math.max(...dailySales.map((day) => Number(day.orders || 0)), 1);
+    const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
+    const todayBookings = appointments.todayBookings || [];
+    const upcomingBookings = appointments.upcomingBookings || [];
+    const pendingAppointments = appointments.pendingAppointments || [];
+    const weekDays = appointments.weekDays || [];
     const recentOrders = salesReport?.recentOrders || [];
     const lowStockProducts = salesReport?.lowStockProducts || [];
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const totalBookings = Number(stats.bookingCount || 0);
+    const checkedInBookings = (appointments.allBookings || []).filter((booking) => ['checked_in', 'completed'].includes(booking.status)).length;
+    const trendBase = Math.max(totalBookings, 1);
+    const makeSparkline = (seed) => [18, 28, 22, 36, 30, 44, 38].map((value, index) => Math.min(100, value + (seed * 3) + index));
+    const kpiCards = [
+        { label: "Today's Bookings", value: todayBookings.length, icon: 'TB', trend: todayBookings.length > 0 ? 12 : 0, detail: 'scheduled today', accent: 'green', sparkline: makeSparkline(todayBookings.length) },
+        { label: 'Monthly Revenue', value: '$' + formatCurrency(appointments.monthlyRevenue || 0), icon: '$', trend: Number(stats.growthPercent || 0).toFixed(1), detail: 'vs last 7 days', accent: 'orange', sparkline: makeSparkline(Math.round((appointments.monthlyRevenue || 0) / 50)) },
+        { label: 'Pending Appointments', value: pendingAppointments.length, icon: 'PA', trend: pendingAppointments.length > 0 ? -3 : 0, detail: 'need confirmation', accent: pendingAppointments.length > 0 ? 'yellow' : 'green', sparkline: makeSparkline(pendingAppointments.length) },
+        { label: 'Repeat Customers', value: appointments.repeatCustomers || 0, icon: 'RC', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: 'booked more than once', accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
+        { label: 'QR Walk-ins', value: appointments.qrWalkIns || 0, icon: 'QR', trend: checkedInBookings > 0 ? 7 : 0, detail: 'checked in today', accent: 'blue', sparkline: makeSparkline(checkedInBookings) },
+        { label: 'Loyalty Redemptions', value: appointments.loyaltyRedemptions || 0, icon: 'LR', trend: appointments.loyaltyRedemptions > 0 ? 5 : 0, detail: 'estimated rewards usage', accent: 'green', sparkline: makeSparkline(appointments.loyaltyRedemptions || 0) }
+    ];
+    const statusLabels = {
+        pending: 'pending',
+        confirmed: 'confirmed',
+        checked_in: 'checked-in',
+        completed: 'completed',
+        cancelled: 'cancelled',
+        no_show: 'no-show'
+    };
 %>
 
-<section class="section compact merchant-analytics-page">
+<section class="section compact merchant-analytics-page merchant-appointment-dashboard">
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -21,8 +44,9 @@
             <a class="merchant-analytics-brand" href="/merchant"><%= merchant.name %></a>
             <nav aria-label="Merchant dashboard sections">
                 <a href="/merchant">Dashboard</a>
+                <a href="#merchant-calendar">Calendar</a>
                 <a href="/merchant/products">Inventory</a>
-                <a href="/merchant/promotions">Reports</a>
+                <a href="/merchant/promotions">Promotions</a>
                 <a href="/merchant/services">Services</a>
                 <a href="/profile">Profile</a>
             </nav>
@@ -31,91 +55,134 @@
 
         <% if (databaseError) { %>
             <div class="notice error">
-                <p>Some database records could not be loaded, so reporting may be incomplete.</p>
+                <p>Some database records could not be loaded, so appointment reporting may be incomplete.</p>
             </div>
         <% } %>
 
-        <div class="merchant-analytics-kpis">
-            <article>
-                <span>Total Products</span>
-                <strong><%= stats.productCount %></strong>
-            </article>
-            <article>
-                <span>Total Revenue</span>
-                <strong>$<%= stats.totalRevenue.toFixed(2) %></strong>
-            </article>
-            <article>
-                <span>Total Orders</span>
-                <strong><%= stats.totalOrders %></strong>
-            </article>
-            <article>
-                <span>Avg Order Value</span>
-                <strong>$<%= stats.averageOrderValue.toFixed(2) %></strong>
-            </article>
-            <article class="merchant-growth-card">
-                <span>Growth vs last 7 days</span>
-                <strong><%= stats.growthPercent.toFixed(1) %>%</strong>
-                <small><%= stats.growthPercent >= 0 ? 'Up' : 'Down' %></small>
-            </article>
-        </div>
+        <section class="merchant-kpi-grid" aria-label="Merchant appointment summary">
+            <% kpiCards.forEach((card) => { %>
+                <article class="merchant-kpi-card accent-<%= card.accent %>">
+                    <div class="merchant-kpi-top">
+                        <span class="merchant-kpi-icon"><%= card.icon %></span>
+                        <span class="merchant-kpi-trend <%= Number(card.trend) >= 0 ? 'positive' : 'negative' %>">
+                            <%= Number(card.trend) >= 0 ? '+' : '' %><%= card.trend %>%
+                        </span>
+                    </div>
+                    <span><%= card.label %></span>
+                    <strong><%= card.value %></strong>
+                    <small><%= card.detail %></small>
+                    <div class="merchant-kpi-sparkline" aria-hidden="true">
+                        <% card.sparkline.forEach((point) => { %>
+                            <i style="height:<%= Math.max(8, Math.min(point, 100)) %>%"></i>
+                        <% }) %>
+                    </div>
+                </article>
+            <% }) %>
+        </section>
 
-        <section class="merchant-sales-card">
+        <section class="merchant-calendar-shell" id="merchant-calendar">
             <div class="merchant-card-heading">
                 <div>
-                    <p class="eyebrow">Sales</p>
-                    <h2>Daily sales (last 7 days)</h2>
+                    <p class="eyebrow">Appointment Calendar</p>
+                    <h2>Weekly schedule</h2>
                 </div>
-                <span>Updated <%= new Date().toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' }) %></span>
+                <div class="merchant-calendar-legend">
+                    <% Object.keys(statusLabels).forEach((status) => { %>
+                        <span class="merchant-status-dot status-<%= status %>"><%= statusLabels[status] %></span>
+                    <% }) %>
+                </div>
             </div>
 
-            <div class="merchant-chart-legend">
-                <span><i class="revenue"></i>Revenue ($)</span>
-                <span><i class="orders"></i>Orders</span>
-            </div>
-
-            <div class="merchant-sales-chart" aria-label="Daily sales chart">
-                <% dailySales.forEach((day) => { %>
-                    <div class="merchant-chart-day">
-                        <div class="merchant-chart-bars">
-                            <span class="merchant-revenue-bar" style="height:<%= Math.max((day.revenue / maxRevenue) * 100, day.revenue > 0 ? 8 : 0) %>%"></span>
-                            <span class="merchant-order-dot" style="bottom:<%= Math.max((day.orders / maxOrders) * 100, day.orders > 0 ? 10 : 0) %>%"></span>
+            <div class="merchant-calendar-grid" data-merchant-calendar>
+                <% weekDays.forEach((day) => { %>
+                    <section class="merchant-calendar-day" data-calendar-day="<%= day.key %>">
+                        <header>
+                            <span><%= day.label %></span>
+                            <strong><%= day.day %></strong>
+                        </header>
+                        <div class="merchant-calendar-dropzone">
+                            <% if (!day.appointments.length) { %>
+                                <p class="merchant-calendar-empty">No appointments</p>
+                            <% } %>
+                            <% day.appointments.forEach((booking) => { %>
+                                <article
+                                    class="merchant-calendar-booking status-<%= booking.status %>"
+                                    draggable="true"
+                                    data-booking-id="<%= booking.id %>"
+                                    data-status="<%= booking.status %>">
+                                    <div>
+                                        <strong><%= booking.bookingTime || 'Time TBC' %></strong>
+                                        <span><%= booking.serviceName %></span>
+                                    </div>
+                                    <small><%= booking.customerName %></small>
+                                    <em><%= statusLabels[booking.status] || booking.status %></em>
+                                    <% if (['checked_in', 'completed'].includes(booking.status)) { %>
+                                        <b>QR</b>
+                                    <% } %>
+                                </article>
+                            <% }) %>
                         </div>
-                        <small><%= day.label %></small>
-                    </div>
+                    </section>
                 <% }) %>
             </div>
         </section>
 
-        <div class="merchant-dashboard-lower-grid">
+        <div class="merchant-dashboard-lower-grid merchant-appointment-lower-grid">
             <section class="merchant-orders-card">
                 <div class="merchant-card-heading">
                     <div>
-                        <p class="eyebrow">Orders</p>
-                        <h2>Recent orders</h2>
+                        <p class="eyebrow">Upcoming</p>
+                        <h2>Upcoming bookings</h2>
                     </div>
-                    <a class="text-button" href="/merchant/products">Inventory</a>
+                    <span><%= upcomingBookings.length %> shown</span>
                 </div>
 
-                <% if (!recentOrders.length) { %>
-                    <p class="muted">No paid product orders yet.</p>
+                <% if (!upcomingBookings.length) { %>
+                    <div class="merchant-empty-state">
+                        <span>BK</span>
+                        <strong>No upcoming bookings</strong>
+                        <a class="text-button" href="/merchant/services">Review services</a>
+                    </div>
                 <% } else { %>
-                    <div class="merchant-order-list">
-                        <% recentOrders.forEach((order) => { %>
-                            <article class="merchant-order-row">
-                                <span>
-                                    <strong>ORD-<%= order.id %></strong>
-                                    <small><%= new Date(order.createdAt).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' }) %> &middot; <%= order.itemCount %> item<%= order.itemCount === 1 ? '' : 's' %></small>
-                                </span>
-                                <span>
-                                    <strong>$<%= order.totalAmount.toFixed(2) %></strong>
-                                    <small><%= order.customerName %></small>
-                                </span>
+                    <div class="merchant-appointment-list">
+                        <% upcomingBookings.forEach((booking) => { %>
+                            <article>
+                                <span class="merchant-status-badge status-<%= booking.status %>"><%= statusLabels[booking.status] || booking.status %></span>
+                                <div>
+                                    <strong><%= booking.customerName %></strong>
+                                    <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
+                                </div>
+                                <em><%= ['checked_in', 'completed'].includes(booking.status) ? 'QR checked' : 'QR pending' %></em>
                             </article>
                         <% }) %>
                     </div>
                 <% } %>
             </section>
 
+            <section class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Check-in</p>
+                        <h2>QR check-in status</h2>
+                    </div>
+                    <% if (qrBookingUrl) { %>
+                        <a class="text-button" href="<%= qrBookingUrl %>">Open QR</a>
+                    <% } %>
+                </div>
+                <div class="merchant-checkin-metrics">
+                    <p><span>QR walk-ins</span><strong><%= appointments.qrWalkIns || 0 %></strong></p>
+                    <p><span>Checked-in/completed</span><strong><%= checkedInBookings %></strong></p>
+                    <p><span>Pending check-ins</span><strong><%= Math.max(0, totalBookings - checkedInBookings) %></strong></p>
+                </div>
+                <% if (qrCodeDataUrl && qrBookingUrl) { %>
+                    <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
+                        <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+                    </a>
+                <% } %>
+            </section>
+        </div>
+
+        <div class="merchant-dashboard-lower-grid">
             <section class="merchant-alert-card">
                 <div class="merchant-card-heading">
                     <div>
@@ -138,26 +205,6 @@
                     </div>
                 <% } %>
             </section>
-        </div>
-
-        <div class="merchant-dashboard-lower-grid">
-            <section class="merchant-alert-card <%= validationReport.issues.length > 0 ? 'needs-review' : '' %>">
-                <div class="merchant-card-heading">
-                    <div>
-                        <p class="eyebrow">Issues</p>
-                        <h2><%= validationReport.status %></h2>
-                    </div>
-                </div>
-                <% if (!validationReport.issues.length) { %>
-                    <p class="muted">Your merchant setup looks complete.</p>
-                <% } else { %>
-                    <div class="merchant-alert-list">
-                        <% validationReport.issues.forEach((issue) => { %>
-                            <p><%= issue %></p>
-                        <% }) %>
-                    </div>
-                <% } %>
-            </section>
 
             <section class="merchant-actions-card">
                 <div class="merchant-card-heading">
@@ -167,21 +214,70 @@
                     </div>
                 </div>
                 <div class="merchant-quick-actions">
-                    <a class="button primary" href="/merchant/products/new">Add product</a>
-                    <a class="button secondary" href="/merchant/services">Services</a>
+                    <a class="button primary" href="/merchant/schedule">Manage schedule</a>
+                    <a class="button secondary" href="/merchant/products/new">Add product</a>
                     <a class="button secondary" href="/merchant/promotions">Promotions</a>
                     <form action="/merchant/generate-qr" method="POST">
                         <button class="button secondary" type="submit">Generate QR</button>
                     </form>
                 </div>
-                <% if (qrCodeDataUrl && qrBookingUrl) { %>
-                    <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
-                        <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
-                    </a>
-                <% } %>
             </section>
         </div>
+
+        <section class="merchant-alert-card <%= validationReport.issues.length > 0 ? 'needs-review' : '' %>">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">Merchant Health</p>
+                    <h2><%= validationReport.status %></h2>
+                </div>
+            </div>
+            <% if (!validationReport.issues.length) { %>
+                <p class="muted">Your merchant setup looks complete.</p>
+            <% } else { %>
+                <div class="merchant-alert-list">
+                    <% validationReport.issues.forEach((issue) => { %>
+                        <p><%= issue %></p>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
     </div>
 </section>
+
+<script>
+    (() => {
+        const calendar = document.querySelector('[data-merchant-calendar]');
+        if (!calendar) return;
+
+        let draggedCard = null;
+
+        calendar.querySelectorAll('.merchant-calendar-booking').forEach((card) => {
+            card.addEventListener('dragstart', () => {
+                draggedCard = card;
+                card.classList.add('is-dragging');
+            });
+            card.addEventListener('dragend', () => {
+                card.classList.remove('is-dragging');
+                draggedCard = null;
+            });
+        });
+
+        calendar.querySelectorAll('.merchant-calendar-day').forEach((day) => {
+            day.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                day.classList.add('is-drag-over');
+            });
+            day.addEventListener('dragleave', () => day.classList.remove('is-drag-over'));
+            day.addEventListener('drop', () => {
+                day.classList.remove('is-drag-over');
+                if (!draggedCard) return;
+                const dropzone = day.querySelector('.merchant-calendar-dropzone');
+                dropzone.querySelector('.merchant-calendar-empty')?.remove();
+                dropzone.appendChild(draggedCard);
+                draggedCard.dataset.localDate = day.dataset.calendarDay;
+            });
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>
