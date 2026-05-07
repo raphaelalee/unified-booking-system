@@ -137,8 +137,58 @@ function getOrderReceiptById(transactionId, userId, callback) {
     });
 }
 
+function getMerchantOrderReport(merchantUserId, callback) {
+    const sql = `
+        SELECT
+            transactions.transaction_id,
+            transactions.user_id,
+            transactions.total_amount,
+            transactions.payment_method,
+            transactions.payment_status,
+            transactions.created_at,
+            users.name AS customer_name,
+            COUNT(order_items.order_item_id) AS item_count,
+            SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total
+        FROM transactions
+        INNER JOIN users ON users.user_id = transactions.user_id
+        INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+        INNER JOIN products ON products.product_id = order_items.product_id
+        INNER JOIN salons ON salons.salon_id = products.salon_id
+        WHERE salons.merchant_id = ?
+            AND transactions.payment_status = 'paid'
+        GROUP BY
+            transactions.transaction_id,
+            transactions.user_id,
+            transactions.total_amount,
+            transactions.payment_method,
+            transactions.payment_status,
+            transactions.created_at,
+            users.name
+        ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+    `;
+
+    db.query(sql, [merchantUserId], (error, rows) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows.map((row) => ({
+            id: row.transaction_id,
+            userId: row.user_id,
+            customerName: row.customer_name || 'Customer',
+            totalAmount: Number(row.merchant_total || row.total_amount || 0),
+            paymentMethod: row.payment_method || 'card',
+            paymentStatus: row.payment_status || 'paid',
+            itemCount: Number(row.item_count || 0),
+            createdAt: row.created_at
+        })));
+    });
+}
+
 module.exports = {
     createPaidTransaction,
+    getMerchantOrderReport,
     getOrderReceiptById,
     getPaidSpendByUserId
 };

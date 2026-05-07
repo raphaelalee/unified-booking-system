@@ -7,29 +7,64 @@
 </section>
 
 <section class="section compact">
+    <% if (typeof success !== 'undefined' && success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+
     <div class="giftcard-layout">
         <div class="giftcard-preview">
             <p>Vaniday</p>
             <h2>Beauty Gift Card</h2>
-            <span>$50</span>
+            <span id="giftcard-preview-amount">$50</span>
         </div>
 
         <div class="giftcard-options">
-            <article>
-                <h2>$30 Gift Card</h2>
-                <p class="muted">Good for express nails, grooming, or add-on treatments.</p>
+            <form class="giftcard-purchase-card" action="/giftcards/add" method="POST">
+                <div>
+                    <h2>Choose a gift card amount</h2>
+                    <p class="muted">The selected value will be added to your cart as a digital gift card.</p>
+                </div>
+
+                <div class="giftcard-amount-options" role="radiogroup" aria-label="Gift card amount">
+                    <% [20, 50, 80, 100].forEach((amount) => { %>
+                        <label class="giftcard-amount-choice">
+                            <input type="radio" name="amount" value="<%= amount %>" <%= amount === 50 ? 'checked' : '' %>>
+                            <span>$<%= amount %></span>
+                        </label>
+                    <% }) %>
+                </div>
+
+                <button class="button primary full" type="submit">Add to cart</button>
+            </form>
+
+            <article class="giftcard-terms-card">
+                <h2>Terms and conditions</h2>
+                <ul class="giftcard-terms">
+                    <li>Gift cards are redeemable for Vaniday beauty, salon, spa, and grooming appointments.</li>
+                    <li>Gift cards are valid for 12 months from the purchase date.</li>
+                    <li>Gift cards cannot be exchanged for cash or refunded after purchase.</li>
+                    <li>Gift card value can be used across multiple appointments until the balance is fully redeemed.</li>
+                    <li>Lost, stolen, or expired gift cards cannot be replaced.</li>
+                    <li>Gift cards cannot be used with other vouchers unless stated by Vaniday.</li>
+                </ul>
             </article>
-            <article>
-                <h2>$50 Gift Card</h2>
-                <p class="muted">Great for facials, haircut packages, or spa visits.</p>
-            </article>
-            <article>
-                <h2>$100 Gift Card</h2>
-                <p class="muted">Best for full wellness packages and premium appointments.</p>
-            </article>
-            <a class="button primary" href="/contact">Enquire about gift cards</a>
         </div>
     </div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const previewAmount = document.getElementById('giftcard-preview-amount');
+    const amountInputs = Array.from(document.querySelectorAll('input[name="amount"]'));
+
+    amountInputs.forEach((input) => {
+        input.addEventListener('change', function () {
+            if (previewAmount) {
+                previewAmount.textContent = '$' + input.value;
+            }
+        });
+    });
+});
+</script>
 
 <%- include('partials/footer') %>

@@ -70,6 +70,19 @@ function buildCustomerReferral(member, referralCode, stats = {}) {
     };
 }
 
+function mapWalletHistoryRow(row) {
+    return {
+        id: row.receipt_id.replace(/^order-/, ''),
+        receiptId: row.receipt_id,
+        type: row.purchase_type === 'booking' ? 'Booking' : 'Order',
+        itemNames: row.item_names,
+        totalAmount: Number(row.total_amount || 0),
+        paymentMethod: row.payment_method || 'paid',
+        paymentStatus: row.payment_status || 'paid',
+        createdAt: row.created_at
+    };
+}
+
 function buildCustomerProfileExtras(req, accountUser, callback) {
     const favouriteIds = req.session.favouriteMerchantIds || [];
     const favourites = favouriteIds
@@ -80,6 +93,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     const referralCode = accountUser.referral_code || generateReferralCode(accountUser.user_id);
     let upcomingBookings = [];
     let pastBookings = [];
+    let walletHistory = [];
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -101,6 +115,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                     : Number(wallet.cashbackBalance || 0).toFixed(2),
                 member,
                 loyalty,
+                walletHistory,
                 referral: buildCustomerReferral(member, referralCode, referralStats),
                 upcomingBookings,
                 pastBookings
@@ -135,6 +150,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
         }
 
         const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
+        walletHistory = rows.map(mapWalletHistoryRow);
         let index = 0;
 
         function awardNext() {
@@ -175,6 +191,7 @@ function getEmptyCustomerExtras() {
         cashbackBalance: '0.00',
         member: buildMember(0),
         loyalty: null,
+        walletHistory: [],
         referral: null,
         upcomingBookings: [],
         pastBookings: []
@@ -606,6 +623,7 @@ function showProfile(req, res) {
                 cashbackBalance: customerExtras.cashbackBalance,
                 member: customerExtras.member,
                 loyalty: customerExtras.loyalty,
+                walletHistory: customerExtras.walletHistory,
                 referral: customerExtras.referral,
                 upcomingBookings: customerExtras.upcomingBookings,
                 pastBookings: customerExtras.pastBookings,

@@ -133,6 +133,7 @@ app.get('/merchant/products/new', requireRole('merchant'), merchantDashboardCont
 app.post('/merchant/products', requireRole('merchant'), merchantDashboardController.createProduct);
 app.get('/merchant/products/:productId/edit', requireRole('merchant'), merchantDashboardController.showEditProduct);
 app.post('/merchant/products/:productId', requireRole('merchant'), merchantDashboardController.updateProduct);
+app.post('/merchant/products/:productId/restock', requireRole('merchant'), merchantDashboardController.restockProduct);
 app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
 app.get('/merchant/promotions', requireRole('merchant'), merchantDashboardController.listPromotions);
 app.get('/merchant/promotions/new', requireRole('merchant'), merchantDashboardController.showNewPromotion);
@@ -242,8 +243,14 @@ app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
 app.get('/cashback', requireCustomer, loyaltyController.showCashback);
 
 app.get('/giftcards', requireCustomer, (req, res) => {
-    res.render('giftcards', { title: 'Gift Cards' });
+    const success = req.session.success;
+    req.session.success = null;
+    res.render('giftcards', { title: 'Gift Cards', success });
 });
+app.get('/giftcards/add', requireCustomer, (req, res) => {
+    res.redirect('/giftcards');
+});
+app.post('/giftcards/add', requireCustomer, merchantController.addGiftCardToCart);
 
 app.use((req, res) => {
     res.status(404).render('error', {

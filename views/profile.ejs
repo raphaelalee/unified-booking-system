@@ -309,61 +309,139 @@
                 </section>
 
                 <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
+                    <%
+                        const walletReceipts = typeof walletHistory !== 'undefined' && Array.isArray(walletHistory)
+                            ? walletHistory
+                            : [];
+                        const walletReceiptMap = walletReceipts.reduce((map, receipt) => {
+                            map[String(receipt.receiptId)] = receipt;
+                            return map;
+                        }, {});
+                        const walletTransactions = loyalty && Array.isArray(loyalty.transactions)
+                            ? loyalty.transactions
+                            : [];
+                    %>
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Wallet</p>
-                            <h2>Loyalty & rewards</h2>
+                            <h2>Loyalty wallet</h2>
                         </div>
                         <a class="button secondary" href="/profile/history">Purchase history</a>
                     </div>
 
-                    <div class="loyalty-balance">
-                        <div>
-                            <span>Points</span>
-                            <strong><%= loyalty ? loyalty.wallet.pointsBalance : 0 %></strong>
-                        </div>
-                        <div>
-                            <span>Cashback</span>
-                            <strong>$<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %></strong>
-                        </div>
-                        <div>
-                            <span>Lifetime points</span>
-                            <strong><%= loyalty ? loyalty.wallet.lifetimePoints : 0 %></strong>
-                        </div>
-                    </div>
-
                     <% if (loyalty) { %>
-                        <div class="loyalty-rule-strip">
-                            <p><span>Earn</span><strong><%= loyalty.rules.pointsPerDollar %> pts / $1</strong></p>
-                            <p><span>Cashback</span><strong><%= loyalty.rules.cashbackPercent %>%</strong></p>
-                            <p><span>Redeem</span><strong><%= loyalty.rules.minPointsToRedeem %> pts min</strong></p>
+                        <div class="wallet-overview-grid">
+                            <article class="wallet-balance-card wallet-balance-card-primary">
+                                <span>Available points</span>
+                                <strong><%= loyalty.wallet.pointsBalance %></strong>
+                                <small><%= loyalty.rules.pointsPerDollar %> pts earned per $1 spent</small>
+                            </article>
+                            <article class="wallet-balance-card">
+                                <span>Cashback balance</span>
+                                <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
+                                <small>Usable during cart checkout</small>
+                            </article>
+                            <article class="wallet-balance-card">
+                                <span>Lifetime points</span>
+                                <strong><%= loyalty.wallet.lifetimePoints %></strong>
+                                <small>Total rewards earned from paid receipts</small>
+                            </article>
                         </div>
 
-                        <form class="loyalty-inline-redeem" action="/wallet/redeem" method="POST">
-                            <label>
-                                Convert points into cashback
-                                <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
-                            </label>
-                            <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem</button>
-                        </form>
-
-                        <% if (!loyalty.transactions.length) { %>
-                            <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
-                        <% } else { %>
-                            <div class="wallet-mini-history">
-                                <% loyalty.transactions.slice(0, 5).forEach((entry) => { %>
-                                    <p>
-                                        <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
-                                        <strong><%= entry.description %></strong>
-                                        <em>
-                                            <%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts
-                                            &middot;
-                                            <%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %>
-                                        </em>
-                                    </p>
-                                <% }) %>
+                        <div class="wallet-rules-grid">
+                            <div>
+                                <span>Cashback rate</span>
+                                <strong><%= loyalty.rules.cashbackPercent %>%</strong>
                             </div>
-                        <% } %>
+                            <div>
+                                <span>Minimum redeem</span>
+                                <strong><%= loyalty.rules.minPointsToRedeem %> pts</strong>
+                            </div>
+                            <div>
+                                <span>Points value</span>
+                                <strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %> / pt</strong>
+                            </div>
+                        </div>
+
+                        <div class="wallet-content-grid">
+                            <form class="wallet-redeem-card" action="/wallet/redeem" method="POST">
+                                <div>
+                                    <p class="eyebrow">Redeem</p>
+                                    <h3>Convert points into cashback</h3>
+                                    <p class="muted">Cashback will be added to your wallet and can be applied at checkout.</p>
+                                </div>
+                                <label>
+                                    Points to convert
+                                    <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                </label>
+                                <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem</button>
+                            </form>
+
+                            <div class="wallet-receipt-card">
+                                <div class="wallet-section-heading">
+                                    <div>
+                                        <p class="eyebrow">Receipts</p>
+                                        <h3>Recent linked receipts</h3>
+                                    </div>
+                                    <a class="text-button" href="/profile/history">View all</a>
+                                </div>
+
+                                <% if (!walletReceipts.length) { %>
+                                    <p class="muted">No past paid receipts yet.</p>
+                                <% } else { %>
+                                    <div class="wallet-receipt-list">
+                                        <% walletReceipts.slice(0, 5).forEach((receipt) => { %>
+                                            <a class="wallet-receipt-row" href="/receipt/<%= receipt.receiptId %>">
+                                                <span>
+                                                    <strong>Receipt <%= receipt.id %></strong>
+                                                    <small><%= receipt.itemNames %></small>
+                                                </span>
+                                                <span>
+                                                    <strong>$<%= receipt.totalAmount.toFixed(2) %></strong>
+                                                    <small><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></small>
+                                                </span>
+                                            </a>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
+                            </div>
+                        </div>
+
+                        <div class="wallet-activity-panel">
+                            <div class="wallet-section-heading">
+                                <div>
+                                    <p class="eyebrow">Activity</p>
+                                    <h3>Past wallet activity</h3>
+                                </div>
+                                <span><%= walletTransactions.length %> entr<%= walletTransactions.length === 1 ? 'y' : 'ies' %></span>
+                            </div>
+
+                            <% if (!walletTransactions.length) { %>
+                                <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
+                            <% } else { %>
+                                <div class="wallet-activity-list">
+                                    <% walletTransactions.forEach((entry) => { %>
+                                        <% const linkedReceipt = entry.sourceReceiptId ? walletReceiptMap[String(entry.sourceReceiptId)] : null; %>
+                                        <article class="wallet-activity-row">
+                                            <div>
+                                                <span class="wallet-activity-date"><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                <strong><%= entry.description %></strong>
+                                                <% if (linkedReceipt) { %>
+                                                    <small><%= linkedReceipt.itemNames %></small>
+                                                <% } %>
+                                            </div>
+                                            <div class="wallet-activity-values">
+                                                <span class="<%= entry.pointsDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts</span>
+                                                <span class="<%= entry.cashbackDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %></span>
+                                                <% if (entry.sourceReceiptId) { %>
+                                                    <a class="button secondary" href="/receipt/<%= entry.sourceReceiptId %>">Receipt</a>
+                                                <% } %>
+                                            </div>
+                                        </article>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
                     <% } else { %>
                         <p class="muted">Wallet details could not be loaded right now.</p>
                     <% } %>

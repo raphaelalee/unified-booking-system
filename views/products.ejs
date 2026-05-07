@@ -27,19 +27,34 @@
     <p>Browse beauty and wellness products that complement your appointments.</p>
 </section>
 
-<section class="section compact">
-    <div class="product-grid">
+<section class="section compact products-spacious-page">
+    <div class="section-heading products-list-headline">
+        <div>
+            <p class="eyebrow">Product Catalog</p>
+            <h2>Shop aftercare essentials</h2>
+        </div>
+        <p><%= productList.length %> product<%= productList.length === 1 ? '' : 's' %> available</p>
+    </div>
+
+    <div class="product-grid products-shop-grid">
         <% productList.forEach((product) => { %>
             <%
                 const productImageClass = productImages[product.id] || 'product-skin';
                 const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
             %>
-            <article class="product-card">
-                <div class="product-image <%= productImageClass %>" style="<%= productImageStyle %>"></div>
-                <p class="tag"><%= product.category %></p>
-                <h2><%= product.name %></h2>
-                <p class="muted">$<%= product.price %> &middot; <%= product.description %></p>
-                <div class="product-card-actions">
+            <article class="product-card products-shop-card">
+                <div class="product-image <%= productImageClass %>" style="<%= productImageStyle %>">
+                    <span class="product-image-badge"><%= product.category %></span>
+                    <span class="product-image-price">$<%= Number(product.price || 0).toFixed(2) %></span>
+                </div>
+
+                <div class="product-shop-body">
+                    <p class="tag"><%= product.salonName || product.category %></p>
+                    <h2><%= product.name %></h2>
+                    <p class="muted"><%= product.description %></p>
+                </div>
+
+                <div class="product-shop-footer">
                     <a class="button secondary full" href="/products/<%= product.id %>">View product</a>
                     <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
                         <input type="hidden" name="productId" value="<%= product.id %>">

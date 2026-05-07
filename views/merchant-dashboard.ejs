@@ -1,12 +1,14 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title merchant-dashboard-hero">
-    <p class="eyebrow">Merchant Portal</p>
-    <h1><%= merchant.name %></h1>
-    <p>Overview, customer reporting, merchant health, and QR access for your own merchant account.</p>
-</section>
+<%
+    const dailySales = salesReport?.dailySales || [];
+    const maxRevenue = Math.max(...dailySales.map((day) => Number(day.revenue || 0)), 1);
+    const maxOrders = Math.max(...dailySales.map((day) => Number(day.orders || 0)), 1);
+    const recentOrders = salesReport?.recentOrders || [];
+    const lowStockProducts = salesReport?.lowStockProducts || [];
+%>
 
-<section class="section compact">
+<section class="section compact merchant-analytics-page">
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -14,146 +16,171 @@
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
 
-    <% if (databaseError) { %>
-        <div class="notice error">
-            <p>Booking records could not be loaded, so customer reporting is temporarily limited.</p>
-        </div>
-    <% } %>
+    <div class="merchant-analytics-shell">
+        <header class="merchant-analytics-topbar">
+            <a class="merchant-analytics-brand" href="/merchant"><%= merchant.name %></a>
+            <nav aria-label="Merchant dashboard sections">
+                <a href="/merchant">Dashboard</a>
+                <a href="/merchant/products">Inventory</a>
+                <a href="/merchant/promotions">Reports</a>
+                <a href="/merchant/services">Services</a>
+                <a href="/profile">Profile</a>
+            </nav>
+            <span>Welcome, <%= currentUser ? currentUser.name : 'Merchant' %></span>
+        </header>
 
-    <div class="portal-summary-panel dashboard-kpi-grid merchant-kpi-grid">
-        <div class="portal-stat">
-            <span>Services</span>
-            <strong><%= stats.serviceCount %></strong>
-            <small><%= stats.slotCount %> available slots</small>
-        </div>
-        <div class="portal-stat">
-            <span>Bookings</span>
-            <strong><%= stats.bookingCount %></strong>
-            <small><%= stats.customerCount %> unique customers</small>
-        </div>
-        <div class="portal-stat">
-            <span>Projected Revenue</span>
-            <strong>$<%= stats.bookingRevenue.toFixed(2) %></strong>
-            <small>from your bookings</small>
-        </div>
-        <div class="portal-stat">
-            <span>Avg Service Price</span>
-            <strong>$<%= stats.averagePrice.toFixed(2) %></strong>
-            <small>current menu average</small>
-        </div>
-        <div class="portal-stat">
-            <span>Promotions</span>
-            <strong><%= stats.promotionCount %></strong>
-            <small>merchant campaigns</small>
-        </div>
-    </div>
-
-    <div class="dashboard-report-grid">
-        <article class="dashboard-report-card">
-            <p class="eyebrow">Customer Information</p>
-            <h2>Your customer activity</h2>
-            <div class="report-metric-list">
-                <p><span>Unique customers</span><strong><%= customerReport.totalCustomers %></strong></p>
-                <p><span>Total bookings</span><strong><%= stats.bookingCount %></strong></p>
-                <p><span>Booking revenue</span><strong>$<%= stats.bookingRevenue.toFixed(2) %></strong></p>
+        <% if (databaseError) { %>
+            <div class="notice error">
+                <p>Some database records could not be loaded, so reporting may be incomplete.</p>
             </div>
-            <% if (customerReport.recentBookings.length > 0) { %>
-                <div class="dashboard-mini-list">
-                    <% customerReport.recentBookings.forEach((booking) => { %>
-                        <div>
-                            <strong><%= booking.customer_name || booking.customerName %></strong>
-                            <span><%= booking.service_name || booking.serviceName %> &middot; <%= booking.booking_date || booking.bookingDate %></span>
-                        </div>
-                    <% }) %>
-                </div>
-            <% } else { %>
-                <p class="muted">No customer bookings have been recorded yet.</p>
-            <% } %>
-        </article>
-
-        <article class="dashboard-report-card">
-            <p class="eyebrow">Merchant Information</p>
-            <h2>Your service summary</h2>
-            <div class="report-metric-list">
-                <p><span>Service categories</span><strong><%= merchantReport.categoryCount %></strong></p>
-                <p><span>Available slots</span><strong><%= merchantReport.slotCount %></strong></p>
-                <p><span>Active services</span><strong><%= merchantReport.serviceCount %></strong></p>
-            </div>
-            <% if (merchantReport.topService) { %>
-                <div class="dashboard-highlight">
-                    <span>Highest priced service</span>
-                    <strong><%= merchantReport.topService.name %></strong>
-                    <small>$<%= Number(merchantReport.topService.price).toFixed(2) %></small>
-                </div>
-            <% } else { %>
-                <p class="muted">Add services to build your merchant report.</p>
-            <% } %>
-        </article>
-
-        <article class="dashboard-report-card validation-report-card <%= validationReport.issues.length > 0 ? 'needs-review' : 'healthy' %>">
-            <p class="eyebrow">Validation & Error Reporting</p>
-            <h2><%= validationReport.status %></h2>
-            <% if (validationReport.issues.length === 0) { %>
-                <p class="muted">Your merchant profile and service setup look complete.</p>
-            <% } else { %>
-                <ul class="validation-list">
-                    <% validationReport.issues.forEach((issue) => { %>
-                        <li><%= issue %></li>
-                    <% }) %>
-                </ul>
-            <% } %>
-        </article>
-    </div>
-
-    <div class="section-heading merchant-workspace-heading">
-        <p class="eyebrow">Merchant workspace</p>
-        <h2>Dedicated controls</h2>
-        <p class="muted">Each page now has one clear job, so dashboard reporting stays separate from editing tools.</p>
-    </div>
-
-    <div class="merchant-workspace-grid">
-        <article class="merchant-workspace-card">
-            <p class="eyebrow">Services</p>
-            <h2>Menu, prices, and slots</h2>
-            <p class="muted">Use this page only for service listings and availability.</p>
-            <a class="button primary full" href="/merchant/services">Manage services</a>
-        </article>
-        <article class="merchant-workspace-card">
-            <p class="eyebrow">Products</p>
-            <h2>Retail catalogue</h2>
-            <p class="muted">Add or update products shown on the customer product page.</p>
-            <a class="button secondary full" href="/merchant/products">Manage products</a>
-        </article>
-        <article class="merchant-workspace-card">
-            <p class="eyebrow">Promotions</p>
-            <h2>Campaign offers</h2>
-            <p class="muted">Control discounts, first trials, happy hour, and featured campaigns.</p>
-            <a class="button secondary full" href="/merchant/promotions">Manage promotions</a>
-        </article>
-        <article class="merchant-workspace-card">
-            <p class="eyebrow">Rewards Game</p>
-            <h2>Game prizes</h2>
-            <p class="muted">Create reward prizes customers can win through the game.</p>
-            <a class="button secondary full" href="/merchant/rewards-game">Manage rewards</a>
-        </article>
-    </div>
-
-    <div class="promo-panel qr-panel merchant-dashboard-qr">
-        <p class="eyebrow">Merchant QR</p>
-        <h2>Shop booking QR</h2>
-        <p class="muted">
-            This signed QR link is tied to merchant ID <%= merchant.id %> and opens only this merchant's booking flow.
-        </p>
-        <form action="/merchant/generate-qr" method="POST">
-            <button class="button primary" type="submit">Generate QR Code</button>
-        </form>
-        <% if (qrCodeDataUrl && qrBookingUrl) { %>
-            <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
-                <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
-            </a>
-            <p class="muted">Encoded booking link:</p>
-            <a class="text-link qr-link" href="<%= qrBookingUrl %>"><%= qrBookingUrl %></a>
         <% } %>
+
+        <div class="merchant-analytics-kpis">
+            <article>
+                <span>Total Products</span>
+                <strong><%= stats.productCount %></strong>
+            </article>
+            <article>
+                <span>Total Revenue</span>
+                <strong>$<%= stats.totalRevenue.toFixed(2) %></strong>
+            </article>
+            <article>
+                <span>Total Orders</span>
+                <strong><%= stats.totalOrders %></strong>
+            </article>
+            <article>
+                <span>Avg Order Value</span>
+                <strong>$<%= stats.averageOrderValue.toFixed(2) %></strong>
+            </article>
+            <article class="merchant-growth-card">
+                <span>Growth vs last 7 days</span>
+                <strong><%= stats.growthPercent.toFixed(1) %>%</strong>
+                <small><%= stats.growthPercent >= 0 ? 'Up' : 'Down' %></small>
+            </article>
+        </div>
+
+        <section class="merchant-sales-card">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">Sales</p>
+                    <h2>Daily sales (last 7 days)</h2>
+                </div>
+                <span>Updated <%= new Date().toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' }) %></span>
+            </div>
+
+            <div class="merchant-chart-legend">
+                <span><i class="revenue"></i>Revenue ($)</span>
+                <span><i class="orders"></i>Orders</span>
+            </div>
+
+            <div class="merchant-sales-chart" aria-label="Daily sales chart">
+                <% dailySales.forEach((day) => { %>
+                    <div class="merchant-chart-day">
+                        <div class="merchant-chart-bars">
+                            <span class="merchant-revenue-bar" style="height:<%= Math.max((day.revenue / maxRevenue) * 100, day.revenue > 0 ? 8 : 0) %>%"></span>
+                            <span class="merchant-order-dot" style="bottom:<%= Math.max((day.orders / maxOrders) * 100, day.orders > 0 ? 10 : 0) %>%"></span>
+                        </div>
+                        <small><%= day.label %></small>
+                    </div>
+                <% }) %>
+            </div>
+        </section>
+
+        <div class="merchant-dashboard-lower-grid">
+            <section class="merchant-orders-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Orders</p>
+                        <h2>Recent orders</h2>
+                    </div>
+                    <a class="text-button" href="/merchant/products">Inventory</a>
+                </div>
+
+                <% if (!recentOrders.length) { %>
+                    <p class="muted">No paid product orders yet.</p>
+                <% } else { %>
+                    <div class="merchant-order-list">
+                        <% recentOrders.forEach((order) => { %>
+                            <article class="merchant-order-row">
+                                <span>
+                                    <strong>ORD-<%= order.id %></strong>
+                                    <small><%= new Date(order.createdAt).toLocaleString('en-SG', { dateStyle: 'short', timeStyle: 'short' }) %> &middot; <%= order.itemCount %> item<%= order.itemCount === 1 ? '' : 's' %></small>
+                                </span>
+                                <span>
+                                    <strong>$<%= order.totalAmount.toFixed(2) %></strong>
+                                    <small><%= order.customerName %></small>
+                                </span>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
+            <section class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Inventory</p>
+                        <h2>Low stock alerts</h2>
+                    </div>
+                    <a class="text-button" href="/merchant/products">Manage</a>
+                </div>
+
+                <% if (!lowStockProducts.length) { %>
+                    <p class="muted">No low stock items.</p>
+                <% } else { %>
+                    <div class="merchant-alert-list">
+                        <% lowStockProducts.forEach((product) => { %>
+                            <a href="/merchant/products/<%= product.id %>/edit">
+                                <span><%= product.name %></span>
+                                <strong><%= product.stockQuantity %> left</strong>
+                            </a>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+        </div>
+
+        <div class="merchant-dashboard-lower-grid">
+            <section class="merchant-alert-card <%= validationReport.issues.length > 0 ? 'needs-review' : '' %>">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Issues</p>
+                        <h2><%= validationReport.status %></h2>
+                    </div>
+                </div>
+                <% if (!validationReport.issues.length) { %>
+                    <p class="muted">Your merchant setup looks complete.</p>
+                <% } else { %>
+                    <div class="merchant-alert-list">
+                        <% validationReport.issues.forEach((issue) => { %>
+                            <p><%= issue %></p>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
+            <section class="merchant-actions-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Workspace</p>
+                        <h2>Quick actions</h2>
+                    </div>
+                </div>
+                <div class="merchant-quick-actions">
+                    <a class="button primary" href="/merchant/products/new">Add product</a>
+                    <a class="button secondary" href="/merchant/services">Services</a>
+                    <a class="button secondary" href="/merchant/promotions">Promotions</a>
+                    <form action="/merchant/generate-qr" method="POST">
+                        <button class="button secondary" type="submit">Generate QR</button>
+                    </form>
+                </div>
+                <% if (qrCodeDataUrl && qrBookingUrl) { %>
+                    <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
+                        <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+                    </a>
+                <% } %>
+            </section>
+        </div>
     </div>
 </section>
 

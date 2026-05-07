@@ -32,7 +32,8 @@
                 return map;
             }, new Map()).values());
             const productCount = cart.filter((item) => item.type === 'Product').reduce((sum, item) => sum + Number(item.quantity || 1), 0);
-            const serviceCount = cart.filter((item) => item.type !== 'Product').length;
+            const giftCardCount = cart.filter((item) => item.type === 'Gift Card').length;
+            const serviceCount = cart.filter((item) => item.type !== 'Product' && item.type !== 'Gift Card').length;
         %>
 
         <div class="cart-layout cart-organized-layout">
@@ -46,6 +47,7 @@
                         <span><%= itemCount %> total item<%= itemCount === 1 ? '' : 's' %></span>
                         <% if (serviceCount > 0) { %><span><%= serviceCount %> service<%= serviceCount === 1 ? '' : 's' %></span><% } %>
                         <% if (productCount > 0) { %><span><%= productCount %> product<%= productCount === 1 ? '' : 's' %></span><% } %>
+                        <% if (giftCardCount > 0) { %><span><%= giftCardCount %> gift card<%= giftCardCount === 1 ? '' : 's' %></span><% } %>
                     </div>
                 </div>
 
@@ -71,7 +73,15 @@
                                 <h2><%= item.serviceName %></h2>
                                 <p class="muted"><%= item.duration %></p>
                                 <div class="cart-item-meta">
-                                    <span><%= item.type === 'Product' ? `${item.quantity} x $${Number(item.price).toFixed(2)}` : 'Booking item' %></span>
+                                    <span>
+                                        <% if (item.type === 'Product') { %>
+                                            <%= item.quantity %> x $<%= Number(item.price).toFixed(2) %>
+                                        <% } else if (item.type === 'Gift Card') { %>
+                                            Gift card value
+                                        <% } else { %>
+                                            Booking item
+                                        <% } %>
+                                    </span>
                                     <strong>$<%= Number(item.lineTotal).toFixed(2) %></strong>
                                 </div>
                             </div>

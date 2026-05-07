@@ -3,6 +3,7 @@ const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
 const Promotion = require('../models/Promotion');
+const Transaction = require('../models/Transaction');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -251,6 +252,40 @@ function buildMerchantReports(merchant, bookings = [], hadError = false) {
     };
 }
 
+function getLastSevenSalesDays(orders = []) {
+    const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let index = 6; index >= 0; index -= 1) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - index);
+        const key = date.toISOString().slice(0, 10);
+        days.push({
+            key,
+            label: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
+            revenue: 0,
+            orders: 0
+        });
+    }
+
+    const dayMap = days.reduce((map, day) => {
+        map[day.key] = day;
+        return map;
+    }, {});
+
+    orders.forEach((order) => {
+        const date = new Date(order.createdAt);
+        if (Number.isNaN(date.getTime())) return;
+        const key = date.toISOString().slice(0, 10);
+        if (!dayMap[key]) return;
+        dayMap[key].revenue += Number(order.totalAmount || 0);
+        dayMap[key].orders += 1;
+    });
+
+    return days;
+}
+
 function renderMerchantDashboard(req, res, merchant, options = {}) {
     return Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings) => {
         if (bookingError) {
@@ -262,86 +297,132 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                 console.error(promotionError);
             }
 
-            const safeBookings = bookingError ? [] : bookings || [];
-            const safePromotions = promotionError ? [] : promotions || [];
-            const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
-            const slotCount = Array.isArray(merchant.services)
-                ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
-                : 0;
-            const bookingRevenue = safeBookings.reduce((total, booking) => {
-                return total + Number(booking.service_price || booking.price || 0);
-            }, 0);
-            const uniqueCustomers = new Set(safeBookings.map((booking) => booking.customer_email || booking.email || booking.customerName || booking.customer_name)).size;
-            const averagePrice = serviceCount > 0
-                ? merchant.services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
-                : 0;
-            const topService = Array.isArray(merchant.services)
-                ? merchant.services.reduce((top, service) => {
-                    const servicePrice = Number(service.price || 0);
-                    return servicePrice > Number(top?.price || 0) ? service : top;
-                }, null)
-                : null;
-            const validationIssues = [];
-
-            if (!merchant.location && !merchant.address) {
-                validationIssues.push('Merchant location is not configured yet.');
-            }
-            if (serviceCount === 0) {
-                validationIssues.push('No services are active. Add a service to start booking customers.');
-            }
-            if (bookingError) {
-                validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
-            }
-            if (promotionError) {
-                validationIssues.push('Promotion records could not be loaded, so campaign reporting is temporarily limited.');
-            }
-
-            const reports = {
-                stats: {
-                    serviceCount,
-                    slotCount,
-                    bookingCount: safeBookings.length,
-                    customerCount: uniqueCustomers,
-                    bookingRevenue,
-                    averagePrice,
-                    promotionCount: safePromotions.length
-                },
-                customerReport: {
-                    totalCustomers: uniqueCustomers,
-                    recentBookings: safeBookings.slice(0, 5)
-                },
-                merchantReport: {
-                    categoryCount: Array.isArray(merchant.services)
-                        ? new Set(merchant.services.map((service) => service.category || '')).size
-                        : 0,
-                    slotCount,
-                    serviceCount,
-                    topService
-                },
-                validationReport: {
-                    issues: validationIssues,
-                    status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+            return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
                 }
-            };
 
-            const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
-            const error = options.error !== undefined ? options.error : req.session.merchantError;
-            req.session.merchantSuccess = null;
-            req.session.merchantError = null;
+                return Transaction.getMerchantOrderReport(req.session.user.id, (orderError, orders = []) => {
+                    if (orderError) {
+                        console.error(orderError);
+                    }
 
-            return res.status(options.status || 200).render('merchant-dashboard', {
-                title: 'Merchant Dashboard',
-                merchant,
-                success,
-                error,
-                databaseError: Boolean(bookingError || promotionError),
-                stats: reports.stats,
-                customerReport: reports.customerReport,
-                merchantReport: reports.merchantReport,
-                validationReport: reports.validationReport,
-                promotions: safePromotions,
-                qrCodeDataUrl: options.qrCodeDataUrl || null,
-                qrBookingUrl: options.qrBookingUrl || null
+                    const safeBookings = bookingError ? [] : bookings || [];
+                    const safePromotions = promotionError ? [] : promotions || [];
+                    const safeProducts = productError ? [] : products || [];
+                    const safeOrders = orderError ? [] : orders || [];
+                    const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
+                    const slotCount = Array.isArray(merchant.services)
+                        ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
+                        : 0;
+                    const bookingRevenue = safeBookings.reduce((total, booking) => {
+                        return total + Number(booking.service_price || booking.price || 0);
+                    }, 0);
+                    const productRevenue = safeOrders.reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+                    const totalRevenue = bookingRevenue + productRevenue;
+                    const totalOrders = safeOrders.length + safeBookings.length;
+                    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+                    const uniqueCustomers = new Set([
+                        ...safeBookings.map((booking) => booking.customer_email || booking.email || booking.customerName || booking.customer_name),
+                        ...safeOrders.map((order) => order.userId)
+                    ].filter(Boolean)).size;
+                    const averagePrice = serviceCount > 0
+                        ? merchant.services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
+                        : 0;
+                    const topService = Array.isArray(merchant.services)
+                        ? merchant.services.reduce((top, service) => {
+                            const servicePrice = Number(service.price || 0);
+                            return servicePrice > Number(top?.price || 0) ? service : top;
+                        }, null)
+                        : null;
+                    const lowStockProducts = safeProducts.filter((product) => Number(product.stockQuantity || 0) <= 5);
+                    const salesDays = getLastSevenSalesDays(safeOrders);
+                    const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
+                    const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
+                    const growthPercent = previousRevenue > 0
+                        ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
+                        : currentRevenue > 0 ? 100 : 0;
+                    const validationIssues = [];
+
+                    if (!merchant.location && !merchant.address) {
+                        validationIssues.push('Merchant location is not configured yet.');
+                    }
+                    if (serviceCount === 0) {
+                        validationIssues.push('No services are active. Add a service to start booking customers.');
+                    }
+                    if (lowStockProducts.length > 0) {
+                        validationIssues.push(`${lowStockProducts.length} product${lowStockProducts.length === 1 ? '' : 's'} need stock review.`);
+                    }
+                    if (bookingError) {
+                        validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
+                    }
+                    if (promotionError) {
+                        validationIssues.push('Promotion records could not be loaded, so campaign reporting is temporarily limited.');
+                    }
+                    if (productError || orderError) {
+                        validationIssues.push('Product sales reporting could not be fully loaded.');
+                    }
+
+                    const reports = {
+                        stats: {
+                            serviceCount,
+                            slotCount,
+                            bookingCount: safeBookings.length,
+                            customerCount: uniqueCustomers,
+                            bookingRevenue,
+                            productRevenue,
+                            totalRevenue,
+                            totalOrders,
+                            averageOrderValue,
+                            averagePrice,
+                            promotionCount: safePromotions.length,
+                            productCount: safeProducts.length,
+                            growthPercent
+                        },
+                        customerReport: {
+                            totalCustomers: uniqueCustomers,
+                            recentBookings: safeBookings.slice(0, 5)
+                        },
+                        merchantReport: {
+                            categoryCount: Array.isArray(merchant.services)
+                                ? new Set(merchant.services.map((service) => service.category || '')).size
+                                : 0,
+                            slotCount,
+                            serviceCount,
+                            topService
+                        },
+                        salesReport: {
+                            dailySales: salesDays,
+                            recentOrders: safeOrders.slice(0, 5),
+                            lowStockProducts
+                        },
+                        validationReport: {
+                            issues: validationIssues,
+                            status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+                        }
+                    };
+
+                    const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
+                    const error = options.error !== undefined ? options.error : req.session.merchantError;
+                    req.session.merchantSuccess = null;
+                    req.session.merchantError = null;
+
+                    return res.status(options.status || 200).render('merchant-dashboard', {
+                        title: 'Merchant Dashboard',
+                        merchant,
+                        success,
+                        error,
+                        databaseError: Boolean(bookingError || promotionError || productError || orderError),
+                        stats: reports.stats,
+                        customerReport: reports.customerReport,
+                        merchantReport: reports.merchantReport,
+                        salesReport: reports.salesReport,
+                        validationReport: reports.validationReport,
+                        promotions: safePromotions,
+                        qrCodeDataUrl: options.qrCodeDataUrl || null,
+                        qrBookingUrl: options.qrBookingUrl || null
+                    });
+                });
             });
         });
     });
@@ -838,6 +919,25 @@ function updateProduct(req, res) {
     });
 }
 
+function restockProduct(req, res) {
+    const quantity = Number(req.body.quantity || 1);
+
+    return Product.restockForMerchant(req.session.user.id, req.params.productId, quantity, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Product stock could not be updated.';
+            return res.redirect('/merchant/products');
+        }
+
+        req.session.merchantSuccess = result.affectedRows > 0
+            ? `Stock updated by ${Math.max(1, Math.min(Math.floor(quantity || 1), 999))}.`
+            : null;
+        req.session.merchantError = result.affectedRows > 0 ? null : 'This product could not be found for your merchant account.';
+
+        return res.redirect('/merchant/products');
+    });
+}
+
 function deleteProduct(req, res) {
     return Product.deleteForMerchant(req.session.user.id, req.params.productId, (error, deleted) => {
         if (error) {
@@ -1103,6 +1203,7 @@ module.exports = {
     createProduct,
     showEditProduct,
     updateProduct,
+    restockProduct,
     deleteProduct,
     listPromotions,
     showNewPromotion,

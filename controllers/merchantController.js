@@ -1779,6 +1779,32 @@ function addProductToCart(req, res) {
     });
 }
 
+function addGiftCardToCart(req, res) {
+    const allowedAmounts = [20, 50, 80, 100];
+    const amount = Number(req.body.amount || 0);
+
+    if (!allowedAmounts.includes(amount)) {
+        req.session.success = 'Please select a valid gift card amount.';
+        return res.redirect('/giftcards');
+    }
+
+    req.session.cart = req.session.cart || [];
+    req.session.cart.push({
+        id: Date.now(),
+        type: 'Gift Card',
+        merchantId: null,
+        merchantName: 'Vaniday',
+        serviceId: `gift-card-${amount}`,
+        serviceName: `$${amount} Vaniday Gift Card`,
+        duration: 'Digital gift card for beauty, salon, spa, and grooming appointments.',
+        price: amount,
+        quantity: 1
+    });
+
+    req.session.success = `$${amount} gift card was added to your cart.`;
+    return res.redirect('/cart');
+}
+
 function showCart(req, res) {
     const cart = (req.session.cart || []).map((item) => {
         const quantity = getCartQuantity(item);
@@ -1877,7 +1903,7 @@ function checkout(req, res) {
         amount,
         items: selectedItems.map((item) => ({
             name: item.serviceName,
-            type: item.type === 'Product' ? 'Product' : 'Service',
+            type: item.type || 'Service',
             serviceId: item.serviceId,
             quantity: item.quantity,
             price: Number(item.price || 0),
@@ -2421,6 +2447,7 @@ module.exports = {
     createBooking,
     addToCart,
     addProductToCart,
+    addGiftCardToCart,
     showCart,
     checkout,
     deleteSelectedCartItems,

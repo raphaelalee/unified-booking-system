@@ -7,7 +7,7 @@
 </section>
 
 <section class="section compact">
-    <form class="login-form service-admin-form" action="<%= product ? `/merchant/products/${product.id}` : '/merchant/products' %>" method="POST">
+    <form class="merchant-product-editor" action="<%= product ? `/merchant/products/${product.id}` : '/merchant/products' %>" method="POST">
         <% if (errors.length > 0) { %>
             <div class="notice error">
                 <% errors.forEach((error) => { %>
@@ -16,48 +16,56 @@
             </div>
         <% } %>
 
-        <label>
-            Product name
-            <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required data-product-name-input>
-        </label>
+        <div class="merchant-product-editor-grid">
+            <div class="merchant-product-editor-main">
+                <label>
+                    Product name
+                    <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required data-product-name-input>
+                </label>
 
-        <div class="ai-product-helper">
-            <div>
-                <p class="eyebrow">AI helper</p>
-                <p class="muted">Generate a description, ingredients, and usage steps from the product name.</p>
+                <div class="ai-product-helper">
+                    <div>
+                        <p class="eyebrow">AI helper</p>
+                        <p class="muted">Generate product copy from the product name.</p>
+                    </div>
+                    <button class="button secondary" type="button" data-generate-product-copy>Generate with AI</button>
+                </div>
+
+                <label>
+                    Description
+                    <textarea name="description" rows="4" placeholder="Short customer-facing product description" data-product-description><%= form.description %></textarea>
+                </label>
+
+                <div class="merchant-product-copy-grid">
+                    <label>
+                        Ingredients
+                        <textarea name="ingredients" rows="4" placeholder="Key ingredients, separated by commas" data-product-ingredients><%= form.ingredients %></textarea>
+                    </label>
+
+                    <label>
+                        How to use
+                        <textarea name="howToUse" rows="4" placeholder="How customers should use this product" data-product-how-to-use><%= form.howToUse %></textarea>
+                    </label>
+                </div>
             </div>
-            <button class="button secondary" type="button" data-generate-product-copy>Generate with AI</button>
+
+            <aside class="merchant-product-editor-side">
+                <label>
+                    Price
+                    <input type="number" name="price" value="<%= form.price %>" placeholder="38.00" min="0" step="0.01" required>
+                </label>
+
+                <label>
+                    Stock quantity
+                    <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
+                </label>
+
+                <label>
+                    Image URL
+                    <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/product.jpg">
+                </label>
+            </aside>
         </div>
-
-        <label>
-            Description
-            <textarea name="description" placeholder="Short customer-facing product description" data-product-description><%= form.description %></textarea>
-        </label>
-
-        <label>
-            Ingredients
-            <textarea name="ingredients" placeholder="Key ingredients, separated by commas" data-product-ingredients><%= form.ingredients %></textarea>
-        </label>
-
-        <label>
-            How to use
-            <textarea name="howToUse" placeholder="How customers should use this product" data-product-how-to-use><%= form.howToUse %></textarea>
-        </label>
-
-        <label>
-            Price
-            <input type="number" name="price" value="<%= form.price %>" placeholder="38.00" min="0" step="0.01" required>
-        </label>
-
-        <label>
-            Stock quantity
-            <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
-        </label>
-
-        <label>
-            Image URL
-            <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/product.jpg">
-        </label>
 
         <div class="form-actions">
             <button class="button primary" type="submit"><%= product ? 'Save product' : 'Create product' %></button>

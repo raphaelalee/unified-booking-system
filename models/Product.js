@@ -36,6 +36,53 @@ const fallbackProducts = [
     { id: 'room-mist', name: 'Botanical Room Mist', category: 'Wellness', price: 22, description: 'Calm spa scent for home', ...productDetails['room-mist'] }
 ];
 
+function ensureProductSchema(callback) {
+    db.query('SHOW COLUMNS FROM products', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        const imageUrlColumn = columns.find((column) => column.Field === 'image_url');
+
+        if (!fields.has('description')) {
+            alters.push('ADD COLUMN description TEXT');
+        }
+
+        if (!fields.has('ingredients')) {
+            alters.push('ADD COLUMN ingredients TEXT');
+        }
+
+        if (!fields.has('how_to_use')) {
+            alters.push('ADD COLUMN how_to_use TEXT');
+        }
+
+        if (!fields.has('created_at')) {
+            alters.push('ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+        }
+
+        if (!fields.has('updated_at')) {
+            alters.push('ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+        }
+
+        if (!fields.has('image_url')) {
+            alters.push('ADD COLUMN image_url TEXT');
+        } else if (!String(imageUrlColumn.Type || '').toLowerCase().includes('text')) {
+            alters.push('MODIFY COLUMN image_url TEXT');
+        }
+
+        if (alters.length === 0) {
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE products ${alters.join(', ')}`, callback);
+    });
+}
+
 function getDefaultDetails(product) {
     const text = `${product.name || ''} ${product.category || ''}`.toLowerCase();
 
@@ -99,10 +146,8 @@ function getAll(callback) {
             return;
         }
 
-        callback(null, [
-            ...rows.map(mapRow),
-            ...getFallbackAll()
-        ]);
+        const databaseProducts = rows.map(mapRow);
+        callback(null, databaseProducts.length > 0 ? databaseProducts : getFallbackAll());
     });
 }
 
@@ -180,52 +225,79 @@ function findForMerchant(userId, productId, callback) {
 }
 
 function createForMerchant(userId, product, callback) {
-    const sql = `
-        INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use)
-        SELECT salon_id, ?, ?, ?, ?, ?, ?, ?
-        FROM salons
-        WHERE merchant_id = ?
-        LIMIT 1
-    `;
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    db.query(sql, [
-        product.name,
-        product.price,
-        product.stockQuantity,
-        product.imageUrl || null,
-        product.description,
-        product.ingredients,
-        product.howToUse,
-        userId
-    ], callback);
+        const sql = `
+            INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use)
+            SELECT salon_id, ?, ?, ?, ?, ?, ?, ?
+            FROM salons
+            WHERE merchant_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [
+            product.name,
+            product.price,
+            product.stockQuantity,
+            product.imageUrl || null,
+            product.description,
+            product.ingredients,
+            product.howToUse,
+            userId
+        ], callback);
+    });
 }
 
 function updateForMerchant(userId, productId, product, callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE products
+            INNER JOIN salons ON salons.salon_id = products.salon_id
+            SET products.name = ?,
+                products.price = ?,
+                products.stock_quantity = ?,
+                products.image_url = ?,
+                products.description = ?,
+                products.ingredients = ?,
+                products.how_to_use = ?
+            WHERE products.product_id = ?
+                AND salons.merchant_id = ?
+        `;
+
+        db.query(sql, [
+            product.name,
+            product.price,
+            product.stockQuantity,
+            product.imageUrl || null,
+            product.description,
+            product.ingredients,
+            product.howToUse,
+            productId,
+            userId
+        ], callback);
+    });
+}
+
+function restockForMerchant(userId, productId, quantity, callback) {
+    const restockQuantity = Math.max(1, Math.min(Math.floor(Number(quantity || 1)), 999));
     const sql = `
         UPDATE products
         INNER JOIN salons ON salons.salon_id = products.salon_id
-        SET products.name = ?,
-            products.price = ?,
-            products.stock_quantity = ?,
-            products.image_url = ?,
-            products.description = ?,
-            products.ingredients = ?,
-            products.how_to_use = ?
+        SET products.stock_quantity = products.stock_quantity + ?
         WHERE products.product_id = ?
             AND salons.merchant_id = ?
     `;
 
-    db.query(sql, [
-        product.name,
-        product.price,
-        product.stockQuantity,
-        product.imageUrl || null,
-        product.description,
-        product.ingredients,
-        product.howToUse,
-        productId,
-        userId
-    ], callback);
+    db.query(sql, [restockQuantity, productId, userId], callback);
 }
 
 function deleteForMerchant(userId, productId, callback) {
@@ -254,5 +326,6 @@ module.exports = {
     findForMerchant,
     createForMerchant,
     updateForMerchant,
+    restockForMerchant,
     deleteForMerchant
 };
