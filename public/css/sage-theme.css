@@ -4215,6 +4215,75 @@ form.is-submitting button[type="submit"] {
     justify-content: flex-end;
 }
 
+.merchant-calendar-actions,
+.merchant-calendar-toolbar {
+    display: flex;
+    align-items: end;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.merchant-calendar-view-toggle {
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.6);
+}
+
+.merchant-calendar-view-toggle button {
+    min-height: 34px;
+    padding: 7px 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sage-readable);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.merchant-calendar-view-toggle button.is-active {
+    background: #fffdf7;
+    color: var(--sage-ink);
+    box-shadow: 0 6px 14px rgba(49, 69, 44, 0.09);
+}
+
+.merchant-calendar-toolbar {
+    margin: 12px 0;
+    justify-content: space-between;
+}
+
+.merchant-calendar-toolbar label {
+    min-width: 180px;
+    display: grid;
+    gap: 5px;
+    color: var(--sage-readable);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.merchant-calendar-toolbar select,
+.merchant-calendar-toolbar input {
+    min-height: 38px;
+    width: 100%;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-ink);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.merchant-calendar-toolbar .button {
+    min-height: 38px;
+}
+
 .merchant-calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(150px, 1fr));
@@ -4277,6 +4346,11 @@ form.is-submitting button[type="submit"] {
     text-align: center;
 }
 
+.merchant-calendar-empty.compact {
+    padding: 8px;
+    font-size: 0.78rem;
+}
+
 .merchant-calendar-booking {
     position: relative;
     min-width: 0;
@@ -4289,6 +4363,82 @@ form.is-submitting button[type="submit"] {
     color: inherit;
     cursor: grab;
     transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.merchant-calendar-month {
+    margin-top: 12px;
+    display: grid;
+    gap: 10px;
+}
+
+.merchant-calendar-month-heading,
+.merchant-calendar-month-weekdays,
+.merchant-calendar-month-day header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.merchant-calendar-month-heading strong {
+    color: var(--sage-ink);
+    font-size: 1.1rem;
+}
+
+.merchant-calendar-month-heading span,
+.merchant-calendar-month-weekdays span,
+.merchant-calendar-month-day header span {
+    color: var(--sage-readable);
+    font-weight: 900;
+}
+
+.merchant-calendar-month-weekdays,
+.merchant-calendar-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.merchant-calendar-month-weekdays span {
+    padding: 0 8px;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+}
+
+.merchant-calendar-month-grid {
+    overflow-x: auto;
+}
+
+.merchant-calendar-month-day {
+    min-height: 150px;
+    padding: 8px;
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.42);
+}
+
+.merchant-calendar-month-day.is-placeholder {
+    background: transparent;
+    border-color: transparent;
+}
+
+.merchant-calendar-booking-compact {
+    padding: 8px;
+    gap: 3px;
+    cursor: default;
+}
+
+.merchant-calendar-booking-compact strong,
+.merchant-calendar-booking-compact span,
+.merchant-calendar-booking-compact small {
+    font-size: 0.78rem;
+}
+
+.is-hidden {
+    display: none !important;
 }
 
 .merchant-calendar-booking.is-dragging {

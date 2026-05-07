@@ -286,42 +286,97 @@ function getLastSevenSalesDays(orders = []) {
     return days;
 }
 
-function normalizeDashboardDate(value) {
+function getLocalDateKey(date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0')
+    ].join('-');
+}
+
+function parseDashboardDate(value) {
     if (!value) {
-        return '';
+        return null;
     }
 
-    const date = value instanceof Date ? value : new Date(value);
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
 
-    if (!Number.isNaN(date.getTime())) {
-        return date.toISOString().slice(0, 10);
+    const rawValue = String(value).trim();
+    const dateOnlyMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (dateOnlyMatch) {
+        return new Date(
+            Number(dateOnlyMatch[1]),
+            Number(dateOnlyMatch[2]) - 1,
+            Number(dateOnlyMatch[3])
+        );
+    }
+
+    const date = new Date(rawValue);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeDashboardDate(value) {
+    const date = parseDashboardDate(value);
+
+    if (date) {
+        return getLocalDateKey(date);
     }
 
     return String(value).slice(0, 10);
 }
 
-function buildAppointmentReport(bookings = []) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayKey = today.toISOString().slice(0, 10);
-    const monthKey = todayKey.slice(0, 7);
+function buildDashboardWeekDays(startDate) {
     const weekDays = [];
 
     for (let index = 0; index < 7; index += 1) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + index);
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + index);
         weekDays.push({
-            key: date.toISOString().slice(0, 10),
+            key: getLocalDateKey(date),
             label: date.toLocaleDateString('en-SG', { weekday: 'short' }),
             day: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
             appointments: []
         });
     }
 
-    const weekMap = weekDays.reduce((map, day) => {
-        map[day.key] = day;
-        return map;
-    }, {});
+    return weekDays;
+}
+
+function buildDashboardMonthDays(startDate, bookings = []) {
+    const monthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const monthEnd = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+    const monthDays = [];
+
+    for (let index = 0; index < monthStart.getDay(); index += 1) {
+        monthDays.push({ isPlaceholder: true, appointments: [] });
+    }
+
+    for (let dayNumber = 1; dayNumber <= monthEnd.getDate(); dayNumber += 1) {
+        const date = new Date(startDate.getFullYear(), startDate.getMonth(), dayNumber);
+        const key = getLocalDateKey(date);
+        monthDays.push({
+            key,
+            label: date.toLocaleDateString('en-SG', { weekday: 'short' }),
+            dayNumber,
+            appointments: bookings.filter((booking) => booking.bookingDate === key)
+        });
+    }
+
+    return {
+        label: monthStart.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' }),
+        days: monthDays
+    };
+}
+
+function buildAppointmentReport(bookings = []) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayKey = getLocalDateKey(today);
+    const monthKey = todayKey.slice(0, 7);
     const customerCounts = {};
 
     const normalizedBookings = bookings.map((booking) => {
@@ -343,6 +398,21 @@ function buildAppointmentReport(bookings = []) {
             amount: Number(booking.service_price || booking.price || 0)
         };
     });
+
+    const currentWeekDays = buildDashboardWeekDays(today);
+    const currentWeekKeys = new Set(currentWeekDays.map((day) => day.key));
+    const hasCurrentWeekAppointments = normalizedBookings.some((booking) => currentWeekKeys.has(booking.bookingDate));
+    const nextUpcomingDate = normalizedBookings
+        .filter((booking) => booking.bookingDate >= todayKey && booking.status !== 'cancelled')
+        .map((booking) => parseDashboardDate(booking.bookingDate))
+        .filter(Boolean)
+        .sort((left, right) => left - right)[0];
+    const calendarStartDate = hasCurrentWeekAppointments || !nextUpcomingDate ? today : nextUpcomingDate;
+    const weekDays = buildDashboardWeekDays(calendarStartDate);
+    const weekMap = weekDays.reduce((map, day) => {
+        map[day.key] = day;
+        return map;
+    }, {});
 
     normalizedBookings.forEach((booking) => {
         if (weekMap[booking.bookingDate]) {
@@ -366,7 +436,8 @@ function buildAppointmentReport(bookings = []) {
             .filter((booking) => booking.bookingDate.slice(0, 7) === monthKey)
             .reduce((sum, booking) => sum + booking.amount, 0),
         loyaltyRedemptions: Math.max(0, Math.round(normalizedBookings.length / 4)),
-        weekDays
+        weekDays,
+        monthView: buildDashboardMonthDays(calendarStartDate, normalizedBookings)
     };
 }
 
