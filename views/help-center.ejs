@@ -1,0 +1,315 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const finalStatuses = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+    const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '-';
+        }
+
+        return date.toLocaleDateString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+    const formatDateTime = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '-';
+        }
+
+        return date.toLocaleString('en-SG', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+    const prettyStatus = (status) => statusLabels[status] || String(status || 'pending').replace(/_/g, ' ');
+    const requestLabel = (type) => requestLabels[type] || String(type || 'Support request').replace(/_/g, ' ');
+    const statusClass = (status) => `status-${String(status || 'pending').replace(/_/g, '-')}`;
+    const isClosed = (request) => finalStatuses.includes(request.status);
+    const canCancelOrder = (order) => !['shipped', 'delivered', 'cancelled'].includes(order.deliveryStatus);
+%>
+
+<section class="page-title help-center-hero">
+    <p class="eyebrow"><%= roleCopy.eyebrow %></p>
+    <h1><%= roleCopy.heading %></h1>
+    <p><%= roleCopy.description %></p>
+</section>
+
+<section class="section compact help-center-page">
+    <% if (flash) { %>
+        <div class="notice <%= flash.type === 'success' ? 'success' : 'error' %>">
+            <p><%= flash.message %></p>
+        </div>
+    <% } %>
+
+    <div class="help-policy-grid">
+        <article>
+            <span>01</span>
+            <h2>Refund review</h2>
+            <p>Refunds go to Vaniday admin first, then merchants are asked for approval before money is recorded as returned.</p>
+        </article>
+        <article>
+            <span>02</span>
+            <h2>Booking changes</h2>
+            <p>Service change requests go directly to the merchant because they control appointment availability.</p>
+        </article>
+        <article>
+            <span>03</span>
+            <h2>Protection rules</h2>
+            <p>Shipped orders cannot be cancelled, and service cancellations within one day can include a late fee.</p>
+        </article>
+    </div>
+
+    <div class="help-center-layout <%= role %>-help-layout">
+        <section class="support-panel support-request-panel">
+            <div class="section-cta">
+                <div>
+                    <p class="eyebrow"><%= role === 'customer' ? 'Your cases' : 'Support queue' %></p>
+                    <h2><%= role === 'customer' ? 'Request history' : 'Refund and change requests' %></h2>
+                    <p class="muted"><%= requests.length %> request<%= requests.length === 1 ? '' : 's' %> found.</p>
+                </div>
+            </div>
+
+            <% if (requests.length === 0) { %>
+                <div class="help-empty-state">
+                    <span>V</span>
+                    <h2>No support requests yet</h2>
+                    <p class="muted">
+                        <%= role === 'customer'
+                            ? 'Your refund, cancellation, and booking change requests will appear here.'
+                            : 'New customer cases will appear here once they are submitted.' %>
+                    </p>
+                </div>
+            <% } else { %>
+                <div class="support-request-list">
+                    <% requests.forEach((request) => { %>
+                        <article class="support-request-card <%= statusClass(request.status) %>">
+                            <div class="support-request-main">
+                                <div class="support-request-topline">
+                                    <span class="tag"><%= requestLabel(request.requestType) %></span>
+                                    <span class="support-status"><%= prettyStatus(request.status) %></span>
+                                </div>
+                                <h3>#<%= request.id %> · <%= request.targetType === 'order' ? 'Order' : 'Booking' %> <%= request.receiptId || request.targetId %></h3>
+                                <p>
+                                    <% if (role !== 'customer') { %>
+                                        Customer: <strong><%= request.customerName %></strong>.
+                                    <% } %>
+                                    <% if (role !== 'merchant' && request.merchantUserId) { %>
+                                        Merchant: <strong><%= request.merchantName %></strong>.
+                                    <% } %>
+                                    Submitted <%= formatDateTime(request.createdAt) %>.
+                                </p>
+
+                                <div class="support-mini-grid">
+                                    <p><span>Refund</span><strong><%= formatMoney(request.refundAmount) %></strong></p>
+                                    <p><span>Late fee</span><strong><%= formatMoney(request.lateFeeAmount) %></strong></p>
+                                    <p><span>Merchant</span><strong><%= request.merchantDecision || 'pending' %></strong></p>
+                                    <p><span>Admin</span><strong><%= request.adminDecision || 'pending' %></strong></p>
+                                </div>
+
+                                <% if (request.reason) { %>
+                                    <p class="support-note"><strong>Reason:</strong> <%= request.reason %></p>
+                                <% } %>
+                                <% if (request.customerNote) { %>
+                                    <p class="support-note"><strong>Customer note:</strong> <%= request.customerNote %></p>
+                                <% } %>
+                                <% if (request.requestedChange) { %>
+                                    <p class="support-note"><strong>Requested change:</strong> <%= request.requestedChange %></p>
+                                <% } %>
+                                <% if (request.merchantNote) { %>
+                                    <p class="support-note"><strong>Merchant note:</strong> <%= request.merchantNote %></p>
+                                <% } %>
+                                <% if (request.adminNote) { %>
+                                    <p class="support-note"><strong>Admin note:</strong> <%= request.adminNote %></p>
+                                <% } %>
+                            </div>
+
+                            <% if (role === 'merchant' && request.status === 'pending_merchant_review') { %>
+                                <div class="support-action-box">
+                                    <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
+                                        <label for="merchant-note-<%= request.id %>">Merchant note</label>
+                                        <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
+                                        <div class="inline-actions">
+                                            <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
+                                            <button class="button secondary danger-button" type="submit" name="decision" value="declined">Decline</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            <% } %>
+
+                            <% if (role === 'admin' && !isClosed(request)) { %>
+                                <div class="support-action-box admin-support-actions">
+                                    <% if (request.status === 'pending_admin_review' && request.merchantUserId) { %>
+                                        <form action="/help-center/requests/<%= request.id %>/send-to-merchant" method="POST">
+                                            <label for="admin-send-note-<%= request.id %>">Message for merchant</label>
+                                            <textarea id="admin-send-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Ask the merchant to approve or decline this request."></textarea>
+                                            <button class="button secondary" type="submit">Send to merchant</button>
+                                        </form>
+                                    <% } %>
+                                    <form action="/help-center/requests/<%= request.id %>/admin-resolution" method="POST">
+                                        <label for="admin-final-note-<%= request.id %>">Final admin note</label>
+                                        <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Explain the final decision."></textarea>
+                                        <div class="inline-actions">
+                                            <button class="button primary" type="submit" name="decision" value="approved">Approve refund</button>
+                                            <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            <% } %>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
+
+        <% if (role === 'customer') { %>
+            <section class="support-panel customer-support-actions">
+                <div class="section-cta">
+                    <div>
+                        <p class="eyebrow">Submit request</p>
+                        <h2>Orders and bookings</h2>
+                        <p class="muted">Open requests are limited so every case can be reviewed properly.</p>
+                    </div>
+                </div>
+
+                <div class="customer-help-columns">
+                    <div>
+                        <h3>Product orders</h3>
+                        <% if (orders.length === 0) { %>
+                            <p class="muted">No paid product orders yet.</p>
+                        <% } %>
+                        <% orders.forEach((order) => { %>
+                            <article class="help-item-card">
+                                <div>
+                                    <span class="tag"><%= order.deliveryStatus %></span>
+                                    <h4><%= order.receiptId %></h4>
+                                    <p><%= order.itemNames %></p>
+                                    <small><%= formatMoney(order.totalAmount) %> · <%= formatDateTime(order.createdAt) %></small>
+                                </div>
+                                <form action="/help-center/requests" method="POST">
+                                    <input type="hidden" name="targetType" value="order">
+                                    <input type="hidden" name="targetId" value="<%= order.id %>">
+                                    <input type="hidden" name="requestType" value="order_refund">
+                                    <label for="order-reason-<%= order.id %>">Reason</label>
+                                    <select id="order-reason-<%= order.id %>" name="reason" <%= canCancelOrder(order) ? '' : 'disabled' %>>
+                                        <option value="Changed my mind">Changed my mind</option>
+                                        <option value="Ordered by mistake">Ordered by mistake</option>
+                                        <option value="Product issue">Product issue</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <label for="order-note-<%= order.id %>">Details</label>
+                                    <textarea id="order-note-<%= order.id %>" name="customerNote" rows="3" placeholder="Tell admin why you need a refund." <%= canCancelOrder(order) ? '' : 'disabled' %>></textarea>
+                                    <button class="button primary full" type="submit" <%= canCancelOrder(order) ? '' : 'disabled' %>>
+                                        <%= canCancelOrder(order) ? 'Request refund' : 'Already shipped' %>
+                                    </button>
+                                </form>
+                            </article>
+                        <% }) %>
+                    </div>
+
+                    <div>
+                        <h3>Service bookings</h3>
+                        <% if (bookings.length === 0) { %>
+                            <p class="muted">No service bookings yet.</p>
+                        <% } %>
+                        <% bookings.forEach((booking) => { %>
+                            <article class="help-item-card">
+                                <div>
+                                    <span class="tag"><%= booking.status %></span>
+                                    <h4><%= booking.service_name %></h4>
+                                    <p><%= booking.merchant_name %></p>
+                                    <small><%= formatDate(booking.booking_date) %> at <%= booking.booking_time %> · <%= formatMoney(booking.service_price) %></small>
+                                </div>
+                                <form action="/help-center/requests" method="POST">
+                                    <input type="hidden" name="targetType" value="booking">
+                                    <input type="hidden" name="targetId" value="<%= booking.id %>">
+                                    <label for="booking-type-<%= booking.id %>">Request type</label>
+                                    <select id="booking-type-<%= booking.id %>" name="requestType">
+                                        <option value="booking_change">Change booking</option>
+                                        <option value="booking_refund">Request refund</option>
+                                        <option value="booking_cancel">Cancel booking</option>
+                                    </select>
+                                    <label for="booking-reason-<%= booking.id %>">Reason</label>
+                                    <select id="booking-reason-<%= booking.id %>" name="reason">
+                                        <option value="Need to reschedule">Need to reschedule</option>
+                                        <option value="Service issue">Service issue</option>
+                                        <option value="Unable to attend">Unable to attend</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <label for="booking-change-<%= booking.id %>">Requested change</label>
+                                    <textarea id="booking-change-<%= booking.id %>" name="requestedChange" rows="2" placeholder="Example: Change to another date, time, or service."></textarea>
+                                    <label for="booking-note-<%= booking.id %>">Details</label>
+                                    <textarea id="booking-note-<%= booking.id %>" name="customerNote" rows="3" placeholder="Add details for admin and merchant."></textarea>
+                                    <button class="button primary full" type="submit">Submit request</button>
+                                </form>
+                            </article>
+                        <% }) %>
+                    </div>
+                </div>
+            </section>
+        <% } %>
+
+        <% if (role === 'merchant') { %>
+            <section class="support-panel merchant-order-panel">
+                <div class="section-cta">
+                    <div>
+                        <p class="eyebrow">Fulfilment</p>
+                        <h2>Product order status</h2>
+                        <p class="muted">Orders marked shipped can no longer be cancelled through customer refund requests.</p>
+                    </div>
+                </div>
+
+                <% if (orders.length === 0) { %>
+                    <div class="help-empty-state small">
+                        <span>V</span>
+                        <p class="muted">No paid product orders yet.</p>
+                    </div>
+                <% } else { %>
+                    <div class="admin-table-wrap support-order-table">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Order</th>
+                                    <th>Customer</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Update</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% orders.forEach((order) => { %>
+                                    <tr>
+                                        <td><strong>order-<%= order.id %></strong><span><%= order.itemCount %> item(s)</span></td>
+                                        <td><%= order.customerName %></td>
+                                        <td><%= formatMoney(order.totalAmount) %></td>
+                                        <td><span class="support-status"><%= order.deliveryStatus %></span></td>
+                                        <td>
+                                            <form class="inline-status-form" action="/help-center/orders/<%= order.id %>/delivery-status" method="POST">
+                                                <select name="deliveryStatus">
+                                                    <% orderStatuses.forEach((status) => { %>
+                                                        <option value="<%= status %>" <%= status === order.deliveryStatus ? 'selected' : '' %>><%= status %></option>
+                                                    <% }) %>
+                                                </select>
+                                                <button class="button secondary" type="submit">Save</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </section>
+        <% } %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

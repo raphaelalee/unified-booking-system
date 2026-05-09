@@ -4,6 +4,7 @@ const Booking = require('../models/Booking');
 const Product = require('../models/Product');
 const Promotion = require('../models/Promotion');
 const Transaction = require('../models/Transaction');
+const Notification = require('../models/Notification');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -242,6 +243,28 @@ function buildProductPayload(form) {
         ingredients: form.ingredients || 'Ingredients will be updated by the merchant.',
         howToUse: form.howToUse || 'Use as directed by the merchant.'
     };
+}
+
+function logNotificationError(error) {
+    if (error) {
+        console.error('Notification error:', error.message || error);
+    }
+}
+
+function notifyMerchant(userId, notification) {
+    Notification.create({
+        ...notification,
+        recipientUserId: userId,
+        recipientRole: 'merchant'
+    }, logNotificationError);
+}
+
+function notifyAdmins(notification) {
+    Notification.createForRole('admin', notification, logNotificationError);
+}
+
+function notifyCustomers(notification) {
+    Notification.createForRole('customer', notification, logNotificationError);
 }
 
 function buildMerchantReports(merchant, bookings = [], hadError = false) {
@@ -754,6 +777,22 @@ function createService(req, res) {
                 }
 
                 req.session.merchantSuccess = 'Service created successfully.';
+                notifyMerchant(req.session.user.id, {
+                    actorUserId: req.session.user.id,
+                    type: 'merchant_update',
+                    title: 'Service listed',
+                    message: `${form.name} is now listed with customer booking slots.`,
+                    linkUrl: '/merchant/services',
+                    dedupeKey: `merchant-service-created-${Date.now()}-${req.session.user.id}`
+                });
+                notifyAdmins({
+                    actorUserId: req.session.user.id,
+                    type: 'merchant_update',
+                    title: 'Merchant added a service',
+                    message: `${merchant.name} listed ${form.name}.`,
+                    linkUrl: '/admin/services',
+                    dedupeKey: `admin-merchant-service-created-${Date.now()}`
+                });
                 return res.redirect('/merchant/services');
             });
         });
@@ -881,6 +920,14 @@ function updateService(req, res) {
                     }
 
                     req.session.merchantSuccess = 'Service updated successfully.';
+                    notifyMerchant(req.session.user.id, {
+                        actorUserId: req.session.user.id,
+                        type: 'merchant_update',
+                        title: 'Service updated',
+                        message: `${form.name} was updated successfully.`,
+                        linkUrl: '/merchant/services',
+                        dedupeKey: `merchant-service-updated-${service.id}-${Date.now()}`
+                    });
                     return res.redirect('/merchant/services');
                 });
             });
@@ -995,6 +1042,30 @@ function createProduct(req, res) {
             }
 
             req.session.merchantSuccess = 'Product created successfully.';
+            notifyMerchant(req.session.user.id, {
+                actorUserId: req.session.user.id,
+                type: 'product_update',
+                title: 'Product listed',
+                message: `${form.name} is now available in the Vaniday product catalogue.`,
+                linkUrl: '/merchant/products',
+                dedupeKey: `merchant-product-created-${result?.insertId || Date.now()}-${req.session.user.id}`
+            });
+            notifyCustomers({
+                actorUserId: req.session.user.id,
+                type: 'product_update',
+                title: 'New beauty product added',
+                message: `${merchant.name} added ${form.name} to the Vaniday shop.`,
+                linkUrl: '/products',
+                dedupeKey: `customer-product-created-${result?.insertId || Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'product_update',
+                title: 'Merchant listed a product',
+                message: `${merchant.name} listed ${form.name}.`,
+                linkUrl: '/admin',
+                dedupeKey: `admin-product-created-${result?.insertId || Date.now()}`
+            });
             return res.redirect('/merchant/products');
         });
     });
@@ -1094,6 +1165,16 @@ function updateProduct(req, res) {
 
                 req.session.merchantSuccess = result.affectedRows > 0 ? 'Product updated successfully.' : null;
                 req.session.merchantError = result.affectedRows > 0 ? null : 'Product could not be updated.';
+                if (result.affectedRows > 0) {
+                    notifyMerchant(req.session.user.id, {
+                        actorUserId: req.session.user.id,
+                        type: 'product_update',
+                        title: 'Product updated',
+                        message: `${form.name} details were saved.`,
+                        linkUrl: '/merchant/products',
+                        dedupeKey: `merchant-product-updated-${product.id}-${Date.now()}`
+                    });
+                }
                 return res.redirect('/merchant/products');
             });
         });
@@ -1114,6 +1195,16 @@ function restockProduct(req, res) {
             ? `Stock updated by ${Math.max(1, Math.min(Math.floor(quantity || 1), 999))}.`
             : null;
         req.session.merchantError = result.affectedRows > 0 ? null : 'This product could not be found for your merchant account.';
+        if (result.affectedRows > 0) {
+            notifyMerchant(req.session.user.id, {
+                actorUserId: req.session.user.id,
+                type: 'stock_update',
+                title: 'Stock updated',
+                message: `Product stock increased by ${Math.max(1, Math.min(Math.floor(quantity || 1), 999))}.`,
+                linkUrl: '/merchant/products',
+                dedupeKey: `merchant-stock-updated-${req.params.productId}-${Date.now()}`
+            });
+        }
 
         return res.redirect('/merchant/products');
     });
@@ -1238,6 +1329,30 @@ function createPromotion(req, res) {
             }
 
             req.session.merchantSuccess = 'Promotion created successfully.';
+            notifyMerchant(req.session.user.id, {
+                actorUserId: req.session.user.id,
+                type: 'offer_update',
+                title: 'Promotion created',
+                message: `${form.title} is now saved under your merchant promotions.`,
+                linkUrl: '/merchant/promotions',
+                dedupeKey: `merchant-promotion-created-${result?.insertId || Date.now()}-${req.session.user.id}`
+            });
+            notifyCustomers({
+                actorUserId: req.session.user.id,
+                type: 'offer_update',
+                title: 'New offer from Vaniday',
+                message: `${merchant.name} added a new promotion: ${form.title}.`,
+                linkUrl: '/promotions',
+                dedupeKey: `customer-merchant-promotion-created-${result?.insertId || Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'offer_update',
+                title: 'Merchant promotion created',
+                message: `${merchant.name} created ${form.title}.`,
+                linkUrl: '/admin/promotions',
+                dedupeKey: `admin-merchant-promotion-created-${result?.insertId || Date.now()}`
+            });
             return res.redirect('/merchant/promotions');
         });
     });
@@ -1350,6 +1465,24 @@ function updatePromotion(req, res) {
 
                 req.session.merchantSuccess = result.affectedRows > 0 ? 'Promotion updated successfully.' : null;
                 req.session.merchantError = result.affectedRows > 0 ? null : 'Promotion could not be updated.';
+                if (result.affectedRows > 0) {
+                    notifyMerchant(req.session.user.id, {
+                        actorUserId: req.session.user.id,
+                        type: 'offer_update',
+                        title: 'Promotion updated',
+                        message: `${form.title} was updated successfully.`,
+                        linkUrl: '/merchant/promotions',
+                        dedupeKey: `merchant-promotion-updated-${promotion.id}-${Date.now()}`
+                    });
+                    notifyCustomers({
+                        actorUserId: req.session.user.id,
+                        type: 'offer_update',
+                        title: 'Offer updated',
+                        message: `${merchant.name} updated ${form.title}.`,
+                        linkUrl: '/promotions',
+                        dedupeKey: `customer-merchant-promotion-updated-${promotion.id}-${Date.now()}`
+                    });
+                }
                 return res.redirect('/merchant/promotions');
             });
         });

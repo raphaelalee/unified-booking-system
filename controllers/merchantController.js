@@ -8,6 +8,8 @@ const Product = require('../models/Product');
 const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Loyalty = require('../models/Loyalty');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
@@ -99,6 +101,91 @@ function notifyBookingByEmail(booking) {
 function notifyBooking(booking) {
     notifyBookingByWhatsApp(booking);
     notifyBookingByEmail(booking);
+}
+
+function logNotificationError(error) {
+    if (error) {
+        console.error('Notification error:', error.message || error);
+    }
+}
+
+function createNotification(notification) {
+    Notification.create(notification, logNotificationError);
+}
+
+function createRoleNotification(role, notification) {
+    Notification.createForRole(role, notification, logNotificationError);
+}
+
+function createMerchantNotification(merchant, notification) {
+    if (merchant?.merchantUserId) {
+        createNotification({
+            ...notification,
+            recipientUserId: merchant.merchantUserId,
+            recipientRole: 'merchant'
+        });
+        return;
+    }
+
+    if (!merchant?.ownerEmail) {
+        return;
+    }
+
+    User.findByEmail(merchant.ownerEmail, (error, user) => {
+        if (error) {
+            logNotificationError(error);
+            return;
+        }
+
+        if (!user) {
+            return;
+        }
+
+        createNotification({
+            ...notification,
+            recipientUserId: user.user_id,
+            recipientRole: 'merchant'
+        });
+    });
+}
+
+function notifyBookingCreated(req, merchant, validation, bookingId = null) {
+    const serviceName = validation.serviceName || validation.service?.name || 'your service';
+    const appointmentLabel = `${req.body.bookingDate} at ${req.body.bookingTime}`;
+    const customerLink = bookingId ? `/receipt/${bookingId}` : '/profile#bookings';
+    const bookingKey = bookingId || `${merchant.id}-${req.session.user.id}-${Date.now()}`;
+
+    createNotification({
+        recipientUserId: req.session.user.id,
+        recipientRole: 'customer',
+        actorUserId: merchant.merchantUserId || null,
+        type: 'booking_confirmed',
+        title: 'Booking request confirmed',
+        message: `${serviceName} at ${merchant.name} is booked for ${appointmentLabel}.`,
+        linkUrl: customerLink,
+        dedupeKey: bookingId ? `booking-created-customer-${bookingId}` : null,
+        metadata: { merchantId: merchant.id, bookingId, serviceName }
+    });
+
+    createMerchantNotification(merchant, {
+        actorUserId: req.session.user.id,
+        type: 'booking',
+        title: 'New booking received',
+        message: `${validation.customerName || 'A customer'} booked ${serviceName} for ${appointmentLabel}.`,
+        linkUrl: '/merchant/schedule',
+        dedupeKey: bookingId ? `booking-created-merchant-${bookingId}` : null,
+        metadata: { merchantId: merchant.id, bookingId, serviceName }
+    });
+
+    createRoleNotification('admin', {
+        actorUserId: req.session.user.id,
+        type: 'booking',
+        title: 'New customer booking',
+        message: `${validation.customerName || 'A customer'} booked ${serviceName} at ${merchant.name}.`,
+        linkUrl: '/admin',
+        dedupeKey: `booking-created-admin-${bookingKey}`,
+        metadata: { merchantId: merchant.id, bookingId, serviceName }
+    });
 }
 
 function getInsertedBookingId(result) {
@@ -1396,6 +1483,7 @@ function saveQrBooking(req, res) {
                 const bookingId = getInsertedBookingId(result);
                 const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
+                notifyBookingCreated(req, merchant, validation, bookingId);
                 notifyBooking({
                     customerName: validation.customerName,
                     email: validation.email,
@@ -1566,6 +1654,7 @@ function saveSecureScanBooking(req, res) {
                     const bookingId = getInsertedBookingId(result);
                     const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
+                    notifyBookingCreated(req, merchant, validation, bookingId);
                     notifyBooking({
                         customerName: validation.customerName,
                         email: validation.email,
@@ -1695,7 +1784,7 @@ function createBooking(req, res) {
         });
     }
 
-    Booking.create({
+    const booking = Booking.create({
         merchantId: merchant.id,
         merchantName: merchant.name,
         serviceId: validation.service.id,
@@ -1707,6 +1796,7 @@ function createBooking(req, res) {
         bookingTime: req.body.bookingTime
     });
 
+    notifyBookingCreated(req, merchant, validation, booking.id || null);
     req.session.success = `Booking request received for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${req.body.bookingTime}.`;
     return res.redirect('/');
 }
@@ -2119,6 +2209,7 @@ async function buildTrustedPayment(req, payment) {
             userId: booking.user_id,
             userName: booking.customer_name,
             merchantName: booking.merchant_name,
+            merchantUserId: booking.merchant_user_id,
             serviceName: booking.service_name,
             amount: Number(booking.service_price || 0),
             items: [
@@ -2239,6 +2330,86 @@ function applyPaymentSideEffects(req, payment) {
     }
 }
 
+function getOrderRecipients(transactionId) {
+    return new Promise((resolve) => {
+        if (!transactionId) {
+            resolve([]);
+            return;
+        }
+
+        Transaction.getMerchantOrderRecipients(transactionId, (error, recipients) => {
+            if (error) {
+                logNotificationError(error);
+                resolve([]);
+                return;
+            }
+
+            resolve(recipients || []);
+        });
+    });
+}
+
+async function notifyPaymentCompleted(req, paidPayment, transactionId) {
+    const receiptLink = `/receipt/${encodeURIComponent(paidPayment.receiptId)}`;
+    const amountLabel = `$${Number(paidPayment.amount || 0).toFixed(2)}`;
+
+    createNotification({
+        recipientUserId: paidPayment.userId,
+        recipientRole: 'customer',
+        actorUserId: null,
+        type: paidPayment.kind === 'booking' ? 'booking_paid' : 'order_paid',
+        title: paidPayment.kind === 'booking' ? 'Booking payment successful' : 'Order purchased successfully',
+        message: paidPayment.kind === 'booking'
+            ? `${paidPayment.serviceName} at ${paidPayment.merchantName} has been paid (${amountLabel}).`
+            : `Your Vaniday order has been paid successfully (${amountLabel}).`,
+        linkUrl: receiptLink,
+        dedupeKey: `payment-customer-${paidPayment.receiptId}`,
+        metadata: { receiptId: paidPayment.receiptId, transactionId }
+    });
+
+    createRoleNotification('admin', {
+        actorUserId: paidPayment.userId,
+        type: paidPayment.kind === 'booking' ? 'booking_paid' : 'order_paid',
+        title: paidPayment.kind === 'booking' ? 'Paid booking completed' : 'Paid order completed',
+        message: `${paidPayment.userName || 'A customer'} completed a ${amountLabel} ${paidPayment.kind === 'booking' ? 'booking payment' : 'checkout'}.`,
+        linkUrl: '/admin',
+        dedupeKey: `payment-admin-${paidPayment.receiptId}`,
+        metadata: { receiptId: paidPayment.receiptId, transactionId }
+    });
+
+    if (paidPayment.kind === 'booking' && paidPayment.merchantUserId) {
+        createNotification({
+            recipientUserId: paidPayment.merchantUserId,
+            recipientRole: 'merchant',
+            actorUserId: paidPayment.userId,
+            type: 'booking_paid',
+            title: 'Booking payment received',
+            message: `${paidPayment.userName || 'A customer'} paid ${amountLabel} for ${paidPayment.serviceName}.`,
+            linkUrl: '/merchant/schedule',
+            dedupeKey: `payment-merchant-booking-${paidPayment.receiptId}`,
+            metadata: { receiptId: paidPayment.receiptId, transactionId }
+        });
+    }
+
+    if (paidPayment.kind === 'order') {
+        const recipients = await getOrderRecipients(transactionId);
+
+        recipients.forEach((recipient) => {
+            createNotification({
+                recipientUserId: recipient.merchantUserId,
+                recipientRole: 'merchant',
+                actorUserId: paidPayment.userId,
+                type: 'order_received',
+                title: 'New product order received',
+                message: `${paidPayment.userName || 'A customer'} bought ${recipient.itemCount} item${recipient.itemCount === 1 ? '' : 's'} from ${recipient.salonName} ($${Number(recipient.totalAmount || 0).toFixed(2)}).`,
+                linkUrl: '/merchant',
+                dedupeKey: `payment-merchant-order-${transactionId}-${recipient.merchantUserId}`,
+                metadata: { receiptId: paidPayment.receiptId, transactionId }
+            });
+        });
+    }
+}
+
 function savePaidReceipt(req, payment, paymentMethod) {
     const receiptId = String(payment.receiptId);
 
@@ -2306,6 +2477,7 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
 
     applyPaymentSideEffects(req, payment);
     savePaidReceipt(req, paidPayment, paymentMethod);
+    await notifyPaymentCompleted(req, paidPayment, transactionId);
 
     return paidPayment.receiptId;
 }

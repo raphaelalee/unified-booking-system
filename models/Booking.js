@@ -73,6 +73,7 @@ function getAllInDatabase(callback) {
             users.name AS customer_name,
             users.email,
             salons.salon_name AS merchant_name,
+            salons.merchant_id AS merchant_user_id,
             services.service_name,
             services.price AS service_price
         FROM bookings
@@ -260,6 +261,59 @@ function getByUserId(userId, callback) {
     });
 }
 
+function getSupportBookingsByUserId(userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            salons.salon_name AS merchant_name,
+            salons.merchant_id AS merchant_user_id,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.user_id = ?
+        ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
+        LIMIT 60
+    `;
+
+    db.query(sql, [userId], callback);
+}
+
+function findSupportBookingForCustomer(bookingId, userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            salons.salon_name AS merchant_name,
+            salons.merchant_id AS merchant_user_id,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+            AND bookings.user_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [bookingId, userId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows[0] || null);
+    });
+}
+
 function getReceiptById(bookingId, callback) {
     const sql = `
         SELECT
@@ -271,6 +325,7 @@ function getReceiptById(bookingId, callback) {
             users.name AS customer_name,
             users.email,
             salons.salon_name AS merchant_name,
+            salons.merchant_id AS merchant_user_id,
             services.service_name,
             services.price AS service_price
         FROM bookings
@@ -327,6 +382,16 @@ function markCompleted(bookingId, callback) {
     db.query(sql, [bookingId], callback);
 }
 
+function markCancelled(bookingId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET status = 'cancelled'
+        WHERE booking_id = ?
+    `;
+
+    db.query(sql, [bookingId], callback);
+}
+
 function markCheckedIn(bookingId, merchantUserId, callback) {
     const sql = `
         UPDATE bookings
@@ -345,15 +410,18 @@ module.exports = {
     create,
     createCustomerBooking,
     createInDatabase,
+    findSupportBookingForCustomer,
     getByUserId,
     getReceiptById,
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
     getCheckInDetails,
+    getSupportBookingsByUserId,
     getUpcomingByUserId,
     hasExistingBooking,
     hasExistingBookingInDatabase,
+    markCancelled,
     markCompleted,
     markCheckedIn
 };

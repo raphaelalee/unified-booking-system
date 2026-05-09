@@ -9,6 +9,7 @@ const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const Notification = require('../models/Notification');
 const { getCartItemCount } = require('../utils/cart');
 
 const membershipTiers = [
@@ -17,6 +18,12 @@ const membershipTiers = [
     { name: 'Gold', points: '5,000+', detail: 'Priority perks', className: 'gold' },
     { name: 'Platinum', points: '10,000+', detail: 'VIP benefits', className: 'platinum' }
 ];
+
+function logNotificationError(error) {
+    if (error) {
+        console.error('Notification error:', error.message || error);
+    }
+}
 
 function buildSessionUser(user) {
     return {
@@ -725,6 +732,16 @@ function claimRewardShopDaily(req, res) {
 
         req.session.user.glintsBalance = Number(req.session.user.glintsBalance || 0) + Number(result.rewardValue || 0);
         req.session.rewardShopSuccess = `Claimed ${result.rewardValue} VaniGlints for today.`;
+        Notification.create({
+            recipientUserId: req.session.user.id,
+            recipientRole: 'customer',
+            actorUserId: null,
+            type: 'reward_update',
+            title: 'Daily reward claimed',
+            message: `${result.rewardValue} VaniGlints were added to your reward balance.`,
+            linkUrl: '/reward-shop',
+            dedupeKey: `customer-daily-reward-${req.session.user.id}-${new Date().toISOString().slice(0, 10)}`
+        }, logNotificationError);
         return res.redirect('/reward-shop');
     });
 }

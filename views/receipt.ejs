@@ -22,6 +22,7 @@
     <% if (!pdfMode) { %>
         <div class="hero-actions">
             <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download PDF</a>
+            <a class="button secondary" href="<%= supportRequestPath %>">Need help</a>
             <a class="button secondary" href="/services">Continue browsing</a>
         </div>
     <% } %>

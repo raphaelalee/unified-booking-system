@@ -5,6 +5,7 @@ const Promotion = require('../models/Promotion');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 function getBookingAmount(booking) {
     return Number(booking.service_price || booking.price || 0);
@@ -12,6 +13,43 @@ function getBookingAmount(booking) {
 
 function getUniqueCount(items, getValue) {
     return new Set(items.map(getValue).filter(Boolean)).size;
+}
+
+function logNotificationError(error) {
+    if (error) {
+        console.error('Notification error:', error.message || error);
+    }
+}
+
+function notifyAdmins(notification) {
+    Notification.createForRole('admin', notification, logNotificationError);
+}
+
+function notifyCustomers(notification) {
+    Notification.createForRole('customer', notification, logNotificationError);
+}
+
+function notifyMerchantUser(userId, notification) {
+    if (!userId) {
+        return;
+    }
+
+    Notification.create({
+        ...notification,
+        recipientUserId: userId,
+        recipientRole: 'merchant'
+    }, logNotificationError);
+}
+
+function notifyMerchantBySalonId(salonId, notification) {
+    MerchantService.getMerchantBySalonId(salonId, (error, merchant) => {
+        if (error) {
+            logNotificationError(error);
+            return;
+        }
+
+        notifyMerchantUser(merchant?.merchantUserId, notification);
+    });
 }
 
 function buildValidationReport({ merchants, bookings, bookingError, userError }) {
@@ -525,7 +563,7 @@ function createMerchant(req, res) {
         return MerchantService.createMerchant({
             ...form,
             passwordHash
-        }, (createError) => {
+        }, (createError, createdMerchant) => {
             if (createError) {
                 console.error(createError);
                 return res.status(500).render('admin-merchant-form', {
@@ -540,6 +578,22 @@ function createMerchant(req, res) {
             }
 
             req.session.adminSuccess = `${form.salonName} was added as a merchant.`;
+            notifyMerchantUser(createdMerchant?.userId, {
+                actorUserId: req.session.user.id,
+                type: 'merchant_update',
+                title: 'Merchant account approved',
+                message: `${form.salonName} is ready. You can now manage services, products, promotions, and rewards.`,
+                linkUrl: '/merchant',
+                dedupeKey: `merchant-account-created-${createdMerchant?.userId || Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'merchant_update',
+                title: 'Merchant onboarded',
+                message: `${form.salonName} was added as a merchant by ${req.session.user.name || 'admin'}.`,
+                linkUrl: '/admin',
+                dedupeKey: `admin-merchant-created-${createdMerchant?.userId || Date.now()}`
+            });
             return res.redirect('/admin');
         });
     });
@@ -609,6 +663,22 @@ function createService(req, res) {
         }
 
         req.session.adminSuccess = 'Service created successfully.';
+        notifyMerchantBySalonId(form.salonId, {
+            actorUserId: req.session.user.id,
+            type: 'merchant_update',
+            title: 'Admin added a service',
+            message: `${form.name} was added to your merchant service menu by Vaniday admin.`,
+            linkUrl: '/merchant/services',
+            dedupeKey: `merchant-admin-service-created-${form.salonId}-${Date.now()}`
+        });
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'merchant_update',
+            title: 'Admin service created',
+            message: `${form.name} was added for a merchant salon.`,
+            linkUrl: '/admin/services',
+            dedupeKey: `admin-service-created-${form.salonId}-${Date.now()}`
+        });
         return res.redirect('/admin/services');
     });
 }
@@ -848,6 +918,30 @@ function createPromotion(req, res) {
                 }
 
                 req.session.adminSuccess = 'Promotion created successfully.';
+                notifyCustomers({
+                    actorUserId: req.session.user.id,
+                    type: 'offer_update',
+                    title: 'New Vaniday offer',
+                    message: `A new promotion is live: ${form.title}.`,
+                    linkUrl: '/promotions',
+                    dedupeKey: `customer-admin-promotion-created-${form.salonId}-${Date.now()}`
+                });
+                notifyMerchantBySalonId(form.salonId, {
+                    actorUserId: req.session.user.id,
+                    type: 'offer_update',
+                    title: 'Admin created a promotion',
+                    message: `${form.title} was created for your merchant profile.`,
+                    linkUrl: '/merchant/promotions',
+                    dedupeKey: `merchant-admin-promotion-created-${form.salonId}-${Date.now()}`
+                });
+                notifyAdmins({
+                    actorUserId: req.session.user.id,
+                    type: 'offer_update',
+                    title: 'Promotion launched',
+                    message: `${form.title} was created from the admin portal.`,
+                    linkUrl: '/admin/promotions',
+                    dedupeKey: `admin-promotion-created-${form.salonId}-${Date.now()}`
+                });
                 return res.redirect('/admin/promotions');
             });
         });
@@ -1058,6 +1152,22 @@ function createRewardVoucher(req, res) {
         }
 
         req.session.adminSuccess = 'Reward shop voucher created successfully.';
+        notifyCustomers({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'New reward voucher',
+            message: `${form.title} is now available in the Vaniday reward shop.`,
+            linkUrl: '/reward-shop',
+            dedupeKey: `customer-reward-voucher-created-${Date.now()}`
+        });
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'Reward voucher created',
+            message: `${form.title} was added to the reward shop.`,
+            linkUrl: '/admin/reward-shop',
+            dedupeKey: `admin-reward-voucher-created-${Date.now()}`
+        });
         return res.redirect('/admin/reward-shop');
     });
 }
@@ -1176,6 +1286,22 @@ function updateDailyRewards(req, res) {
         }
 
         req.session.adminSuccess = 'Daily reward points updated successfully.';
+        notifyCustomers({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'Daily rewards updated',
+            message: 'The Vaniday daily reward check-in values have been refreshed.',
+            linkUrl: '/reward-shop',
+            dedupeKey: `customer-daily-rewards-updated-${Date.now()}`
+        });
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'Daily rewards updated',
+            message: 'Daily reward points were updated from the admin portal.',
+            linkUrl: '/admin/reward-shop',
+            dedupeKey: `admin-daily-rewards-updated-${Date.now()}`
+        });
         return res.redirect('/admin/reward-shop');
     });
 }

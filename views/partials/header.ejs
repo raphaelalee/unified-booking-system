@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=1">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=8">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=21">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=23">
 </head>
 <body>
     <header class="site-header">
@@ -27,6 +27,7 @@
             <div class="nav-links">
                 <% if (currentUser && currentUser.role === 'admin') { %>
                     <a href="/admin">Dashboard</a>
+                    <a href="/help-center">Help Center</a>
                     <a href="/admin/services">Manage Services</a>
                     <a href="/admin/promotions">Manage Promotions</a>
                     <a href="/admin/reward-shop">Reward Shop</a>
@@ -37,6 +38,7 @@
                     <a href="/profile">Profile</a>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <a href="/merchant">Dashboard</a>
+                    <a href="/help-center">Help Center</a>
                     <a href="/merchant/services">My Services</a>
                     <a href="/merchant/products">My Products</a>
                     <a href="/merchant/promotions">My Promotions</a>
@@ -59,6 +61,7 @@
                     </div>
                     <a href="/products">Products</a>
                     <% if (currentUser && currentUser.role === 'customer') { %>
+                        <a href="/help-center">Help Center</a>
                         <a href="/rewards-game">Games</a>
                         <a href="/reward-shop">Reward Shop</a>
                         <a href="/cashback">Cashback</a>
@@ -74,6 +77,15 @@
                     </div>
                 <% } %>
                 <div class="nav-account-links">
+                    <% if (currentUser) { %>
+                        <a class="notification-link" href="/notifications" aria-label="Notifications">
+                            <span class="notification-bell" aria-hidden="true"></span>
+                            <span class="notification-link-label">Notifications</span>
+                            <% if ((typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) > 0) { %>
+                                <span class="notification-count"><%= notificationUnreadCount > 9 ? '9+' : notificationUnreadCount %></span>
+                            <% } %>
+                        </a>
+                    <% } %>
                     <a class="profile-icon-link" href="/profile" aria-label="Profile">
                         <span class="login-icon" aria-hidden="true"></span>
                     </a>

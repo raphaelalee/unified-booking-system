@@ -13,8 +13,11 @@ const profileController = require('./controllers/profileController');
 const loyaltyController = require('./controllers/loyaltyController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
 const bookingController = require('./controllers/bookingController');
+const notificationController = require('./controllers/notificationController');
+const helpCenterController = require('./controllers/helpCenterController');
 const { allowGuestOrCustomer, requireCustomer, requireLogin, requireRole, allowBookingViewer } = require('./middleware');
 const Product = require('./models/Product');
+const Notification = require('./models/Notification');
 const { getCartItemCount } = require('./utils/cart');
 
 const app = express();
@@ -37,7 +40,23 @@ app.use(passport.initialize());
 app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);
     res.locals.currentUser = req.session.user || null;
-    next();
+
+    if (!req.session.user) {
+        res.locals.notificationUnreadCount = 0;
+        next();
+        return;
+    }
+
+    Notification.countUnread(req.session.user.id, (error, count) => {
+        if (error) {
+            console.error(error);
+            res.locals.notificationUnreadCount = 0;
+        } else {
+            res.locals.notificationUnreadCount = count;
+        }
+
+        next();
+    });
 });
 
 function requireMerchantJson(req, res, next) {
@@ -74,6 +93,16 @@ app.get('/promotions/one-for-one', allowGuestOrCustomer, (req, res) => {
 app.get('/promotions/featured-salons', allowGuestOrCustomer, merchantController.showFeaturedSalons);
 app.get('/merchants', allowGuestOrCustomer, merchantController.listMerchants);
 app.get('/profile', userController.showProfile);
+app.get('/notifications', requireLogin, notificationController.showNotifications);
+app.get('/notifications/:notificationId/open', requireLogin, notificationController.openNotification);
+app.post('/notifications/:notificationId/read', requireLogin, notificationController.markNotificationRead);
+app.post('/notifications/read-all', requireLogin, notificationController.markAllRead);
+app.get('/help-center', requireLogin, helpCenterController.showHelpCenter);
+app.post('/help-center/requests', requireCustomer, helpCenterController.createRequest);
+app.post('/help-center/requests/:requestId/send-to-merchant', requireRole('admin'), helpCenterController.adminSendToMerchant);
+app.post('/help-center/requests/:requestId/merchant-response', requireRole('merchant'), helpCenterController.merchantRespond);
+app.post('/help-center/requests/:requestId/admin-resolution', requireRole('admin'), helpCenterController.adminResolve);
+app.post('/help-center/orders/:transactionId/delivery-status', requireRole('merchant', 'admin'), helpCenterController.updateOrderDeliveryStatus);
 app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
 app.post('/reward-shop/claim', requireCustomer, userController.claimRewardShopDaily);

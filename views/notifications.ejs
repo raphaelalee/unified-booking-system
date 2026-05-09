@@ -1,0 +1,117 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const iconByType = {
+        booking: 'B',
+        booking_confirmed: 'B',
+        booking_paid: 'P',
+        order_paid: 'O',
+        order_received: 'O',
+        offer_update: '%',
+        reward_update: 'R',
+        merchant_update: 'M',
+        product_update: 'P',
+        stock_update: 'S',
+        system: 'V'
+    };
+    const formatNotificationDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleString('en-SG', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+%>
+
+<section class="page-title notifications-hero">
+    <p class="eyebrow"><%= roleCopy.eyebrow %></p>
+    <h1><%= roleCopy.heading %></h1>
+    <p><%= roleCopy.description %></p>
+</section>
+
+<section class="section compact notifications-page">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+
+    <div class="notifications-summary">
+        <div class="portal-stat">
+            <span>Unread</span>
+            <strong><%= unreadCount %></strong>
+            <small>needs attention</small>
+        </div>
+        <div class="portal-stat">
+            <span>Total</span>
+            <strong><%= notifications.length %></strong>
+            <small>latest 80 messages</small>
+        </div>
+        <div class="portal-stat">
+            <span>Categories</span>
+            <strong><%= Object.keys(typeCounts).length %></strong>
+            <small>booking, orders, offers</small>
+        </div>
+    </div>
+
+    <div class="section-cta notifications-toolbar">
+        <div>
+            <p class="eyebrow">Notification centre</p>
+            <h2>Inbox</h2>
+            <p class="muted">Unread messages stay on top. Open a notification to mark it as read.</p>
+        </div>
+        <% if (unreadCount > 0) { %>
+            <form action="/notifications/read-all" method="POST">
+                <button class="button secondary" type="submit">Mark all read</button>
+            </form>
+        <% } %>
+    </div>
+
+    <% if (notifications.length === 0) { %>
+        <div class="notification-empty-state">
+            <span class="notification-empty-icon">V</span>
+            <h2>No notifications yet</h2>
+            <p class="muted">
+                Booking, order, offer, merchant, and reward updates will appear here once there is activity on your account.
+            </p>
+        </div>
+    <% } else { %>
+        <div class="notification-list">
+            <% notifications.forEach((notification) => { %>
+                <article class="notification-card <%= notification.status === 'unread' ? 'is-unread' : 'is-read' %>">
+                    <div class="notification-type-mark">
+                        <%= iconByType[notification.type] || 'V' %>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-card-topline">
+                            <span class="tag"><%= notification.type.replace(/_/g, ' ') %></span>
+                            <time><%= formatNotificationDate(notification.createdAt) %></time>
+                        </div>
+                        <h2><%= notification.title %></h2>
+                        <p><%= notification.message %></p>
+                        <div class="notification-actions">
+                            <a class="button primary" href="/notifications/<%= notification.id %>/open">
+                                <%= notification.status === 'unread' ? 'Read update' : 'Open' %>
+                            </a>
+                            <% if (notification.status === 'unread') { %>
+                                <form action="/notifications/<%= notification.id %>/read" method="POST">
+                                    <button class="button secondary" type="submit">Mark read</button>
+                                </form>
+                            <% } %>
+                        </div>
+                    </div>
+                    <% if (notification.status === 'unread') { %>
+                        <span class="notification-unread-dot" aria-label="Unread"></span>
+                    <% } %>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

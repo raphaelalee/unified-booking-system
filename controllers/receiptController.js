@@ -62,6 +62,7 @@ function mapBookingReceipt(row, req) {
         userId: row.user_id,
         userName: row.customer_name,
         merchantName: row.merchant_name,
+        merchantUserId: row.merchant_user_id,
         items: [
             {
                 name: row.service_name,
@@ -98,6 +99,7 @@ function mapOrderReceipt(order) {
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
+        deliveryStatus: order.deliveryStatus,
         paidAt: order.createdAt || new Date().toISOString()
     };
 }
@@ -182,6 +184,7 @@ async function buildReceiptViewModel(req, id) {
     return {
         title: `Receipt ${receipt.id}`,
         receipt,
+        supportRequestPath: `/help-center?receiptId=${encodeURIComponent(receipt.id)}`,
         checkinUrl,
         qrCodeDataUrl,
         paidAtLabel: new Date(receipt.paidAt).toLocaleString('en-SG', {

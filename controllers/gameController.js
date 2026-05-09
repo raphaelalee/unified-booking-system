@@ -1,5 +1,28 @@
 const MerchantService = require('../models/MerchantService');
 const RewardsGame = require('../models/RewardsGame');
+const Notification = require('../models/Notification');
+
+function logNotificationError(error) {
+    if (error) {
+        console.error('Notification error:', error.message || error);
+    }
+}
+
+function notifyCustomers(notification) {
+    Notification.createForRole('customer', notification, logNotificationError);
+}
+
+function notifyAdmins(notification) {
+    Notification.createForRole('admin', notification, logNotificationError);
+}
+
+function notifyMerchant(userId, notification) {
+    Notification.create({
+        ...notification,
+        recipientUserId: userId,
+        recipientRole: 'merchant'
+    }, logNotificationError);
+}
 
 function getSettingsForm(body = {}) {
     return {
@@ -263,6 +286,14 @@ function updateAdminSettings(req, res) {
             req.session.adminError = 'Rewards game settings could not be updated.';
         } else {
             req.session.adminSuccess = 'Rewards game settings updated.';
+            notifyCustomers({
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'Rewards game updated',
+                message: `Weekly free plays and spending bonus chances were refreshed.`,
+                linkUrl: '/rewards-game',
+                dedupeKey: `customer-game-settings-${Date.now()}`
+            });
         }
 
         return res.redirect('/admin/rewards-game');
@@ -329,6 +360,22 @@ function createAdminPrize(req, res) {
         }
 
         req.session.adminSuccess = 'Game prize created.';
+        notifyCustomers({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'New game prize available',
+            message: `${form.title} was added to the Vaniday rewards game.`,
+            linkUrl: '/rewards-game',
+            dedupeKey: `customer-admin-game-prize-${Date.now()}`
+        });
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'reward_update',
+            title: 'Game prize created',
+            message: `${form.title} was added to the rewards game.`,
+            linkUrl: '/admin/rewards-game',
+            dedupeKey: `admin-game-prize-${Date.now()}`
+        });
         return res.redirect('/admin/rewards-game');
     });
 }
@@ -509,6 +556,30 @@ function createMerchantPrize(req, res) {
             }
 
             req.session.merchantSuccess = 'Game reward created.';
+            notifyMerchant(req.session.user.id, {
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'Game reward created',
+                message: `${form.title} was added to your merchant reward pool.`,
+                linkUrl: '/merchant/rewards-game',
+                dedupeKey: `merchant-game-reward-${Date.now()}-${req.session.user.id}`
+            });
+            notifyCustomers({
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'New merchant game reward',
+                message: `${merchant.name} added ${form.title} to the rewards game.`,
+                linkUrl: '/rewards-game',
+                dedupeKey: `customer-merchant-game-reward-${Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'Merchant game reward created',
+                message: `${merchant.name} added ${form.title} to the rewards game.`,
+                linkUrl: '/admin/rewards-game',
+                dedupeKey: `admin-merchant-game-reward-${Date.now()}`
+            });
             return res.redirect('/merchant/rewards-game');
         });
     });

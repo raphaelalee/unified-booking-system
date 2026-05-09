@@ -69,6 +69,24 @@ function findById(userId, callback) {
     });
 }
 
+function findByRole(role, callback) {
+    const sql = `
+        SELECT user_id, name, email, phone, role
+        FROM users
+        WHERE role = ?
+        ORDER BY created_at DESC, user_id DESC
+    `;
+
+    db.query(sql, [role], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results || []);
+    });
+}
+
 function updateProfile(userId, profile, callback) {
     const sql = `
         UPDATE users
@@ -184,6 +202,7 @@ module.exports = {
     findByReferralCode,
     findByEmail,
     findById,
+    findByRole,
     updateProfile,
     updatePassword,
     updateReferralCode,

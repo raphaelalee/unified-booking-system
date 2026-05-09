@@ -1,5 +1,68 @@
 const db = require('../db');
 
+let fulfilmentSchemaReady = false;
+
+function ensureFulfilmentSchema(callback) {
+    if (fulfilmentSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    db.query('SHOW COLUMNS FROM transactions', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('delivery_status')) {
+            alters.push("ADD COLUMN delivery_status VARCHAR(30) NOT NULL DEFAULT 'processing'");
+        }
+
+        if (!fields.has('shipped_at')) {
+            alters.push('ADD COLUMN shipped_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('delivered_at')) {
+            alters.push('ADD COLUMN delivered_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('refund_status')) {
+            alters.push("ADD COLUMN refund_status VARCHAR(30) NOT NULL DEFAULT 'none'");
+        }
+
+        if (!fields.has('refunded_amount')) {
+            alters.push('ADD COLUMN refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+
+        if (!fields.has('refunded_at')) {
+            alters.push('ADD COLUMN refunded_at DATETIME DEFAULT NULL');
+        }
+
+        if (alters.length === 0) {
+            fulfilmentSchemaReady = true;
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE transactions ${alters.join(', ')}`, (alterError) => {
+            if (!alterError) {
+                fulfilmentSchemaReady = true;
+            }
+
+            callback(alterError);
+        });
+    });
+}
+
+function normalizeDeliveryStatus(status) {
+    const value = String(status || '').trim().toLowerCase();
+    const allowed = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
+    return allowed.includes(value) ? value : 'processing';
+}
+
 function createPaidTransaction(userId, amount, paymentMethod, items, callback) {
     db.getConnection((connectionError, connection) => {
         if (connectionError) {
@@ -85,110 +148,382 @@ function getPaidSpendByUserId(userId, callback) {
 }
 
 function getOrderReceiptById(transactionId, userId, callback) {
-    const sql = `
-        SELECT
-            transactions.transaction_id AS id,
-            transactions.user_id,
-            transactions.total_amount,
-            transactions.payment_status,
-            transactions.payment_method,
-            transactions.created_at,
-            users.name AS customer_name,
-            products.name AS product_name,
-            order_items.quantity,
-            order_items.price_at_purchase
-        FROM transactions
-        INNER JOIN users ON users.user_id = transactions.user_id
-        INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
-        INNER JOIN products ON products.product_id = order_items.product_id
-        WHERE transactions.transaction_id = ?
-            AND transactions.user_id = ?
-        ORDER BY order_items.order_item_id ASC
-    `;
-
-    db.query(sql, [transactionId, userId], (error, rows) => {
-        if (error) {
-            callback(error);
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        if (!rows.length) {
-            callback(null, null);
-            return;
-        }
+        const sql = `
+            SELECT
+                transactions.transaction_id AS id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.shipped_at,
+                transactions.delivered_at,
+                transactions.created_at,
+                users.name AS customer_name,
+                products.name AS product_name,
+                order_items.quantity,
+                order_items.price_at_purchase
+            FROM transactions
+            INNER JOIN users ON users.user_id = transactions.user_id
+            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+            INNER JOIN products ON products.product_id = order_items.product_id
+            WHERE transactions.transaction_id = ?
+                AND transactions.user_id = ?
+            ORDER BY order_items.order_item_id ASC
+        `;
 
-        const first = rows[0];
-        callback(null, {
-            id: first.id,
-            userId: first.user_id,
-            userName: first.customer_name,
-            totalAmount: Number(first.total_amount || 0),
-            paymentStatus: first.payment_status || 'paid',
-            paymentMethod: first.payment_method || 'card',
-            createdAt: first.created_at,
-            items: rows.map((row) => ({
-                name: row.product_name,
-                type: 'Product',
-                quantity: Number(row.quantity || 1),
-                unitPrice: Number(row.price_at_purchase || 0),
-                lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0)
-            }))
+        db.query(sql, [transactionId, userId], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            if (!rows.length) {
+                callback(null, null);
+                return;
+            }
+
+            const first = rows[0];
+            callback(null, {
+                id: first.id,
+                userId: first.user_id,
+                userName: first.customer_name,
+                totalAmount: Number(first.total_amount || 0),
+                paymentStatus: first.payment_status || 'paid',
+                paymentMethod: first.payment_method || 'card',
+                deliveryStatus: first.delivery_status || 'processing',
+                shippedAt: first.shipped_at,
+                deliveredAt: first.delivered_at,
+                createdAt: first.created_at,
+                items: rows.map((row) => ({
+                    name: row.product_name,
+                    type: 'Product',
+                    quantity: Number(row.quantity || 1),
+                    unitPrice: Number(row.price_at_purchase || 0),
+                    lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0)
+                }))
+            });
         });
     });
 }
 
 function getMerchantOrderReport(merchantUserId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                transactions.transaction_id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_method,
+                transactions.payment_status,
+                transactions.delivery_status,
+                transactions.created_at,
+                users.name AS customer_name,
+                COUNT(order_items.order_item_id) AS item_count,
+                SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total
+            FROM transactions
+            INNER JOIN users ON users.user_id = transactions.user_id
+            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+            INNER JOIN products ON products.product_id = order_items.product_id
+            INNER JOIN salons ON salons.salon_id = products.salon_id
+            WHERE salons.merchant_id = ?
+                AND transactions.payment_status = 'paid'
+            GROUP BY
+                transactions.transaction_id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_method,
+                transactions.payment_status,
+                transactions.delivery_status,
+                transactions.created_at,
+                users.name
+            ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+        `;
+
+        db.query(sql, [merchantUserId], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map((row) => ({
+                id: row.transaction_id,
+                userId: row.user_id,
+                customerName: row.customer_name || 'Customer',
+                totalAmount: Number(row.merchant_total || row.total_amount || 0),
+                paymentMethod: row.payment_method || 'card',
+                paymentStatus: row.payment_status || 'paid',
+                deliveryStatus: row.delivery_status || 'processing',
+                itemCount: Number(row.item_count || 0),
+                createdAt: row.created_at
+            })));
+        });
+    });
+}
+
+function getMerchantOrderRecipients(transactionId, callback) {
     const sql = `
         SELECT
-            transactions.transaction_id,
-            transactions.user_id,
-            transactions.total_amount,
-            transactions.payment_method,
-            transactions.payment_status,
-            transactions.created_at,
-            users.name AS customer_name,
+            salons.merchant_id AS merchant_user_id,
+            salons.salon_name,
             COUNT(order_items.order_item_id) AS item_count,
             SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total
-        FROM transactions
-        INNER JOIN users ON users.user_id = transactions.user_id
-        INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+        FROM order_items
         INNER JOIN products ON products.product_id = order_items.product_id
         INNER JOIN salons ON salons.salon_id = products.salon_id
-        WHERE salons.merchant_id = ?
-            AND transactions.payment_status = 'paid'
-        GROUP BY
-            transactions.transaction_id,
-            transactions.user_id,
-            transactions.total_amount,
-            transactions.payment_method,
-            transactions.payment_status,
-            transactions.created_at,
-            users.name
-        ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+        WHERE order_items.transaction_id = ?
+        GROUP BY salons.merchant_id, salons.salon_name
+        ORDER BY salons.salon_name
     `;
 
-    db.query(sql, [merchantUserId], (error, rows) => {
+    db.query(sql, [transactionId], (error, rows = []) => {
         if (error) {
             callback(error);
             return;
         }
 
         callback(null, rows.map((row) => ({
-            id: row.transaction_id,
-            userId: row.user_id,
-            customerName: row.customer_name || 'Customer',
-            totalAmount: Number(row.merchant_total || row.total_amount || 0),
-            paymentMethod: row.payment_method || 'card',
-            paymentStatus: row.payment_status || 'paid',
+            merchantUserId: row.merchant_user_id,
+            salonName: row.salon_name,
             itemCount: Number(row.item_count || 0),
-            createdAt: row.created_at
+            totalAmount: Number(row.merchant_total || 0)
         })));
+    });
+}
+
+function getCustomerOrders(userId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                transactions.transaction_id AS id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.created_at,
+                COUNT(order_items.order_item_id) AS item_count,
+                GROUP_CONCAT(products.name ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
+                GROUP_CONCAT(DISTINCT salons.merchant_id ORDER BY salons.merchant_id SEPARATOR ',') AS merchant_user_ids,
+                GROUP_CONCAT(DISTINCT salons.salon_name ORDER BY salons.salon_name SEPARATOR ', ') AS merchant_names
+            FROM transactions
+            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+            INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE transactions.user_id = ?
+                AND transactions.payment_status = 'paid'
+            GROUP BY
+                transactions.transaction_id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.created_at
+            ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+        `;
+
+        db.query(sql, [userId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map((row) => ({
+                id: row.id,
+                receiptId: `order-${row.id}`,
+                userId: row.user_id,
+                itemNames: row.item_names || 'Product order',
+                merchantName: row.merchant_names || 'Vaniday merchant',
+                merchantUserIds: String(row.merchant_user_ids || '')
+                    .split(',')
+                    .map((id) => Number(id))
+                    .filter(Boolean),
+                itemCount: Number(row.item_count || 0),
+                totalAmount: Number(row.total_amount || 0),
+                paymentStatus: row.payment_status || 'paid',
+                paymentMethod: row.payment_method || 'card',
+                deliveryStatus: row.delivery_status || 'processing',
+                createdAt: row.created_at
+            })));
+        });
+    });
+}
+
+function getOrderById(transactionId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                transactions.transaction_id AS id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.created_at,
+                users.name AS customer_name,
+                users.email AS customer_email,
+                COUNT(order_items.order_item_id) AS item_count,
+                GROUP_CONCAT(products.name ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
+                GROUP_CONCAT(DISTINCT salons.merchant_id ORDER BY salons.merchant_id SEPARATOR ',') AS merchant_user_ids,
+                GROUP_CONCAT(DISTINCT salons.salon_name ORDER BY salons.salon_name SEPARATOR ', ') AS merchant_names
+            FROM transactions
+            INNER JOIN users ON users.user_id = transactions.user_id
+            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+            INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE transactions.transaction_id = ?
+            GROUP BY
+                transactions.transaction_id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.created_at,
+                users.name,
+                users.email
+            LIMIT 1
+        `;
+
+        db.query(sql, [transactionId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const row = rows[0];
+
+            if (!row) {
+                callback(null, null);
+                return;
+            }
+
+            callback(null, {
+                id: row.id,
+                receiptId: `order-${row.id}`,
+                userId: row.user_id,
+                customerName: row.customer_name || 'Customer',
+                customerEmail: row.customer_email || '',
+                itemNames: row.item_names || 'Product order',
+                merchantName: row.merchant_names || 'Vaniday merchant',
+                merchantUserIds: String(row.merchant_user_ids || '')
+                    .split(',')
+                    .map((id) => Number(id))
+                    .filter(Boolean),
+                itemCount: Number(row.item_count || 0),
+                totalAmount: Number(row.total_amount || 0),
+                paymentStatus: row.payment_status || 'paid',
+                paymentMethod: row.payment_method || 'card',
+                deliveryStatus: row.delivery_status || 'processing',
+                createdAt: row.created_at
+            });
+        });
+    });
+}
+
+function getOrderForCustomer(userId, transactionId, callback) {
+    getCustomerOrders(userId, (error, orders = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, orders.find((order) => String(order.id) === String(transactionId)) || null);
+    });
+}
+
+function updateDeliveryStatus(transactionId, status, options = {}, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const deliveryStatus = normalizeDeliveryStatus(status);
+        const timestampColumn = deliveryStatus === 'shipped'
+            ? ', shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)'
+            : deliveryStatus === 'delivered'
+                ? ', delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)'
+                : '';
+        const params = [deliveryStatus, transactionId];
+        let ownershipClause = '';
+
+        if (options.merchantUserId) {
+            ownershipClause = `
+                AND EXISTS (
+                    SELECT 1
+                    FROM order_items
+                    INNER JOIN products ON products.product_id = order_items.product_id
+                    INNER JOIN salons ON salons.salon_id = products.salon_id
+                    WHERE order_items.transaction_id = transactions.transaction_id
+                        AND salons.merchant_id = ?
+                )
+            `;
+            params.push(options.merchantUserId);
+        }
+
+        const sql = `
+            UPDATE transactions
+            SET delivery_status = ?${timestampColumn}
+            WHERE transaction_id = ?
+            ${ownershipClause}
+        `;
+
+        db.query(sql, params, callback);
+    });
+}
+
+function recordRefund(transactionId, amount, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE transactions
+            SET
+                refund_status = 'refunded',
+                refunded_amount = ?,
+                refunded_at = CURRENT_TIMESTAMP
+            WHERE transaction_id = ?
+        `;
+
+        db.query(sql, [Number(amount || 0), transactionId], callback);
     });
 }
 
 module.exports = {
     createPaidTransaction,
+    getOrderById,
     getMerchantOrderReport,
+    getMerchantOrderRecipients,
+    getCustomerOrders,
+    getOrderForCustomer,
     getOrderReceiptById,
-    getPaidSpendByUserId
+    getPaidSpendByUserId,
+    recordRefund,
+    updateDeliveryStatus
 };

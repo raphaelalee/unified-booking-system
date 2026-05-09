@@ -19,7 +19,45 @@ function ensureTable(callback) {
         )
     `;
 
-    db.query(sql, callback);
+    db.query(sql, (tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query('SHOW COLUMNS FROM purchase_history', (columnError, columns = []) => {
+            if (columnError) {
+                callback(columnError);
+                return;
+            }
+
+            const fields = new Set(columns.map((column) => column.Field));
+            const alters = [];
+
+            if (!fields.has('delivery_status')) {
+                alters.push("ADD COLUMN delivery_status VARCHAR(30) NOT NULL DEFAULT 'processing'");
+            }
+
+            if (!fields.has('refund_status')) {
+                alters.push("ADD COLUMN refund_status VARCHAR(30) NOT NULL DEFAULT 'none'");
+            }
+
+            if (!fields.has('refunded_amount')) {
+                alters.push('ADD COLUMN refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
+            if (!fields.has('refunded_at')) {
+                alters.push('ADD COLUMN refunded_at DATETIME DEFAULT NULL');
+            }
+
+            if (!alters.length) {
+                callback(null);
+                return;
+            }
+
+            db.query(`ALTER TABLE purchase_history ${alters.join(', ')}`, callback);
+        });
+    });
 }
 
 function formatItemNames(items = []) {
@@ -108,6 +146,109 @@ function getByReceiptId(receiptId, userId, callback) {
     });
 }
 
+function getSupportOrdersByUserId(userId, callback) {
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                receipt_id,
+                user_id,
+                item_names,
+                total_amount,
+                payment_method,
+                payment_status,
+                delivery_status,
+                refund_status,
+                refunded_amount,
+                refunded_at,
+                created_at
+            FROM purchase_history
+            WHERE user_id = ?
+                AND purchase_type = 'product'
+                AND payment_status = 'paid'
+            ORDER BY created_at DESC, history_id DESC
+        `;
+
+        db.query(sql, [userId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map((row) => ({
+                id: row.receipt_id,
+                receiptId: row.receipt_id,
+                targetId: row.receipt_id,
+                source: 'purchase_history',
+                userId: row.user_id,
+                itemNames: row.item_names || 'Product order',
+                merchantName: 'Vaniday merchant',
+                merchantUserIds: [],
+                itemCount: 1,
+                totalAmount: Number(row.total_amount || 0),
+                paymentStatus: row.payment_status || 'paid',
+                paymentMethod: row.payment_method || 'card',
+                deliveryStatus: row.delivery_status || 'processing',
+                refundStatus: row.refund_status || 'none',
+                refundedAmount: Number(row.refunded_amount || 0),
+                refundedAt: row.refunded_at,
+                createdAt: row.created_at
+            })));
+        });
+    });
+}
+
+function getSupportOrderForCustomer(userId, receiptId, callback) {
+    getSupportOrdersByUserId(userId, (error, orders = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, orders.find((order) => String(order.receiptId) === String(receiptId)) || null);
+    });
+}
+
+function updateDeliveryStatus(receiptId, status, callback) {
+    const value = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'].includes(status)
+        ? status
+        : 'processing';
+
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query(
+            `UPDATE purchase_history SET delivery_status = ? WHERE receipt_id = ? AND purchase_type = 'product'`,
+            [value, receiptId],
+            callback
+        );
+    });
+}
+
+function recordRefund(receiptId, amount, callback) {
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query(
+            `UPDATE purchase_history
+             SET refund_status = 'refunded', refunded_amount = ?, refunded_at = CURRENT_TIMESTAMP
+             WHERE receipt_id = ? AND purchase_type = 'product'`,
+            [Number(amount || 0), receiptId],
+            callback
+        );
+    });
+}
+
 function parseItems(value) {
     if (Array.isArray(value)) {
         return value;
@@ -136,13 +277,19 @@ function mapReceipt(row) {
         totalAmount: Number(row.total_amount || 0),
         paymentMethod: row.payment_method || 'paid',
         paymentStatus: row.payment_status || 'paid',
+        deliveryStatus: row.delivery_status || 'processing',
+        refundStatus: row.refund_status || 'none',
         paidAt: row.created_at
     };
 }
 
 module.exports = {
     getByReceiptId,
+    getSupportOrderForCustomer,
+    getSupportOrdersByUserId,
     getByUserId,
     mapReceipt,
+    recordRefund,
+    updateDeliveryStatus,
     save
 };
