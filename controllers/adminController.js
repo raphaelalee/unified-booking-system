@@ -152,8 +152,8 @@ function validateMerchantForm(form) {
         errors.push('Please enter a valid merchant email.');
     }
 
-    if (form.password.length < 4) {
-        errors.push('Password must be at least 4 characters.');
+    if (form.password.length < 8 || !/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+        errors.push('Password must be at least 8 characters and include at least one letter and one number.');
     }
 
     if (form.salonName.length < 2) {
@@ -550,7 +550,7 @@ function createMerchant(req, res) {
         });
     }
 
-    return bcrypt.hash(form.password, 10, (hashError, passwordHash) => {
+    return bcrypt.hash(form.password, 12, (hashError, passwordHash) => {
         if (hashError) {
             console.error(hashError);
             return res.status(500).render('admin-merchant-form', {

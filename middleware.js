@@ -1,3 +1,102 @@
+const crypto = require('crypto');
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const rateLimitBuckets = new Map();
+
+function wantsJson(req) {
+    return req.xhr
+        || req.path.startsWith('/api/')
+        || (req.get('accept') || '').includes('application/json');
+}
+
+function sendForbidden(req, res, message) {
+    if (wantsJson(req)) {
+        return res.status(403).json({ success: false, message });
+    }
+
+    return res.status(403).render('error', {
+        title: 'Request Blocked',
+        message
+    });
+}
+
+function setSecurityHeaders(req, res, next) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+    if (req.secure || req.get('x-forwarded-proto') === 'https') {
+        res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    }
+
+    return next();
+}
+
+function ensureCsrfToken(req, res, next) {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    }
+
+    res.locals.csrfToken = req.session.csrfToken;
+    return next();
+}
+
+function verifyCsrfToken(req, res, next) {
+    if (SAFE_METHODS.has(req.method)) {
+        return next();
+    }
+
+    const submittedToken = req.body?._csrf || req.get('x-csrf-token');
+
+    if (submittedToken && req.session.csrfToken && submittedToken === req.session.csrfToken) {
+        return next();
+    }
+
+    return sendForbidden(req, res, 'This request could not be verified. Please refresh the page and try again.');
+}
+
+function rotateCsrfToken(req) {
+    if (req.session) {
+        req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    }
+}
+
+function getClientKey(req, namespace) {
+    return `${namespace}:${req.ip || req.socket?.remoteAddress || 'unknown'}`;
+}
+
+function createRateLimiter({ windowMs = 60000, max = 60, namespace = 'default', message = 'Too many requests. Please wait a moment and try again.' } = {}) {
+    return (req, res, next) => {
+        const now = Date.now();
+        const key = getClientKey(req, namespace);
+        const bucket = rateLimitBuckets.get(key) || { count: 0, resetAt: now + windowMs };
+
+        if (bucket.resetAt <= now) {
+            bucket.count = 0;
+            bucket.resetAt = now + windowMs;
+        }
+
+        bucket.count += 1;
+        rateLimitBuckets.set(key, bucket);
+
+        if (bucket.count > max) {
+            res.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+
+            if (wantsJson(req)) {
+                return res.status(429).json({ success: false, message });
+            }
+
+            return res.status(429).render('error', {
+                title: 'Slow Down',
+                message
+            });
+        }
+
+        return next();
+    };
+}
+
 function requireLogin(req, res, next) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -63,8 +162,13 @@ function requireRole(...roles) {
 module.exports = {
     allowBookingViewer,
     allowGuestOrCustomer,
+    createRateLimiter,
     getRoleHome,
+    ensureCsrfToken,
     requireCustomer,
     requireLogin,
-    requireRole
+    requireRole,
+    rotateCsrfToken,
+    setSecurityHeaders,
+    verifyCsrfToken
 };

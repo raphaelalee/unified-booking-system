@@ -8149,6 +8149,150 @@ textarea {
     }
 }
 
+/* Final polish: responsive motion that keeps the app feeling crisp without moving layout. */
+:where(a, button, .button, input, select, textarea) {
+    transition:
+        background-color 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        color 180ms ease,
+        opacity 180ms ease,
+        transform 180ms ease;
+}
+
+:where(a, button, .button):focus-visible,
+:where(input, select, textarea):focus-visible {
+    outline: 3px solid rgba(47, 111, 115, 0.26);
+    outline-offset: 3px;
+}
+
+:where(.button, .text-button, .nav-links a, .nav-account-links a, .nav-support-links a):active {
+    transform: translateY(1px) scale(0.99);
+}
+
+.button:not(:disabled):hover,
+.cart-checkout-button:not(:disabled):hover,
+.admin-action-button:not(:disabled):hover,
+.merchant-action-button:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(31, 25, 20, 0.14);
+}
+
+.merchant-card,
+.merchant-row,
+.product-card,
+.service-catalog-card,
+.service-shop-card,
+.promotion-offer-card,
+.reward-voucher-card,
+.booking-service-card,
+.account-panel,
+.cart-item {
+    will-change: transform;
+}
+
+.merchant-card:hover,
+.merchant-row:hover,
+.product-card:hover,
+.service-catalog-card:hover,
+.service-shop-card:hover,
+.promotion-offer-card:hover,
+.reward-voucher-card:hover,
+.booking-service-card:hover,
+.cart-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 44px rgba(31, 25, 20, 0.11);
+}
+
+.page-transition-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    opacity: 0;
+    background: rgba(31, 25, 20, 0.36);
+    backdrop-filter: blur(4px);
+    transition: opacity 180ms ease;
+}
+
+.page-transition-overlay.is-visible {
+    opacity: 1;
+}
+
+.page-transition-card {
+    min-width: 260px;
+    padding: 24px;
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    border: 1px solid rgba(251, 245, 234, 0.38);
+    border-radius: 8px;
+    background: rgba(251, 245, 234, 0.94);
+    color: var(--sand-ink, var(--ink));
+    box-shadow: 0 24px 70px rgba(20, 15, 10, 0.24);
+}
+
+.page-transition-mark {
+    width: 48px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--sand-espresso, var(--clay));
+    color: var(--sand-cream, #fffaf5);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.page-transition-spinner {
+    width: 34px;
+    aspect-ratio: 1;
+    border: 3px solid rgba(31, 25, 20, 0.14);
+    border-top-color: var(--sand-espresso, var(--clay));
+    border-radius: 50%;
+    animation: vanidaySpin 760ms linear infinite;
+}
+
+.is-submitting :where(button, input, select, textarea) {
+    pointer-events: none;
+}
+
+@keyframes vanidaySpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :where(a, button, .button, input, select, textarea),
+    .page-transition-overlay {
+        transition: none;
+    }
+
+    .page-transition-spinner {
+        animation: none;
+    }
+
+    .merchant-card:hover,
+    .merchant-row:hover,
+    .product-card:hover,
+    .service-catalog-card:hover,
+    .service-shop-card:hover,
+    .promotion-offer-card:hover,
+    .reward-voucher-card:hover,
+    .booking-service-card:hover,
+    .cart-item:hover,
+    .button:not(:disabled):hover,
+    .cart-checkout-button:not(:disabled):hover,
+    .admin-action-button:not(:disabled):hover,
+    .merchant-action-button:not(:disabled):hover {
+        transform: none;
+    }
+}
+
 .login-form .auth-divider {
     display: grid;
     grid-template-columns: 1fr auto 1fr;

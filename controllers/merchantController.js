@@ -2562,7 +2562,8 @@ async function completeNetsPayment(req, res) {
 }
 
 function failNetsPayment(req, res) {
-    return res.redirect('/nets-qr/fail');
+    req.session.pendingNetsPayment = null;
+    return res.json({ ok: true });
 }
 
 function showNetsFail(req, res) {

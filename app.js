@@ -15,27 +15,57 @@ const merchantDashboardController = require('./controllers/merchantDashboardCont
 const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
-const { allowGuestOrCustomer, requireCustomer, requireLogin, requireRole, allowBookingViewer } = require('./middleware');
+const {
+    allowGuestOrCustomer,
+    allowBookingViewer,
+    createRateLimiter,
+    ensureCsrfToken,
+    requireCustomer,
+    requireLogin,
+    requireRole,
+    setSecurityHeaders,
+    verifyCsrfToken
+} = require('./middleware');
 const Product = require('./models/Product');
 const Notification = require('./models/Notification');
 const { getCartItemCount } = require('./utils/cart');
 
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production';
+const sessionSecret = process.env.SESSION_SECRET || 'dev-only-vaniday-session-secret-change-me';
+
+if (isProduction && sessionSecret === 'dev-only-vaniday-session-secret-change-me') {
+    throw new Error('SESSION_SECRET must be set in production.');
+}
+
+app.set('trust proxy', 1);
 
 // Set up EJS for your Views
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
-app.use(express.static(path.join(__dirname, 'public'), { redirect: false })); // For CSS, Images, JS
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(setSecurityHeaders);
+app.use(express.static(path.join(__dirname, 'public'), {
+    redirect: false,
+    maxAge: isProduction ? '7d' : 0
+})); // For CSS, Images, JS
+app.use(bodyParser.urlencoded({ extended: true, limit: '100kb' }));
+app.use(bodyParser.json({ limit: '100kb' }));
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'vaniday_secret_key',
+    name: 'vaniday.sid',
+    secret: sessionSecret,
     resave: false,
-    saveUninitialized: true
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isProduction,
+        maxAge: 1000 * 60 * 60 * 8
+    }
 }));
 app.use(passport.initialize());
+app.use(ensureCsrfToken);
 
 app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);
@@ -57,6 +87,33 @@ app.use((req, res, next) => {
 
         next();
     });
+});
+
+app.use(verifyCsrfToken);
+
+const authRateLimit = createRateLimiter({
+    namespace: 'auth',
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: 'Too many sign-in attempts. Please wait a few minutes and try again.'
+});
+const aiRateLimit = createRateLimiter({
+    namespace: 'ai',
+    windowMs: 60 * 1000,
+    max: 25,
+    message: 'The assistant is receiving too many requests. Please try again shortly.'
+});
+const writeRateLimit = createRateLimiter({
+    namespace: 'writes',
+    windowMs: 60 * 1000,
+    max: 120
+});
+app.use((req, res, next) => {
+    if (req.method === 'POST') {
+        return writeRateLimit(req, res, next);
+    }
+
+    return next();
 });
 
 function requireMerchantJson(req, res, next) {
@@ -116,12 +173,12 @@ app.post('/rewards-game/play', requireCustomer, gameController.playCustomerGame)
 app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);
 app.post('/rewards-game/flappy/finish', requireCustomer, gameController.finishFlappyGame);
 app.get('/login', userController.showLogin);
-app.post('/login', userController.loginUser);
+app.post('/login', authRateLimit, userController.loginUser);
 app.get('/auth/google', userController.startGoogleLogin);
 app.get('/auth/google/callback', userController.handleGoogleCallback);
 app.get('/signup', userController.showSignup);
 app.get('/ref/:referralCode', userController.openReferralSignup);
-app.post('/signup', userController.signupUser);
+app.post('/signup', authRateLimit, userController.signupUser);
 app.post('/logout', userController.logoutUser);
 app.get('/cart', requireCustomer, merchantController.showCart);
 app.post('/cart/add/:merchantId', requireCustomer, merchantController.addToCart);
@@ -145,8 +202,8 @@ app.get('/booking/:merchantId', allowBookingViewer, merchantController.showBooki
 app.post('/booking/:merchantId', requireCustomer, merchantController.saveQrBooking);
 app.get('/merchants/:id', allowGuestOrCustomer, merchantController.showMerchant);
 app.post('/merchants/:id/book', requireCustomer, merchantController.createBooking);
-app.post('/api/ai/chat', allowGuestOrCustomer, aiController.getBeautyAdvice);
-app.post('/api/ai/product-copy', requireMerchantJson, aiController.generateProductCopy);
+app.post('/api/ai/chat', aiRateLimit, allowGuestOrCustomer, aiController.getBeautyAdvice);
+app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.generateProductCopy);
 app.get('/merchant', requireRole('merchant'), merchantDashboardController.showServices);
 app.get('/merchant/schedule', requireRole('merchant'), merchantDashboardController.showSchedule);
 app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
@@ -226,7 +283,7 @@ app.get('/products', allowGuestOrCustomer, (req, res) => {
 
         res.render('products', {
             title: 'Products',
-            products: error ? Product.getAll() : products,
+            products: error ? [] : products,
             showChatbot: true
         });
     });
