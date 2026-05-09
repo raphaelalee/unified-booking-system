@@ -2,12 +2,18 @@ const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
 
 function getEmailConfig() {
+    const host = process.env.SMTP_HOST;
+    const rawPass = process.env.SMTP_PASS || '';
+    const pass = String(host || '').toLowerCase().includes('gmail.com')
+        ? rawPass.replace(/\s+/g, '')
+        : rawPass;
+
     return {
-        host: process.env.SMTP_HOST,
+        host,
         port: Number(process.env.SMTP_PORT || 587),
         secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        pass,
         from: process.env.EMAIL_FROM || process.env.SMTP_USER,
         rejectUnauthorized: String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() !== 'false'
     };
@@ -15,6 +21,15 @@ function getEmailConfig() {
 
 function isConfigured(config) {
     return Boolean(config.host && config.user && config.pass && config.from);
+}
+
+function isSmtpAuthError(error) {
+    const message = String(error?.message || '');
+
+    return error?.code === 'EAUTH'
+        || error?.responseCode === 534
+        || error?.responseCode === 535
+        || /Invalid login|WebLoginRequired|Username and Password not accepted/i.test(message);
 }
 
 function buildBookingEmailText(booking) {
@@ -165,14 +180,23 @@ async function sendBookingConfirmationEmail(booking) {
         }
     });
 
-    return transporter.sendMail({
-        from: config.from,
-        to: normalizedBooking.email,
-        subject: `Vaniday booking request: ${normalizedBooking.serviceName}`,
-        text: buildBookingEmailText(normalizedBooking),
-        html: buildBookingEmailHtml(normalizedBooking, qrCid),
-        attachments
-    });
+    try {
+        return await transporter.sendMail({
+            from: config.from,
+            to: normalizedBooking.email,
+            subject: `Vaniday booking request: ${normalizedBooking.serviceName}`,
+            text: buildBookingEmailText(normalizedBooking),
+            html: buildBookingEmailHtml(normalizedBooking, qrCid),
+            attachments
+        });
+    } catch (error) {
+        if (isSmtpAuthError(error)) {
+            console.error('Email booking confirmation skipped: Gmail SMTP rejected the login. Use a Gmail app password in SMTP_PASS, not the normal account password.');
+            return { skipped: true, reason: 'smtp_auth_failed' };
+        }
+
+        throw error;
+    }
 }
 
 module.exports = {

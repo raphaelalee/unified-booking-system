@@ -47,6 +47,10 @@ function verifyCsrfToken(req, res, next) {
         return next();
     }
 
+    if (req.path === '/webhooks/whatsapp') {
+        return next();
+    }
+
     const submittedToken = req.body?._csrf || req.get('x-csrf-token');
 
     if (submittedToken && req.session.csrfToken && submittedToken === req.session.csrfToken) {

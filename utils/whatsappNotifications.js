@@ -37,6 +37,41 @@ function buildBookingMessage(booking) {
     ].join('\n');
 }
 
+function buildReminderMessage(booking) {
+    return [
+        `Hi ${booking.customerName}, reminder for your Vaniday booking.`,
+        `Merchant: ${booking.merchantName}`,
+        `Service: ${booking.serviceName}`,
+        `Date: ${booking.bookingDate}`,
+        `Time: ${booking.bookingTime}`,
+        booking.checkInUrl ? `Check-in QR: ${booking.checkInUrl}` : '',
+        'Please contact the merchant if you need to reschedule or cancel.'
+    ].filter(Boolean).join('\n');
+}
+
+function buildRescheduleMessage(booking) {
+    return [
+        `Hi ${booking.customerName}, your Vaniday booking has been rescheduled.`,
+        `Merchant: ${booking.merchantName}`,
+        `Service: ${booking.serviceName}`,
+        `New date: ${booking.bookingDate}`,
+        `New time: ${booking.bookingTime}`,
+        'Please check your Help Center updates for details.'
+    ].join('\n');
+}
+
+function buildCancellationMessage(booking) {
+    return [
+        `Hi ${booking.customerName}, your Vaniday booking has been cancelled.`,
+        `Merchant: ${booking.merchantName}`,
+        `Service: ${booking.serviceName}`,
+        booking.bookingDate ? `Original date: ${booking.bookingDate}` : '',
+        booking.bookingTime ? `Original time: ${booking.bookingTime}` : '',
+        booking.reason ? `Reason: ${booking.reason}` : '',
+        'You can make a new booking from Vaniday when ready.'
+    ].filter(Boolean).join('\n');
+}
+
 function buildTemplatePayload(to, booking, config) {
     return {
         messaging_product: 'whatsapp',
@@ -64,7 +99,7 @@ function buildTemplatePayload(to, booking, config) {
     };
 }
 
-function buildTextPayload(to, booking) {
+function buildTextPayload(to, body) {
     return {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -72,22 +107,17 @@ function buildTextPayload(to, booking) {
         type: 'text',
         text: {
             preview_url: false,
-            body: buildBookingMessage(booking)
+            body
         }
     };
 }
 
-async function sendBookingNotification(booking) {
+async function sendWhatsAppPayload(payload) {
     const config = getConfig();
-    const to = formatRecipientPhone(booking.phone);
 
-    if (!config.accessToken || !config.phoneNumberId || !to) {
+    if (!config.accessToken || !config.phoneNumberId) {
         return { skipped: true };
     }
-
-    const payload = config.templateName
-        ? buildTemplatePayload(to, booking, config)
-        : buildTextPayload(to, booking);
 
     const response = await fetch(`https://graph.facebook.com/${config.apiVersion}/${config.phoneNumberId}/messages`, {
         method: 'POST',
@@ -108,6 +138,48 @@ async function sendBookingNotification(booking) {
     return data;
 }
 
+async function sendWhatsAppText(phone, message) {
+    const to = formatRecipientPhone(phone);
+
+    if (!to) {
+        return { skipped: true };
+    }
+
+    return sendWhatsAppPayload(buildTextPayload(to, String(message || '').trim()));
+}
+
+async function sendBookingNotification(booking) {
+    const config = getConfig();
+    const to = formatRecipientPhone(booking.phone);
+
+    if (!config.accessToken || !config.phoneNumberId || !to) {
+        return { skipped: true };
+    }
+
+    const payload = config.templateName
+        ? buildTemplatePayload(to, booking, config)
+        : buildTextPayload(to, buildBookingMessage(booking));
+
+    return sendWhatsAppPayload(payload);
+}
+
+function sendBookingReminder(booking) {
+    return sendWhatsAppText(booking.phone, buildReminderMessage(booking));
+}
+
+function sendBookingRescheduleNotification(booking) {
+    return sendWhatsAppText(booking.phone, buildRescheduleMessage(booking));
+}
+
+function sendBookingCancellationNotification(booking) {
+    return sendWhatsAppText(booking.phone, buildCancellationMessage(booking));
+}
+
 module.exports = {
-    sendBookingNotification
+    formatRecipientPhone,
+    sendBookingCancellationNotification,
+    sendBookingNotification,
+    sendBookingReminder,
+    sendBookingRescheduleNotification,
+    sendWhatsAppText
 };

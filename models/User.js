@@ -69,6 +69,29 @@ function findById(userId, callback) {
     });
 }
 
+function findCustomerByPhone(phone, callback) {
+    const digits = String(phone || '').replace(/[^\d]/g, '');
+    const localPhone = digits.startsWith('65') && digits.length === 10
+        ? digits.slice(2)
+        : digits;
+    const sql = `
+        SELECT user_id, name, email, phone, referral_code, password, role, glints_balance, created_at
+        FROM users
+        WHERE role = 'customer'
+            AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
+        LIMIT 1
+    `;
+
+    db.query(sql, [digits, localPhone], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results[0] || null);
+    });
+}
+
 function findByRole(role, callback) {
     const sql = `
         SELECT user_id, name, email, phone, role
@@ -201,6 +224,7 @@ module.exports = {
     create,
     findByReferralCode,
     findByEmail,
+    findCustomerByPhone,
     findById,
     findByRole,
     updateProfile,

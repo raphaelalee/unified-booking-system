@@ -4,6 +4,10 @@ const Notification = require('../models/Notification');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const SupportRequest = require('../models/SupportRequest');
 const Transaction = require('../models/Transaction');
+const {
+    sendCancellationForBooking,
+    sendRescheduleForBooking
+} = require('../services/whatsappAutomation');
 
 const ACTIVE_REQUEST_LIMIT = 5;
 const SHIPPED_STATUSES = ['shipped', 'delivered'];
@@ -32,7 +36,10 @@ const getMerchantRequests = promisify(SupportRequest.getForMerchant);
 const getAdminRequests = promisify(SupportRequest.getForAdmin);
 const getCustomerBookings = promisify(Booking.getSupportBookingsByUserId);
 const findBookingForCustomer = promisify(Booking.findSupportBookingForCustomer);
+const getBookingNotificationDetails = promisify(Booking.getNotificationDetailsById);
+const hasExistingBooking = promisify(Booking.hasExistingBookingInDatabase);
 const markBookingCancelled = promisify(Booking.markCancelled);
+const updateBookingSchedule = promisify(Booking.updateSchedule);
 const getCustomerOrders = promisify(Transaction.getCustomerOrders);
 const getOrderForCustomer = promisify(Transaction.getOrderForCustomer);
 const getOrderById = promisify(Transaction.getOrderById);
@@ -114,6 +121,85 @@ function calculateLateFee(amount) {
     }
 
     return Math.round(Math.max(8, base * 0.2) * 100) / 100;
+}
+
+function normalizeRequestDate(value) {
+    const date = value instanceof Date ? value : new Date(`${String(value || '').slice(0, 10)}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 10);
+}
+
+function normalizeRequestTime(value) {
+    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?/);
+
+    if (!match) {
+        return '';
+    }
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return '';
+    }
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function parseRequestedBookingSlot(value) {
+    const text = String(value || '');
+    const dateMatch = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+
+    return {
+        bookingDate: dateMatch ? normalizeRequestDate(dateMatch[1]) : '',
+        bookingTime: timeMatch ? normalizeRequestTime(`${timeMatch[1]}:${timeMatch[2]}`) : ''
+    };
+}
+
+async function applyApprovedBookingChange(request) {
+    const nextSlot = parseRequestedBookingSlot(request.requestedChange);
+
+    if (!nextSlot.bookingDate || !nextSlot.bookingTime) {
+        throw new Error('Approved booking changes must include a new date and time in YYYY-MM-DD HH:mm format.');
+    }
+
+    const booking = await getBookingNotificationDetails(request.targetId);
+
+    if (!booking) {
+        throw new Error('The booking could not be found.');
+    }
+
+    const currentDate = normalizeRequestDate(booking.booking_date);
+    const currentTime = normalizeRequestTime(booking.booking_time);
+    const isSameSlot = currentDate === nextSlot.bookingDate && currentTime === nextSlot.bookingTime;
+
+    if (!isSameSlot) {
+        const slotTaken = await hasExistingBooking(
+            booking.salon_id,
+            booking.service_id,
+            nextSlot.bookingDate,
+            nextSlot.bookingTime
+        );
+
+        if (slotTaken) {
+            throw new Error('The requested new slot is already booked. Please ask the customer to choose another time.');
+        }
+    }
+
+    const result = await updateBookingSchedule(request.targetId, nextSlot.bookingDate, nextSlot.bookingTime);
+
+    if (!result.affectedRows) {
+        throw new Error('The booking could not be rescheduled.');
+    }
+
+    await sendRescheduleForBooking(request.targetId).catch((error) => {
+        console.error('WhatsApp reschedule notification failed:', error.message);
+    });
 }
 
 function notifyUser(user, notification) {
@@ -499,6 +585,11 @@ async function merchantRespond(req, res) {
 
         const decision = req.body.decision === 'approved' ? 'approved' : 'declined';
         const note = cleanText(req.body.merchantNote);
+
+        if (request.requestType === 'booking_change' && decision === 'approved') {
+            await applyApprovedBookingChange(request);
+        }
+
         const result = await merchantRespondToRequest(request.id, req.session.user.id, decision, note);
 
         if (!result.affectedRows) {
@@ -613,6 +704,9 @@ async function adminResolve(req, res) {
                 }
             } else if (request.targetType === 'booking' && request.requestType !== 'booking_change') {
                 await markBookingCancelled(request.targetId);
+                await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+                    console.error('WhatsApp cancellation notification failed:', error.message);
+                });
             }
         }
 

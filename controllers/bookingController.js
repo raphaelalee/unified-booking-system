@@ -2,6 +2,7 @@ const QRCode = require('qrcode');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
+const { getPublicHolidayName } = require('../utils/publicHolidays');
 
 function getPublicBaseUrl(req) {
     return (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
@@ -31,6 +32,13 @@ function createBooking(req, res) {
 
     if (!isValidBookingDate(bookingDate)) {
         req.session.profileError = 'Please choose today or a future booking date.';
+        return res.redirect(req.get('Referrer') || '/services');
+    }
+
+    const holidayName = getPublicHolidayName(bookingDate);
+
+    if (holidayName) {
+        req.session.profileError = `Bookings are unavailable on ${holidayName}. Please choose another date.`;
         return res.redirect(req.get('Referrer') || '/services');
     }
 
@@ -77,18 +85,23 @@ function createBooking(req, res) {
                 const customerName = (req.body.customerName || req.session.user.name || 'Customer').trim();
                 let emailSkipped = false;
 
-                const emailResult = await sendBookingConfirmationEmail({
-                    bookingId,
-                    customerName,
-                    email,
-                    merchantName: service.salonName || 'Vaniday merchant',
-                    serviceName: service.name,
-                    bookingDate,
-                    bookingTime,
-                    checkinUrl,
-                    qrCodeDataUrl
-                });
-                emailSkipped = Boolean(emailResult?.skipped);
+                try {
+                    const emailResult = await sendBookingConfirmationEmail({
+                        bookingId,
+                        customerName,
+                        email,
+                        merchantName: service.salonName || 'Vaniday merchant',
+                        serviceName: service.name,
+                        bookingDate,
+                        bookingTime,
+                        checkinUrl,
+                        qrCodeDataUrl
+                    });
+                    emailSkipped = Boolean(emailResult?.skipped);
+                } catch (emailError) {
+                    emailSkipped = true;
+                    console.error('Booking confirmation email failed:', emailError.message);
+                }
 
                 return res.render('booking-email-sent', {
                     title: 'Booking Confirmed',

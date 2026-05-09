@@ -1,4 +1,5 @@
 const express = require('express');
+require('dotenv').config();
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const path = require('path');
@@ -15,6 +16,8 @@ const merchantDashboardController = require('./controllers/merchantDashboardCont
 const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
+const whatsappController = require('./controllers/whatsappController');
+const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
     allowGuestOrCustomer,
     allowBookingViewer,
@@ -176,6 +179,8 @@ app.get('/login', userController.showLogin);
 app.post('/login', authRateLimit, userController.loginUser);
 app.get('/auth/google', userController.startGoogleLogin);
 app.get('/auth/google/callback', userController.handleGoogleCallback);
+app.get('/webhooks/whatsapp', whatsappController.getWebhook);
+app.post('/webhooks/whatsapp', whatsappController.postWebhook);
 app.get('/signup', userController.showSignup);
 app.get('/ref/:referralCode', userController.openReferralSignup);
 app.post('/signup', authRateLimit, userController.signupUser);
@@ -358,4 +363,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+    startWhatsAppReminderScheduler();
 });

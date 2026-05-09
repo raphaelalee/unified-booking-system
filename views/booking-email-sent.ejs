@@ -2,14 +2,18 @@
 
 <section class="page-title">
     <p class="eyebrow">Booking confirmed</p>
-    <h1>Confirmation sent.</h1>
-    <p>
-        We have sent your booking confirmation<% if (!emailSkipped) { %> to
-        <strong><%= booking.email %></strong><% } %>. Your check-in QR code is in the email.
-    </p>
+    <h1><%= emailSkipped ? 'Booking created.' : 'Confirmation sent.' %></h1>
+    <% if (emailSkipped) { %>
+        <p>Your booking was created. Use the check-in QR code shown below for your appointment.</p>
+    <% } else { %>
+        <p>
+            We have sent your booking confirmation to <strong><%= booking.email %></strong>.
+            Your check-in QR code is in the email.
+        </p>
+    <% } %>
     <% if (emailSkipped) { %>
         <div class="notice">
-            <p>Email sending is not configured or failed. Your booking was still created.</p>
+            <p>Email sending is not configured or Gmail rejected the SMTP login. Your booking was still created.</p>
         </div>
     <% } %>
     <div class="hero-actions">
@@ -41,7 +45,7 @@
         <aside class="receipt-qr-panel">
             <p class="eyebrow">Email QR preview</p>
             <img class="qr-code" src="<%= booking.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= booking.id %>">
-            <p class="muted">This is the same QR code included in your booking email.</p>
+            <p class="muted"><%= emailSkipped ? 'Use this QR code when checking in.' : 'This is the same QR code included in your booking email.' %></p>
         </aside>
     </div>
 </section>

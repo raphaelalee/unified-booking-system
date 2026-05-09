@@ -156,6 +156,7 @@
                 <label>
                     Date
                     <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
+                    <span class="muted js-public-holiday-message" hidden></span>
                 </label>
 
                 <label>
@@ -200,15 +201,42 @@
     (() => {
         const bookingForm = document.querySelector('.booking-form');
         const dateField = bookingForm?.querySelector('input[name="bookingDate"]');
+        const holidayMessage = bookingForm?.querySelector('.js-public-holiday-message');
         const selectedPromotion = <%- JSON.stringify(selectedPromotion || null) %>;
+        const publicHolidays = <%- JSON.stringify(typeof publicHolidays !== 'undefined' ? publicHolidays : {}) %>;
 
-        if (!bookingForm || !dateField || !selectedPromotion || selectedPromotion.campaignLabel !== 'Happy Hour') {
+        if (!bookingForm || !dateField) {
             return;
         }
 
-        const validateWeekendRule = () => {
+        const validateBookingDate = () => {
+            const setMessage = (message = '') => {
+                if (!holidayMessage) {
+                    return;
+                }
+
+                holidayMessage.textContent = message;
+                holidayMessage.hidden = !message;
+            };
+
             if (!dateField.value) {
                 dateField.setCustomValidity('');
+                setMessage();
+                return;
+            }
+
+            const holidayName = publicHolidays[dateField.value];
+
+            if (holidayName) {
+                const message = `Closed on ${holidayName}. Please choose another date.`;
+                dateField.setCustomValidity(message);
+                setMessage(message);
+                return;
+            }
+
+            if (!selectedPromotion || selectedPromotion.campaignLabel !== 'Happy Hour') {
+                dateField.setCustomValidity('');
+                setMessage();
                 return;
             }
 
@@ -216,18 +244,21 @@
 
             if (Number.isNaN(selectedDate.getTime())) {
                 dateField.setCustomValidity('');
+                setMessage();
                 return;
             }
 
             const day = selectedDate.getDay();
             const isWeekday = day >= 1 && day <= 5;
 
-            dateField.setCustomValidity(isWeekday ? '' : 'Happy Hour promotions can only be booked on weekdays.');
+            const message = isWeekday ? '' : 'Happy Hour promotions can only be booked on weekdays.';
+            dateField.setCustomValidity(message);
+            setMessage(message);
         };
 
-        dateField.addEventListener('input', validateWeekendRule);
-        dateField.addEventListener('change', validateWeekendRule);
-        validateWeekendRule();
+        dateField.addEventListener('input', validateBookingDate);
+        dateField.addEventListener('change', validateBookingDate);
+        validateBookingDate();
     })();
 
     (() => {

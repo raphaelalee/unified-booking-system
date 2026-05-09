@@ -12,6 +12,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
+const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const {
     getBookingCheckInUrl,
@@ -442,7 +443,8 @@ function renderBookingPage(req, res, merchant, options = {}) {
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
         whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, selectedService, bookingUrl),
-        todayDate: getTodayInputValue()
+        todayDate: getTodayInputValue(),
+        publicHolidays: getPublicHolidayDateMap()
     });
 }
 
@@ -483,7 +485,8 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
         encodedBookingUrl: encodeURIComponent(bookingUrl),
         whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
         backUrl: backLink.url,
-        backLabel: backLink.label
+        backLabel: backLink.label,
+        publicHolidays: getPublicHolidayDateMap()
     });
 }
 
@@ -520,6 +523,12 @@ function validateBooking(merchant, form) {
 
     if (!form.bookingDate || Number.isNaN(selectedDate.getTime()) || selectedDate < today) {
         errors.push('Please choose today or a future booking date.');
+    }
+
+    const holidayName = getPublicHolidayName(form.bookingDate);
+
+    if (holidayName) {
+        errors.push(`Bookings are unavailable on ${holidayName}. Please choose another date.`);
     }
 
     if (!form.bookingTime || !service || !serviceSelection.bookableItem.slots.includes(form.bookingTime)) {

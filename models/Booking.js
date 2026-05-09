@@ -1,6 +1,51 @@
 const db = require('../db');
 
 const bookings = [];
+let whatsappReminderSchemaReady = false;
+let whatsappReminderSchemaPending = false;
+let whatsappReminderSchemaQueue = [];
+
+function flushWhatsAppReminderSchema(error) {
+    const queue = whatsappReminderSchemaQueue;
+    whatsappReminderSchemaQueue = [];
+    whatsappReminderSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureWhatsAppReminderSchema(callback) {
+    if (whatsappReminderSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    whatsappReminderSchemaQueue.push(callback);
+
+    if (whatsappReminderSchemaPending) {
+        return;
+    }
+
+    whatsappReminderSchemaPending = true;
+
+    const sql = `
+        CREATE TABLE IF NOT EXISTS whatsapp_reminder_logs (
+            log_id INT NOT NULL AUTO_INCREMENT,
+            booking_id INT NOT NULL,
+            reminder_type VARCHAR(40) NOT NULL,
+            sent_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (log_id),
+            UNIQUE KEY uq_whatsapp_reminder_booking_type (booking_id, reminder_type),
+            KEY idx_whatsapp_reminder_sent_at (sent_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(sql, (error) => {
+        if (!error) {
+            whatsappReminderSchemaReady = true;
+        }
+
+        flushWhatsAppReminderSchema(error);
+    });
+}
 
 function normalizeTimeForDatabase(value) {
     if (!value) {
@@ -346,6 +391,125 @@ function getReceiptById(bookingId, callback) {
     });
 }
 
+function getNotificationDetailsById(bookingId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            users.name AS customer_name,
+            users.email,
+            users.phone,
+            services.service_id,
+            salons.salon_id,
+            salons.salon_name AS merchant_name,
+            salons.merchant_id AS merchant_user_id,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN users ON users.user_id = bookings.user_id
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [bookingId], (error, results) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, results[0] || null);
+    });
+}
+
+function mapNotificationBooking(row) {
+    if (!row) {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        userId: row.user_id,
+        customerName: row.customer_name,
+        email: row.email,
+        phone: row.phone,
+        merchantName: row.merchant_name,
+        merchantUserId: row.merchant_user_id,
+        serviceId: row.service_id,
+        salonId: row.salon_id,
+        serviceName: row.service_name,
+        bookingDate: row.booking_date,
+        bookingTime: row.booking_time,
+        status: row.status
+    };
+}
+
+function getWhatsAppReminderCandidates(startAt, endAt, reminderType, callback) {
+    ensureWhatsAppReminderSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                bookings.booking_id AS id,
+                bookings.user_id,
+                bookings.booking_date,
+                TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+                bookings.status,
+                users.name AS customer_name,
+                users.email,
+                users.phone,
+                salons.salon_name AS merchant_name,
+                salons.merchant_id AS merchant_user_id,
+                services.service_name,
+                services.price AS service_price
+            FROM bookings
+            INNER JOIN users ON users.user_id = bookings.user_id
+            INNER JOIN services ON services.service_id = bookings.service_id
+            INNER JOIN salons ON salons.salon_id = services.salon_id
+            LEFT JOIN whatsapp_reminder_logs ON whatsapp_reminder_logs.booking_id = bookings.booking_id
+                AND whatsapp_reminder_logs.reminder_type = ?
+            WHERE users.phone IS NOT NULL
+                AND users.phone <> ''
+                AND bookings.status NOT IN ('cancelled', 'completed', 'checked_in')
+                AND TIMESTAMP(bookings.booking_date, bookings.timeslot) BETWEEN ? AND ?
+                AND whatsapp_reminder_logs.log_id IS NULL
+            ORDER BY bookings.booking_date ASC, bookings.timeslot ASC
+            LIMIT 50
+        `;
+
+        db.query(sql, [reminderType, startAt, endAt], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapNotificationBooking).filter(Boolean));
+        });
+    });
+}
+
+function markWhatsAppReminderSent(bookingId, reminderType, callback) {
+    ensureWhatsAppReminderSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `INSERT IGNORE INTO whatsapp_reminder_logs (booking_id, reminder_type) VALUES (?, ?)`,
+            [bookingId, reminderType],
+            callback
+        );
+    });
+}
+
 function attachTransaction(bookingId, transactionId, callback) {
     const sql = `
         UPDATE bookings
@@ -392,6 +556,17 @@ function markCancelled(bookingId, callback) {
     db.query(sql, [bookingId], callback);
 }
 
+function updateSchedule(bookingId, bookingDate, bookingTime, callback) {
+    const sql = `
+        UPDATE bookings
+        SET booking_date = ?, timeslot = ?
+        WHERE booking_id = ?
+            AND status <> 'cancelled'
+    `;
+
+    db.query(sql, [bookingDate, normalizeTimeForDatabase(bookingTime), bookingId], callback);
+}
+
 function markCheckedIn(bookingId, merchantUserId, callback) {
     const sql = `
         UPDATE bookings
@@ -417,11 +592,15 @@ module.exports = {
     getAllInDatabase,
     getByMerchantUserId,
     getCheckInDetails,
+    getNotificationDetailsById,
     getSupportBookingsByUserId,
     getUpcomingByUserId,
+    getWhatsAppReminderCandidates,
     hasExistingBooking,
     hasExistingBookingInDatabase,
+    markWhatsAppReminderSent,
     markCancelled,
     markCompleted,
-    markCheckedIn
+    markCheckedIn,
+    updateSchedule
 };
