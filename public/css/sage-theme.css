@@ -3098,6 +3098,62 @@ form.is-submitting button[type="submit"] {
     color: var(--sage-readable);
 }
 
+.merchant-review-summary {
+    display: grid;
+    gap: 6px;
+}
+
+.merchant-review-summary strong,
+.merchant-review-card-top span {
+    color: #a67c00;
+}
+
+.merchant-review-summary strong {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1;
+}
+
+.merchant-review-list {
+    display: grid;
+    gap: 14px;
+}
+
+.merchant-review-card {
+    padding: 18px;
+    display: grid;
+    gap: 8px;
+    border: 1px solid rgba(104, 112, 88, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 252, 244, 0.9);
+}
+
+.merchant-review-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.merchant-review-card p,
+.merchant-review-card small {
+    margin: 0;
+}
+
+.merchant-review-media {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.merchant-review-media img,
+.merchant-review-media video {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(104, 112, 88, 0.16);
+}
+
 .merchant-info-footer-panel {
     width: min(100%, 1480px);
     display: flex;
@@ -5320,6 +5376,98 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-calendar-shell {
     padding: 16px;
+}
+
+.merchant-reviews-shell {
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.86);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.merchant-review-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merchant-review-summary-card,
+.merchant-review-card {
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.merchant-review-summary-card {
+    display: grid;
+    gap: 6px;
+}
+
+.merchant-review-summary-card span,
+.merchant-review-summary-card small,
+.merchant-review-card small {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-review-summary-card strong {
+    color: var(--sage-ink);
+    font-size: clamp(1.4rem, 2.2vw, 2rem);
+    line-height: 1;
+}
+
+.merchant-review-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 16px;
+}
+
+.merchant-review-card {
+    display: grid;
+    gap: 12px;
+}
+
+.merchant-review-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.merchant-review-card-top strong,
+.merchant-review-card p {
+    color: var(--sage-ink);
+}
+
+.merchant-review-card p {
+    margin: 0;
+}
+
+.merchant-review-rating {
+    text-align: right;
+}
+
+.merchant-review-rating span {
+    color: #a67c00;
+    font-size: 1.1rem;
+    font-weight: 900;
+}
+
+.merchant-review-media {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.merchant-review-media img,
+.merchant-review-media video {
+    width: 128px;
+    height: 128px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
 }
 
 .merchant-calendar-legend {

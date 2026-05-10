@@ -399,8 +399,10 @@ function getReceiptById(bookingId, callback) {
             bookings.status,
             users.name AS customer_name,
             users.email,
+            salons.salon_id AS merchant_id,
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
+            services.service_id,
             services.service_name,
             services.price AS service_price
         FROM bookings

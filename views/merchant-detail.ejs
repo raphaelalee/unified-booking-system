@@ -2,6 +2,10 @@
 
 <%
     const detailServices = Array.isArray(merchant.services) ? merchant.services : [];
+    const merchantReviews = Array.isArray(reviews) ? reviews : [];
+    const averageRating = Number.isFinite(reviewSummary?.averageRating) ? reviewSummary.averageRating : Number(merchant.rating || 0);
+    const reviewCount = Number(reviewSummary?.reviewCount || 0);
+    const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
     const priceValues = detailServices.map((service) => Number(service.price)).filter((price) => Number.isFinite(price));
     const startingPrice = priceValues.length > 0 ? Math.min(...priceValues) : 0;
     const slotCount = detailServices.reduce((total, service) => total + (Array.isArray(service.slots) ? service.slots.length : 0), 0);
@@ -22,7 +26,7 @@
             <p><%= merchant.description %></p>
             <div class="merchant-info-meta">
                 <span><%= merchant.location %></span>
-                <span>Rating <%= merchant.rating %></span>
+                <span>Rating <%= averageRating ? averageRating.toFixed(1) : merchant.rating %><%= reviewCount > 0 ? ` (${reviewCount} review${reviewCount === 1 ? '' : 's'})` : '' %></span>
                 <span><%= detailServices.length %> services</span>
             </div>
         </div>
@@ -45,7 +49,7 @@
                 </div>
                 <div>
                     <span>Rating</span>
-                    <strong><%= merchant.rating %></strong>
+                    <strong><%= averageRating ? averageRating.toFixed(1) : merchant.rating %></strong>
                 </div>
                 <div>
                     <span>From</span>
@@ -105,6 +109,60 @@
                 <% }) %>
             </div>
         <% } %>
+    </section>
+
+    <section class="merchant-info-grid">
+        <article class="merchant-info-panel">
+            <p class="eyebrow">Customer reviews</p>
+            <h2>What customers said</h2>
+            <div class="merchant-review-summary">
+                <strong><%= averageRating ? averageRating.toFixed(1) : merchant.rating %></strong>
+                <span><%= reviewCount > 0 ? `${reviewCount} verified review${reviewCount === 1 ? '' : 's'}` : 'No verified reviews yet' %></span>
+            </div>
+
+            <% if (!merchantReviews.length) { %>
+                <p class="muted">Reviews appear here after customers complete a service and submit feedback.</p>
+            <% } else { %>
+                <div class="merchant-review-list">
+                    <% merchantReviews.forEach((review) => { %>
+                        <article class="merchant-review-card">
+                            <div class="merchant-review-card-top">
+                                <strong><%= review.customerName %></strong>
+                                <span><%- renderStars(review.rating) %></span>
+                            </div>
+                            <small><%= review.serviceName %></small>
+                            <% if (review.comment) { %>
+                                <p><%= review.comment %></p>
+                            <% } else { %>
+                                <p class="muted">Customer left a rating without additional comments.</p>
+                            <% } %>
+                            <% if (review.imagePath || review.videoPath) { %>
+                                <div class="merchant-review-media">
+                                    <% if (review.imagePath) { %>
+                                        <a href="<%= review.imagePath %>" target="_blank" rel="noopener">
+                                            <img src="<%= review.imagePath %>" alt="Review photo for <%= review.serviceName %>">
+                                        </a>
+                                    <% } %>
+                                    <% if (review.videoPath) { %>
+                                        <video controls preload="metadata">
+                                            <source src="<%= review.videoPath %>">
+                                        </video>
+                                    <% } %>
+                                </div>
+                            <% } %>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </article>
+
+        <article class="merchant-info-panel merchant-info-highlight">
+            <p class="eyebrow">Review policy</p>
+            <h2>Verified service feedback</h2>
+            <p class="muted">
+                Only customers with completed or checked-in bookings can submit one review per booking, so the feedback shown here is tied to actual service visits.
+            </p>
+        </article>
     </section>
 
     <section class="merchant-info-footer-panel">

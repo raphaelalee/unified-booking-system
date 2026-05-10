@@ -4,6 +4,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const Booking = require('../models/Booking');
 const Merchant = require('../models/Merchant');
+const Review = require('../models/Review');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
@@ -102,6 +103,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let upcomingBookings = [];
     let pastBookings = [];
     let walletHistory = [];
+    let reviewableBookings = [];
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -126,7 +128,8 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                 walletHistory,
                 referral: buildCustomerReferral(member, referralCode, referralStats),
                 upcomingBookings,
-                pastBookings
+                pastBookings,
+                reviewableBookings
             };
 
             if (accountUser.referral_code) {
@@ -181,12 +184,38 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
         Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
             if (bookingError) {
                 console.error(bookingError);
-            } else {
-                upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
-                pastBookings = bookings.filter((booking) => booking.booking_group === 'past');
+                awardNext();
+                return;
             }
 
-            awardNext();
+            upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
+            pastBookings = bookings.filter((booking) => booking.booking_group === 'past');
+            const bookingIds = pastBookings.map((booking) => booking.id);
+
+            Review.getByBookingIds(bookingIds, (reviewError, reviews = []) => {
+                if (reviewError) {
+                    console.error(reviewError);
+                } else {
+                    const reviewMap = reviews.reduce((map, review) => {
+                        map[String(review.bookingId)] = review;
+                        return map;
+                    }, {});
+
+                    pastBookings = pastBookings.map((booking) => ({
+                        ...booking,
+                        review: reviewMap[String(booking.id)] || null
+                    }));
+                }
+
+                reviewableBookings = pastBookings.filter((booking) => (
+                    ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                ));
+                pastBookings = pastBookings.filter((booking) => !(
+                    ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                ));
+
+                awardNext();
+            });
         });
     });
 }
@@ -202,7 +231,8 @@ function getEmptyCustomerExtras() {
         walletHistory: [],
         referral: null,
         upcomingBookings: [],
-        pastBookings: []
+        pastBookings: [],
+        reviewableBookings: []
     };
 }
 
@@ -689,6 +719,7 @@ function showProfile(req, res) {
                 referral: customerExtras.referral,
                 upcomingBookings: customerExtras.upcomingBookings,
                 pastBookings: customerExtras.pastBookings,
+                reviewableBookings: customerExtras.reviewableBookings,
                 isCustomer,
                 dashboardPath: getDashboardPath(req.session.user.role),
                 roleLabel: getRoleLabel(req.session.user.role),

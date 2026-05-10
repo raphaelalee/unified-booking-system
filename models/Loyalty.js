@@ -334,6 +334,104 @@ function awardForReceipt(receipt, callback) {
     });
 }
 
+function awardReviewBonus(userId, bookingId, options = {}, callback) {
+    const basePoints = Number(options.basePoints || 0);
+    const mediaPoints = Number(options.mediaPoints || 0);
+    const detailPoints = Number(options.detailPoints || 0);
+    const totalPoints = Math.max(0, Math.floor(basePoints + mediaPoints + detailPoints));
+
+    if (!userId || !bookingId || totalPoints <= 0) {
+        callback(null, { awarded: false, points: 0 });
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const sourceReceiptId = `booking-review-${bookingId}`;
+                const descriptionParts = [`Review reward for booking #${bookingId}`];
+
+                if (basePoints > 0) descriptionParts.push(`+${Math.floor(basePoints)} rating`);
+                if (mediaPoints > 0) descriptionParts.push(`+${Math.floor(mediaPoints)} media`);
+                if (detailPoints > 0) descriptionParts.push(`+${Math.floor(detailPoints)} detail`);
+
+                const insertSql = `
+                    INSERT IGNORE INTO loyalty_transactions
+                        (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
+                    VALUES (?, ?, 'review_bonus', ?, 0, ?)
+                `;
+
+                connection.query(insertSql, [
+                    userId,
+                    sourceReceiptId,
+                    totalPoints,
+                    descriptionParts.join(' ')
+                ], (insertError, result) => {
+                    if (insertError) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(insertError);
+                        });
+                    }
+
+                    if (!result.affectedRows) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, { awarded: false, duplicate: true, points: 0 });
+                        });
+                    }
+
+                    const updateSql = `
+                        INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
+                        VALUES (?, ?, 0, ?)
+                        ON DUPLICATE KEY UPDATE
+                            points_balance = points_balance + VALUES(points_balance),
+                            lifetime_points = lifetime_points + VALUES(lifetime_points)
+                    `;
+
+                    connection.query(updateSql, [userId, totalPoints, totalPoints], (updateError) => {
+                        if (updateError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(updateError);
+                            });
+                        }
+
+                        return connection.commit((commitError) => {
+                            connection.release();
+                            callback(commitError, {
+                                awarded: !commitError,
+                                points: totalPoints,
+                                breakdown: {
+                                    basePoints: Math.floor(basePoints),
+                                    mediaPoints: Math.floor(mediaPoints),
+                                    detailPoints: Math.floor(detailPoints)
+                                }
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
 function redeemCashback(userId, amount, sourceReceiptId, callback) {
     const redeemAmount = roundMoney(amount);
 
@@ -495,6 +593,7 @@ function redeemPointsForCashback(userId, points, callback) {
 
 module.exports = {
     awardForReceipt,
+    awardReviewBonus,
     ensureWallet,
     getRules,
     getWalletView,

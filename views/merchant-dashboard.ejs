@@ -33,10 +33,16 @@
         cancelled: 'cancelled',
         no_show: 'no-show'
     };
+    const merchantReviews = typeof reviews !== 'undefined' && Array.isArray(reviews) ? reviews : [];
+    const merchantReviewSummary = typeof reviewSummary !== 'undefined' && reviewSummary
+        ? reviewSummary
+        : { reviewCount: 0, averageRating: null };
+    const renderReviewStars = (rating) => '&#9733;'.repeat(Math.round(Number(rating || 0))) + '&#9734;'.repeat(Math.max(0, 5 - Math.round(Number(rating || 0))));
     const merchantTabAlerts = {
         dashboard: pendingCheckIns + (validationReport?.issues?.length || 0),
         calendar: pendingAppointments.length,
-        inventory: lowStockProducts.length
+        inventory: lowStockProducts.length,
+        reviews: merchantReviews.length
     };
     const merchantBadgeKey = `merchant-tab-badges:${merchant.id || merchant.salon_id || merchant.name || 'default'}`;
 %>
@@ -56,6 +62,7 @@
                 <button type="button" class="merchant-topbar-tab active" data-merchant-tab="dashboard">Dashboard<% if (merchantTabAlerts.dashboard > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.dashboard > 99 ? '99+' : merchantTabAlerts.dashboard %></span><% } %></button>
                 <button type="button" class="merchant-topbar-tab" data-merchant-tab="calendar">Calendar<% if (merchantTabAlerts.calendar > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.calendar > 99 ? '99+' : merchantTabAlerts.calendar %></span><% } %></button>
                 <button type="button" class="merchant-topbar-tab" data-merchant-tab="inventory">Inventory<% if (merchantTabAlerts.inventory > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.inventory > 99 ? '99+' : merchantTabAlerts.inventory %></span><% } %></button>
+                <button type="button" class="merchant-topbar-tab" data-merchant-tab="reviews">Reviews<% if (merchantTabAlerts.reviews > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.reviews > 99 ? '99+' : merchantTabAlerts.reviews %></span><% } %></button>
                 <a href="/merchant/promotions">Promotions</a>
                 <a href="/merchant/services">Services</a>
                 <a href="/profile">Profile</a>
@@ -337,6 +344,80 @@
                 </section>
             </div>
         </section>
+
+        <section class="merchant-dashboard-panel" id="merchant-reviews" data-merchant-panel="reviews" hidden>
+            <section class="merchant-reviews-shell">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Customer Feedback</p>
+                        <h2>Reviews</h2>
+                    </div>
+                    <span><%= merchantReviewSummary.reviewCount || 0 %> total</span>
+                </div>
+
+                <div class="merchant-review-summary-grid">
+                    <article class="merchant-review-summary-card">
+                        <span>Average rating</span>
+                        <strong><%= merchantReviewSummary.averageRating !== null ? Number(merchantReviewSummary.averageRating).toFixed(1) : '0.0' %></strong>
+                        <small><%- renderReviewStars(merchantReviewSummary.averageRating) %></small>
+                    </article>
+                    <article class="merchant-review-summary-card">
+                        <span>Verified reviews</span>
+                        <strong><%= merchantReviewSummary.reviewCount || 0 %></strong>
+                        <small>From completed services</small>
+                    </article>
+                    <article class="merchant-review-summary-card">
+                        <span>Media uploads</span>
+                        <strong><%= merchantReviews.filter((review) => review.imagePath || review.videoPath).length %></strong>
+                        <small>Photos or videos attached</small>
+                    </article>
+                </div>
+
+                <% if (!merchantReviews.length) { %>
+                    <div class="merchant-empty-state">
+                        <span>RV</span>
+                        <strong>No reviews yet</strong>
+                        <p class="muted">Reviews appear here after customers complete a service and submit feedback.</p>
+                    </div>
+                <% } else { %>
+                    <div class="merchant-review-list">
+                        <% merchantReviews.forEach((review) => { %>
+                            <article class="merchant-review-card">
+                                <div class="merchant-review-card-top">
+                                    <div>
+                                        <strong><%= review.customerName || 'Customer' %></strong>
+                                        <span><%= review.serviceName || 'Service' %></span>
+                                    </div>
+                                    <div class="merchant-review-rating">
+                                        <span><%- renderReviewStars(review.rating) %></span>
+                                        <small><%= new Date(review.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></small>
+                                    </div>
+                                </div>
+                                <% if (review.comment) { %>
+                                    <p><%= review.comment %></p>
+                                <% } else { %>
+                                    <p class="muted">Customer left a rating without a written comment.</p>
+                                <% } %>
+                                <% if (review.imagePath || review.videoPath) { %>
+                                    <div class="merchant-review-media">
+                                        <% if (review.imagePath) { %>
+                                            <a href="<%= review.imagePath %>" target="_blank" rel="noopener">
+                                                <img src="<%= review.imagePath %>" alt="Review photo for <%= review.serviceName %>">
+                                            </a>
+                                        <% } %>
+                                        <% if (review.videoPath) { %>
+                                            <video controls preload="metadata">
+                                                <source src="<%= review.videoPath %>">
+                                            </video>
+                                        <% } %>
+                                    </div>
+                                <% } %>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+        </section>
     </div>
 </section>
 
@@ -347,7 +428,8 @@
         const merchantHashMap = {
             '#merchant-overview': 'dashboard',
             '#merchant-calendar': 'calendar',
-            '#merchant-inventory': 'inventory'
+            '#merchant-inventory': 'inventory',
+            '#merchant-reviews': 'reviews'
         };
         const merchantBadgeStorageKey = <%- JSON.stringify(merchantBadgeKey) %>;
         const getClearedMerchantTabs = () => {

@@ -7,7 +7,20 @@
     const profilePastBookings = typeof pastBookings !== 'undefined' && Array.isArray(pastBookings)
         ? pastBookings
         : [];
+    const profileReviewableBookings = typeof reviewableBookings !== 'undefined' && Array.isArray(reviewableBookings)
+        ? reviewableBookings
+        : [];
+    const profileReviewedBookings = profilePastBookings.filter((booking) => booking.review);
+    const profileReviewRewardMax = 70;
+    const profileReviewPotential = profileReviewableBookings.length * profileReviewRewardMax;
+    const profileReviewEarnedPoints = loyalty && Array.isArray(loyalty.transactions)
+        ? loyalty.transactions
+            .filter((entry) => String(entry.type || '').toLowerCase() === 'review_bonus')
+            .reduce((sum, entry) => sum + Number(entry.pointsDelta || 0), 0)
+        : 0;
     const formatBookingStatus = (value) => String(value || 'pending').replace(/_/g, '-');
+    const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
+    const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
 %>
 
 <section class="section compact account-settings-page profile-redesign-page">
@@ -60,6 +73,7 @@
         <a href="#profile-details" data-profile-tab="profile-details">Profile</a>
         <% if (isCustomer) { %>
             <a href="#bookings" data-profile-tab="bookings">Bookings</a>
+            <a href="#to-rate" data-profile-tab="to-rate">To Rate</a>
             <a href="#wallet" data-profile-tab="wallet">Wallet</a>
             <a href="#membership" data-profile-tab="membership">Rewards</a>
         <% } %>
@@ -256,8 +270,150 @@
                                         <span class="profile-booking-status-row">
                                             <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
                                         </span>
+                                        <% if (booking.review) { %>
+                                            <div class="profile-booking-review-block">
+                                                <strong>Your review</strong>
+                                                <span><%- renderStars(booking.review.rating) %></span>
+                                                <% if (booking.review.comment) { %>
+                                                    <p><%= booking.review.comment %></p>
+                                                <% } %>
+                                                <% if (booking.review.imagePath || booking.review.videoPath) { %>
+                                                    <div class="profile-review-media">
+                                                        <% if (booking.review.imagePath) { %>
+                                                            <a href="<%= booking.review.imagePath %>" target="_blank" rel="noopener">
+                                                                <img src="<%= booking.review.imagePath %>" alt="Review photo for <%= booking.service_name %>">
+                                                            </a>
+                                                        <% } %>
+                                                        <% if (booking.review.videoPath) { %>
+                                                            <video controls preload="metadata">
+                                                                <source src="<%= booking.review.videoPath %>">
+                                                            </video>
+                                                        <% } %>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+                                        <% } %>
                                     </div>
                                     <a class="button secondary" href="/receipt/<%= booking.id %>">View</a>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </section>
+
+                <section id="to-rate" class="account-panel profile-tab-panel" data-profile-panel="to-rate">
+                    <div class="profile-review-hub">
+                        <div class="profile-review-hub-top">
+                            <div>
+                                <p class="eyebrow">Reviews</p>
+                                <h2>My Rating</h2>
+                            </div>
+                            <p class="muted">Rate completed services and earn reward points.</p>
+                        </div>
+
+                        <div class="profile-review-hub-stats">
+                            <article>
+                                <strong><%= profileReviewableBookings.length %></strong>
+                                <span>To rate</span>
+                            </article>
+                            <article>
+                                <strong><%= profileReviewedBookings.length %></strong>
+                                <span>My reviews</span>
+                            </article>
+                            <article>
+                                <strong><%= profileReviewEarnedPoints %></strong>
+                                <span>Points earned</span>
+                            </article>
+                        </div>
+
+                        <div class="profile-review-hub-banner">
+                            <strong>Review all and earn up to <%= profileReviewPotential %> pts</strong>
+                            <span><%= profileReviewableBookings.length %> service<%= profileReviewableBookings.length === 1 ? '' : 's' %> waiting for review</span>
+                        </div>
+
+                        <div class="profile-review-hub-switcher">
+                            <span class="is-active">To Rate</span>
+                            <a href="#bookings" data-profile-tab-link="bookings">My Reviews</a>
+                        </div>
+                    </div>
+
+                    <% if (!profileReviewableBookings.length) { %>
+                        <p class="muted">No completed services waiting for review.</p>
+                    <% } else { %>
+                        <div class="profile-review-queue">
+                            <% profileReviewableBookings.forEach((booking) => { %>
+                                <article class="profile-review-queue-card">
+                                    <div class="profile-review-queue-card-head">
+                                        <strong><%= booking.merchant_name %></strong>
+                                        <span>Completed service ready to review</span>
+                                    </div>
+                                    <div class="profile-review-queue-card-body">
+                                        <div class="profile-review-service-thumb" aria-hidden="true">
+                                            <span><%= String(booking.service_name || 'S').charAt(0).toUpperCase() %></span>
+                                        </div>
+                                        <div class="profile-review-service-copy">
+                                            <strong><%= booking.service_name %></strong>
+                                            <span>
+                                                <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
+                                                <% if (booking.booking_time) { %>
+                                                    at <%= booking.booking_time %>
+                                                <% } %>
+                                            </span>
+                                            <span class="profile-booking-status-row">
+                                                <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
+                                            </span>
+                                        </div>
+                                        <div class="profile-review-service-action">
+                                            <span class="profile-review-bonus-pill">Bonus +<%= profileReviewRewardMax %> pts</span>
+                                            <a class="button primary" href="/receipt/<%= booking.id %>">View service</a>
+                                        </div>
+                                    </div>
+                                    <div class="profile-review-queue-card-foot">
+                                        <span>Rate to earn +10 pts</span>
+                                        <span class="profile-review-star-outline" aria-hidden="true">&#9734;&#9734;&#9734;&#9734;&#9734;</span>
+                                    </div>
+                                    <div>
+                                        <% if (canReviewBooking(booking)) { %>
+                                            <details class="profile-booking-review-form">
+                                                <summary class="button secondary">Review now</summary>
+                                                <form action="/profile/bookings/<%= booking.id %>/review" method="POST" enctype="multipart/form-data">
+                                                    <div class="profile-review-reward-strip">
+                                                        <p><span>Rate service</span><strong>+10 pts</strong></p>
+                                                        <p><span>Add image or video</span><strong>+50 pts</strong></p>
+                                                        <p><span>Write 50+ characters</span><strong>+10 pts</strong></p>
+                                                    </div>
+                                                    <label>
+                                                        Rating
+                                                        <span class="profile-star-rating" role="radiogroup" aria-label="Star rating">
+                                                            <input type="radio" id="review-rating-<%= booking.id %>-5" name="rating" value="5" required>
+                                                            <label for="review-rating-<%= booking.id %>-5" title="5 stars">&#9733;</label>
+                                                            <input type="radio" id="review-rating-<%= booking.id %>-4" name="rating" value="4">
+                                                            <label for="review-rating-<%= booking.id %>-4" title="4 stars">&#9733;</label>
+                                                            <input type="radio" id="review-rating-<%= booking.id %>-3" name="rating" value="3">
+                                                            <label for="review-rating-<%= booking.id %>-3" title="3 stars">&#9733;</label>
+                                                            <input type="radio" id="review-rating-<%= booking.id %>-2" name="rating" value="2">
+                                                            <label for="review-rating-<%= booking.id %>-2" title="2 stars">&#9733;</label>
+                                                            <input type="radio" id="review-rating-<%= booking.id %>-1" name="rating" value="1">
+                                                            <label for="review-rating-<%= booking.id %>-1" title="1 star">&#9733;</label>
+                                                        </span>
+                                                    </label>
+                                                    <label>
+                                                        Comment
+                                                        <textarea name="comment" rows="3" maxlength="800" placeholder="Share your experience with this service."></textarea>
+                                                    </label>
+                                                    <label>
+                                                        Photo
+                                                        <input type="file" name="reviewImage" accept="image/*">
+                                                    </label>
+                                                    <label>
+                                                        Video
+                                                        <input type="file" name="reviewVideo" accept="video/*">
+                                                    </label>
+                                                    <button class="button primary" type="submit">Submit review</button>
+                                                </form>
+                                            </details>
+                                        <% } %>
+                                    </div>
                                 </article>
                             <% }) %>
                         </div>

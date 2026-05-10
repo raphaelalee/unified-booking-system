@@ -5,6 +5,7 @@ const Product = require('../models/Product');
 const Promotion = require('../models/Promotion');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
+const Review = require('../models/Review');
 const { getMerchantScanUrl } = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
@@ -522,123 +523,141 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                         console.error(orderError);
                     }
 
-                    const safeBookings = bookingError ? [] : bookings || [];
-                    const safePromotions = promotionError ? [] : promotions || [];
-                    const safeProducts = productError ? [] : products || [];
-                    const safeOrders = orderError ? [] : orders || [];
-                    const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
-                    const slotCount = Array.isArray(merchant.services)
-                        ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
-                        : 0;
-                    const bookingRevenue = safeBookings.reduce((total, booking) => {
-                        return total + Number(booking.service_price || booking.price || 0);
-                    }, 0);
-                    const productRevenue = safeOrders.reduce((total, order) => total + Number(order.totalAmount || 0), 0);
-                    const totalRevenue = bookingRevenue + productRevenue;
-                    const totalOrders = safeOrders.length + safeBookings.length;
-                    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-                    const uniqueCustomers = new Set([
-                        ...safeBookings.map((booking) => booking.customer_email || booking.email || booking.customerName || booking.customer_name),
-                        ...safeOrders.map((order) => order.userId)
-                    ].filter(Boolean)).size;
-                    const averagePrice = serviceCount > 0
-                        ? merchant.services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
-                        : 0;
-                    const topService = Array.isArray(merchant.services)
-                        ? merchant.services.reduce((top, service) => {
-                            const servicePrice = Number(service.price || 0);
-                            return servicePrice > Number(top?.price || 0) ? service : top;
-                        }, null)
-                        : null;
-                    const lowStockProducts = safeProducts.filter((product) => Number(product.stockQuantity || 0) <= 5);
-                    const salesDays = getLastSevenSalesDays(safeOrders);
-                    const appointmentReport = buildAppointmentReport(safeBookings);
-                    const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
-                    const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
-                    const growthPercent = previousRevenue > 0
-                        ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
-                        : currentRevenue > 0 ? 100 : 0;
-                    const validationIssues = [];
-
-                    if (!merchant.location && !merchant.address) {
-                        validationIssues.push('Merchant location is not configured yet.');
-                    }
-                    if (serviceCount === 0) {
-                        validationIssues.push('No services are active. Add a service to start booking customers.');
-                    }
-                    if (lowStockProducts.length > 0) {
-                        validationIssues.push(`${lowStockProducts.length} product${lowStockProducts.length === 1 ? '' : 's'} need stock review.`);
-                    }
-                    if (bookingError) {
-                        validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
-                    }
-                    if (promotionError) {
-                        validationIssues.push('Promotion records could not be loaded, so campaign reporting is temporarily limited.');
-                    }
-                    if (productError || orderError) {
-                        validationIssues.push('Product sales reporting could not be fully loaded.');
-                    }
-
-                    const reports = {
-                        stats: {
-                            serviceCount,
-                            slotCount,
-                            bookingCount: safeBookings.length,
-                            customerCount: uniqueCustomers,
-                            bookingRevenue,
-                            productRevenue,
-                            totalRevenue,
-                            totalOrders,
-                            averageOrderValue,
-                            averagePrice,
-                            promotionCount: safePromotions.length,
-                            productCount: safeProducts.length,
-                            growthPercent
-                        },
-                        customerReport: {
-                            totalCustomers: uniqueCustomers,
-                            recentBookings: safeBookings.slice(0, 5)
-                        },
-                        appointmentReport,
-                        merchantReport: {
-                            categoryCount: Array.isArray(merchant.services)
-                                ? new Set(merchant.services.map((service) => service.category || '')).size
-                                : 0,
-                            slotCount,
-                            serviceCount,
-                            topService
-                        },
-                        salesReport: {
-                            dailySales: salesDays,
-                            recentOrders: safeOrders.slice(0, 5),
-                            lowStockProducts
-                        },
-                        validationReport: {
-                            issues: validationIssues,
-                            status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+                    return Review.getSummaryByMerchantId(merchant.id, (reviewSummaryError, reviewSummary = { reviewCount: 0, averageRating: null }) => {
+                        if (reviewSummaryError) {
+                            console.error(reviewSummaryError);
                         }
-                    };
 
-                    const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
-                    const error = options.error !== undefined ? options.error : req.session.merchantError;
-                    req.session.merchantSuccess = null;
-                    req.session.merchantError = null;
+                        return Review.listByMerchantId(merchant.id, 12, (reviewListError, reviews = []) => {
+                            if (reviewListError) {
+                                console.error(reviewListError);
+                            }
 
-                    return res.status(options.status || 200).render('merchant-dashboard', {
-                        title: 'Merchant Dashboard',
-                        merchant,
-                        success,
-                        error,
-                        databaseError: Boolean(bookingError || promotionError || productError || orderError),
-                        stats: reports.stats,
-                        customerReport: reports.customerReport,
-                        appointmentReport: reports.appointmentReport,
-                        merchantReport: reports.merchantReport,
-                        salesReport: reports.salesReport,
-                        validationReport: reports.validationReport,
-                        promotions: safePromotions,
-                        qrCodeDataUrl: options.qrCodeDataUrl || null,
-                        qrBookingUrl: options.qrBookingUrl || null
+                            const safeBookings = bookingError ? [] : bookings || [];
+                            const safePromotions = promotionError ? [] : promotions || [];
+                            const safeProducts = productError ? [] : products || [];
+                            const safeOrders = orderError ? [] : orders || [];
+                            const safeReviews = reviewListError ? [] : reviews || [];
+                            const safeReviewSummary = reviewSummaryError
+                                ? { reviewCount: 0, averageRating: null }
+                                : reviewSummary || { reviewCount: 0, averageRating: null };
+                            const serviceCount = Array.isArray(merchant.services) ? merchant.services.length : 0;
+                            const slotCount = Array.isArray(merchant.services)
+                                ? merchant.services.reduce((total, svc) => total + ((Array.isArray(svc.slots) ? svc.slots.length : 0)), 0)
+                                : 0;
+                            const bookingRevenue = safeBookings.reduce((total, booking) => {
+                                return total + Number(booking.service_price || booking.price || 0);
+                            }, 0);
+                            const productRevenue = safeOrders.reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+                            const totalRevenue = bookingRevenue + productRevenue;
+                            const totalOrders = safeOrders.length + safeBookings.length;
+                            const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+                            const uniqueCustomers = new Set([
+                                ...safeBookings.map((booking) => booking.customer_email || booking.email || booking.customerName || booking.customer_name),
+                                ...safeOrders.map((order) => order.userId)
+                            ].filter(Boolean)).size;
+                            const averagePrice = serviceCount > 0
+                                ? merchant.services.reduce((total, service) => total + Number(service.price || 0), 0) / serviceCount
+                                : 0;
+                            const topService = Array.isArray(merchant.services)
+                                ? merchant.services.reduce((top, service) => {
+                                    const servicePrice = Number(service.price || 0);
+                                    return servicePrice > Number(top?.price || 0) ? service : top;
+                                }, null)
+                                : null;
+                            const lowStockProducts = safeProducts.filter((product) => Number(product.stockQuantity || 0) <= 5);
+                            const salesDays = getLastSevenSalesDays(safeOrders);
+                            const appointmentReport = buildAppointmentReport(safeBookings);
+                            const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
+                            const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
+                            const growthPercent = previousRevenue > 0
+                                ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
+                                : currentRevenue > 0 ? 100 : 0;
+                            const validationIssues = [];
+
+                            if (!merchant.location && !merchant.address) {
+                                validationIssues.push('Merchant location is not configured yet.');
+                            }
+                            if (serviceCount === 0) {
+                                validationIssues.push('No services are active. Add a service to start booking customers.');
+                            }
+                            if (lowStockProducts.length > 0) {
+                                validationIssues.push(`${lowStockProducts.length} product${lowStockProducts.length === 1 ? '' : 's'} need stock review.`);
+                            }
+                            if (bookingError) {
+                                validationIssues.push('Booking records could not be loaded, so customer reporting is temporarily limited.');
+                            }
+                            if (promotionError) {
+                                validationIssues.push('Promotion records could not be loaded, so campaign reporting is temporarily limited.');
+                            }
+                            if (productError || orderError) {
+                                validationIssues.push('Product sales reporting could not be fully loaded.');
+                            }
+
+                            const reports = {
+                                stats: {
+                                    serviceCount,
+                                    slotCount,
+                                    bookingCount: safeBookings.length,
+                                    customerCount: uniqueCustomers,
+                                    bookingRevenue,
+                                    productRevenue,
+                                    totalRevenue,
+                                    totalOrders,
+                                    averageOrderValue,
+                                    averagePrice,
+                                    promotionCount: safePromotions.length,
+                                    productCount: safeProducts.length,
+                                    growthPercent
+                                },
+                                customerReport: {
+                                    totalCustomers: uniqueCustomers,
+                                    recentBookings: safeBookings.slice(0, 5)
+                                },
+                                appointmentReport,
+                                merchantReport: {
+                                    categoryCount: Array.isArray(merchant.services)
+                                        ? new Set(merchant.services.map((service) => service.category || '')).size
+                                        : 0,
+                                    slotCount,
+                                    serviceCount,
+                                    topService
+                                },
+                                salesReport: {
+                                    dailySales: salesDays,
+                                    recentOrders: safeOrders.slice(0, 5),
+                                    lowStockProducts
+                                },
+                                validationReport: {
+                                    issues: validationIssues,
+                                    status: validationIssues.length === 0 ? 'Healthy' : 'Needs Review'
+                                }
+                            };
+
+                            const success = options.success !== undefined ? options.success : req.session.merchantSuccess;
+                            const error = options.error !== undefined ? options.error : req.session.merchantError;
+                            req.session.merchantSuccess = null;
+                            req.session.merchantError = null;
+
+                            return res.status(options.status || 200).render('merchant-dashboard', {
+                                title: 'Merchant Dashboard',
+                                merchant,
+                                success,
+                                error,
+                                databaseError: Boolean(bookingError || promotionError || productError || orderError || reviewSummaryError || reviewListError),
+                                stats: reports.stats,
+                                customerReport: reports.customerReport,
+                                appointmentReport: reports.appointmentReport,
+                                merchantReport: reports.merchantReport,
+                                salesReport: reports.salesReport,
+                                validationReport: reports.validationReport,
+                                reviewSummary: safeReviewSummary,
+                                reviews: safeReviews,
+                                promotions: safePromotions,
+                                qrCodeDataUrl: options.qrCodeDataUrl || null,
+                                qrBookingUrl: options.qrBookingUrl || null
+                            });
+                        });
                     });
                 });
             });

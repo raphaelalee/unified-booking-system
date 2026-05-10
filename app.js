@@ -17,6 +17,7 @@ const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
+const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
     allowGuestOrCustomer,
@@ -137,6 +138,19 @@ function requireMerchantJson(req, res, next) {
     return next();
 }
 
+function handleReviewMediaUpload(req, res, next) {
+    uploadReviewMedia(req, res, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        console.error(error);
+        req.session.profileError = error.message || 'Review media could not be uploaded.';
+        res.redirect('/profile#bookings');
+    });
+}
+
 app.get('/', allowGuestOrCustomer, merchantController.showHome);
 app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
@@ -173,6 +187,7 @@ app.post('/profile', userController.updateProfile);
 app.post('/profile/password', userController.updatePassword);
 app.post('/profile/bookings/:bookingId/cancel', requireCustomer, bookingController.cancelBooking);
 app.post('/profile/bookings/:bookingId/reschedule', requireCustomer, bookingController.rescheduleBooking);
+app.post('/profile/bookings/:bookingId/review', requireCustomer, handleReviewMediaUpload, bookingController.submitReview);
 app.get('/rewards-game', requireCustomer, gameController.showCustomerGame);
 app.post('/rewards-game/play', requireCustomer, gameController.playCustomerGame);
 app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);

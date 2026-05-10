@@ -9,6 +9,7 @@ const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Loyalty = require('../models/Loyalty');
 const Notification = require('../models/Notification');
+const Review = require('../models/Review');
 const User = require('../models/User');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
@@ -477,20 +478,41 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
     };
     const backLink = backLinks[source] || backLinks.services;
 
-    return res.status(options.status || 200).render('merchant-detail', {
-        title: merchant.name,
-        merchant,
-        isFavourite: favouriteIds.includes(merchant.id),
-        canGenerateQr: Boolean(options.canGenerateQr),
-        errors: options.errors || [],
-        form: getPrefilledBookingForm(req, options.form || {}),
-        todayDate: getTodayInputValue(),
-        bookingUrl,
-        encodedBookingUrl: encodeURIComponent(bookingUrl),
-        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
-        backUrl: backLink.url,
-        backLabel: backLink.label,
-        publicHolidays: getPublicHolidayDateMap()
+    return Review.getSummaryByMerchantId(merchant.id, (summaryError, reviewSummary) => {
+        if (summaryError) {
+            console.error(summaryError);
+        }
+
+        return Review.listByMerchantId(merchant.id, 6, (reviewsError, reviews = []) => {
+            if (reviewsError) {
+                console.error(reviewsError);
+            }
+
+            const summary = reviewSummary && reviewSummary.reviewCount > 0
+                ? reviewSummary
+                : {
+                    averageRating: Number(merchant.rating || 0) || null,
+                    reviewCount: 0
+                };
+
+            return res.status(options.status || 200).render('merchant-detail', {
+                title: merchant.name,
+                merchant,
+                isFavourite: favouriteIds.includes(merchant.id),
+                canGenerateQr: Boolean(options.canGenerateQr),
+                errors: options.errors || [],
+                form: getPrefilledBookingForm(req, options.form || {}),
+                todayDate: getTodayInputValue(),
+                bookingUrl,
+                encodedBookingUrl: encodeURIComponent(bookingUrl),
+                whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
+                backUrl: backLink.url,
+                backLabel: backLink.label,
+                publicHolidays: getPublicHolidayDateMap(),
+                reviews: reviewsError ? [] : reviews,
+                reviewSummary: summary
+            });
+        });
     });
 }
 
