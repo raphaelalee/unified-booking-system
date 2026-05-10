@@ -182,8 +182,8 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
             if (bookingError) {
                 console.error(bookingError);
             } else {
-                upcomingBookings = bookings.filter((booking) => booking.status === 'upcoming');
-                pastBookings = bookings.filter((booking) => booking.status === 'completed');
+                upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
+                pastBookings = bookings.filter((booking) => booking.booking_group === 'past');
             }
 
             awardNext();

@@ -20,6 +20,58 @@ function isValidBookingDate(value) {
     return !Number.isNaN(selectedDate.getTime()) && selectedDate >= today;
 }
 
+function normalizeBookingTime(value) {
+    const rawValue = String(value || '').trim();
+    const match = rawValue.match(/^(\d{1,2}):(\d{2})$/);
+
+    if (!match) {
+        return '';
+    }
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return '';
+    }
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getDayKey(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 10);
+}
+
+function isPastBookingDate(value) {
+    const bookingKey = getDayKey(value);
+
+    if (!bookingKey) {
+        return true;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return bookingKey < today.toISOString().slice(0, 10);
+}
+
+function setProfileError(req, message) {
+    req.session.profileError = message;
+}
+
+function setProfileSuccess(req, message) {
+    req.session.profileSuccess = message;
+}
+
 function createBooking(req, res) {
     const serviceId = req.body.serviceId || req.params.serviceId;
     const bookingDate = req.body.bookingDate;
@@ -177,8 +229,159 @@ function confirmBooking(req, res) {
     });
 }
 
+function cancelBooking(req, res) {
+    const bookingId = Number(req.params.bookingId);
+    const userId = req.session.user?.id;
+
+    if (!bookingId || !userId) {
+        setProfileError(req, 'The selected booking could not be found.');
+        return res.redirect('/profile#bookings');
+    }
+
+    return Booking.getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
+        if (lookupError) {
+            console.error(lookupError);
+            setProfileError(req, 'That booking could not be loaded.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (!booking) {
+            setProfileError(req, 'That booking could not be found on your account.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (booking.status === 'cancelled') {
+            setProfileError(req, 'This booking is already cancelled.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
+            setProfileError(req, 'Past or completed bookings cannot be cancelled.');
+            return res.redirect('/profile#bookings');
+        }
+
+        return Booking.cancelForCustomer(bookingId, userId, (updateError, result) => {
+            if (updateError) {
+                console.error(updateError);
+                setProfileError(req, 'This booking could not be cancelled.');
+                return res.redirect('/profile#bookings');
+            }
+
+            if (!result?.affectedRows) {
+                setProfileError(req, 'This booking could not be cancelled.');
+                return res.redirect('/profile#bookings');
+            }
+
+            setProfileSuccess(req, 'Booking cancelled successfully.');
+            return res.redirect('/profile#bookings');
+        });
+    });
+}
+
+function rescheduleBooking(req, res) {
+    const bookingId = Number(req.params.bookingId);
+    const userId = req.session.user?.id;
+    const bookingDate = String(req.body.bookingDate || '').trim();
+    const bookingTime = normalizeBookingTime(req.body.bookingTime);
+
+    if (!bookingId || !userId) {
+        setProfileError(req, 'The selected booking could not be found.');
+        return res.redirect('/profile#bookings');
+    }
+
+    if (!isValidBookingDate(bookingDate)) {
+        setProfileError(req, 'Please choose today or a future booking date.');
+        return res.redirect('/profile#bookings');
+    }
+
+    if (!bookingTime) {
+        setProfileError(req, 'Please choose a valid booking time.');
+        return res.redirect('/profile#bookings');
+    }
+
+    const holidayName = getPublicHolidayName(bookingDate);
+
+    if (holidayName) {
+        setProfileError(req, `Bookings are unavailable on ${holidayName}. Please choose another date.`);
+        return res.redirect('/profile#bookings');
+    }
+
+    return Booking.getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
+        if (lookupError) {
+            console.error(lookupError);
+            setProfileError(req, 'That booking could not be loaded.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (!booking) {
+            setProfileError(req, 'That booking could not be found on your account.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (booking.status === 'cancelled') {
+            setProfileError(req, 'Cancelled bookings cannot be rescheduled.');
+            return res.redirect('/profile#bookings');
+        }
+
+        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
+            setProfileError(req, 'Past or completed bookings cannot be rescheduled.');
+            return res.redirect('/profile#bookings');
+        }
+
+        const currentDate = getDayKey(booking.booking_date);
+        const currentTime = normalizeBookingTime(booking.booking_time);
+        const isSameSlot = currentDate === bookingDate && currentTime === bookingTime;
+
+        const finishUpdate = () => {
+            return Booking.updateScheduleForCustomer(bookingId, userId, bookingDate, bookingTime, (updateError, result) => {
+                if (updateError) {
+                    console.error(updateError);
+                    setProfileError(req, 'This booking could not be rescheduled.');
+                    return res.redirect('/profile#bookings');
+                }
+
+                if (!result?.affectedRows) {
+                    setProfileError(req, 'This booking could not be rescheduled.');
+                    return res.redirect('/profile#bookings');
+                }
+
+                setProfileSuccess(req, `Booking moved to ${bookingDate} at ${bookingTime}.`);
+                return res.redirect('/profile#bookings');
+            });
+        };
+
+        if (isSameSlot) {
+            setProfileSuccess(req, 'Your booking already uses that date and time.');
+            return res.redirect('/profile#bookings');
+        }
+
+        return Booking.hasExistingBookingInDatabase(
+            booking.salon_id,
+            booking.service_id,
+            bookingDate,
+            bookingTime,
+            (slotError, slotTaken) => {
+                if (slotError) {
+                    console.error(slotError);
+                    setProfileError(req, 'That booking slot could not be checked.');
+                    return res.redirect('/profile#bookings');
+                }
+
+                if (slotTaken) {
+                    setProfileError(req, 'That date and time is already booked. Please choose another slot.');
+                    return res.redirect('/profile#bookings');
+                }
+
+                return finishUpdate();
+            }
+        );
+    });
+}
+
 module.exports = {
+    cancelBooking,
     confirmBooking,
     createBooking,
+    rescheduleBooking,
     showBookFallback
 };

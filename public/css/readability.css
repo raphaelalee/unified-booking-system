@@ -517,6 +517,11 @@ body:not(.flappy-page) {
     background: #ffffff !important;
 }
 
+.profile-booking-status-row {
+    margin-top: 10px;
+    display: inline-flex;
+}
+
 .service-card-image {
     position: relative;
 }

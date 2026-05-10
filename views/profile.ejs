@@ -7,6 +7,7 @@
     const profilePastBookings = typeof pastBookings !== 'undefined' && Array.isArray(pastBookings)
         ? pastBookings
         : [];
+    const formatBookingStatus = (value) => String(value || 'pending').replace(/_/g, '-');
 %>
 
 <section class="section compact account-settings-page profile-redesign-page">
@@ -217,6 +218,9 @@
                                                 at <%= booking.booking_time %>
                                             <% } %>
                                         </span>
+                                        <span class="profile-booking-status-row">
+                                            <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
+                                        </span>
                                     </div>
                                     <a class="button secondary" href="/receipt/<%= booking.id %>">View QR</a>
                                 </article>
@@ -248,6 +252,9 @@
                                             <% if (booking.booking_time) { %>
                                                 at <%= booking.booking_time %>
                                             <% } %>
+                                        </span>
+                                        <span class="profile-booking-status-row">
+                                            <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
                                         </span>
                                     </div>
                                     <a class="button secondary" href="/receipt/<%= booking.id %>">View</a>

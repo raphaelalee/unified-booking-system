@@ -171,6 +171,8 @@ app.get('/membership', requireCustomer, (req, res) => {
 });
 app.post('/profile', userController.updateProfile);
 app.post('/profile/password', userController.updatePassword);
+app.post('/profile/bookings/:bookingId/cancel', requireCustomer, bookingController.cancelBooking);
+app.post('/profile/bookings/:bookingId/reschedule', requireCustomer, bookingController.rescheduleBooking);
 app.get('/rewards-game', requireCustomer, gameController.showCustomerGame);
 app.post('/rewards-game/play', requireCustomer, gameController.playCustomerGame);
 app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);

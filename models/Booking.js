@@ -279,11 +279,13 @@ function getByUserId(userId, callback) {
             bookings.status,
             salons.salon_name AS merchant_name,
             salons.address AS merchant_address,
+            services.service_id,
             services.service_name,
             services.price AS service_price,
             CASE
-                WHEN bookings.status IN ('completed', 'checked_in', 'paid') THEN 'completed'
-                WHEN bookings.booking_date < CURDATE() THEN 'completed'
+                WHEN bookings.status = 'cancelled' THEN 'past'
+                WHEN bookings.status IN ('completed', 'checked_in') THEN 'past'
+                WHEN bookings.booking_date < CURDATE() THEN 'past'
                 ELSE 'upcoming'
             END AS booking_group
         FROM bookings
@@ -299,10 +301,7 @@ function getByUserId(userId, callback) {
             return;
         }
 
-        callback(null, rows.map((row) => ({
-            ...row,
-            status: row.booking_group
-        })));
+        callback(null, rows);
     });
 }
 
@@ -339,6 +338,37 @@ function findSupportBookingForCustomer(bookingId, userId, callback) {
             bookings.status,
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
+            services.service_name,
+            services.price AS service_price
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE bookings.booking_id = ?
+            AND bookings.user_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [bookingId, userId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows[0] || null);
+    });
+}
+
+function getManageableByIdForCustomer(bookingId, userId, callback) {
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.user_id,
+            bookings.booking_date,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            bookings.status,
+            services.service_id,
+            salons.salon_id,
+            salons.salon_name AS merchant_name,
             services.service_name,
             services.price AS service_price
         FROM bookings
@@ -556,6 +586,18 @@ function markCancelled(bookingId, callback) {
     db.query(sql, [bookingId], callback);
 }
 
+function cancelForCustomer(bookingId, userId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET status = 'cancelled'
+        WHERE booking_id = ?
+            AND user_id = ?
+            AND status NOT IN ('cancelled', 'completed', 'checked_in')
+    `;
+
+    db.query(sql, [bookingId, userId], callback);
+}
+
 function updateSchedule(bookingId, bookingDate, bookingTime, callback) {
     const sql = `
         UPDATE bookings
@@ -565,6 +607,18 @@ function updateSchedule(bookingId, bookingDate, bookingTime, callback) {
     `;
 
     db.query(sql, [bookingDate, normalizeTimeForDatabase(bookingTime), bookingId], callback);
+}
+
+function updateScheduleForCustomer(bookingId, userId, bookingDate, bookingTime, callback) {
+    const sql = `
+        UPDATE bookings
+        SET booking_date = ?, timeslot = ?
+        WHERE booking_id = ?
+            AND user_id = ?
+            AND status NOT IN ('cancelled', 'completed', 'checked_in')
+    `;
+
+    db.query(sql, [bookingDate, normalizeTimeForDatabase(bookingTime), bookingId, userId], callback);
 }
 
 function markCheckedIn(bookingId, merchantUserId, callback) {
@@ -585,7 +639,9 @@ module.exports = {
     create,
     createCustomerBooking,
     createInDatabase,
+    cancelForCustomer,
     findSupportBookingForCustomer,
+    getManageableByIdForCustomer,
     getByUserId,
     getReceiptById,
     getAll,
@@ -602,5 +658,6 @@ module.exports = {
     markCancelled,
     markCompleted,
     markCheckedIn,
-    updateSchedule
+    updateSchedule,
+    updateScheduleForCustomer
 };
