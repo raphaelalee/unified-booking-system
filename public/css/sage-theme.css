@@ -3127,17 +3127,283 @@ form.is-submitting button[type="submit"] {
     margin-top: 24px;
 }
 
+.merchant-service-manager-page,
+.merchant-service-form-page {
+    width: min(1480px, calc(100% - 40px));
+    margin: 0 auto;
+    padding-top: clamp(28px, 4vw, 54px);
+}
+
+.merchant-services-header {
+    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px;
+    align-items: end;
+}
+
+.merchant-services-header h1 {
+    margin: 8px 0 10px;
+    color: var(--sage-strong);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(2.4rem, 5vw, 4.7rem);
+    line-height: 0.95;
+}
+
+.merchant-services-header p {
+    max-width: 700px;
+    margin: 0;
+    color: var(--sage-readable);
+    line-height: 1.75;
+}
+
+.merchant-services-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .merchant-service-summary {
+    margin-bottom: 18px;
+    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-bottom: 22px;
+    gap: 12px;
+}
+
+.merchant-service-summary article,
+.merchant-service-toolbar,
+.merchant-service-row,
+.merchant-service-slot-panel {
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.78);
+}
+
+.merchant-service-summary article {
+    min-height: 94px;
+    padding: 18px;
+    display: grid;
+    align-content: center;
+    gap: 6px;
+}
+
+.merchant-service-summary span,
+.merchant-service-table-head span,
+.merchant-service-category,
+.merchant-service-duration,
+.merchant-service-slots span {
+    color: var(--sage-readable);
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.merchant-service-summary strong {
+    color: var(--sage-ink);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.merchant-service-summary small {
+    color: var(--sage-readable);
+    font-weight: 800;
 }
 
 .merchant-service-toolbar {
+    margin-bottom: 18px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.merchant-service-toolbar h2 {
+    margin: 0 0 8px;
+    color: var(--sage-ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(1.7rem, 2.4vw, 2.35rem);
+}
+
+.merchant-service-table-head {
+    padding: 0 18px 8px;
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) 110px 100px 100px 130px minmax(200px, 0.72fr) 128px;
+    gap: 18px;
+}
+
+.merchant-service-list {
+    display: grid;
+    gap: 10px;
+}
+
+.merchant-service-row {
+    min-width: 0;
+    min-height: 112px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) 110px 100px 100px 130px minmax(200px, 0.72fr) 128px;
+    gap: 18px;
     align-items: center;
 }
 
-.merchant-service-grid .service-catalog-card {
-    min-height: 360px;
+.merchant-service-main {
+    min-width: 0;
+}
+
+.merchant-service-main h3 {
+    margin: 0 0 6px;
+    color: var(--sage-ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(1.15rem, 1.6vw, 1.45rem);
+    line-height: 1.1;
+}
+
+.merchant-service-main p {
+    margin: 0;
+    color: var(--sage-readable);
+    overflow-wrap: anywhere;
+}
+
+.merchant-service-price {
+    color: var(--sage-ink);
+    font-size: 1.12rem;
+}
+
+.merchant-service-package {
+    display: grid;
+    gap: 4px;
+}
+
+.merchant-service-package strong {
+    color: var(--sage-ink);
+}
+
+.merchant-service-package span,
+.merchant-package-toggle {
+    color: var(--sage-readable);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.merchant-service-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.merchant-service-slots span,
+.merchant-selected-slots button {
+    min-height: 34px;
+    padding: 7px 11px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 999px;
+    background: rgba(238, 244, 233, 0.82);
+}
+
+.merchant-service-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.merchant-service-actions form {
+    margin: 0;
+}
+
+.merchant-service-actions .button {
+    width: 100%;
+    min-height: 44px;
+}
+
+.merchant-service-editor {
+    width: 100%;
+    max-width: none !important;
+    margin: 0;
+}
+
+.merchant-service-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(520px, 1fr) minmax(420px, 0.54fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.merchant-service-editor-main {
+    display: grid;
+    gap: 16px;
+}
+
+.merchant-service-editor-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.merchant-service-slot-panel {
+    padding: 22px;
+    display: grid;
+    gap: 16px;
+}
+
+.merchant-service-editor > .form-actions {
+    margin-top: 22px;
+}
+
+.merchant-service-slot-panel h2 {
+    margin: 0 0 8px;
+    color: var(--sage-ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.65rem;
+}
+
+.merchant-slot-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+}
+
+.merchant-selected-slots {
+    min-height: 42px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.merchant-selected-slots button {
+    color: var(--sage-ink);
+    font: inherit;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.merchant-selected-slots button::after {
+    content: "x";
+    margin-left: 8px;
+    color: #8d3f34;
+}
+
+.merchant-slot-empty {
+    margin: 0;
+}
+
+.merchant-package-panel {
+    grid-column: 2;
+}
+
+.merchant-package-toggle {
+    display: flex !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px !important;
+}
+
+.merchant-package-toggle input {
+    width: 18px;
+    height: 18px;
 }
 
 .notification-link {
@@ -3774,6 +4040,39 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
         flex-direction: column;
     }
 
+    .merchant-service-manager-page,
+    .merchant-service-form-page {
+        width: min(100% - 24px, 720px);
+        padding-top: 26px;
+    }
+
+    .merchant-services-header,
+    .merchant-service-row,
+    .merchant-service-editor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-package-panel {
+        grid-column: auto;
+    }
+
+    .merchant-services-header-actions {
+        justify-content: stretch;
+    }
+
+    .merchant-services-header-actions .button,
+    .merchant-service-form-header > .button {
+        width: 100%;
+    }
+
+    .merchant-service-table-head {
+        display: none;
+    }
+
+    .merchant-service-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .merchant-workspace-grid,
     .merchant-service-summary,
     .notifications-summary {
@@ -3788,6 +4087,23 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     .notification-actions form,
     .notification-actions .button {
         width: 100%;
+    }
+}
+
+@media (max-width: 560px) {
+    .merchant-service-manager-page,
+    .merchant-service-form-page {
+        width: min(100% - 18px, 560px);
+    }
+
+    .merchant-services-header h1 {
+        font-size: 2.35rem;
+    }
+
+    .merchant-service-actions,
+    .merchant-slot-picker,
+    .merchant-service-editor-pair {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -4281,9 +4597,97 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     margin: 0;
 }
 
-.merchant-product-list {
-    width: min(1100px, 100%);
+.merchant-products-page {
+    width: min(1280px, calc(100% - 32px));
     margin: 0 auto;
+    padding-top: clamp(28px, 4vw, 54px);
+}
+
+.merchant-products-hero {
+    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px;
+    align-items: end;
+}
+
+.merchant-products-hero-copy {
+    min-width: 0;
+    max-width: 760px;
+}
+
+.merchant-products-hero h1 {
+    margin: 8px 0 10px;
+    color: var(--sage-strong);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(2.4rem, 5vw, 4.7rem);
+    line-height: 0.95;
+}
+
+.merchant-products-hero p {
+    max-width: 680px;
+    margin: 0;
+    color: var(--sage-readable);
+    font-size: 1rem;
+    line-height: 1.75;
+}
+
+.merchant-products-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.merchant-products-summary {
+    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merchant-products-summary article,
+.merchant-products-empty {
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.78);
+}
+
+.merchant-products-summary article {
+    min-height: 94px;
+    padding: 18px;
+    display: grid;
+    align-content: center;
+    gap: 6px;
+}
+
+.merchant-products-summary span,
+.merchant-products-table-head span,
+.merchant-product-stock span {
+    color: var(--sage-readable);
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.merchant-products-summary strong {
+    color: var(--sage-ink);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.merchant-products-table-head {
+    width: 100%;
+    padding: 0 18px 8px 92px;
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) 110px 120px 150px 128px;
+    gap: 18px;
+}
+
+.merchant-product-list {
+    width: 100%;
+    margin: 0;
     display: grid;
     gap: 10px;
 }
@@ -4298,9 +4702,10 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 .merchant-product-row.compact {
-    min-height: 104px;
-    padding: 12px 14px;
-    grid-template-columns: 64px minmax(220px, 1fr) auto 150px auto;
+    min-height: 108px;
+    padding: 14px 16px;
+    grid-template-columns: 58px minmax(260px, 1fr) 110px 120px 150px 128px;
+    gap: 18px;
 }
 
 .merchant-product-thumb {
@@ -4312,7 +4717,7 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 .merchant-product-row.compact .merchant-product-thumb {
-    width: 64px;
+    width: 58px;
 }
 
 .merchant-product-main {
@@ -4327,7 +4732,8 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-product-row.compact h2 {
     margin: 0 0 4px;
-    font-size: clamp(1.15rem, 1.6vw, 1.45rem);
+    font-size: clamp(1.05rem, 1.35vw, 1.32rem);
+    line-height: 1.15;
 }
 
 .merchant-product-main .muted {
@@ -4341,12 +4747,27 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 .merchant-product-meta {
     display: grid;
     gap: 4px;
-    text-align: right;
+    text-align: left;
 }
 
 .merchant-product-meta strong {
     color: var(--sage-ink);
     font-size: 1.15rem;
+}
+
+.merchant-product-stock {
+    display: grid;
+    gap: 4px;
+}
+
+.merchant-product-stock strong {
+    color: var(--sage-ink);
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.merchant-product-stock.is-low strong {
+    color: #8d3f34;
 }
 
 .merchant-product-meta span {
@@ -4366,6 +4787,9 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-product-actions .button {
     width: 100%;
+    min-height: 44px;
+    padding-right: 14px;
+    padding-left: 14px;
 }
 
 .merchant-restock-form {
@@ -4398,6 +4822,25 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .restock-icon-button:hover {
     background: var(--sage-ink);
+}
+
+.merchant-products-empty {
+    padding: clamp(28px, 4vw, 48px);
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+}
+
+.merchant-products-empty h2 {
+    margin: 0;
+    color: var(--sage-ink);
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.merchant-products-empty p:not(.eyebrow) {
+    margin: 0;
+    color: var(--sage-readable);
 }
 
 .merchant-product-editor {
@@ -5844,13 +6287,36 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 @media (max-width: 900px) {
     .merchant-products-toolbar,
-    .merchant-product-row {
+    .merchant-product-row,
+    .merchant-product-row.compact,
+    .merchant-products-hero {
         align-items: stretch;
         grid-template-columns: 1fr;
     }
 
     .merchant-products-toolbar {
         flex-direction: column;
+    }
+
+    .merchant-products-page {
+        width: min(100% - 24px, 720px);
+        padding-top: 26px;
+    }
+
+    .merchant-products-hero-actions {
+        justify-content: stretch;
+    }
+
+    .merchant-products-hero-actions .button {
+        flex: 1 1 180px;
+    }
+
+    .merchant-products-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-products-table-head {
+        display: none;
     }
 
     .merchant-product-thumb {
@@ -5861,6 +6327,11 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
     .merchant-product-meta {
         text-align: left;
+    }
+
+    .merchant-product-stock,
+    .merchant-product-meta {
+        padding-top: 2px;
     }
 
     .merchant-product-actions {
@@ -5879,6 +6350,14 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 @media (max-width: 640px) {
+    .merchant-products-page {
+        width: min(100% - 18px, 560px);
+    }
+
+    .merchant-products-hero h1 {
+        font-size: 2.35rem;
+    }
+
     .merchant-product-editor .form-actions,
     .merchant-product-actions {
         flex-direction: column;

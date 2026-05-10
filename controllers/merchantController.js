@@ -195,6 +195,9 @@ function getInsertedBookingId(result) {
 
 function getBookingPath(merchant, service = null) {
     const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
+    if (!merchant.qrToken) {
+        return `/booking/${merchant.id}${serviceQuery}`;
+    }
     return `/booking/${merchant.id}/${merchant.qrToken}${serviceQuery}`;
 }
 
@@ -408,7 +411,8 @@ function renderBookingPage(req, res, merchant, options = {}) {
     const sanitizedForm = {
         ...form,
         ...(selectedService ? { serviceId: selectedService.id } : {}),
-        ...(selectedServiceOption ? { serviceOptionId: selectedServiceOption.id } : {})
+        ...(selectedServiceOption ? { serviceOptionId: selectedServiceOption.id } : {}),
+        purchaseType: form.purchaseType || (req.query.package === '1' ? 'package' : 'single')
     };
     const scopedServices = getBookingServices(bookingMerchant, selectedService);
     const useSecureQr = options.secureQr || Boolean(req.params.token || req.query.token);
@@ -497,6 +501,7 @@ function validateBooking(merchant, form) {
     const phone = (form.phone || '').trim();
     const service = getSelectedService(merchant, form.serviceId);
     const serviceSelection = getBookableSelection(service, form.serviceOptionId);
+    const purchaseType = form.purchaseType === 'package' && service?.packageEnabled ? 'package' : 'single';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = form.bookingDate ? new Date(form.bookingDate) : null;
@@ -542,13 +547,24 @@ function validateBooking(merchant, form) {
     const serviceName = serviceSelection.selectedOption
         ? `${service.name} - ${serviceSelection.selectedOption.name}`
         : service?.name;
+    const displayServiceName = purchaseType === 'package'
+        ? `${serviceName} (${service.packageSessions}-session package)`
+        : serviceName;
+    const displayBookableItem = purchaseType === 'package'
+        ? {
+            ...serviceSelection.bookableItem,
+            price: Number(service.packagePrice || serviceSelection.bookableItem.price),
+            packageSessions: service.packageSessions
+        }
+        : serviceSelection.bookableItem;
 
     return {
         errors,
         service,
         selectedOption: serviceSelection.selectedOption,
-        bookableItem: serviceSelection.bookableItem,
-        serviceName,
+        bookableItem: displayBookableItem,
+        serviceName: displayServiceName,
+        purchaseType,
         customerName,
         email,
         phone
@@ -715,19 +731,47 @@ function showServices(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const serviceCatalog = Merchant.getServiceCatalog(search).map((service) => ({
-        ...service,
-        serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
-    }));
 
-    res.render('services', {
-        title: 'Services',
-        merchants: Merchant.getAll(search),
-        favouriteIds,
-        serviceCatalog,
-        portalStats: Merchant.getPortalStats(search),
-        search,
-        showChatbot: true
+    return MerchantService.getAllServices((serviceError, databaseServices = []) => {
+        if (serviceError) {
+            console.error(serviceError);
+        }
+
+        const sourceServices = serviceError || databaseServices.length === 0
+            ? Merchant.getServiceCatalog(search)
+            : databaseServices.map((service) => ({
+                ...service,
+                merchantId: service.salonId,
+                merchantName: service.salonName,
+                merchantLocation: service.salonAddress || '',
+                merchantCategory: service.category || 'Service',
+                merchantRating: 'New',
+                serviceBookingPath: `/booking/${service.salonId}?serviceId=${service.id}`
+            }));
+        const serviceCatalog = sourceServices.map((service) => ({
+            ...service,
+            serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
+        }));
+        const prices = serviceCatalog.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
+        const merchantIds = new Set(serviceCatalog.map((service) => service.merchantId).filter(Boolean));
+
+        return res.render('services', {
+            title: 'Services',
+            merchants: Merchant.getAll(search),
+            favouriteIds,
+            serviceCatalog,
+            portalStats: serviceError || databaseServices.length === 0
+                ? Merchant.getPortalStats(search)
+                : {
+                    merchantCount: merchantIds.size,
+                    serviceCount: serviceCatalog.length,
+                    promotionCount: 0,
+                    slotCount: serviceCatalog.reduce((total, service) => total + (service.slots || []).length, 0),
+                    startingPrice: prices.length > 0 ? Math.min(...prices) : 0
+                },
+            search,
+            showChatbot: true
+        });
     });
 }
 
@@ -1281,9 +1325,23 @@ function showBookingPage(req, res) {
     const tokenMerchant = Merchant.findById(req.params.merchantId);
 
     if (!tokenMerchant) {
-        return res.status(404).render('error', {
-            title: 'Merchant Not Found',
-            message: 'The merchant booking page could not be found.'
+        return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, databaseMerchant) => {
+            if (error) {
+                console.error(error);
+                return res.status(500).render('error', {
+                    title: 'Merchant Not Found',
+                    message: 'The merchant booking page could not be loaded.'
+                });
+            }
+
+            if (!databaseMerchant) {
+                return res.status(404).render('error', {
+                    title: 'Merchant Not Found',
+                    message: 'The merchant booking page could not be found.'
+                });
+            }
+
+            return renderBookingPage(req, res, databaseMerchant);
         });
     }
 
@@ -1291,7 +1349,7 @@ function showBookingPage(req, res) {
         return null;
     }
 
-    if (!req.params.qrToken) {
+    if (!req.params.qrToken && tokenMerchant.qrToken) {
         return res.redirect(getBookingPath(tokenMerchant, getSelectedService(tokenMerchant, req.query.serviceId)));
     }
 

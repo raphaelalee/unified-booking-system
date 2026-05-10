@@ -14,6 +14,7 @@
     const selectedBookingOption = selectedBookingService && requestedOptionId && Array.isArray(selectedBookingService.options)
         ? selectedBookingService.options.find((option) => String(option.id) === requestedOptionId)
         : null;
+    const requestedPurchaseType = String((form && form.purchaseType) || (typeof packageSelected !== 'undefined' && packageSelected ? 'package' : 'single'));
     const bookingServices = selectedBookingService ? [selectedBookingService] : allBookingServices;
     const promoDisplayPrice = selectedPromotion && typeof selectedPromotion.price === 'number'
         ? selectedPromotion.price
@@ -68,7 +69,8 @@
             <% bookingServices.forEach((service) => { %>
                 <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
                 <% const bookableItem = activeOption || service; %>
-                <% const displayPrice = promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price; %>
+                <% const packageIsSelected = requestedPurchaseType === 'package' && service.packageEnabled; %>
+                <% const displayPrice = packageIsSelected ? service.packagePrice : (promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price); %>
                 <article class="booking-service-card">
                     <div>
                         <h3><%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %></h3>
@@ -78,6 +80,9 @@
                                 <span class="promotion-original-price">$<%= promoOriginalPrice %></span>
                             <% } %>
                             $<%= displayPrice %>
+                            <% if (packageIsSelected) { %>
+                                &middot; <%= service.packageSessions %> sessions
+                            <% } %>
                         </p>
                         <% if (Array.isArray(service.options) && service.options.length > 0) { %>
                             <% if (activeOption) { %>
@@ -95,6 +100,9 @@
                                     <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
                                 </p>
                             <% } %>
+                        <% } %>
+                        <% if (service.packageEnabled) { %>
+                            <p class="muted">Package available: <%= service.packageSessions %> sessions for $<%= Number(service.packagePrice).toFixed(2) %>.</p>
                         <% } %>
                         <p>Available: <%= (bookableItem.slots || service.slots).join(', ') %></p>
                     </div>
@@ -141,12 +149,24 @@
                 <select name="serviceId" class="js-service-select">
                     <option value="">Select a service</option>
                     <% bookingServices.forEach((service) => { %>
-                        <option value="<%= service.id %>" <%= requestedServiceId === String(service.id) ? 'selected' : '' %>>
-                            <%= service.name %> - $<%= service.price %>
+                        <option
+                            value="<%= service.id %>"
+                            data-purchase-type="single"
+                            <%= requestedServiceId === String(service.id) && requestedPurchaseType !== 'package' ? 'selected' : '' %>>
+                            <%= service.name %> - single session $<%= Number(service.price).toFixed(2) %>
                         </option>
+                        <% if (service.packageEnabled) { %>
+                            <option
+                                value="<%= service.id %>"
+                                data-purchase-type="package"
+                                <%= requestedServiceId === String(service.id) && requestedPurchaseType === 'package' ? 'selected' : '' %>>
+                                <%= service.name %> package - <%= service.packageSessions %> sessions $<%= Number(service.packagePrice).toFixed(2) %>
+                            </option>
+                        <% } %>
                     <% }) %>
                 </select>
             </label>
+            <input type="hidden" name="purchaseType" value="<%= requestedPurchaseType === 'package' ? 'package' : 'single' %>" data-purchase-type-field>
 
             <% if (requestedOptionId) { %>
                 <input type="hidden" name="serviceOptionId" value="<%= requestedOptionId %>">
@@ -264,6 +284,7 @@
     (() => {
         const bookingForm = document.querySelector('.js-immediate-booking-form');
         const serviceSelect = bookingForm?.querySelector('.js-service-select');
+        const purchaseTypeField = bookingForm?.querySelector('[data-purchase-type-field]');
 
         if (!bookingForm || !serviceSelect) {
             return;
@@ -271,6 +292,9 @@
 
         const syncBookingAction = () => {
             bookingForm.action = `/book/${encodeURIComponent(serviceSelect.value || 'select')}`;
+            if (purchaseTypeField) {
+                purchaseTypeField.value = serviceSelect.selectedOptions[0]?.dataset.purchaseType || 'single';
+            }
         };
 
         serviceSelect.addEventListener('change', syncBookingAction);

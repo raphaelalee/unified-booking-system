@@ -286,12 +286,19 @@ function normalizeSlots(slots) {
 
 function buildServiceData(serviceData, existingService = {}) {
     const price = Number(serviceData.price);
+    const packageSessions = Number(serviceData.packageSessions);
+    const packagePrice = Number(serviceData.packagePrice);
+    const packageEnabled = Boolean(serviceData.packageEnabled) && packageSessions > 1 && packagePrice > 0;
 
     return {
         ...existingService,
         name: String(serviceData.name || '').trim(),
         duration: String(serviceData.duration || '').trim(),
         price: Number.isFinite(price) ? price : 0,
+        packageEnabled,
+        packageSessions: packageEnabled ? packageSessions : 0,
+        packagePrice: packageEnabled ? packagePrice : 0,
+        packageLabel: packageEnabled ? `${packageSessions}-session package` : '',
         slots: normalizeSlots(serviceData.slots)
     };
 }

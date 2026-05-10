@@ -58,6 +58,14 @@ function createBooking(req, res) {
             });
         }
 
+        const purchaseType = req.body.purchaseType === 'package' && service.packageEnabled ? 'package' : 'single';
+        const bookedServiceName = purchaseType === 'package'
+            ? `${service.name} (${service.packageSessions}-session package)`
+            : service.name;
+        const bookedServicePrice = purchaseType === 'package'
+            ? Number(service.packagePrice || service.price)
+            : Number(service.price || 0);
+
         return Booking.createCustomerBooking({
             userId: req.session.user.id,
             serviceId: service.id,
@@ -91,7 +99,7 @@ function createBooking(req, res) {
                         customerName,
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
-                        serviceName: service.name,
+                        serviceName: bookedServiceName,
                         bookingDate,
                         bookingTime,
                         checkinUrl,
@@ -110,7 +118,9 @@ function createBooking(req, res) {
                         customerName,
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
-                        serviceName: service.name,
+                        serviceName: bookedServiceName,
+                        servicePrice: bookedServicePrice,
+                        purchaseType,
                         bookingDate,
                         bookingTime,
                         checkinUrl,

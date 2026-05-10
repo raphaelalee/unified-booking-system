@@ -174,6 +174,7 @@
                     const serviceBookingPath = merchantQrToken
                         ? service.serviceBookingPath || `/booking/${service.merchantId}/${merchantQrToken}?serviceId=${service.id}`
                         : `/merchants/${service.merchantId}`;
+                    const servicePackageBookingPath = `${serviceBookingPath}${serviceBookingPath.includes('?') ? '&' : '?'}package=1`;
                     const serviceVisual = getServiceVisual(service, index);
                     const serviceOptions = Array.isArray(service.options) ? service.options : [];
                     const visibleOptions = serviceOptions.slice(0, 3);
@@ -212,6 +213,9 @@
 
                         <div class="service-meta-pills" aria-label="Service details">
                             <span><%= service.duration %></span>
+                            <% if (service.packageEnabled) { %>
+                                <span><%= service.packageSessions %> sessions $<%= Number(service.packagePrice).toFixed(2) %></span>
+                            <% } %>
                             <% if (service.merchantPromotion) { %>
                                 <span><%= service.merchantPromotion %></span>
                             <% } %>
@@ -240,6 +244,9 @@
                         </div>
                         <div class="service-shopping-actions">
                             <a class="button primary full" href="<%= serviceBookingPath %>">Book now</a>
+                            <% if (service.packageEnabled) { %>
+                                <a class="button secondary full" href="<%= servicePackageBookingPath %>">Book package</a>
+                            <% } %>
                             <a class="button secondary full" href="/merchants/<%= service.merchantId %>?from=services">View merchant</a>
                         </div>
                     </div>

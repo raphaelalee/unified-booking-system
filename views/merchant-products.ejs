@@ -1,12 +1,11 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Merchant Portal</p>
-    <h1>My products.</h1>
-    <p>List and manage products for <%= merchant.name %>. Customers can shop these products from the Vaniday product page.</p>
-</section>
+<%
+    const totalStock = products.reduce((sum, product) => sum + Number(product.stockQuantity || 0), 0);
+    const lowStockCount = products.filter((product) => Number(product.stockQuantity || 0) <= 5).length;
+%>
 
-<section class="section compact">
+<section class="section compact merchant-products-page">
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -14,22 +13,48 @@
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
 
-    <div class="merchant-products-toolbar compact">
-        <div>
-            <p class="eyebrow">Products</p>
-            <h2><%= products.length %> listed product<%= products.length === 1 ? '' : 's' %></h2>
+    <header class="merchant-products-hero">
+        <div class="merchant-products-hero-copy">
+            <p class="eyebrow">Merchant Portal</p>
+            <h1>Product inventory</h1>
+            <p>Manage products for <%= merchant.name %>, update stock quickly, and keep the customer product page ready for shoppers.</p>
         </div>
-        <div class="admin-action-row">
-            <a class="button secondary" href="/merchant">Back to dashboard</a>
+        <div class="merchant-products-hero-actions">
+            <a class="button secondary" href="/merchant">Dashboard</a>
             <a class="button primary" href="/merchant/products/new">Add product</a>
         </div>
+    </header>
+
+    <div class="merchant-products-summary" aria-label="Inventory summary">
+        <article>
+            <span>Listed products</span>
+            <strong><%= products.length %></strong>
+        </article>
+        <article>
+            <span>Total stock</span>
+            <strong><%= totalStock %></strong>
+        </article>
+        <article>
+            <span>Low stock</span>
+            <strong><%= lowStockCount %></strong>
+        </article>
     </div>
 
     <% if (products.length === 0) { %>
-        <div class="notice">
-            <p>No products listed yet. Add your first product when it is ready for customers.</p>
+        <div class="merchant-products-empty">
+            <p class="eyebrow">Products</p>
+            <h2>No products listed yet</h2>
+            <p>Add your first product when it is ready for customers.</p>
+            <a class="button primary" href="/merchant/products/new">Add product</a>
         </div>
     <% } else { %>
+        <div class="merchant-products-table-head" aria-hidden="true">
+            <span>Product</span>
+            <span>Price</span>
+            <span>Stock</span>
+            <span>Restock</span>
+            <span>Actions</span>
+        </div>
         <div class="merchant-product-list">
             <% products.forEach((product) => { %>
                 <article class="merchant-product-row compact">
@@ -40,7 +65,10 @@
                     </div>
                     <div class="merchant-product-meta">
                         <strong>$<%= product.price.toFixed(2) %></strong>
-                        <span><%= product.stockQuantity %> in stock</span>
+                    </div>
+                    <div class="merchant-product-stock <%= Number(product.stockQuantity || 0) <= 5 ? 'is-low' : '' %>">
+                        <strong><%= product.stockQuantity %></strong>
+                        <span>in stock</span>
                     </div>
                     <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
                         <input type="number" name="quantity" min="1" max="999" step="1" value="1" aria-label="Restock quantity">

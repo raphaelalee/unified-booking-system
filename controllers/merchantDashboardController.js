@@ -42,6 +42,14 @@ function formatDateInputValue(value) {
     return date.toISOString().slice(0, 10);
 }
 
+function isTruthyFormValue(value) {
+    if (Array.isArray(value)) {
+        return value.some((item) => isTruthyFormValue(item));
+    }
+
+    return ['1', 'on', 'true', 'yes'].includes(String(value || '').trim().toLowerCase());
+}
+
 function getServiceForm(body = {}) {
     return {
         name: String(body.name || '').trim(),
@@ -49,7 +57,10 @@ function getServiceForm(body = {}) {
         categoryId: String(body.categoryId || '').trim(),
         durationMins: String(body.durationMins || '').trim(),
         price: String(body.price || '').trim(),
-        slots: String(body.slots || '').trim()
+        slots: String(body.slots || '').trim(),
+        packageEnabled: isTruthyFormValue(body.packageEnabled),
+        packageSessions: String(body.packageSessions || '').trim(),
+        packagePrice: String(body.packagePrice || '').trim()
     };
 }
 
@@ -58,6 +69,8 @@ function validateServiceForm(form) {
     const categoryId = Number(form.categoryId);
     const durationMins = Number(form.durationMins);
     const price = Number(form.price);
+    const packageSessions = Number(form.packageSessions);
+    const packagePrice = Number(form.packagePrice);
     const slots = form.slots.split(',').map((slot) => slot.trim()).filter(Boolean);
 
     if (form.name.length < 2) {
@@ -80,7 +93,31 @@ function validateServiceForm(form) {
         errors.push('Please enter at least one available slot.');
     }
 
+    if (form.packageEnabled) {
+        if (!Number.isInteger(packageSessions) || packageSessions < 2) {
+            errors.push('Package sessions must be at least 2.');
+        }
+
+        if (!Number.isFinite(packagePrice) || packagePrice <= 0) {
+            errors.push('Please enter a valid package price.');
+        }
+    }
+
     return errors;
+}
+
+function buildServicePayload(form) {
+    return {
+        name: form.name,
+        description: form.description,
+        categoryId: Number(form.categoryId),
+        durationMins: Number(form.durationMins),
+        price: Number(form.price),
+        slots: form.slots,
+        packageEnabled: Boolean(form.packageEnabled),
+        packageSessions: form.packageEnabled ? Number(form.packageSessions) : 0,
+        packagePrice: form.packageEnabled ? Number(form.packagePrice) : 0
+    };
 }
 
 function getProductForm(body = {}) {
@@ -756,14 +793,7 @@ function createService(req, res) {
                 });
             }
 
-            return MerchantService.createService(req.session.user.id, {
-                name: form.name,
-                description: form.description,
-                categoryId: Number(form.categoryId),
-                durationMins: Number(form.durationMins),
-                price: Number(form.price),
-                slots: form.slots
-            }, (createError) => {
+            return MerchantService.createService(req.session.user.id, buildServicePayload(form), (createError) => {
                 if (createError) {
                     console.error(createError);
                     return res.status(500).render('merchant-service-form', {
@@ -843,7 +873,10 @@ function showEditService(req, res) {
                         categoryId: String(service.categoryId),
                         durationMins: String(service.durationMins),
                         price: String(service.price),
-                        slots: (service.slots || []).join(', ')
+                        slots: (service.slots || []).join(', '),
+                        packageEnabled: Boolean(service.packageEnabled),
+                        packageSessions: service.packageSessions ? String(service.packageSessions) : '',
+                        packagePrice: service.packagePrice ? String(service.packagePrice) : ''
                     },
                     errors: []
                 });
@@ -899,14 +932,7 @@ function updateService(req, res) {
                     });
                 }
 
-                return MerchantService.updateService(req.session.user.id, service.id, {
-                    name: form.name,
-                    description: form.description,
-                    categoryId: Number(form.categoryId),
-                    durationMins: Number(form.durationMins),
-                    price: Number(form.price),
-                    slots: form.slots
-                }, (updateError) => {
+                return MerchantService.updateService(req.session.user.id, service.id, buildServicePayload(form), (updateError) => {
                     if (updateError) {
                         console.error(updateError);
                         return res.status(500).render('merchant-service-form', {
