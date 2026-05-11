@@ -6,6 +6,7 @@ const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Review = require('../models/Review');
 
 function getBookingAmount(booking) {
     return Number(booking.service_price || booking.price || 0);
@@ -513,27 +514,48 @@ function showDashboard(req, res) {
                     console.error(userError);
                 }
 
-                const dashboardBookings = bookingError ? Booking.getAll() : bookings;
-                const reports = buildAdminReports(
-                    merchants,
-                    dashboardBookings,
-                    userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
-                    Boolean(bookingError),
-                    Boolean(userError)
-                );
-                const success = req.session.adminSuccess;
-                const error = req.session.adminError;
-                req.session.adminSuccess = null;
-                req.session.adminError = null;
+                return Review.getPlatformSummary((reviewSummaryError, reviewSummary) => {
+                    if (reviewSummaryError) {
+                        console.error(reviewSummaryError);
+                    }
 
-                return res.render('admin-dashboard', {
-                    title: 'Admin Dashboard',
-                    merchants,
-                    bookings: dashboardBookings,
-                    databaseError: Boolean(bookingError || userError),
-                    success,
-                    error,
-                    ...reports
+                    return Review.getMerchantLeaderboard(8, (reviewLeaderboardError, reviewLeaderboard = []) => {
+                        if (reviewLeaderboardError) {
+                            console.error(reviewLeaderboardError);
+                        }
+
+                        return Review.listAll(24, (reviewListError, reviews = []) => {
+                            if (reviewListError) {
+                                console.error(reviewListError);
+                            }
+
+                            const dashboardBookings = bookingError ? Booking.getAll() : bookings;
+                            const reports = buildAdminReports(
+                                merchants,
+                                dashboardBookings,
+                                userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
+                                Boolean(bookingError),
+                                Boolean(userError)
+                            );
+                            const success = req.session.adminSuccess;
+                            const error = req.session.adminError;
+                            req.session.adminSuccess = null;
+                            req.session.adminError = null;
+
+                            return res.render('admin-dashboard', {
+                                title: 'Admin Dashboard',
+                                merchants,
+                                bookings: dashboardBookings,
+                                reviews,
+                                reviewSummary: reviewSummaryError ? { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 } : reviewSummary,
+                                reviewLeaderboard: reviewLeaderboardError ? [] : reviewLeaderboard,
+                                databaseError: Boolean(bookingError || userError || reviewSummaryError || reviewLeaderboardError || reviewListError),
+                                success,
+                                error,
+                                ...reports
+                            });
+                        });
+                    });
                 });
             });
         });

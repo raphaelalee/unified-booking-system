@@ -3,6 +3,9 @@
 <%
     const platformBookings = Array.isArray(bookings) ? bookings : [];
     const safeMerchants = Array.isArray(merchants) ? merchants : [];
+    const adminReviews = Array.isArray(reviews) ? reviews : [];
+    const safeReviewSummary = reviewSummary || { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 };
+    const safeReviewLeaderboard = Array.isArray(reviewLeaderboard) ? reviewLeaderboard : [];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
     const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
     const formatDateValue = (value) => {
@@ -122,11 +125,23 @@
             status
         };
     });
+    const bestRatedReviewMerchant = safeReviewLeaderboard[0] || null;
+    const lowRatedReviewMerchants = safeReviewLeaderboard
+        .filter((merchant) => merchant.reviewCount > 0)
+        .slice()
+        .sort((left, right) => {
+            if (left.averageRating === right.averageRating) {
+                return right.reviewCount - left.reviewCount;
+            }
+
+            return left.averageRating - right.averageRating;
+        })
+        .slice(0, 5);
     const healthItems = [
         { label: 'Merchants missing services', value: merchantReport.merchantsWithoutServices.length, severity: merchantReport.merchantsWithoutServices.length > 0 ? 'yellow' : 'green', action: '/admin/services/new' },
         { label: 'Failed payments', value: 0, severity: 'green', action: '/admin' },
         { label: 'Suspicious QR activity', value: failedQrScans, severity: failedQrScans > 0 ? 'red' : 'green', action: '#admin-qr' },
-        { label: 'Low-rated merchants', value: merchantRows.filter((merchant) => merchant.rating < 4).length, severity: 'green', action: '#admin-merchants' },
+        { label: 'Low-rated merchants', value: Math.max(merchantRows.filter((merchant) => merchant.rating < 4).length, lowRatedReviewMerchants.filter((merchant) => Number(merchant.averageRating || 0) < 4).length), severity: 'green', action: '#admin-reviews' },
         { label: 'Inactive merchants', value: inactiveMerchants.length, severity: inactiveMerchants.length > 0 ? 'yellow' : 'green', action: '#admin-merchants' },
         { label: 'Pending refund requests', value: 0, severity: 'green', action: '#admin-bookings' }
     ];
@@ -185,6 +200,7 @@
         qr: failedQrScans + Math.max(0, pendingApprovalMerchants.length > 0 ? 1 : 0),
         bookings: statusCounts.pending,
         merchants: pendingApprovalMerchants.length + inactiveMerchants.length,
+        reviews: lowRatedReviewMerchants.filter((merchant) => Number(merchant.averageRating || 0) < 4).length,
         health: validationReport.issues.length,
         audit: 0
     };
@@ -199,6 +215,7 @@
             <button type="button" class="admin-sidebar-tab" data-dashboard-tab="qr" data-panel-title="QR Analytics" data-panel-description="Track scan volume, validation outcomes, merchant scan activity, and QR behavior across the platform.">QR Analytics<% if (adminTabAlerts.qr > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.qr > 99 ? '99+' : adminTabAlerts.qr %></span><% } %></button>
             <button type="button" class="admin-sidebar-tab" data-dashboard-tab="bookings" data-panel-title="Booking Records" data-panel-description="Review platform bookings, filter by status or merchant, and export the current booking view.">Bookings<% if (adminTabAlerts.bookings > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.bookings > 99 ? '99+' : adminTabAlerts.bookings %></span><% } %></button>
             <button type="button" class="admin-sidebar-tab" data-dashboard-tab="merchants" data-panel-title="Merchant Overview" data-panel-description="Review merchant performance, service readiness, revenue, and account status from one place.">Merchants<% if (adminTabAlerts.merchants > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.merchants > 99 ? '99+' : adminTabAlerts.merchants %></span><% } %></button>
+            <button type="button" class="admin-sidebar-tab" data-dashboard-tab="reviews" data-panel-title="Review Insights" data-panel-description="Track merchant ratings, recent customer reviews, media feedback, and store quality trends across the platform.">Reviews<% if (adminTabAlerts.reviews > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.reviews > 99 ? '99+' : adminTabAlerts.reviews %></span><% } %></button>
             <button type="button" class="admin-sidebar-tab" data-dashboard-tab="health" data-panel-title="Platform Health" data-panel-description="Focus on operational risks, validation issues, low activity signals, and marketplace health checks.">Health<% if (adminTabAlerts.health > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.health > 99 ? '99+' : adminTabAlerts.health %></span><% } %></button>
             <button type="button" class="admin-sidebar-tab" data-dashboard-tab="audit" data-panel-title="Audit Trail" data-panel-description="Inspect recent admin activity and jump into common platform operations quickly.">Audit Trail<% if (adminTabAlerts.audit > 0) { %><span class="admin-tab-badge" data-admin-tab-badge><%= adminTabAlerts.audit > 99 ? '99+' : adminTabAlerts.audit %></span><% } %></button>
         </nav>
@@ -534,6 +551,121 @@
             </section>
         </section>
 
+        <section class="admin-dashboard-panel" id="admin-reviews" data-dashboard-panel="reviews" hidden>
+            <section class="admin-stat-grid" aria-label="Review insights">
+                <article class="admin-stat-card accent-green">
+                    <div class="admin-stat-card-top"><span class="admin-stat-icon">RV</span></div>
+                    <strong><%= safeReviewSummary.reviewCount %></strong>
+                    <span>Total reviews</span>
+                </article>
+                <article class="admin-stat-card accent-blue">
+                    <div class="admin-stat-card-top"><span class="admin-stat-icon">ST</span></div>
+                    <strong><%= safeReviewSummary.averageRating === null ? '0.0' : safeReviewSummary.averageRating.toFixed(1) %></strong>
+                    <span>Average rating</span>
+                </article>
+                <article class="admin-stat-card accent-orange">
+                    <div class="admin-stat-card-top"><span class="admin-stat-icon">MD</span></div>
+                    <strong><%= safeReviewSummary.mediaReviewCount %></strong>
+                    <span>Reviews with media</span>
+                </article>
+                <article class="admin-stat-card accent-green">
+                    <div class="admin-stat-card-top"><span class="admin-stat-icon">MR</span></div>
+                    <strong><%= safeReviewSummary.merchantCount %></strong>
+                    <span>Merchants reviewed</span>
+                </article>
+            </section>
+
+            <section class="admin-grid">
+                <article class="admin-panel span-4">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <p class="eyebrow">Leaderboard</p>
+                            <h2>Best rated stores</h2>
+                        </div>
+                    </div>
+                    <div class="admin-log-list">
+                        <% if (!safeReviewLeaderboard.length) { %>
+                            <article><span>No review data yet.</span></article>
+                        <% } %>
+                        <% safeReviewLeaderboard.slice(0, 5).forEach((merchant, index) => { %>
+                            <article>
+                                <strong>#<%= index + 1 %> <%= merchant.merchantName %></strong>
+                                <span><%= merchant.averageRating === null ? '0.0' : merchant.averageRating.toFixed(1) %> stars</span>
+                                <small><%= merchant.reviewCount %> reviews • <%= merchant.mediaReviewCount %> with media</small>
+                            </article>
+                        <% }) %>
+                    </div>
+                </article>
+
+                <article class="admin-panel span-4">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <p class="eyebrow">Attention</p>
+                            <h2>Lowest rated stores</h2>
+                        </div>
+                    </div>
+                    <div class="admin-log-list">
+                        <% if (!lowRatedReviewMerchants.length) { %>
+                            <article><span>No low-rated merchants yet.</span></article>
+                        <% } %>
+                        <% lowRatedReviewMerchants.forEach((merchant) => { %>
+                            <article>
+                                <strong><%= merchant.merchantName %></strong>
+                                <span><%= merchant.averageRating === null ? '0.0' : merchant.averageRating.toFixed(1) %> stars</span>
+                                <small><%= merchant.reviewCount %> reviews • <%= merchant.mediaReviewCount %> with media</small>
+                            </article>
+                        <% }) %>
+                    </div>
+                </article>
+
+                <article class="admin-panel span-4">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <p class="eyebrow">Smart Widget</p>
+                            <h2>Review spotlight</h2>
+                        </div>
+                    </div>
+                    <div class="admin-smart-widget">
+                        <strong><%= bestRatedReviewMerchant?.merchantName || 'No merchant yet' %></strong>
+                        <span><%= bestRatedReviewMerchant ? `${bestRatedReviewMerchant.averageRating?.toFixed(1) || '0.0'} stars` : 'No ratings yet' %></span>
+                        <small><%= bestRatedReviewMerchant ? `${bestRatedReviewMerchant.reviewCount} reviews tracked` : 'Waiting for customer feedback' %></small>
+                    </div>
+                </article>
+            </section>
+
+            <section class="admin-panel">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Recent Reviews</p>
+                        <h2>Latest customer feedback</h2>
+                    </div>
+                </div>
+                <% if (!adminReviews.length) { %>
+                    <%- include('partials/admin-empty-state', { icon: 'RV', message: 'No customer reviews have been submitted yet', actionUrl: '/admin', actionLabel: 'Back to dashboard' }) %>
+                <% } else { %>
+                    <div class="admin-review-grid">
+                        <% adminReviews.forEach((review) => { %>
+                            <article class="admin-review-card">
+                                <div class="admin-review-card-top">
+                                    <strong><%= review.merchantName || 'Merchant' %></strong>
+                                    <span><%= '★'.repeat(Math.max(0, Number(review.rating || 0))) %><%= '☆'.repeat(Math.max(0, 5 - Number(review.rating || 0))) %></span>
+                                </div>
+                                <h3><%= review.serviceName || 'Service' %></h3>
+                                <p><%= review.comment || 'No written comment provided.' %></p>
+                                <small><%= review.customerName || 'Customer' %> • <%= formatDateValue(review.createdAt) || 'Today' %></small>
+                                <% if (review.imagePath || review.videoPath) { %>
+                                    <div class="admin-review-media-tags">
+                                        <% if (review.imagePath) { %><span>Image</span><% } %>
+                                        <% if (review.videoPath) { %><span>Video</span><% } %>
+                                    </div>
+                                <% } %>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+        </section>
+
         <section class="admin-dashboard-panel" id="admin-audit" data-dashboard-panel="audit" hidden>
             <section class="admin-grid">
                 <article class="admin-panel span-7">
@@ -700,6 +832,7 @@
             '#admin-qr': 'qr',
             '#admin-bookings': 'bookings',
             '#admin-merchants': 'merchants',
+            '#admin-reviews': 'reviews',
             '#admin-audit': 'audit'
         };
         const adminBadgeStorageKey = <%- JSON.stringify(adminBadgeKey) %>;

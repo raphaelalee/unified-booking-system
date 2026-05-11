@@ -92,6 +92,7 @@ function mapRow(row = {}) {
         userId: row.user_id,
         merchantId: row.merchant_id,
         serviceId: row.service_id,
+        merchantName: row.merchant_name,
         customerName: row.customer_name,
         serviceName: row.service_name,
         rating: Number(row.rating || 0),
@@ -255,10 +256,127 @@ function listByMerchantId(merchantId, limit, callback) {
     });
 }
 
+function getPlatformSummary(callback) {
+    ensureReviewSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                COUNT(*) AS review_count,
+                ROUND(AVG(rating), 1) AS average_rating,
+                SUM(CASE WHEN image_path IS NOT NULL OR video_path IS NOT NULL THEN 1 ELSE 0 END) AS media_review_count,
+                COUNT(DISTINCT merchant_id) AS merchant_count
+            FROM reviews
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const row = rows[0] || {};
+            callback(null, {
+                reviewCount: Number(row.review_count || 0),
+                averageRating: row.average_rating === null ? null : Number(row.average_rating),
+                mediaReviewCount: Number(row.media_review_count || 0),
+                merchantCount: Number(row.merchant_count || 0)
+            });
+        });
+    });
+}
+
+function getMerchantLeaderboard(limit, callback) {
+    ensureReviewSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const rowLimit = Math.max(1, Math.min(Number(limit) || 10, 25));
+        const sql = `
+            SELECT
+                reviews.merchant_id,
+                salons.salon_name AS merchant_name,
+                COUNT(*) AS review_count,
+                ROUND(AVG(reviews.rating), 1) AS average_rating,
+                SUM(CASE WHEN reviews.image_path IS NOT NULL OR reviews.video_path IS NOT NULL THEN 1 ELSE 0 END) AS media_review_count
+            FROM reviews
+            LEFT JOIN salons ON salons.salon_id = reviews.merchant_id
+            GROUP BY reviews.merchant_id, salons.salon_name
+            ORDER BY average_rating DESC, review_count DESC, merchant_name ASC
+            LIMIT ${rowLimit}
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map((row) => ({
+                merchantId: row.merchant_id,
+                merchantName: row.merchant_name || 'Merchant',
+                reviewCount: Number(row.review_count || 0),
+                averageRating: row.average_rating === null ? null : Number(row.average_rating),
+                mediaReviewCount: Number(row.media_review_count || 0)
+            })));
+        });
+    });
+}
+
+function listAll(limit, callback) {
+    ensureReviewSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const rowLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+        const sql = `
+            SELECT
+                reviews.review_id AS id,
+                reviews.booking_id,
+                reviews.user_id,
+                reviews.merchant_id,
+                reviews.service_id,
+                reviews.rating,
+                reviews.comment,
+                reviews.image_path,
+                reviews.video_path,
+                reviews.created_at,
+                users.name AS customer_name,
+                services.service_name,
+                salons.salon_name AS merchant_name
+            FROM reviews
+            INNER JOIN users ON users.user_id = reviews.user_id
+            INNER JOIN services ON services.service_id = reviews.service_id
+            LEFT JOIN salons ON salons.salon_id = reviews.merchant_id
+            ORDER BY reviews.created_at DESC
+            LIMIT ${rowLimit}
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapRow));
+        });
+    });
+}
+
 module.exports = {
     create,
     findByBookingId,
     getByBookingIds,
     getSummaryByMerchantId,
-    listByMerchantId
+    listByMerchantId,
+    getPlatformSummary,
+    getMerchantLeaderboard,
+    listAll
 };
