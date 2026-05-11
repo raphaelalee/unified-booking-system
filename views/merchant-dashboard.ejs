@@ -11,6 +11,11 @@
     const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const recentOrders = salesReport?.recentOrders || [];
     const lowStockProducts = salesReport?.lowStockProducts || [];
+    const payoutSummary = salesReport?.payoutSummary || {
+        grossOrderSales: 0,
+        totalCommissionDeducted: 0,
+        totalNetPayout: 0
+    };
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
     const totalBookings = Number(stats.bookingCount || 0);
     const checkedInBookings = (appointments.allBookings || []).filter((booking) => ['checked_in', 'completed'].includes(booking.status)).length;
@@ -96,6 +101,24 @@
                         </div>
                     </article>
                 <% }) %>
+            </section>
+
+            <section class="merchant-payout-summary-grid" aria-label="Merchant payout summary">
+                <article class="merchant-payout-summary-card">
+                    <span>Gross sales</span>
+                    <strong>$<%= formatCurrency(payoutSummary.grossOrderSales) %></strong>
+                    <small>Paid product orders before commission</small>
+                </article>
+                <article class="merchant-payout-summary-card">
+                    <span>Commission deducted</span>
+                    <strong>$<%= formatCurrency(payoutSummary.totalCommissionDeducted) %></strong>
+                    <small>Platform fee based on your admin-set rate</small>
+                </article>
+                <article class="merchant-payout-summary-card">
+                    <span>Net payout</span>
+                    <strong>$<%= formatCurrency(payoutSummary.totalNetPayout) %></strong>
+                    <small>Estimated amount remaining after commission</small>
+                </article>
             </section>
 
             <div class="merchant-dashboard-lower-grid merchant-appointment-lower-grid">

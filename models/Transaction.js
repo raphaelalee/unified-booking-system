@@ -1,6 +1,32 @@
 const db = require('../db');
 
 let fulfilmentSchemaReady = false;
+const DEFAULT_COMMISSION_RATE = 15;
+let merchantCommissionSchemaReady = false;
+
+function normalizeCommissionRate(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric) || numeric < 0) {
+        return DEFAULT_COMMISSION_RATE;
+    }
+
+    return Math.min(100, Math.round(numeric * 100) / 100);
+}
+
+function buildCommissionBreakdown(grossAmount, commissionRate) {
+    const gross = Number(grossAmount || 0);
+    const rate = normalizeCommissionRate(commissionRate);
+    const commissionAmount = Math.round(gross * (rate / 100) * 100) / 100;
+    const payoutAmount = Math.round((gross - commissionAmount) * 100) / 100;
+
+    return {
+        grossAmount: gross,
+        commissionRate: rate,
+        commissionAmount,
+        payoutAmount
+    };
+}
 
 function ensureFulfilmentSchema(callback) {
     if (fulfilmentSchemaReady) {
@@ -220,85 +246,151 @@ function getMerchantOrderReport(merchantUserId, callback) {
             return;
         }
 
+        ensureMerchantCommissionSchema((commissionSchemaError) => {
+            if (commissionSchemaError) {
+                callback(commissionSchemaError);
+                return;
+            }
+
+            const sql = `
+                SELECT
+                    transactions.transaction_id,
+                    transactions.user_id,
+                    transactions.total_amount,
+                    transactions.payment_method,
+                    transactions.payment_status,
+                    transactions.delivery_status,
+                    transactions.created_at,
+                    users.name AS customer_name,
+                    COUNT(order_items.order_item_id) AS item_count,
+                    SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total,
+                    COALESCE(salons.commission_rate, 15.00) AS commission_rate
+                FROM transactions
+                INNER JOIN users ON users.user_id = transactions.user_id
+                INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+                INNER JOIN products ON products.product_id = order_items.product_id
+                INNER JOIN salons ON salons.salon_id = products.salon_id
+                WHERE salons.merchant_id = ?
+                    AND transactions.payment_status = 'paid'
+                GROUP BY
+                    transactions.transaction_id,
+                    transactions.user_id,
+                    transactions.total_amount,
+                    transactions.payment_method,
+                    transactions.payment_status,
+                    transactions.delivery_status,
+                    transactions.created_at,
+                    users.name,
+                    salons.commission_rate
+                ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+            `;
+
+            db.query(sql, [merchantUserId], (error, rows) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, rows.map((row) => {
+                    const commission = buildCommissionBreakdown(row.merchant_total || row.total_amount || 0, row.commission_rate);
+
+                    return {
+                        id: row.transaction_id,
+                        userId: row.user_id,
+                        customerName: row.customer_name || 'Customer',
+                        totalAmount: commission.grossAmount,
+                        grossAmount: commission.grossAmount,
+                        commissionRate: commission.commissionRate,
+                        commissionAmount: commission.commissionAmount,
+                        payoutAmount: commission.payoutAmount,
+                        paymentMethod: row.payment_method || 'card',
+                        paymentStatus: row.payment_status || 'paid',
+                        deliveryStatus: row.delivery_status || 'processing',
+                        itemCount: Number(row.item_count || 0),
+                        createdAt: row.created_at
+                    };
+                }));
+            });
+        });
+    });
+}
+
+function ensureMerchantCommissionSchema(callback) {
+    if (merchantCommissionSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    db.query('SHOW COLUMNS FROM salons', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+
+        if (fields.has('commission_rate')) {
+            merchantCommissionSchemaReady = true;
+            callback(null);
+            return;
+        }
+
+        db.query(
+            'ALTER TABLE salons ADD COLUMN commission_rate DECIMAL(5,2) NOT NULL DEFAULT 15.00',
+            (alterError) => {
+                if (!alterError) {
+                    merchantCommissionSchemaReady = true;
+                }
+
+                callback(alterError);
+            }
+        );
+    });
+}
+
+function getMerchantOrderRecipients(transactionId, callback) {
+    ensureMerchantCommissionSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
         const sql = `
             SELECT
-                transactions.transaction_id,
-                transactions.user_id,
-                transactions.total_amount,
-                transactions.payment_method,
-                transactions.payment_status,
-                transactions.delivery_status,
-                transactions.created_at,
-                users.name AS customer_name,
+                salons.merchant_id AS merchant_user_id,
+                salons.salon_name,
                 COUNT(order_items.order_item_id) AS item_count,
-                SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total
-            FROM transactions
-            INNER JOIN users ON users.user_id = transactions.user_id
-            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+                SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total,
+                COALESCE(salons.commission_rate, 15.00) AS commission_rate
+            FROM order_items
             INNER JOIN products ON products.product_id = order_items.product_id
             INNER JOIN salons ON salons.salon_id = products.salon_id
-            WHERE salons.merchant_id = ?
-                AND transactions.payment_status = 'paid'
-            GROUP BY
-                transactions.transaction_id,
-                transactions.user_id,
-                transactions.total_amount,
-                transactions.payment_method,
-                transactions.payment_status,
-                transactions.delivery_status,
-                transactions.created_at,
-                users.name
-            ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
+            WHERE order_items.transaction_id = ?
+            GROUP BY salons.merchant_id, salons.salon_name, salons.commission_rate
+            ORDER BY salons.salon_name
         `;
 
-        db.query(sql, [merchantUserId], (error, rows) => {
+        db.query(sql, [transactionId], (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;
             }
 
-            callback(null, rows.map((row) => ({
-                id: row.transaction_id,
-                userId: row.user_id,
-                customerName: row.customer_name || 'Customer',
-                totalAmount: Number(row.merchant_total || row.total_amount || 0),
-                paymentMethod: row.payment_method || 'card',
-                paymentStatus: row.payment_status || 'paid',
-                deliveryStatus: row.delivery_status || 'processing',
-                itemCount: Number(row.item_count || 0),
-                createdAt: row.created_at
-            })));
+            callback(null, rows.map((row) => {
+                const commission = buildCommissionBreakdown(row.merchant_total || 0, row.commission_rate);
+
+                return {
+                    merchantUserId: row.merchant_user_id,
+                    salonName: row.salon_name,
+                    itemCount: Number(row.item_count || 0),
+                    totalAmount: commission.grossAmount,
+                    grossAmount: commission.grossAmount,
+                    commissionRate: commission.commissionRate,
+                    commissionAmount: commission.commissionAmount,
+                    payoutAmount: commission.payoutAmount
+                };
+            }));
         });
-    });
-}
-
-function getMerchantOrderRecipients(transactionId, callback) {
-    const sql = `
-        SELECT
-            salons.merchant_id AS merchant_user_id,
-            salons.salon_name,
-            COUNT(order_items.order_item_id) AS item_count,
-            SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total
-        FROM order_items
-        INNER JOIN products ON products.product_id = order_items.product_id
-        INNER JOIN salons ON salons.salon_id = products.salon_id
-        WHERE order_items.transaction_id = ?
-        GROUP BY salons.merchant_id, salons.salon_name
-        ORDER BY salons.salon_name
-    `;
-
-    db.query(sql, [transactionId], (error, rows = []) => {
-        if (error) {
-            callback(error);
-            return;
-        }
-
-        callback(null, rows.map((row) => ({
-            merchantUserId: row.merchant_user_id,
-            salonName: row.salon_name,
-            itemCount: Number(row.item_count || 0),
-            totalAmount: Number(row.merchant_total || 0)
-        })));
     });
 }
 

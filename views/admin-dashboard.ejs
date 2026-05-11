@@ -108,12 +108,16 @@
         const revenue = merchantRevenue[merchantName] || 0;
         const isPending = pendingApprovalMerchants.includes(merchant);
         const status = isPending ? 'pending approval' : 'active';
+        const commissionRate = Number(merchant.commission_rate || 15);
         return {
             ...merchant,
             merchantName,
             serviceCount,
             bookingCount,
             revenue,
+            commissionRate,
+            estimatedCommissionAmount: revenue * (commissionRate / 100),
+            estimatedPayoutAmount: revenue * (1 - (commissionRate / 100)),
             rating: Number(merchant.rating || merchant.average_rating || (bookingCount > 0 ? 4.6 : 4.2)),
             status
         };
@@ -505,6 +509,18 @@
                                 <span><strong>$<%= formatCurrency(merchant.revenue) %></strong> revenue</span>
                                 <span><strong><%= merchant.serviceCount %></strong> services</span>
                             </div>
+                            <div class="admin-merchant-metrics admin-merchant-metrics-commission">
+                                <span><strong><%= merchant.commissionRate.toFixed(2) %>%</strong> commission</span>
+                                <span><strong>$<%= formatCurrency(merchant.estimatedCommissionAmount) %></strong> fee est.</span>
+                                <span><strong>$<%= formatCurrency(merchant.estimatedPayoutAmount) %></strong> payout est.</span>
+                            </div>
+                            <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/commission" method="POST">
+                                <label>
+                                    Commission %
+                                    <input type="number" name="commissionRate" min="0" max="100" step="0.01" value="<%= merchant.commissionRate.toFixed(2) %>" required>
+                                </label>
+                                <button class="button secondary" type="submit">Update commission</button>
+                            </form>
                             <div class="admin-merchant-actions">
                                 <a class="text-button" href="/merchant/<%= merchant.salon_id %>">View Merchant</a>
                                 <button type="button" disabled>Suspend</button>

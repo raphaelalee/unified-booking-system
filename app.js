@@ -260,6 +260,7 @@ app.get('/merchant/:merchantId', allowGuestOrCustomer, merchantController.showPu
 app.get('/admin', requireRole('admin'), adminController.showDashboard);
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
+app.post('/admin/merchants/:salonId/commission', requireRole('admin'), adminController.updateMerchantCommission);
 app.get('/admin/services', requireRole('admin'), adminController.listServices);
 app.get('/admin/promotions', requireRole('admin'), adminController.listPromotions);
 app.get('/admin/promotions/new', requireRole('admin'), adminController.showNewPromotion);

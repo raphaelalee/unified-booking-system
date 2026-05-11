@@ -6,6 +6,12 @@ ensureServiceSchema((error) => {
     }
 });
 
+ensureSalonCommissionSchema((error) => {
+    if (error) {
+        console.error('Salon commission schema could not be prepared:', error.message || error);
+    }
+});
+
 function formatTimeSlot(value) {
     if (!value) {
         return '';
@@ -69,6 +75,27 @@ function ensureServiceSchema(callback) {
     });
 }
 
+function ensureSalonCommissionSchema(callback) {
+    db.query('SHOW COLUMNS FROM salons', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+
+        if (fields.has('commission_rate')) {
+            callback(null);
+            return;
+        }
+
+        db.query(
+            'ALTER TABLE salons ADD COLUMN commission_rate DECIMAL(5,2) NOT NULL DEFAULT 15.00',
+            callback
+        );
+    });
+}
+
 function mapMerchantRows(rows) {
     if (!rows || rows.length === 0) {
         return null;
@@ -111,6 +138,7 @@ function mapMerchantRows(rows) {
         name: first.salon_name,
         location: first.address || 'No address set',
         description: first.salon_description || '',
+        commissionRate: Number(first.commission_rate || 15),
         category: 'Merchant',
         services: Array.from(servicesById.values())
     };
@@ -124,6 +152,7 @@ function getMerchantByUserId(userId, callback) {
             salons.salon_name,
             salons.address,
             salons.description AS salon_description,
+            salons.commission_rate,
             services.service_id,
             services.category_id,
             services.service_name,
@@ -690,24 +719,32 @@ function deleteServiceAsAdmin(serviceId, callback) {
 }
 
 function getAdminOverview(callback) {
-    const sql = `
-        SELECT
-            users.user_id AS merchant_user_id,
-            users.name AS owner_name,
-            users.email AS owner_email,
-            salons.salon_id,
-            salons.salon_name,
-            salons.address,
-            salons.description,
-            COUNT(services.service_id) AS service_count
-        FROM salons
-        INNER JOIN users ON users.user_id = salons.merchant_id
-        LEFT JOIN services ON services.salon_id = salons.salon_id
-        GROUP BY users.user_id, users.name, users.email, salons.salon_id, salons.salon_name, salons.address, salons.description
-        ORDER BY salons.salon_id
-    `;
+    ensureSalonCommissionSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    db.query(sql, callback);
+        const sql = `
+            SELECT
+                users.user_id AS merchant_user_id,
+                users.name AS owner_name,
+                users.email AS owner_email,
+                salons.salon_id,
+                salons.salon_name,
+                salons.address,
+                salons.description,
+                salons.commission_rate,
+                COUNT(services.service_id) AS service_count
+            FROM salons
+            INNER JOIN users ON users.user_id = salons.merchant_id
+            LEFT JOIN services ON services.salon_id = salons.salon_id
+            GROUP BY users.user_id, users.name, users.email, salons.salon_id, salons.salon_name, salons.address, salons.description, salons.commission_rate
+            ORDER BY salons.salon_id
+        `;
+
+        db.query(sql, callback);
+    });
 }
 
 function createMerchant(merchantData, callback) {
@@ -743,8 +780,8 @@ function createMerchant(merchantData, callback) {
                 }
 
                 const salonSql = `
-                    INSERT INTO salons (merchant_id, salon_name, address, description, image_url)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO salons (merchant_id, salon_name, address, description, image_url, commission_rate)
+                    VALUES (?, ?, ?, ?, ?, 15.00)
                 `;
                 const salonValues = [
                     userResult.insertId,
@@ -781,6 +818,28 @@ function createMerchant(merchantData, callback) {
     });
 }
 
+function updateCommissionRate(salonId, commissionRate, callback) {
+    ensureSalonCommissionSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            'UPDATE salons SET commission_rate = ? WHERE salon_id = ?',
+            [commissionRate, salonId],
+            (error, result) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, result.affectedRows > 0);
+            }
+        );
+    });
+}
+
 module.exports = {
     getMerchantByUserId,
     getMerchantBySalonId,
@@ -796,5 +855,6 @@ module.exports = {
     deleteService,
     deleteServiceAsAdmin,
     getAdminOverview,
-    createMerchant
+    createMerchant,
+    updateCommissionRate
 };

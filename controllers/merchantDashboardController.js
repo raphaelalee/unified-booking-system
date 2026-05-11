@@ -549,6 +549,9 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 return total + Number(booking.service_price || booking.price || 0);
                             }, 0);
                             const productRevenue = safeOrders.reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+                            const grossOrderSales = safeOrders.reduce((total, order) => total + Number(order.grossAmount || order.totalAmount || 0), 0);
+                            const totalCommissionDeducted = safeOrders.reduce((total, order) => total + Number(order.commissionAmount || 0), 0);
+                            const totalNetPayout = safeOrders.reduce((total, order) => total + Number(order.payoutAmount || order.totalAmount || 0), 0);
                             const totalRevenue = bookingRevenue + productRevenue;
                             const totalOrders = safeOrders.length + safeBookings.length;
                             const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
@@ -626,7 +629,12 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 salesReport: {
                                     dailySales: salesDays,
                                     recentOrders: safeOrders.slice(0, 5),
-                                    lowStockProducts
+                                    lowStockProducts,
+                                    payoutSummary: {
+                                        grossOrderSales,
+                                        totalCommissionDeducted,
+                                        totalNetPayout
+                                    }
                                 },
                                 validationReport: {
                                     issues: validationIssues,

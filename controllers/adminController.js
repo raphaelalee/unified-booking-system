@@ -141,6 +141,16 @@ function getMerchantForm(body = {}) {
     };
 }
 
+function normalizeCommissionRate(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+        return NaN;
+    }
+
+    return Math.round(numeric * 100) / 100;
+}
+
 function validateMerchantForm(form) {
     const errors = [];
 
@@ -596,6 +606,35 @@ function createMerchant(req, res) {
             });
             return res.redirect('/admin');
         });
+    });
+}
+
+function updateMerchantCommission(req, res) {
+    const salonId = Number(req.params.salonId);
+    const commissionRate = normalizeCommissionRate(req.body.commissionRate);
+
+    if (!Number.isInteger(salonId) || salonId < 1) {
+        req.session.adminError = 'Invalid merchant selected for commission update.';
+        return res.redirect('/admin#admin-merchants');
+    }
+
+    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+        req.session.adminError = 'Commission rate must be between 0 and 100.';
+        return res.redirect('/admin#admin-merchants');
+    }
+
+    return MerchantService.updateCommissionRate(salonId, commissionRate, (updateError, updated) => {
+        if (updateError) {
+            console.error(updateError);
+            req.session.adminError = 'Merchant commission could not be updated.';
+            return res.redirect('/admin#admin-merchants');
+        }
+
+        req.session.adminSuccess = updated
+            ? `Merchant commission updated to ${commissionRate.toFixed(2)}%.`
+            : 'Merchant commission could not be updated.';
+        req.session.adminError = updated ? null : 'Merchant commission could not be updated.';
+        return res.redirect('/admin#admin-merchants');
     });
 }
 
@@ -1310,6 +1349,7 @@ module.exports = {
     showDashboard,
     showNewMerchant,
     createMerchant,
+    updateMerchantCommission,
     listServices,
     showNewPromotion,
     createPromotion,
