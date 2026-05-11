@@ -12,6 +12,12 @@ ensureSalonCommissionSchema((error) => {
     }
 });
 
+ensureServiceInventorySchema((error) => {
+    if (error) {
+        console.error('Service inventory schema could not be prepared:', error.message || error);
+    }
+});
+
 function formatTimeSlot(value) {
     if (!value) {
         return '';
@@ -96,6 +102,111 @@ function ensureSalonCommissionSchema(callback) {
     });
 }
 
+function ensureServiceInventorySchema(callback) {
+    const sql = `
+        CREATE TABLE IF NOT EXISTS service_inventory_links (
+            service_id INT NOT NULL,
+            product_id INT NOT NULL,
+            quantity_required INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (service_id),
+            KEY idx_service_inventory_product (product_id),
+            CONSTRAINT fk_service_inventory_service FOREIGN KEY (service_id) REFERENCES services (service_id) ON DELETE CASCADE,
+            CONSTRAINT fk_service_inventory_product FOREIGN KEY (product_id) REFERENCES products (product_id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(sql, callback);
+}
+
+function decorateServiceInventory(items, callback) {
+    const collection = Array.isArray(items) ? items : [];
+    const serviceIds = collection
+        .map((service) => Number(service?.id || service?.serviceId))
+        .filter((serviceId) => Number.isInteger(serviceId) && serviceId > 0);
+
+    if (!serviceIds.length) {
+        callback(null, collection);
+        return;
+    }
+
+    ensureServiceInventorySchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const placeholders = serviceIds.map(() => '?').join(', ');
+        const sql = `
+            SELECT
+                service_inventory_links.service_id,
+                service_inventory_links.product_id,
+                service_inventory_links.quantity_required,
+                products.name AS product_name,
+                products.stock_quantity
+            FROM service_inventory_links
+            INNER JOIN products ON products.product_id = service_inventory_links.product_id
+            WHERE service_inventory_links.service_id IN (${placeholders})
+        `;
+
+        db.query(sql, serviceIds, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const inventoryMap = rows.reduce((map, row) => {
+                const quantityRequired = Math.max(1, Number(row.quantity_required || 1));
+                const stockQuantity = Math.max(0, Number(row.stock_quantity || 0));
+
+                map[String(row.service_id)] = {
+                    inventoryProductId: Number(row.product_id),
+                    inventoryProductName: row.product_name || 'Linked product',
+                    inventoryQuantityRequired: quantityRequired,
+                    inventoryStockQuantity: stockQuantity,
+                    inventoryBlocked: stockQuantity < quantityRequired
+                };
+                return map;
+            }, {});
+
+            callback(null, collection.map((service) => {
+                const inventory = inventoryMap[String(service.id || service.serviceId)] || {};
+
+                return {
+                    ...service,
+                    inventoryProductId: inventory.inventoryProductId || null,
+                    inventoryProductName: inventory.inventoryProductName || '',
+                    inventoryQuantityRequired: inventory.inventoryQuantityRequired || 0,
+                    inventoryStockQuantity: inventory.inventoryStockQuantity || 0,
+                    inventoryBlocked: Boolean(inventory.inventoryBlocked),
+                    isActiveFrontend: !inventory.inventoryBlocked
+                };
+            }));
+        });
+    });
+}
+
+function setInventoryLink(connection, serviceId, productId, quantityRequired, callback) {
+    const normalizedProductId = Number(productId);
+    const normalizedQuantity = Math.max(1, Number(quantityRequired || 1));
+
+    if (!Number.isInteger(normalizedProductId) || normalizedProductId < 1) {
+        connection.query('DELETE FROM service_inventory_links WHERE service_id = ?', [serviceId], callback);
+        return;
+    }
+
+    const sql = `
+        INSERT INTO service_inventory_links (service_id, product_id, quantity_required)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            product_id = VALUES(product_id),
+            quantity_required = VALUES(quantity_required)
+    `;
+
+    connection.query(sql, [serviceId, normalizedProductId, normalizedQuantity], callback);
+}
+
 function mapMerchantRows(rows) {
     if (!rows || rows.length === 0) {
         return null;
@@ -178,7 +289,24 @@ function getMerchantByUserId(userId, callback) {
             return;
         }
 
-        callback(null, mapMerchantRows(rows));
+        const merchant = mapMerchantRows(rows);
+
+        if (!merchant || !Array.isArray(merchant.services) || merchant.services.length === 0) {
+            callback(null, merchant);
+            return;
+        }
+
+        decorateServiceInventory(merchant.services, (inventoryError, services) => {
+            if (inventoryError) {
+                callback(inventoryError);
+                return;
+            }
+
+            callback(null, {
+                ...merchant,
+                services
+            });
+        });
     });
 }
 
@@ -215,7 +343,24 @@ function getMerchantBySalonId(salonId, callback) {
             return;
         }
 
-        callback(null, mapMerchantRows(rows));
+        const merchant = mapMerchantRows(rows);
+
+        if (!merchant || !Array.isArray(merchant.services) || merchant.services.length === 0) {
+            callback(null, merchant);
+            return;
+        }
+
+        decorateServiceInventory(merchant.services, (inventoryError, services) => {
+            if (inventoryError) {
+                callback(inventoryError);
+                return;
+            }
+
+            callback(null, {
+                ...merchant,
+                services
+            });
+        });
     });
 }
 
@@ -300,7 +445,7 @@ function getAllServices(callback) {
             }
         });
 
-        callback(null, Array.from(servicesById.values()));
+        decorateServiceInventory(Array.from(servicesById.values()), callback);
     });
 }
 
@@ -341,7 +486,7 @@ function findServiceForMerchant(userId, serviceId, callback) {
 
         const first = rows[0];
 
-        callback(null, {
+        decorateServiceInventory([{
             id: first.service_id,
             serviceId: first.service_id,
             salonId: first.salon_id,
@@ -354,6 +499,13 @@ function findServiceForMerchant(userId, serviceId, callback) {
             price: Number(first.price),
             ...getPackageFields(first),
             slots: rows.map((row) => formatTimeSlot(row.timeslot)).filter(Boolean)
+        }], (inventoryError, services) => {
+            if (inventoryError) {
+                callback(inventoryError);
+                return;
+            }
+
+            callback(null, services[0] || null);
         });
     });
 }
@@ -395,7 +547,7 @@ function findServiceById(serviceId, callback) {
 
         const first = rows[0];
 
-        callback(null, {
+        decorateServiceInventory([{
             id: first.service_id,
             serviceId: first.service_id,
             salonId: first.salon_id,
@@ -409,6 +561,13 @@ function findServiceById(serviceId, callback) {
             price: Number(first.price),
             ...getPackageFields(first),
             slots: rows.map((row) => formatTimeSlot(row.timeslot)).filter(Boolean)
+        }], (inventoryError, services) => {
+            if (inventoryError) {
+                callback(inventoryError);
+                return;
+            }
+
+            callback(null, services[0] || null);
         });
     });
 }
@@ -488,9 +647,18 @@ function createService(userId, serviceData, callback) {
                             });
                         }
 
-                        connection.commit((commitError) => {
-                            connection.release();
-                            callback(commitError, result.insertId);
+                        setInventoryLink(connection, result.insertId, serviceData.inventoryProductId, serviceData.inventoryQuantityRequired, (inventoryError) => {
+                            if (inventoryError) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(inventoryError);
+                                });
+                            }
+
+                            connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError, result.insertId);
+                            });
                         });
                     });
                 });
@@ -612,9 +780,18 @@ function updateService(userId, serviceId, serviceData, callback) {
                         });
                     }
 
-                    connection.commit((commitError) => {
-                        connection.release();
-                        callback(commitError);
+                    setInventoryLink(connection, serviceId, serviceData.inventoryProductId, serviceData.inventoryQuantityRequired, (inventoryError) => {
+                        if (inventoryError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(inventoryError);
+                            });
+                        }
+
+                        connection.commit((commitError) => {
+                            connection.release();
+                            callback(commitError);
+                        });
                     });
                 });
             });

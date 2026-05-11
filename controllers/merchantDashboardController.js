@@ -61,18 +61,23 @@ function getServiceForm(body = {}) {
         slots: String(body.slots || '').trim(),
         packageEnabled: isTruthyFormValue(body.packageEnabled),
         packageSessions: String(body.packageSessions || '').trim(),
-        packagePrice: String(body.packagePrice || '').trim()
+        packagePrice: String(body.packagePrice || '').trim(),
+        inventoryProductId: String(body.inventoryProductId || '').trim(),
+        inventoryQuantityRequired: String(body.inventoryQuantityRequired || '').trim()
     };
 }
 
-function validateServiceForm(form) {
+function validateServiceForm(form, products = []) {
     const errors = [];
     const categoryId = Number(form.categoryId);
     const durationMins = Number(form.durationMins);
     const price = Number(form.price);
     const packageSessions = Number(form.packageSessions);
     const packagePrice = Number(form.packagePrice);
+    const inventoryProductId = form.inventoryProductId === '' ? null : Number(form.inventoryProductId);
+    const inventoryQuantityRequired = form.inventoryQuantityRequired === '' ? 1 : Number(form.inventoryQuantityRequired);
     const slots = form.slots.split(',').map((slot) => slot.trim()).filter(Boolean);
+    const validProductIds = new Set((products || []).map((product) => Number(product.id)));
 
     if (form.name.length < 2) {
         errors.push('Service name must be at least 2 characters.');
@@ -104,6 +109,16 @@ function validateServiceForm(form) {
         }
     }
 
+    if (inventoryProductId !== null) {
+        if (!Number.isInteger(inventoryProductId) || !validProductIds.has(inventoryProductId)) {
+            errors.push('Please choose a valid linked inventory product.');
+        }
+
+        if (!Number.isInteger(inventoryQuantityRequired) || inventoryQuantityRequired < 1) {
+            errors.push('Inventory quantity required must be at least 1.');
+        }
+    }
+
     return errors;
 }
 
@@ -117,8 +132,31 @@ function buildServicePayload(form) {
         slots: form.slots,
         packageEnabled: Boolean(form.packageEnabled),
         packageSessions: form.packageEnabled ? Number(form.packageSessions) : 0,
-        packagePrice: form.packageEnabled ? Number(form.packagePrice) : 0
+        packagePrice: form.packageEnabled ? Number(form.packagePrice) : 0,
+        inventoryProductId: form.inventoryProductId ? Number(form.inventoryProductId) : null,
+        inventoryQuantityRequired: form.inventoryProductId ? Number(form.inventoryQuantityRequired || 1) : 0
     };
+}
+
+function renderServiceForm(res, {
+    title,
+    merchant,
+    categories,
+    products = [],
+    service = null,
+    form,
+    errors,
+    status = 200
+}) {
+    return res.status(status).render('merchant-service-form', {
+        title,
+        merchant,
+        categories,
+        products,
+        service,
+        form,
+        errors
+    });
 }
 
 function getProductForm(body = {}) {
@@ -777,13 +815,24 @@ function showNewService(req, res) {
                 });
             }
 
-            return res.render('merchant-service-form', {
-                title: 'Add Service',
-                merchant,
-                categories,
-                service: null,
-                form: getServiceForm(),
-                errors: []
+            return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
+                    return res.status(500).render('error', {
+                        title: 'Products Not Found',
+                        message: 'Merchant inventory could not be loaded.'
+                    });
+                }
+
+                return renderServiceForm(res, {
+                    title: 'Add Service',
+                    merchant,
+                    categories,
+                    products,
+                    service: null,
+                    form: getServiceForm(),
+                    errors: []
+                });
             });
         });
     });
@@ -798,7 +847,6 @@ function createService(req, res) {
         }
 
         const form = getServiceForm(req.body);
-        const errors = validateServiceForm(form);
 
         return MerchantService.getCategories((categoryError, categories) => {
             if (categoryError) {
@@ -809,48 +857,64 @@ function createService(req, res) {
                 });
             }
 
-            if (errors.length > 0) {
-                return res.status(400).render('merchant-service-form', {
-                    title: 'Add Service',
-                    merchant,
-                    categories,
-                    service: null,
-                    form,
-                    errors
-                });
-            }
-
-            return MerchantService.createService(req.session.user.id, buildServicePayload(form), (createError) => {
-                if (createError) {
-                    console.error(createError);
-                    return res.status(500).render('merchant-service-form', {
-                        title: 'Add Service',
-                        merchant,
-                        categories,
-                        service: null,
-                        form,
-                        errors: ['Service could not be created. Please check the category and timeslots.']
+            return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
+                    return res.status(500).render('error', {
+                        title: 'Products Not Found',
+                        message: 'Merchant inventory could not be loaded.'
                     });
                 }
 
-                req.session.merchantSuccess = 'Service created successfully.';
-                notifyMerchant(req.session.user.id, {
-                    actorUserId: req.session.user.id,
-                    type: 'merchant_update',
-                    title: 'Service listed',
-                    message: `${form.name} is now listed with customer booking slots.`,
-                    linkUrl: '/merchant/services',
-                    dedupeKey: `merchant-service-created-${Date.now()}-${req.session.user.id}`
+                const errors = validateServiceForm(form, products);
+
+                if (errors.length > 0) {
+                    return renderServiceForm(res, {
+                        title: 'Add Service',
+                        merchant,
+                        categories,
+                        products,
+                        service: null,
+                        form,
+                        errors,
+                        status: 400
+                    });
+                }
+
+                return MerchantService.createService(req.session.user.id, buildServicePayload(form), (createError) => {
+                    if (createError) {
+                        console.error(createError);
+                        return renderServiceForm(res, {
+                            title: 'Add Service',
+                            merchant,
+                            categories,
+                            products,
+                            service: null,
+                            form,
+                            errors: ['Service could not be created. Please check the category, inventory link, and timeslots.'],
+                            status: 500
+                        });
+                    }
+
+                    req.session.merchantSuccess = 'Service created successfully.';
+                    notifyMerchant(req.session.user.id, {
+                        actorUserId: req.session.user.id,
+                        type: 'merchant_update',
+                        title: 'Service listed',
+                        message: `${form.name} is now listed with customer booking slots.`,
+                        linkUrl: '/merchant/services',
+                        dedupeKey: `merchant-service-created-${Date.now()}-${req.session.user.id}`
+                    });
+                    notifyAdmins({
+                        actorUserId: req.session.user.id,
+                        type: 'merchant_update',
+                        title: 'Merchant added a service',
+                        message: `${merchant.name} listed ${form.name}.`,
+                        linkUrl: '/admin/services',
+                        dedupeKey: `admin-merchant-service-created-${Date.now()}`
+                    });
+                    return res.redirect('/merchant/services');
                 });
-                notifyAdmins({
-                    actorUserId: req.session.user.id,
-                    type: 'merchant_update',
-                    title: 'Merchant added a service',
-                    message: `${merchant.name} listed ${form.name}.`,
-                    linkUrl: '/admin/services',
-                    dedupeKey: `admin-merchant-service-created-${Date.now()}`
-                });
-                return res.redirect('/merchant/services');
             });
         });
     });
@@ -889,23 +953,36 @@ function showEditService(req, res) {
                     });
                 }
 
-                return res.render('merchant-service-form', {
-                    title: 'Edit Service',
-                    merchant,
-                    categories,
-                    service,
-                    form: {
-                        name: service.name,
-                        description: service.description,
-                        categoryId: String(service.categoryId),
-                        durationMins: String(service.durationMins),
-                        price: String(service.price),
-                        slots: (service.slots || []).join(', '),
-                        packageEnabled: Boolean(service.packageEnabled),
-                        packageSessions: service.packageSessions ? String(service.packageSessions) : '',
-                        packagePrice: service.packagePrice ? String(service.packagePrice) : ''
-                    },
-                    errors: []
+                return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                    if (productError) {
+                        console.error(productError);
+                        return res.status(500).render('error', {
+                            title: 'Products Not Found',
+                            message: 'Merchant inventory could not be loaded.'
+                        });
+                    }
+
+                    return renderServiceForm(res, {
+                        title: 'Edit Service',
+                        merchant,
+                        categories,
+                        products,
+                        service,
+                        form: {
+                            name: service.name,
+                            description: service.description,
+                            categoryId: String(service.categoryId),
+                            durationMins: String(service.durationMins),
+                            price: String(service.price),
+                            slots: (service.slots || []).join(', '),
+                            packageEnabled: Boolean(service.packageEnabled),
+                            packageSessions: service.packageSessions ? String(service.packageSessions) : '',
+                            packagePrice: service.packagePrice ? String(service.packagePrice) : '',
+                            inventoryProductId: service.inventoryProductId ? String(service.inventoryProductId) : '',
+                            inventoryQuantityRequired: service.inventoryQuantityRequired ? String(service.inventoryQuantityRequired) : ''
+                        },
+                        errors: []
+                    });
                 });
             });
         });
@@ -937,7 +1014,6 @@ function updateService(req, res) {
             }
 
             const form = getServiceForm(req.body);
-            const errors = validateServiceForm(form);
 
             return MerchantService.getCategories((categoryError, categories) => {
                 if (categoryError) {
@@ -948,40 +1024,56 @@ function updateService(req, res) {
                     });
                 }
 
-                if (errors.length > 0) {
-                    return res.status(400).render('merchant-service-form', {
-                        title: 'Edit Service',
-                        merchant,
-                        categories,
-                        service,
-                        form,
-                        errors
-                    });
-                }
-
-                return MerchantService.updateService(req.session.user.id, service.id, buildServicePayload(form), (updateError) => {
-                    if (updateError) {
-                        console.error(updateError);
-                        return res.status(500).render('merchant-service-form', {
-                            title: 'Edit Service',
-                            merchant,
-                            categories,
-                            service,
-                            form,
-                            errors: ['Service could not be updated. Please check the category and timeslots.']
+                return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                    if (productError) {
+                        console.error(productError);
+                        return res.status(500).render('error', {
+                            title: 'Products Not Found',
+                            message: 'Merchant inventory could not be loaded.'
                         });
                     }
 
-                    req.session.merchantSuccess = 'Service updated successfully.';
-                    notifyMerchant(req.session.user.id, {
-                        actorUserId: req.session.user.id,
-                        type: 'merchant_update',
-                        title: 'Service updated',
-                        message: `${form.name} was updated successfully.`,
-                        linkUrl: '/merchant/services',
-                        dedupeKey: `merchant-service-updated-${service.id}-${Date.now()}`
+                    const errors = validateServiceForm(form, products);
+
+                    if (errors.length > 0) {
+                        return renderServiceForm(res, {
+                            title: 'Edit Service',
+                            merchant,
+                            categories,
+                            products,
+                            service,
+                            form,
+                            errors,
+                            status: 400
+                        });
+                    }
+
+                    return MerchantService.updateService(req.session.user.id, service.id, buildServicePayload(form), (updateError) => {
+                        if (updateError) {
+                            console.error(updateError);
+                            return renderServiceForm(res, {
+                                title: 'Edit Service',
+                                merchant,
+                                categories,
+                                products,
+                                service,
+                                form,
+                                errors: ['Service could not be updated. Please check the category, inventory link, and timeslots.'],
+                                status: 500
+                            });
+                        }
+
+                        req.session.merchantSuccess = 'Service updated successfully.';
+                        notifyMerchant(req.session.user.id, {
+                            actorUserId: req.session.user.id,
+                            type: 'merchant_update',
+                            title: 'Service updated',
+                            message: `${form.name} was updated successfully.`,
+                            linkUrl: '/merchant/services',
+                            dedupeKey: `merchant-service-updated-${service.id}-${Date.now()}`
+                        });
+                        return res.redirect('/merchant/services');
                     });
-                    return res.redirect('/merchant/services');
                 });
             });
         });

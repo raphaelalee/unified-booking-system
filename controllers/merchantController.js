@@ -381,9 +381,18 @@ function applyPromotionAvailability(merchant, selectedPromotion = null) {
     };
 }
 
+function filterInventoryAvailableServices(merchant) {
+    const services = (merchant?.services || []).filter((service) => !service.inventoryBlocked);
+
+    return {
+        ...merchant,
+        services
+    };
+}
+
 function renderBookingPage(req, res, merchant, options = {}) {
     const selectedPromotion = options.selectedPromotion || getPromotionSelection(req.query);
-    const bookingMerchant = applyPromotionAvailability(merchant, selectedPromotion);
+    const bookingMerchant = filterInventoryAvailableServices(applyPromotionAvailability(merchant, selectedPromotion));
     const rawServiceId = options.form?.serviceId || req.query.serviceId;
     const rawServiceOptionId = options.form?.serviceOptionId || req.query.serviceOptionId;
     const serviceFromId = getSelectedService(bookingMerchant, rawServiceId);
@@ -419,8 +428,8 @@ function renderBookingPage(req, res, merchant, options = {}) {
     const useSecureQr = options.secureQr || Boolean(req.params.token || req.query.token);
     const bookingPath = appendQueryParams(
         useSecureQr
-            ? getSecureBookingPath(merchant, selectedService)
-            : getBookingPath(merchant, selectedService),
+            ? getSecureBookingPath(bookingMerchant, selectedService)
+            : getBookingPath(bookingMerchant, selectedService),
         {
             serviceOptionId: selectedServiceOption ? selectedServiceOption.id : '',
             ...getPromotionQueryParams(selectedPromotion)
@@ -428,8 +437,8 @@ function renderBookingPage(req, res, merchant, options = {}) {
     );
     const bookingUrl = appendQueryParams(
         useSecureQr
-            ? getSecureBookingUrl(req, merchant, selectedService)
-            : getBookingUrl(req, merchant, selectedService),
+            ? getSecureBookingUrl(req, bookingMerchant, selectedService)
+            : getBookingUrl(req, bookingMerchant, selectedService),
         {
             serviceOptionId: selectedServiceOption ? selectedServiceOption.id : '',
             ...getPromotionQueryParams(selectedPromotion)
@@ -447,7 +456,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         bookingPath,
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
-        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, selectedService, bookingUrl),
+        whatsappEnquiryUrl: getWhatsAppEnquiryUrl(bookingMerchant, selectedService, bookingUrl),
         todayDate: getTodayInputValue(),
         publicHolidays: getPublicHolidayDateMap()
     });
@@ -542,6 +551,10 @@ function validateBooking(merchant, form) {
 
     if (!service) {
         errors.push('Please select a valid service.');
+    }
+
+    if (service?.inventoryBlocked) {
+        errors.push('This service is temporarily unavailable because the required inventory is out of stock.');
     }
 
     if (serviceSelection.requiresOption && !serviceSelection.selectedOption) {
@@ -770,7 +783,9 @@ function showServices(req, res) {
                 merchantRating: 'New',
                 serviceBookingPath: `/booking/${service.salonId}?serviceId=${service.id}`
             }));
-        const serviceCatalog = sourceServices.map((service) => ({
+        const serviceCatalog = sourceServices
+            .filter((service) => !service.inventoryBlocked)
+            .map((service) => ({
             ...service,
             serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
         }));

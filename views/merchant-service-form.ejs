@@ -119,6 +119,29 @@
                     </label>
                 </div>
             </section>
+
+            <section class="merchant-service-slot-panel merchant-package-panel" aria-label="Inventory sync">
+                <div>
+                    <p class="eyebrow">Inventory sync</p>
+                    <h2>Stock-aware booking</h2>
+                    <p class="muted">Link this service to one tracked product. If stock falls below the required quantity, the service is hidden from customers until inventory is replenished.</p>
+                </div>
+                <label>
+                    Linked product
+                    <select name="inventoryProductId">
+                        <option value="">No linked product</option>
+                        <% (products || []).forEach((product) => { %>
+                            <option value="<%= product.id %>" <%= String(form.inventoryProductId || '') === String(product.id) ? 'selected' : '' %>>
+                                <%= product.name %> (<%= Number(product.stockQuantity || 0) %> in stock)
+                            </option>
+                        <% }) %>
+                    </select>
+                </label>
+                <label>
+                    Quantity required per booking
+                    <input type="number" name="inventoryQuantityRequired" value="<%= form.inventoryQuantityRequired || '' %>" min="1" step="1" placeholder="1">
+                </label>
+            </section>
         </div>
 
         <div class="form-actions">

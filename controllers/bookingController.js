@@ -132,6 +132,11 @@ function createBooking(req, res) {
             });
         }
 
+        if (service.inventoryBlocked) {
+            req.session.profileError = 'This service is temporarily unavailable because the required inventory is out of stock.';
+            return res.redirect(req.get('Referrer') || '/services');
+        }
+
         const purchaseType = req.body.purchaseType === 'package' && service.packageEnabled ? 'package' : 'single';
         const bookedServiceName = purchaseType === 'package'
             ? `${service.name} (${service.packageSessions}-session package)`

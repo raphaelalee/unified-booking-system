@@ -94,6 +94,15 @@
                         <% if (service.description) { %>
                             <p><%= service.description %></p>
                         <% } %>
+                        <% if (service.inventoryProductId) { %>
+                            <p class="muted">
+                                Linked inventory: <strong><%= service.inventoryProductName || 'Tracked product' %></strong>
+                                (<%= Number(service.inventoryStockQuantity || 0) %> in stock, requires <%= Number(service.inventoryQuantityRequired || 1) %>)
+                                <% if (service.inventoryBlocked) { %>
+                                    <span>• Booking hidden until restocked</span>
+                                <% } %>
+                            </p>
+                        <% } %>
                     </div>
                     <span class="merchant-service-category"><%= service.category || merchant.category %></span>
                     <span class="merchant-service-duration"><%= service.duration %></span>
