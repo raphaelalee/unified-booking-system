@@ -343,6 +343,12 @@ function notifyCustomers(notification) {
     Notification.createForRole('customer', notification, logNotificationError);
 }
 
+function normalizeMerchantBookingStatus(value) {
+    const status = String(value || '').trim().toLowerCase();
+    const allowed = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
+    return allowed.has(status) ? status : '';
+}
+
 function buildMerchantReports(merchant, bookings = [], hadError = false) {
     return {
         totalBookings: bookings.length,
@@ -772,6 +778,33 @@ function generateQr(req, res) {
                 qrBookingUrl
             });
         });
+    });
+}
+
+function updateBookingStatus(req, res) {
+    const bookingId = Number(req.params.bookingId);
+    const status = normalizeMerchantBookingStatus(req.body.status);
+
+    if (!bookingId || !status) {
+        req.session.merchantError = 'Choose a valid booking action.';
+        return res.redirect('/merchant#merchant-calendar');
+    }
+
+    return Booking.updateStatusForMerchant(bookingId, req.session.user.id, status, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Booking status could not be updated.';
+            return res.redirect('/merchant#merchant-calendar');
+        }
+
+        if (!result?.affectedRows) {
+            req.session.merchantError = 'That booking was not found for your merchant account.';
+            return res.redirect('/merchant#merchant-calendar');
+        }
+
+        const statusCopy = status.replace(/_/g, ' ');
+        req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.`;
+        return res.redirect('/merchant#merchant-calendar');
     });
 }
 
@@ -1652,6 +1685,7 @@ function deletePromotion(req, res) {
 module.exports = {
     showServices,
     generateQr,
+    updateBookingStatus,
     showSchedule,
     showNewService,
     createService,

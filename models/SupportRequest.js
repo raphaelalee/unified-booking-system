@@ -3,8 +3,65 @@ const db = require('../db');
 let schemaReady = false;
 let schemaPending = false;
 let schemaQueue = [];
+let messageSchemaReady = false;
+let messageSchemaPending = false;
+let messageSchemaQueue = [];
 
 const RESOLVED_STATUSES = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+
+function flushMessageSchemaQueue(error) {
+    const queue = messageSchemaQueue;
+    messageSchemaQueue = [];
+    messageSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureMessageSchema(callback) {
+    if (messageSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    messageSchemaQueue.push(callback);
+
+    if (messageSchemaPending) {
+        return;
+    }
+
+    messageSchemaPending = true;
+
+    ensureSchema((requestSchemaError) => {
+        if (requestSchemaError) {
+            flushMessageSchemaQueue(requestSchemaError);
+            return;
+        }
+
+        const sql = `
+            CREATE TABLE IF NOT EXISTS support_messages (
+                message_id INT NOT NULL AUTO_INCREMENT,
+                request_id INT NOT NULL,
+                sender_user_id INT DEFAULT NULL,
+                sender_role VARCHAR(30) NOT NULL DEFAULT 'customer',
+                message_body TEXT,
+                screenshot_path VARCHAR(255) DEFAULT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (message_id),
+                KEY idx_support_messages_request (request_id, created_at),
+                CONSTRAINT fk_support_messages_request
+                    FOREIGN KEY (request_id) REFERENCES support_requests (request_id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `;
+
+        db.query(sql, (error) => {
+            if (!error) {
+                messageSchemaReady = true;
+            }
+
+            flushMessageSchemaQueue(error);
+        });
+    });
+}
 
 function flushSchemaQueue(error) {
     const queue = schemaQueue;
@@ -97,6 +154,19 @@ function mapRow(row = {}) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         resolvedAt: row.resolved_at
+    };
+}
+
+function mapMessageRow(row = {}) {
+    return {
+        id: row.message_id,
+        requestId: row.request_id,
+        senderUserId: row.sender_user_id,
+        senderRole: row.sender_role,
+        senderName: row.sender_name || row.sender_role || 'Support',
+        messageBody: row.message_body || '',
+        screenshotPath: row.screenshot_path || '',
+        createdAt: row.created_at
     };
 }
 
@@ -404,15 +474,89 @@ function adminResolve(requestId, adminUserId, decision, note, callback) {
     });
 }
 
+function createMessage(data, callback) {
+    ensureMessageSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT INTO support_messages
+                (request_id, sender_user_id, sender_role, message_body, screenshot_path)
+            VALUES (?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [
+            data.requestId,
+            data.senderUserId || null,
+            data.senderRole || 'customer',
+            data.messageBody || null,
+            data.screenshotPath || null
+        ], callback);
+    });
+}
+
+function getMessagesForRequests(requestIds, callback) {
+    const ids = (Array.isArray(requestIds) ? requestIds : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        callback(null, {});
+        return;
+    }
+
+    ensureMessageSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const placeholders = ids.map(() => '?').join(', ');
+        const sql = `
+            SELECT
+                support_messages.*,
+                users.name AS sender_name
+            FROM support_messages
+            LEFT JOIN users ON users.user_id = support_messages.sender_user_id
+            WHERE support_messages.request_id IN (${placeholders})
+            ORDER BY support_messages.created_at ASC, support_messages.message_id ASC
+        `;
+
+        db.query(sql, ids, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const grouped = ids.reduce((map, id) => {
+                map[String(id)] = [];
+                return map;
+            }, {});
+
+            rows.forEach((row) => {
+                const key = String(row.request_id);
+                grouped[key] = grouped[key] || [];
+                grouped[key].push(mapMessageRow(row));
+            });
+
+            callback(null, grouped);
+        });
+    });
+}
+
 module.exports = {
     adminResolve,
     adminSendToMerchant,
     countOpenByCustomer,
     create,
+    createMessage,
     findById,
     getForAdmin,
     getForCustomer,
     getForMerchant,
+    getMessagesForRequests,
     hasActiveRequest,
     merchantRespond
 };

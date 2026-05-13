@@ -522,6 +522,281 @@ body:not(.flappy-page) {
     display: inline-flex;
 }
 
+.profile-bookings-panel {
+    display: grid;
+    gap: 24px;
+}
+
+.profile-booking-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.profile-booking-grid.compact {
+    gap: 12px;
+}
+
+.profile-booking-card {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid rgba(38, 59, 43, 0.12);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 12px 26px rgba(38, 59, 43, 0.06);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.profile-booking-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(84, 130, 92, 0.28);
+    box-shadow: 0 18px 36px rgba(38, 59, 43, 0.1);
+}
+
+.profile-booking-card.is-cancelled {
+    background: rgba(255, 255, 255, 0.86);
+}
+
+.profile-booking-thumb {
+    width: 112px;
+    height: 112px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid rgba(38, 59, 43, 0.1);
+    background: #eef4e9;
+}
+
+.profile-booking-card-main {
+    min-width: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.profile-booking-card-head,
+.profile-booking-actions,
+.profile-booking-support,
+.profile-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.profile-booking-card-head {
+    align-items: flex-start;
+}
+
+.profile-booking-card-head strong {
+    display: block;
+    color: var(--readable-ink);
+    font-size: 1rem;
+}
+
+.profile-booking-card-head span:not(.status-badge) {
+    display: block;
+    margin-top: 3px;
+    color: var(--readable-text);
+    font-weight: 700;
+}
+
+.profile-booking-meta {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.profile-booking-meta div {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.72);
+}
+
+.profile-booking-meta dt {
+    color: rgba(38, 59, 43, 0.68);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.profile-booking-meta dd {
+    margin: 3px 0 0;
+    color: var(--readable-ink);
+    font-weight: 900;
+}
+
+.profile-booking-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.profile-booking-actions .button {
+    min-height: 38px;
+    padding: 9px 12px;
+}
+
+.profile-booking-support {
+    justify-content: flex-start;
+    padding-top: 4px;
+}
+
+.profile-booking-support span {
+    color: var(--readable-text);
+    font-weight: 800;
+}
+
+.profile-booking-modal[hidden] {
+    display: none;
+}
+
+.profile-booking-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.profile-booking-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(24, 36, 28, 0.42);
+}
+
+.profile-booking-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(560px, 100%);
+    max-height: min(760px, calc(100vh - 40px));
+    overflow: auto;
+    padding: 24px;
+    display: grid;
+    gap: 14px;
+    border-radius: 8px;
+    background: #fbfdf9;
+    box-shadow: 0 28px 70px rgba(24, 36, 28, 0.24);
+}
+
+.profile-booking-modal-panel h2,
+.profile-booking-modal-panel p {
+    margin: 0;
+}
+
+.profile-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(38, 59, 43, 0.14);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--readable-ink);
+    cursor: pointer;
+    font-size: 1.25rem;
+    font-weight: 900;
+}
+
+.profile-booking-modal-panel form,
+.profile-booking-modal-panel label {
+    display: grid;
+    gap: 8px;
+}
+
+.profile-modal-label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--readable-ink);
+    font-weight: 900;
+}
+
+.profile-suggestion-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.profile-suggestion-strip button,
+.profile-slot-choice span {
+    border: 1px solid rgba(84, 130, 92, 0.22);
+    border-radius: 999px;
+    background: rgba(238, 244, 233, 0.86);
+    color: var(--readable-ink);
+    font-weight: 900;
+}
+
+.profile-suggestion-strip button {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.profile-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.profile-slot-choice input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.profile-slot-choice span {
+    min-height: 38px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.profile-slot-choice input:checked + span {
+    background: #4f6847;
+    color: #ffffff;
+}
+
+.profile-slot-choice input:disabled + span {
+    cursor: not-allowed;
+    opacity: 0.42;
+    text-decoration: line-through;
+}
+
+.profile-approval-note,
+.profile-policy-box {
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.74);
+    color: var(--readable-text);
+    font-weight: 800;
+}
+
+.profile-policy-box {
+    display: grid;
+    gap: 4px;
+}
+
+.profile-policy-box strong {
+    color: var(--readable-ink);
+}
+
+.profile-confirm-check {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    font-weight: 800;
+}
+
+.profile-modal-feedback {
+    min-height: 20px;
+    color: #a64032;
+    font-weight: 900;
+}
+
+.profile-modal-open {
+    overflow: hidden;
+}
+
 .profile-booking-review-block,
 .profile-booking-review-form {
     margin-top: 12px;
@@ -983,8 +1258,31 @@ textarea[data-product-how-to-use] {
     }
 
     .profile-review-hub-stats,
-    .profile-review-queue-card-body {
+    .profile-review-queue-card-body,
+    .profile-booking-card,
+    .profile-booking-meta {
         grid-template-columns: 1fr;
+    }
+
+    .profile-booking-thumb {
+        width: 100%;
+        height: 160px;
+    }
+
+    .profile-booking-card-head,
+    .profile-booking-actions,
+    .profile-modal-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .profile-booking-actions .button,
+    .profile-modal-actions .button {
+        width: 100%;
+    }
+
+    .profile-slot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .profile-review-service-action {

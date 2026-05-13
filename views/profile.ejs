@@ -7,6 +7,12 @@
     const profilePastBookings = typeof pastBookings !== 'undefined' && Array.isArray(pastBookings)
         ? pastBookings
         : [];
+    const profileCancelledBookings = typeof cancelledBookings !== 'undefined' && Array.isArray(cancelledBookings)
+        ? cancelledBookings
+        : [];
+    const profileBookingAvailability = typeof bookingAvailability !== 'undefined' && bookingAvailability
+        ? bookingAvailability
+        : {};
     const profileReviewableBookings = typeof reviewableBookings !== 'undefined' && Array.isArray(reviewableBookings)
         ? reviewableBookings
         : [];
@@ -18,9 +24,35 @@
             .filter((entry) => String(entry.type || '').toLowerCase() === 'review_bonus')
             .reduce((sum, entry) => sum + Number(entry.pointsDelta || 0), 0)
         : 0;
-    const formatBookingStatus = (value) => String(value || 'pending').replace(/_/g, '-');
+    const formatBookingStatus = (value) => String(value || 'pending').replace(/_/g, ' ');
+    const formatBookingDate = (value) => {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Date TBC' : date.toLocaleDateString('en-SG', { dateStyle: 'medium' });
+    };
+    const formatBookingDateTime = (value) => {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' });
+    };
+    const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+    const formatDuration = (value) => Number(value || 0) > 0 ? `${Number(value)} mins` : 'Duration TBC';
+    const formatRefundStatus = (value) => String(value || 'not_requested').replace(/_/g, ' ');
+    const profileImageFallback = '/images/vaniday-service-placeholder.svg';
     const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
+    const bookingDataFor = (booking) => {
+        const availability = profileBookingAvailability[String(booking.id)] || {};
+        return encodeURIComponent(JSON.stringify({
+            id: booking.id,
+            serviceName: booking.service_name,
+            merchantName: booking.merchant_name,
+            bookingDate: booking.booking_date instanceof Date ? booking.booking_date.toISOString().slice(0, 10) : String(booking.booking_date || '').slice(0, 10),
+            bookingTime: booking.booking_time || '',
+            duration: formatDuration(booking.duration_mins),
+            price: formatMoney(booking.service_price),
+            slots: availability.slots || [],
+            taken: availability.taken || []
+        }));
+    };
 %>
 
 <section class="section compact account-settings-page profile-redesign-page">
@@ -207,7 +239,7 @@
             </form>
 
             <% if (isCustomer) { %>
-                <section id="bookings" class="account-panel profile-tab-panel" data-profile-panel="bookings">
+                <section id="bookings" class="account-panel profile-tab-panel profile-bookings-panel" data-profile-panel="bookings">
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Bookings</p>
@@ -219,31 +251,44 @@
                     <% if (!profileUpcomingBookings.length) { %>
                         <p class="muted">No upcoming bookings yet.</p>
                     <% } else { %>
-                        <div class="saved-merchant-list">
+                        <div class="profile-booking-grid">
                             <% profileUpcomingBookings.forEach((booking) => { %>
-                                <article class="saved-merchant-row">
-                                    <div>
-                                        <strong><%= booking.service_name %></strong>
-                                        <span>
-                                            <%= booking.merchant_name %>
-                                            &middot;
-                                            <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
-                                            <% if (booking.booking_time) { %>
-                                                at <%= booking.booking_time %>
-                                            <% } %>
-                                        </span>
-                                        <span class="profile-booking-status-row">
-                                            <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
-                                        </span>
+                                <article class="profile-booking-card" data-booking-card="<%= booking.id %>" data-booking="<%- bookingDataFor(booking) %>">
+                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                    <div class="profile-booking-card-main">
+                                        <div class="profile-booking-card-head">
+                                            <div>
+                                                <strong data-booking-service><%= booking.service_name %></strong>
+                                                <span><%= booking.merchant_name %></span>
+                                            </div>
+                                            <span class="status-badge status-<%= booking.status %>" data-booking-status><%= formatBookingStatus(booking.status) %></span>
+                                        </div>
+                                        <dl class="profile-booking-meta">
+                                            <div>
+                                                <dt>Date &amp; time</dt>
+                                                <dd data-booking-datetime><%= formatBookingDate(booking.booking_date) %><%= booking.booking_time ? ` at ${booking.booking_time}` : '' %></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Duration</dt>
+                                                <dd><%= formatDuration(booking.duration_mins) %></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Price</dt>
+                                                <dd><%= formatMoney(booking.service_price) %></dd>
+                                            </div>
+                                        </dl>
+                                        <div class="profile-booking-actions">
+                                            <a class="button secondary" href="/receipt/<%= booking.id %>">View QR</a>
+                                            <button class="button secondary" type="button" data-open-reschedule>Reschedule</button>
+                                            <button class="button secondary danger-button" type="button" data-open-cancel>Cancel Booking</button>
+                                            <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
+                                        </div>
                                     </div>
-                                    <a class="button secondary" href="/receipt/<%= booking.id %>">View QR</a>
                                 </article>
                             <% }) %>
                         </div>
                     <% } %>
-                </section>
 
-                <section class="account-panel profile-tab-panel" data-profile-panel="bookings">
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">History</p>
@@ -254,22 +299,18 @@
                     <% if (!profilePastBookings.length) { %>
                         <p class="muted">No completed bookings yet.</p>
                     <% } else { %>
-                        <div class="saved-merchant-list">
+                        <div class="profile-booking-grid compact">
                             <% profilePastBookings.forEach((booking) => { %>
-                                <article class="saved-merchant-row">
-                                    <div>
-                                        <strong><%= booking.service_name %></strong>
-                                        <span>
-                                            <%= booking.merchant_name %>
-                                            &middot;
-                                            <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
-                                            <% if (booking.booking_time) { %>
-                                                at <%= booking.booking_time %>
-                                            <% } %>
-                                        </span>
-                                        <span class="profile-booking-status-row">
+                                <article class="profile-booking-card">
+                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                    <div class="profile-booking-card-main">
+                                        <div class="profile-booking-card-head">
+                                            <div>
+                                                <strong><%= booking.service_name %></strong>
+                                                <span><%= booking.merchant_name %> &middot; <%= formatBookingDate(booking.booking_date) %><%= booking.booking_time ? ` at ${booking.booking_time}` : '' %></span>
+                                            </div>
                                             <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
-                                        </span>
+                                        </div>
                                         <% if (booking.review) { %>
                                             <div class="profile-booking-review-block">
                                                 <strong>Your review</strong>
@@ -293,8 +334,60 @@
                                                 <% } %>
                                             </div>
                                         <% } %>
+                                        <div class="profile-booking-actions">
+                                            <a class="button secondary" href="/booking/<%= booking.merchant_id %>?serviceId=<%= booking.service_id %>">Rebook</a>
+                                            <a class="button secondary" href="#to-rate" data-profile-tab-link="to-rate">Leave Review</a>
+                                            <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
+                                        </div>
                                     </div>
-                                    <a class="button secondary" href="/receipt/<%= booking.id %>">View</a>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Cancelled</p>
+                            <h2>Cancelled Bookings</h2>
+                        </div>
+                    </div>
+
+                    <% if (!profileCancelledBookings.length) { %>
+                        <p class="muted">No cancelled bookings.</p>
+                    <% } else { %>
+                        <div class="profile-booking-grid compact">
+                            <% profileCancelledBookings.forEach((booking) => { %>
+                                <article class="profile-booking-card is-cancelled">
+                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                    <div class="profile-booking-card-main">
+                                        <div class="profile-booking-card-head">
+                                            <div>
+                                                <strong><%= booking.service_name %></strong>
+                                                <span><%= booking.merchant_name %> &middot; <%= formatBookingDate(booking.booking_date) %><%= booking.booking_time ? ` at ${booking.booking_time}` : '' %></span>
+                                            </div>
+                                            <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
+                                        </div>
+                                        <dl class="profile-booking-meta">
+                                            <div>
+                                                <dt>Cancellation reason</dt>
+                                                <dd><%= booking.cancellation_reason || 'Not provided' %></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Refund status</dt>
+                                                <dd><%= formatRefundStatus(booking.refund_status) %></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Cancelled</dt>
+                                                <dd><%= formatBookingDateTime(booking.cancelled_at) %></dd>
+                                            </div>
+                                        </dl>
+                                        <% if (booking.supportEscalation) { %>
+                                            <div class="profile-booking-support">
+                                                <span>Need more help?</span>
+                                                <a class="button secondary" href="/help-center">Contact Support</a>
+                                            </div>
+                                        <% } %>
+                                    </div>
                                 </article>
                             <% }) %>
                         </div>
@@ -682,6 +775,77 @@
     </div>
 </section>
 
+<div class="profile-booking-modal" data-booking-modal="reschedule" hidden>
+    <div class="profile-booking-modal-backdrop" data-close-booking-modal></div>
+    <section class="profile-booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="reschedule-title">
+        <button class="profile-modal-close" type="button" data-close-booking-modal aria-label="Close reschedule modal">&times;</button>
+        <p class="eyebrow">Reschedule</p>
+        <h2 id="reschedule-title">Choose a new appointment slot</h2>
+        <p class="muted" data-reschedule-summary></p>
+        <div class="profile-suggestion-strip" data-reschedule-suggestions></div>
+        <form data-reschedule-form method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <input type="hidden" name="responseType" value="json">
+            <label>
+                Available date
+                <input type="date" name="bookingDate" data-reschedule-date required>
+            </label>
+            <div>
+                <span class="profile-modal-label">Available times</span>
+                <div class="profile-slot-grid" data-reschedule-slots></div>
+            </div>
+            <p class="profile-approval-note">Merchant approval may be required for changes close to the appointment time.</p>
+            <p class="profile-modal-feedback" data-reschedule-feedback></p>
+            <div class="profile-modal-actions">
+                <button class="button secondary" type="button" data-close-booking-modal>Back</button>
+                <button class="button primary" type="submit">Submit Reschedule</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="profile-booking-modal" data-booking-modal="cancel" hidden>
+    <div class="profile-booking-modal-backdrop" data-close-booking-modal></div>
+    <section class="profile-booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+        <button class="profile-modal-close" type="button" data-close-booking-modal aria-label="Close cancellation modal">&times;</button>
+        <p class="eyebrow">Cancel booking</p>
+        <h2 id="cancel-title">Confirm cancellation</h2>
+        <p class="muted" data-cancel-summary></p>
+        <div class="profile-policy-box">
+            <strong>Cancellation policy</strong>
+            <span>Cancel at least 24 hours before your appointment for standard refund eligibility. Later cancellations may need merchant or admin review.</span>
+        </div>
+        <div class="profile-policy-box">
+            <strong>Refund eligibility</strong>
+            <span data-cancel-refund>Eligibility will be calculated from the appointment time.</span>
+        </div>
+        <form data-cancel-form method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <input type="hidden" name="responseType" value="json">
+            <label>
+                Cancellation reason
+                <select name="reason" required>
+                    <option value="">Select a reason</option>
+                    <option value="Unable to attend">Unable to attend</option>
+                    <option value="Need a different time">Need a different time</option>
+                    <option value="Booked by mistake">Booked by mistake</option>
+                    <option value="Payment issue">Payment issue</option>
+                    <option value="Other">Other</option>
+                </select>
+            </label>
+            <label class="profile-confirm-check">
+                <input type="checkbox" name="finalConfirmation" required>
+                <span>I understand this will cancel my booking.</span>
+            </label>
+            <p class="profile-modal-feedback" data-cancel-feedback></p>
+            <div class="profile-modal-actions">
+                <button class="button secondary" type="button" data-close-booking-modal>Back</button>
+                <button class="button primary danger-button" type="submit">Cancel Booking</button>
+            </div>
+        </form>
+    </section>
+</div>
+
 <script>
     (() => {
         const tabs = Array.from(document.querySelectorAll('[data-profile-tab]'));
@@ -717,7 +881,262 @@
             });
         });
 
+        document.querySelectorAll('[data-profile-tab-link]').forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const panelName = link.dataset.profileTabLink;
+                history.replaceState(null, '', `#${panelName}`);
+                showPanel(panelName);
+            });
+        });
+
         showPanel(window.location.hash.replace('#', '') || defaultPanel);
+    })();
+
+    (() => {
+        const rescheduleModal = document.querySelector('[data-booking-modal="reschedule"]');
+        const cancelModal = document.querySelector('[data-booking-modal="cancel"]');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const fallbackSlots = ['10:00', '11:30', '13:00', '14:30', '16:00', '17:30'];
+        let activeCard = null;
+        let activeBooking = null;
+
+        const parseBooking = (card) => {
+            try {
+                return JSON.parse(decodeURIComponent(card.dataset.booking || ''));
+            } catch (error) {
+                return null;
+            }
+        };
+
+        const toDateKey = (date) => {
+            const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+            return localDate.toISOString().slice(0, 10);
+        };
+
+        const nextDates = (count = 7) => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return Array.from({ length: count }, (_, index) => {
+                const date = new Date(today);
+                date.setDate(today.getDate() + index);
+                return toDateKey(date);
+            });
+        };
+
+        const formatDateLabel = (dateKey) => new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-SG', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        });
+
+        const isTaken = (booking, dateKey, slot) => (booking.taken || []).includes(`${dateKey}|${slot}`);
+
+        const closeModals = () => {
+            [rescheduleModal, cancelModal].forEach((modal) => {
+                if (modal) {
+                    modal.hidden = true;
+                }
+            });
+            document.body.classList.remove('profile-modal-open');
+        };
+
+        const openModal = (modal) => {
+            if (!modal) {
+                return;
+            }
+
+            modal.hidden = false;
+            document.body.classList.add('profile-modal-open');
+            modal.querySelector('button, input, select')?.focus();
+        };
+
+        const renderSlots = (dateKey) => {
+            const slotWrap = rescheduleModal.querySelector('[data-reschedule-slots]');
+            const slots = activeBooking.slots?.length ? activeBooking.slots : fallbackSlots;
+            slotWrap.innerHTML = '';
+
+            slots.forEach((slot, index) => {
+                const id = `reschedule-${activeBooking.id}-${dateKey}-${slot.replace(':', '')}`;
+                const label = document.createElement('label');
+                label.className = 'profile-slot-choice';
+                label.innerHTML = `
+                    <input type="radio" name="bookingTime" id="${id}" value="${slot}" ${isTaken(activeBooking, dateKey, slot) ? 'disabled' : ''} ${index === 0 && !isTaken(activeBooking, dateKey, slot) ? 'checked' : ''}>
+                    <span>${slot}</span>
+                `;
+                slotWrap.appendChild(label);
+            });
+        };
+
+        const renderSuggestions = () => {
+            const suggestionWrap = rescheduleModal.querySelector('[data-reschedule-suggestions]');
+            const slots = activeBooking.slots?.length ? activeBooking.slots : fallbackSlots;
+            const suggestions = [];
+
+            nextDates(10).some((dateKey) => {
+                slots.forEach((slot) => {
+                    if (suggestions.length < 3 && !isTaken(activeBooking, dateKey, slot)) {
+                        suggestions.push({ dateKey, slot });
+                    }
+                });
+                return suggestions.length >= 3;
+            });
+
+            suggestionWrap.innerHTML = suggestions.map((item) => `
+                <button type="button" data-suggestion-date="${item.dateKey}" data-suggestion-time="${item.slot}">
+                    ${formatDateLabel(item.dateKey)} <strong>${item.slot}</strong>
+                </button>
+            `).join('');
+        };
+
+        const updateCancellationRefund = () => {
+            const output = cancelModal.querySelector('[data-cancel-refund]');
+            const appointment = new Date(`${activeBooking.bookingDate}T${activeBooking.bookingTime || '23:59'}:00`);
+            const hours = (appointment.getTime() - Date.now()) / 3600000;
+            output.textContent = hours >= 24
+                ? 'Eligible for standard refund review.'
+                : 'Late cancellation: refund may require merchant or admin review.';
+        };
+
+        document.querySelectorAll('[data-open-reschedule]').forEach((button) => {
+            button.addEventListener('click', () => {
+                activeCard = button.closest('[data-booking-card]');
+                activeBooking = parseBooking(activeCard);
+
+                if (!activeBooking) {
+                    return;
+                }
+
+                rescheduleModal.querySelector('[data-reschedule-summary]').textContent = `${activeBooking.serviceName} at ${activeBooking.merchantName}`;
+                rescheduleModal.querySelector('[data-reschedule-form]').action = `/profile/bookings/${activeBooking.id}/reschedule`;
+                rescheduleModal.querySelector('[data-reschedule-feedback]').textContent = '';
+                const dateInput = rescheduleModal.querySelector('[data-reschedule-date]');
+                dateInput.min = toDateKey(new Date());
+                dateInput.value = activeBooking.bookingDate || dateInput.min;
+                renderSuggestions();
+                renderSlots(dateInput.value);
+                openModal(rescheduleModal);
+            });
+        });
+
+        document.querySelectorAll('[data-open-cancel]').forEach((button) => {
+            button.addEventListener('click', () => {
+                activeCard = button.closest('[data-booking-card]');
+                activeBooking = parseBooking(activeCard);
+
+                if (!activeBooking) {
+                    return;
+                }
+
+                cancelModal.querySelector('[data-cancel-summary]').textContent = `${activeBooking.serviceName} at ${activeBooking.merchantName} on ${activeBooking.bookingDate} ${activeBooking.bookingTime || ''}`;
+                cancelModal.querySelector('[data-cancel-form]').action = `/profile/bookings/${activeBooking.id}/cancel`;
+                cancelModal.querySelector('[data-cancel-feedback]').textContent = '';
+                cancelModal.querySelector('[data-cancel-form]').reset();
+                updateCancellationRefund();
+                openModal(cancelModal);
+            });
+        });
+
+        rescheduleModal?.querySelector('[data-reschedule-date]')?.addEventListener('change', (event) => {
+            renderSlots(event.target.value);
+        });
+
+        rescheduleModal?.querySelector('[data-reschedule-suggestions]')?.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-suggestion-date]');
+            if (!button) {
+                return;
+            }
+
+            const dateInput = rescheduleModal.querySelector('[data-reschedule-date]');
+            dateInput.value = button.dataset.suggestionDate;
+            renderSlots(button.dataset.suggestionDate);
+            const radio = rescheduleModal.querySelector(`input[name="bookingTime"][value="${button.dataset.suggestionTime}"]`);
+            if (radio && !radio.disabled) {
+                radio.checked = true;
+            }
+        });
+
+        document.querySelectorAll('[data-close-booking-modal]').forEach((button) => {
+            button.addEventListener('click', closeModals);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeModals();
+            }
+        });
+
+        const submitJsonForm = (form, feedback, onSuccess) => {
+            feedback.textContent = '';
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: new URLSearchParams(formData),
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-Token': csrfToken
+                }
+            })
+                .then(async (response) => {
+                    const contentType = response.headers.get('content-type') || '';
+
+                    if (response.redirected && response.ok && !contentType.includes('application/json')) {
+                        return {
+                            success: true,
+                            redirected: true,
+                            redirectUrl: response.url
+                        };
+                    }
+
+                    const data = contentType.includes('application/json')
+                        ? await response.json()
+                        : { message: response.redirected ? 'Your session may have expired. Please refresh and try again.' : await response.text() };
+
+                    if (!response.ok || !data.success) {
+                        const message = String(data.message || 'Request failed.')
+                            .replace(/<[^>]*>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        throw new Error(message || 'Request failed.');
+                    }
+
+                    return data;
+                })
+                .then(onSuccess)
+                .catch((error) => {
+                    feedback.textContent = error.message;
+                });
+        };
+
+        rescheduleModal?.querySelector('[data-reschedule-form]')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            submitJsonForm(event.currentTarget, rescheduleModal.querySelector('[data-reschedule-feedback]'), (data) => {
+                if (data.redirected) {
+                    window.location.href = '/profile#bookings';
+                    window.location.reload();
+                    return;
+                }
+
+                const booking = data.booking || {};
+                const displayDate = new Date(`${booking.bookingDate}T00:00:00`).toLocaleDateString('en-SG', { dateStyle: 'medium' });
+                activeCard.querySelector('[data-booking-datetime]').textContent = `${displayDate} at ${booking.bookingTime}`;
+                activeBooking.bookingDate = booking.bookingDate;
+                activeBooking.bookingTime = booking.bookingTime;
+                activeCard.dataset.booking = encodeURIComponent(JSON.stringify(activeBooking));
+                closeModals();
+            });
+        });
+
+        cancelModal?.querySelector('[data-cancel-form]')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            submitJsonForm(event.currentTarget, cancelModal.querySelector('[data-cancel-feedback]'), () => {
+                activeCard.remove();
+                closeModals();
+                window.location.reload();
+            });
+        });
     })();
 </script>
 

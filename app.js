@@ -18,6 +18,7 @@ const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
+const { uploadSupportScreenshot } = require('./utils/supportUpload');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
     allowGuestOrCustomer,
@@ -151,6 +152,22 @@ function handleReviewMediaUpload(req, res, next) {
     });
 }
 
+function handleSupportScreenshotUpload(req, res, next) {
+    uploadSupportScreenshot(req, res, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        console.error(error);
+        req.session.helpCenterFlash = {
+            type: 'error',
+            message: error.message || 'Support screenshot could not be uploaded.'
+        };
+        res.redirect('/help-center');
+    });
+}
+
 app.get('/', allowGuestOrCustomer, merchantController.showHome);
 app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
@@ -172,7 +189,8 @@ app.get('/notifications/:notificationId/open', requireLogin, notificationControl
 app.post('/notifications/:notificationId/read', requireLogin, notificationController.markNotificationRead);
 app.post('/notifications/read-all', requireLogin, notificationController.markAllRead);
 app.get('/help-center', requireLogin, helpCenterController.showHelpCenter);
-app.post('/help-center/requests', requireCustomer, helpCenterController.createRequest);
+app.post('/help-center/requests', requireCustomer, handleSupportScreenshotUpload, helpCenterController.createRequest);
+app.post('/help-center/requests/:requestId/replies', requireLogin, handleSupportScreenshotUpload, helpCenterController.replyToRequest);
 app.post('/help-center/requests/:requestId/send-to-merchant', requireRole('admin'), helpCenterController.adminSendToMerchant);
 app.post('/help-center/requests/:requestId/merchant-response', requireRole('merchant'), helpCenterController.merchantRespond);
 app.post('/help-center/requests/:requestId/admin-resolution', requireRole('admin'), helpCenterController.adminResolve);
@@ -232,6 +250,8 @@ app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController
 app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
 app.get('/merchant/services', requireRole('merchant'), merchantDashboardController.showServices);
 app.post('/merchant/generate-qr', requireRole('merchant'), merchantDashboardController.generateQr);
+app.post('/merchant/bookings/:bookingId/status', requireRole('merchant'), merchantDashboardController.updateBookingStatus);
+app.get('/merchant/bookings/:bookingId/status', requireRole('merchant'), (req, res) => res.redirect('/merchant#merchant-calendar'));
 app.get('/merchant/services/new', requireRole('merchant'), merchantDashboardController.showNewService);
 app.post('/merchant/services', requireRole('merchant'), merchantDashboardController.createService);
 app.get('/merchant/services/:serviceId/edit', requireRole('merchant'), merchantDashboardController.showEditService);

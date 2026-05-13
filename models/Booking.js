@@ -1,9 +1,70 @@
 const db = require('../db');
 
 const bookings = [];
+let bookingManagementSchemaReady = false;
+let bookingManagementSchemaPending = false;
+let bookingManagementSchemaQueue = [];
 let whatsappReminderSchemaReady = false;
 let whatsappReminderSchemaPending = false;
 let whatsappReminderSchemaQueue = [];
+
+function flushBookingManagementSchema(error) {
+    const queue = bookingManagementSchemaQueue;
+    bookingManagementSchemaQueue = [];
+    bookingManagementSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureBookingManagementSchema(callback) {
+    if (bookingManagementSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    bookingManagementSchemaQueue.push(callback);
+
+    if (bookingManagementSchemaPending) {
+        return;
+    }
+
+    bookingManagementSchemaPending = true;
+
+    db.query('SHOW COLUMNS FROM bookings', (columnError, columns = []) => {
+        if (columnError) {
+            flushBookingManagementSchema(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('cancellation_reason')) {
+            alters.push('ADD COLUMN cancellation_reason VARCHAR(180) DEFAULT NULL');
+        }
+
+        if (!fields.has('refund_status')) {
+            alters.push("ADD COLUMN refund_status VARCHAR(40) NOT NULL DEFAULT 'not_requested'");
+        }
+
+        if (!fields.has('cancelled_at')) {
+            alters.push('ADD COLUMN cancelled_at DATETIME DEFAULT NULL');
+        }
+
+        if (alters.length === 0) {
+            bookingManagementSchemaReady = true;
+            flushBookingManagementSchema(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE bookings ${alters.join(', ')}`, (alterError) => {
+            if (!alterError) {
+                bookingManagementSchemaReady = true;
+            }
+
+            flushBookingManagementSchema(alterError);
+        });
+    });
+}
 
 function flushWhatsAppReminderSchema(error) {
     const queue = whatsappReminderSchemaQueue;
@@ -271,16 +332,28 @@ function createCustomerBooking(bookingData, callback) {
 }
 
 function getByUserId(userId, callback) {
-    const sql = `
+    return ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
         SELECT
             bookings.booking_id AS id,
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            bookings.cancellation_reason,
+            bookings.refund_status,
+            bookings.cancelled_at,
             salons.salon_name AS merchant_name,
             salons.address AS merchant_address,
+            salons.salon_id AS merchant_id,
+            salons.image_url AS service_image_url,
             services.service_id,
             services.service_name,
+            services.duration_mins,
             services.price AS service_price,
             CASE
                 WHEN bookings.status = 'cancelled' THEN 'past'
@@ -295,13 +368,95 @@ function getByUserId(userId, callback) {
         ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
     `;
 
-    db.query(sql, [userId], (error, rows) => {
-        if (error) {
-            callback(error);
+        db.query(sql, [userId], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows);
+        });
+    });
+}
+
+function getAvailabilityByBookingIds(userId, bookingIds, callback) {
+    const ids = (Array.isArray(bookingIds) ? bookingIds : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        callback(null, {});
+        return;
+    }
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const slotSql = `
+        SELECT
+            managed.booking_id AS booking_id,
+            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS slot_time
+        FROM bookings AS managed
+        INNER JOIN service_slots ON service_slots.service_id = managed.service_id
+        WHERE managed.user_id = ?
+            AND managed.booking_id IN (${placeholders})
+        ORDER BY service_slots.timeslot ASC
+    `;
+    const takenSql = `
+        SELECT
+            managed.booking_id AS booking_id,
+            taken.booking_date,
+            TIME_FORMAT(taken.timeslot, '%H:%i') AS slot_time
+        FROM bookings AS managed
+        INNER JOIN bookings AS taken ON taken.service_id = managed.service_id
+            AND taken.merchant_id = managed.merchant_id
+            AND taken.booking_id <> managed.booking_id
+        WHERE managed.user_id = ?
+            AND managed.booking_id IN (${placeholders})
+            AND taken.status <> 'cancelled'
+            AND taken.booking_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
+        ORDER BY taken.booking_date ASC, taken.timeslot ASC
+    `;
+
+    db.query(slotSql, [userId, ...ids], (slotError, slotRows = []) => {
+        if (slotError) {
+            callback(slotError);
             return;
         }
 
-        callback(null, rows);
+        db.query(takenSql, [userId, ...ids], (takenError, takenRows = []) => {
+            if (takenError) {
+                callback(takenError);
+                return;
+            }
+
+            const availability = ids.reduce((map, id) => {
+                map[String(id)] = {
+                    slots: [],
+                    taken: []
+                };
+                return map;
+            }, {});
+
+            slotRows.forEach((row) => {
+                const key = String(row.booking_id);
+                if (availability[key] && row.slot_time && !availability[key].slots.includes(row.slot_time)) {
+                    availability[key].slots.push(row.slot_time);
+                }
+            });
+
+            takenRows.forEach((row) => {
+                const key = String(row.booking_id);
+                if (!availability[key] || !row.booking_date || !row.slot_time) {
+                    return;
+                }
+
+                const date = row.booking_date instanceof Date
+                    ? row.booking_date.toISOString().slice(0, 10)
+                    : String(row.booking_date).slice(0, 10);
+                availability[key].taken.push(`${date}|${row.slot_time}`);
+            });
+
+            callback(null, availability);
+        });
     });
 }
 
@@ -359,14 +514,24 @@ function findSupportBookingForCustomer(bookingId, userId, callback) {
 }
 
 function getManageableByIdForCustomer(bookingId, userId, callback) {
-    const sql = `
+    return ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
         SELECT
             bookings.booking_id AS id,
             bookings.user_id,
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            bookings.cancellation_reason,
+            bookings.refund_status,
+            bookings.cancelled_at,
             services.service_id,
+            services.duration_mins,
             salons.salon_id,
             salons.salon_name AS merchant_name,
             services.service_name,
@@ -379,13 +544,14 @@ function getManageableByIdForCustomer(bookingId, userId, callback) {
         LIMIT 1
     `;
 
-    db.query(sql, [bookingId, userId], (error, rows = []) => {
-        if (error) {
-            callback(error);
-            return;
-        }
+        db.query(sql, [bookingId, userId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
 
-        callback(null, rows[0] || null);
+            callback(null, rows[0] || null);
+        });
     });
 }
 
@@ -588,16 +754,27 @@ function markCancelled(bookingId, callback) {
     db.query(sql, [bookingId], callback);
 }
 
-function cancelForCustomer(bookingId, userId, callback) {
+function cancelForCustomer(bookingId, userId, reason, refundStatus, callback) {
     const sql = `
         UPDATE bookings
-        SET status = 'cancelled'
+        SET
+            status = 'cancelled',
+            cancellation_reason = ?,
+            refund_status = ?,
+            cancelled_at = CURRENT_TIMESTAMP
         WHERE booking_id = ?
             AND user_id = ?
             AND status NOT IN ('cancelled', 'completed', 'checked_in')
     `;
 
-    db.query(sql, [bookingId, userId], callback);
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(sql, [reason || null, refundStatus || 'not_requested', bookingId, userId], callback);
+    });
 }
 
 function updateSchedule(bookingId, bookingDate, bookingTime, callback) {
@@ -636,12 +813,45 @@ function markCheckedIn(bookingId, merchantUserId, callback) {
     db.query(sql, [bookingId, merchantUserId], callback);
 }
 
+function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
+    const allowedStatuses = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
+    const nextStatus = String(status || '').trim().toLowerCase();
+
+    if (!allowedStatuses.has(nextStatus)) {
+        callback(new Error('Invalid booking status.'));
+        return;
+    }
+
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE bookings
+            INNER JOIN services ON services.service_id = bookings.service_id
+            INNER JOIN salons ON salons.salon_id = services.salon_id
+            SET
+                bookings.status = ?,
+                bookings.cancelled_at = CASE WHEN ? = 'cancelled' THEN CURRENT_TIMESTAMP ELSE bookings.cancelled_at END,
+                bookings.cancellation_reason = CASE WHEN ? = 'cancelled' THEN COALESCE(bookings.cancellation_reason, 'Cancelled by merchant') ELSE bookings.cancellation_reason END,
+                bookings.refund_status = CASE WHEN ? = 'cancelled' THEN 'merchant_cancelled_review' ELSE bookings.refund_status END
+            WHERE bookings.booking_id = ?
+                AND salons.merchant_id = ?
+        `;
+
+        db.query(sql, [nextStatus, nextStatus, nextStatus, nextStatus, bookingId, merchantUserId], callback);
+    });
+}
+
 module.exports = {
     attachTransaction,
     create,
     createCustomerBooking,
     createInDatabase,
     cancelForCustomer,
+    getAvailabilityByBookingIds,
     findSupportBookingForCustomer,
     getManageableByIdForCustomer,
     getByUserId,
@@ -661,5 +871,6 @@ module.exports = {
     markCompleted,
     markCheckedIn,
     updateSchedule,
-    updateScheduleForCustomer
+    updateScheduleForCustomer,
+    updateStatusForMerchant
 };

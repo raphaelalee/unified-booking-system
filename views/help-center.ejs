@@ -1,315 +1,426 @@
-<%- include('partials/header', { title }) %>
+<%- include('partials/header', { title, useBootstrap: true }) %>
 
 <%
     const finalStatuses = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+    const visibleRequests = Array.isArray(requests) ? requests : [];
+    const safeBookings = Array.isArray(bookings) ? bookings : [];
+    const safeOrders = Array.isArray(orders) ? orders : [];
     const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
     const formatDate = (value) => {
         const date = value instanceof Date ? value : new Date(value);
-
-        if (Number.isNaN(date.getTime())) {
-            return '-';
-        }
-
-        return date.toLocaleDateString('en-SG', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+        return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' });
     };
     const formatDateTime = (value) => {
         const date = value instanceof Date ? value : new Date(value);
-
-        if (Number.isNaN(date.getTime())) {
-            return '-';
-        }
-
-        return date.toLocaleString('en-SG', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-        });
+        return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('en-SG', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     };
-    const prettyStatus = (status) => statusLabels[status] || String(status || 'pending').replace(/_/g, ' ');
     const requestLabel = (type) => requestLabels[type] || String(type || 'Support request').replace(/_/g, ' ');
     const statusClass = (status) => `status-${String(status || 'pending').replace(/_/g, '-')}`;
+    const supportStatusLabel = (status) => ({
+        pending_admin_review: 'Under Review',
+        pending_merchant_review: 'Waiting for Merchant',
+        merchant_approved: 'Under Review',
+        merchant_declined: 'Under Review',
+        resolved_approved: 'Resolved',
+        resolved_rejected: 'Resolved',
+        cancelled: 'Closed',
+        closed: 'Closed'
+    }[status] || 'Open');
     const isClosed = (request) => finalStatuses.includes(request.status);
+    const priorityLabel = (request) => {
+        if (request.requestType === 'booking_refund' || request.requestType === 'order_refund') return 'High';
+        if (request.status === 'pending_merchant_review') return 'Medium';
+        return 'Normal';
+    };
+    const responseTimeLabel = (request) => priorityLabel(request) === 'High' ? 'Within 1 business day' : '1-2 business days';
     const canCancelOrder = (order) => !['shipped', 'delivered', 'cancelled'].includes(order.deliveryStatus);
+    const buildTimeline = (request) => {
+        const timeline = [{ label: 'Submitted', time: formatDateTime(request.createdAt) }];
+        if (request.merchantNote || request.merchantDecision !== 'pending') timeline.push({ label: 'Merchant replied', time: formatDateTime(request.updatedAt) });
+        if (request.adminNote || request.adminDecision !== 'pending') timeline.push({ label: 'Admin replied', time: formatDateTime(request.updatedAt) });
+        if (request.refundAmount > 0 && request.status === 'resolved_approved') timeline.push({ label: 'Refund processed', time: formatDateTime(request.resolvedAt || request.updatedAt) });
+        if (isClosed(request)) timeline.push({ label: 'Issue resolved', time: formatDateTime(request.resolvedAt || request.updatedAt) });
+        return timeline;
+    };
+    const helpCategories = [
+        { icon: 'P', title: 'Payment Issues', description: 'Troubleshoot failed charges, double payments, and receipt problems.', href: '#faq', keywords: 'payment card charge receipt failed' },
+        { icon: 'R', title: 'Refund Disputes', description: 'Understand refund eligibility and escalate unresolved refund cases.', href: '#faq', keywords: 'refund dispute money late cancellation' },
+        { icon: 'T', title: 'Technical Problems', description: 'Get help with QR, login, checkout, upload, and page errors.', href: '#faq', keywords: 'technical qr login error upload checkout' },
+        { icon: 'M', title: 'Merchant Complaints', description: 'Report unresolved salon, appointment, or service experience problems.', href: '#faq', keywords: 'merchant salon complaint service rejected' },
+        { icon: 'A', title: 'Account & Security', description: 'Protect your account, password, contact details, and notifications.', href: '#faq', keywords: 'account security password phone email login' },
+        { icon: 'G', title: 'Promotions & Rewards', description: 'Check voucher, cashback, VaniGlints, and reward eligibility.', href: '#faq', keywords: 'promotions rewards voucher cashback glints loyalty' }
+    ];
+    const faqs = [
+        { question: 'When am I eligible for a refund?', answer: 'Refunds depend on payment status, cancellation timing, merchant decision, and Vaniday admin review. Late cancellations may include a fee.', keywords: 'refund policy eligible late cancellation' },
+        { question: 'How do I reschedule a booking?', answer: 'Go to Profile > Bookings and use Reschedule on the booking card. Help Center is only for unresolved refund, payment, technical, or merchant issues.', keywords: 'booking policy reschedule profile bookings merchant' },
+        { question: 'My payment failed but I was charged. What should I do?', answer: 'Check your receipt and bank status first. If the charge remains after a short delay, create a Payment Issues ticket with a screenshot.', keywords: 'payment troubleshooting failed charged bank' },
+        { question: 'Why are my rewards or vouchers missing?', answer: 'Rewards are linked to paid receipts and eligible campaigns. Some vouchers exclude cancelled, refunded, or already discounted purchases.', keywords: 'loyalty rewards voucher glints cashback' },
+        { question: 'How fast will support reply?', answer: 'High priority refund and payment cases are usually reviewed within one business day. Other issues normally take one to two business days.', keywords: 'response time support priority' }
+    ];
 %>
 
-<section class="page-title help-center-hero">
-    <p class="eyebrow"><%= roleCopy.eyebrow %></p>
-    <h1><%= roleCopy.heading %></h1>
-    <p><%= roleCopy.description %></p>
+<section class="support-hub-hero">
+    <div>
+        <p class="eyebrow">Vaniday Help Center</p>
+        <h1>How can we help you?</h1>
+        <p>Get support for payments, technical issues, refunds, and unresolved booking problems.</p>
+        <div class="support-search-wrap">
+            <input type="search" class="form-control" placeholder="Search help articles or FAQs" data-help-search aria-label="Search help articles or FAQs">
+            <button class="button primary" type="button" data-help-search-button>Search</button>
+        </div>
+        <div class="support-smart-row">
+            <span>Estimated response: 1-2 business days</span>
+            <a href="#contact-support" data-open-support-form>Contact Support</a>
+            <button type="button" data-open-support-assistant>AI assistant</button>
+        </div>
+    </div>
 </section>
 
-<section class="section compact help-center-page">
+<section class="section compact help-center-page support-hub-page">
     <% if (flash) { %>
-        <div class="notice <%= flash.type === 'success' ? 'success' : 'error' %>">
+        <div class="notice <%= flash.type === 'success' ? 'success' : 'error' %>" data-support-toast>
             <p><%= flash.message %></p>
         </div>
     <% } %>
 
-    <div class="help-policy-grid">
-        <article>
-            <span>01</span>
-            <h2>Refund review</h2>
-            <p>Refunds go to Vaniday admin first, then merchants are asked for approval before money is recorded as returned.</p>
-        </article>
-        <article>
-            <span>02</span>
-            <h2>Booking changes</h2>
-            <p>Service change requests go directly to the merchant because they control appointment availability.</p>
-        </article>
-        <article>
-            <span>03</span>
-            <h2>Protection rules</h2>
-            <p>Shipped orders cannot be cancelled, and service cancellations within one day can include a late fee.</p>
-        </article>
-    </div>
-
-    <div class="help-center-layout <%= role %>-help-layout">
-        <section class="support-panel support-request-panel">
-            <div class="section-cta">
-                <div>
-                    <p class="eyebrow"><%= role === 'customer' ? 'Your cases' : 'Support queue' %></p>
-                    <h2><%= role === 'customer' ? 'Request history' : 'Refund and change requests' %></h2>
-                    <p class="muted"><%= requests.length %> request<%= requests.length === 1 ? '' : 's' %> found.</p>
-                </div>
+    <section class="support-section">
+        <div class="support-section-heading">
+            <div>
+                <p class="eyebrow">Quick help</p>
+                <h2>Choose a support category</h2>
             </div>
+        </div>
+        <div class="support-category-grid">
+            <% helpCategories.forEach((category) => { %>
+                <%- include('partials/support-category-card', { category }) %>
+            <% }) %>
+        </div>
+    </section>
 
-            <% if (requests.length === 0) { %>
-                <div class="help-empty-state">
-                    <span>V</span>
-                    <h2>No support requests yet</h2>
-                    <p class="muted">
-                        <%= role === 'customer'
-                            ? 'Your refund, cancellation, and booking change requests will appear here.'
-                            : 'New customer cases will appear here once they are submitted.' %>
-                    </p>
-                </div>
-            <% } else { %>
-                <div class="support-request-list">
-                    <% requests.forEach((request) => { %>
-                        <article class="support-request-card <%= statusClass(request.status) %>">
-                            <div class="support-request-main">
-                                <div class="support-request-topline">
-                                    <span class="tag"><%= requestLabel(request.requestType) %></span>
-                                    <span class="support-status"><%= prettyStatus(request.status) %></span>
-                                </div>
-                                <h3>#<%= request.id %> · <%= request.targetType === 'order' ? 'Order' : 'Booking' %> <%= request.receiptId || request.targetId %></h3>
-                                <p>
-                                    <% if (role !== 'customer') { %>
-                                        Customer: <strong><%= request.customerName %></strong>.
-                                    <% } %>
-                                    <% if (role !== 'merchant' && request.merchantUserId) { %>
-                                        Merchant: <strong><%= request.merchantName %></strong>.
-                                    <% } %>
-                                    Submitted <%= formatDateTime(request.createdAt) %>.
-                                </p>
-
-                                <div class="support-mini-grid">
-                                    <p><span>Refund</span><strong><%= formatMoney(request.refundAmount) %></strong></p>
-                                    <p><span>Late fee</span><strong><%= formatMoney(request.lateFeeAmount) %></strong></p>
-                                    <p><span>Merchant</span><strong><%= request.merchantDecision || 'pending' %></strong></p>
-                                    <p><span>Admin</span><strong><%= request.adminDecision || 'pending' %></strong></p>
-                                </div>
-
-                                <% if (request.reason) { %>
-                                    <p class="support-note"><strong>Reason:</strong> <%= request.reason %></p>
-                                <% } %>
-                                <% if (request.customerNote) { %>
-                                    <p class="support-note"><strong>Customer note:</strong> <%= request.customerNote %></p>
-                                <% } %>
-                                <% if (request.requestedChange) { %>
-                                    <p class="support-note"><strong>Requested change:</strong> <%= request.requestedChange %></p>
-                                <% } %>
-                                <% if (request.merchantNote) { %>
-                                    <p class="support-note"><strong>Merchant note:</strong> <%= request.merchantNote %></p>
-                                <% } %>
-                                <% if (request.adminNote) { %>
-                                    <p class="support-note"><strong>Admin note:</strong> <%= request.adminNote %></p>
-                                <% } %>
-                            </div>
-
-                            <% if (role === 'merchant' && request.status === 'pending_merchant_review') { %>
-                                <div class="support-action-box">
-                                    <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
-                                        <label for="merchant-note-<%= request.id %>">Merchant note</label>
-                                        <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
-                                        <div class="inline-actions">
-                                            <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
-                                            <button class="button secondary danger-button" type="submit" name="decision" value="declined">Decline</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            <% } %>
-
-                            <% if (role === 'admin' && !isClosed(request)) { %>
-                                <div class="support-action-box admin-support-actions">
-                                    <% if (request.status === 'pending_admin_review' && request.merchantUserId) { %>
-                                        <form action="/help-center/requests/<%= request.id %>/send-to-merchant" method="POST">
-                                            <label for="admin-send-note-<%= request.id %>">Message for merchant</label>
-                                            <textarea id="admin-send-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Ask the merchant to approve or decline this request."></textarea>
-                                            <button class="button secondary" type="submit">Send to merchant</button>
-                                        </form>
-                                    <% } %>
-                                    <form action="/help-center/requests/<%= request.id %>/admin-resolution" method="POST">
-                                        <label for="admin-final-note-<%= request.id %>">Final admin note</label>
-                                        <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Explain the final decision."></textarea>
-                                        <div class="inline-actions">
-                                            <button class="button primary" type="submit" name="decision" value="approved">Approve refund</button>
-                                            <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            <% } %>
-                        </article>
-                    <% }) %>
-                </div>
-            <% } %>
-        </section>
-
-        <% if (role === 'customer') { %>
-            <section class="support-panel customer-support-actions">
-                <div class="section-cta">
+    <section class="support-hub-layout support-hub-layout-simple">
+        <div class="support-main-column">
+            <section id="faq" class="support-section support-faq-section">
+                <div class="support-section-heading">
                     <div>
-                        <p class="eyebrow">Submit request</p>
-                        <h2>Orders and bookings</h2>
-                        <p class="muted">Open requests are limited so every case can be reviewed properly.</p>
+                        <p class="eyebrow">Self-service</p>
+                        <h2>Common questions and policies</h2>
                     </div>
+                    <span>Try these before contacting support</span>
                 </div>
-
-                <div class="customer-help-columns">
+                <%- include('partials/support-faq-section', { faqs, accordionId: 'supportFaq' }) %>
+                <div class="support-after-faq">
                     <div>
-                        <h3>Product orders</h3>
-                        <% if (orders.length === 0) { %>
-                            <p class="muted">No paid product orders yet.</p>
-                        <% } %>
-                        <% orders.forEach((order) => { %>
-                            <article class="help-item-card">
-                                <div>
-                                    <span class="tag"><%= order.deliveryStatus %></span>
-                                    <h4><%= order.receiptId %></h4>
-                                    <p><%= order.itemNames %></p>
-                                    <small><%= formatMoney(order.totalAmount) %> · <%= formatDateTime(order.createdAt) %></small>
-                                </div>
-                                <form action="/help-center/requests" method="POST">
-                                    <input type="hidden" name="targetType" value="order">
-                                    <input type="hidden" name="targetId" value="<%= order.id %>">
-                                    <input type="hidden" name="requestType" value="order_refund">
-                                    <label for="order-reason-<%= order.id %>">Reason</label>
-                                    <select id="order-reason-<%= order.id %>" name="reason" <%= canCancelOrder(order) ? '' : 'disabled' %>>
-                                        <option value="Changed my mind">Changed my mind</option>
-                                        <option value="Ordered by mistake">Ordered by mistake</option>
-                                        <option value="Product issue">Product issue</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                    <label for="order-note-<%= order.id %>">Details</label>
-                                    <textarea id="order-note-<%= order.id %>" name="customerNote" rows="3" placeholder="Tell admin why you need a refund." <%= canCancelOrder(order) ? '' : 'disabled' %>></textarea>
-                                    <button class="button primary full" type="submit" <%= canCancelOrder(order) ? '' : 'disabled' %>>
-                                        <%= canCancelOrder(order) ? 'Request refund' : 'Already shipped' %>
-                                    </button>
-                                </form>
-                            </article>
-                        <% }) %>
+                        <strong>Still need help?</strong>
+                        <span>Create a ticket only if the FAQ or booking self-service flow did not solve it.</span>
                     </div>
-
-                    <div>
-                        <h3>Service bookings</h3>
-                        <% if (bookings.length === 0) { %>
-                            <p class="muted">No service bookings yet.</p>
-                        <% } %>
-                        <% bookings.forEach((booking) => { %>
-                            <article class="help-item-card">
-                                <div>
-                                    <span class="tag"><%= booking.status %></span>
-                                    <h4><%= booking.service_name %></h4>
-                                    <p><%= booking.merchant_name %></p>
-                                    <small><%= formatDate(booking.booking_date) %> at <%= booking.booking_time %> · <%= formatMoney(booking.service_price) %></small>
-                                </div>
-                                <form action="/help-center/requests" method="POST">
-                                    <input type="hidden" name="targetType" value="booking">
-                                    <input type="hidden" name="targetId" value="<%= booking.id %>">
-                                    <label for="booking-type-<%= booking.id %>">Request type</label>
-                                    <select id="booking-type-<%= booking.id %>" name="requestType">
-                                        <option value="booking_change">Change booking</option>
-                                        <option value="booking_refund">Request refund</option>
-                                        <option value="booking_cancel">Cancel booking</option>
-                                    </select>
-                                    <label for="booking-reason-<%= booking.id %>">Reason</label>
-                                    <select id="booking-reason-<%= booking.id %>" name="reason">
-                                        <option value="Need to reschedule">Need to reschedule</option>
-                                        <option value="Service issue">Service issue</option>
-                                        <option value="Unable to attend">Unable to attend</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                    <label for="booking-change-<%= booking.id %>">Requested change</label>
-                                    <textarea id="booking-change-<%= booking.id %>" name="requestedChange" rows="2" placeholder="Example: Change to another date, time, or service."></textarea>
-                                    <label for="booking-note-<%= booking.id %>">Details</label>
-                                    <textarea id="booking-note-<%= booking.id %>" name="customerNote" rows="3" placeholder="Add details for admin and merchant."></textarea>
-                                    <button class="button primary full" type="submit">Submit request</button>
-                                </form>
-                            </article>
-                        <% }) %>
-                    </div>
+                    <% if (role === 'customer') { %>
+                        <button class="button primary" type="button" data-open-support-form>Contact Support</button>
+                    <% } %>
                 </div>
             </section>
-        <% } %>
 
-        <% if (role === 'merchant') { %>
-            <section class="support-panel merchant-order-panel">
-                <div class="section-cta">
-                    <div>
-                        <p class="eyebrow">Fulfilment</p>
-                        <h2>Product order status</h2>
-                        <p class="muted">Orders marked shipped can no longer be cancelled through customer refund requests.</p>
+            <% if (role === 'customer') { %>
+                <section id="contact-support" class="support-section support-contact-panel is-collapsed" data-support-form-panel>
+                    <div class="support-section-heading">
+                        <div>
+                            <p class="eyebrow">Contact Support</p>
+                            <h2>Escalate an unresolved issue</h2>
+                        </div>
+                        <button class="button secondary" type="button" data-close-support-form>Hide</button>
                     </div>
+                    <div class="support-suggestions compact">
+                        <strong>Suggested articles</strong>
+                        <a href="#faq">Refund policies</a>
+                        <a href="#faq">Booking policies</a>
+                        <a href="#faq">Payment troubleshooting</a>
+                    </div>
+                    <form action="/help-center/requests" method="POST" enctype="multipart/form-data" data-support-create-form>
+                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                        <input type="hidden" name="responseType" value="json">
+                        <label>
+                            Issue
+                            <select name="requestType" class="form-select" required>
+                                <option value="booking_refund">Refund dispute</option>
+                                <option value="booking_cancel">Booking cancellation issue</option>
+                                <option value="order_refund">Payment or order refund</option>
+                            </select>
+                        </label>
+                        <label>
+                            Reference
+                            <select name="targetId" class="form-select" required>
+                                <option value="">Choose booking or order</option>
+                                <% safeBookings.forEach((booking) => { %>
+                                    <option value="<%= booking.id %>" data-target-type="booking" <%= String(selectedTarget.bookingId) === String(booking.id) ? 'selected' : '' %>>
+                                        Booking #<%= booking.id %> - <%= booking.service_name %>
+                                    </option>
+                                <% }) %>
+                                <% safeOrders.forEach((order) => { %>
+                                    <option value="<%= order.targetId || order.id %>" data-target-type="order" <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
+                                        <%= order.receiptId %> - <%= order.itemNames %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </label>
+                        <input type="hidden" name="targetType" value="booking" data-support-target-type>
+                        <label>
+                            Reason
+                            <select name="reason" class="form-select">
+                                <option value="Refund dispute">Refund dispute</option>
+                                <option value="Payment issue">Payment issue</option>
+                                <option value="Merchant rejection">Merchant rejection</option>
+                                <option value="Technical issue">Technical issue</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </label>
+                        <label>
+                            Details
+                            <textarea name="customerNote" class="form-control" rows="3" maxlength="1200" placeholder="Briefly explain what happened and what help you need." required></textarea>
+                        </label>
+                        <label>
+                            Screenshot
+                            <input type="file" name="screenshot" class="form-control" accept="image/*">
+                        </label>
+                        <p class="support-form-note" data-support-create-feedback>For rescheduling, use Profile > Bookings instead.</p>
+                        <button class="button primary full" type="submit">Create Ticket</button>
+                    </form>
+                </section>
+            <% } %>
+
+            <section id="support-tickets" class="support-section">
+                <div class="support-section-heading">
+                    <div>
+                        <p class="eyebrow">Tickets</p>
+                        <h2>Unresolved and escalated issues</h2>
+                    </div>
+                    <span><%= visibleRequests.length %> ticket<%= visibleRequests.length === 1 ? '' : 's' %></span>
                 </div>
 
-                <% if (orders.length === 0) { %>
-                    <div class="help-empty-state small">
-                        <span>V</span>
-                        <p class="muted">No paid product orders yet.</p>
+                <% if (!visibleRequests.length) { %>
+                    <div class="help-empty-state support-ticket-empty">
+                        <span>?</span>
+                        <h2>No support tickets yet</h2>
+                        <p class="muted">Most issues can be solved with FAQs or booking self-service. If something remains unresolved, create a ticket.</p>
+                        <a class="button secondary" href="#faq">Browse Help Articles</a>
                     </div>
                 <% } else { %>
-                    <div class="admin-table-wrap support-order-table">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Order</th>
-                                    <th>Customer</th>
-                                    <th>Total</th>
-                                    <th>Status</th>
-                                    <th>Update</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% orders.forEach((order) => { %>
-                                    <tr>
-                                        <td><strong>order-<%= order.id %></strong><span><%= order.itemCount %> item(s)</span></td>
-                                        <td><%= order.customerName %></td>
-                                        <td><%= formatMoney(order.totalAmount) %></td>
-                                        <td><span class="support-status"><%= order.deliveryStatus %></span></td>
-                                        <td>
-                                            <form class="inline-status-form" action="/help-center/orders/<%= order.id %>/delivery-status" method="POST">
-                                                <select name="deliveryStatus">
-                                                    <% orderStatuses.forEach((status) => { %>
-                                                        <option value="<%= status %>" <%= status === order.deliveryStatus ? 'selected' : '' %>><%= status %></option>
-                                                    <% }) %>
-                                                </select>
-                                                <button class="button secondary" type="submit">Save</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                <% }) %>
-                            </tbody>
-                        </table>
+                    <div class="support-ticket-list">
+                        <% visibleRequests.forEach((request) => { %>
+                            <%- include('partials/support-ticket-card', {
+                                request,
+                                role,
+                                requestLabel,
+                                supportStatusLabel,
+                                statusClass,
+                                formatDateTime,
+                                priorityLabel,
+                                responseTimeLabel,
+                                buildTimeline,
+                                isClosed,
+                                csrfToken
+                            }) %>
+                        <% }) %>
                     </div>
                 <% } %>
             </section>
+        </div>
+
+        <% if (role === 'merchant') { %>
+            <aside class="support-section merchant-order-panel">
+                <div class="support-section-heading">
+                    <div>
+                        <p class="eyebrow">Fulfilment</p>
+                        <h2>Product order status</h2>
+                    </div>
+                </div>
+                <% if (!safeOrders.length) { %>
+                    <p class="muted">No paid product orders yet.</p>
+                <% } else { %>
+                    <div class="support-order-list">
+                        <% safeOrders.forEach((order) => { %>
+                            <form class="support-order-row" action="/help-center/orders/<%= order.id %>/delivery-status" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                <div><strong>order-<%= order.id %></strong><span><%= order.customerName %></span></div>
+                                <select name="deliveryStatus" class="form-select">
+                                    <% orderStatuses.forEach((status) => { %>
+                                        <option value="<%= status %>" <%= status === order.deliveryStatus ? 'selected' : '' %>><%= status %></option>
+                                    <% }) %>
+                                </select>
+                                <button class="button secondary" type="submit">Save</button>
+                            </form>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </aside>
         <% } %>
-    </div>
+    </section>
 </section>
+
+<button class="support-assistant-button" type="button" data-open-support-assistant>AI</button>
+<div class="support-assistant-panel" data-support-assistant hidden>
+    <div>
+        <strong>Vaniday assistant</strong>
+        <button type="button" data-close-support-assistant aria-label="Close assistant">&times;</button>
+    </div>
+    <p>Search the FAQs first. If your issue remains unresolved, create a ticket with the related booking or order reference.</p>
+    <a class="button primary full" href="#contact-support">Contact Support</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    (() => {
+        const searchInput = document.querySelector('[data-help-search]');
+        const helpCards = Array.from(document.querySelectorAll('[data-help-card]'));
+        const toast = document.querySelector('[data-support-toast]');
+        const assistant = document.querySelector('[data-support-assistant]');
+        const supportFormPanel = document.querySelector('[data-support-form-panel]');
+        const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        const applySearch = () => {
+            const query = (searchInput?.value || '').trim().toLowerCase();
+            helpCards.forEach((card) => {
+                const text = `${card.textContent} ${card.dataset.helpKeywords || ''}`.toLowerCase();
+                card.hidden = Boolean(query) && !text.includes(query);
+            });
+        };
+
+        searchInput?.addEventListener('input', applySearch);
+        document.querySelector('[data-help-search-button]')?.addEventListener('click', applySearch);
+
+        if (toast) {
+            setTimeout(() => toast.classList.add('is-fading'), 4200);
+        }
+
+        document.querySelectorAll('[data-open-support-assistant]').forEach((button) => {
+            button.addEventListener('click', () => {
+                assistant.hidden = false;
+            });
+        });
+        document.querySelector('[data-close-support-assistant]')?.addEventListener('click', () => {
+            assistant.hidden = true;
+        });
+        document.querySelectorAll('[data-open-support-form]').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                supportFormPanel?.classList.remove('is-collapsed');
+                supportFormPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+        document.querySelector('[data-close-support-form]')?.addEventListener('click', () => {
+            supportFormPanel?.classList.add('is-collapsed');
+        });
+
+        document.querySelectorAll('[data-support-create-form]').forEach((form) => {
+            const requestType = form.querySelector('[name="requestType"]');
+            const targetSelect = form.querySelector('[name="targetId"]');
+            const targetType = form.querySelector('[data-support-target-type]');
+            const feedback = form.querySelector('[data-support-create-feedback]');
+            const submitButton = form.querySelector('button[type="submit"]');
+            const syncTarget = () => {
+                const selected = targetSelect.selectedOptions[0];
+                const inferredType = selected?.dataset.targetType || (requestType.value === 'order_refund' ? 'order' : 'booking');
+                targetType.value = inferredType;
+                if (requestType.value === 'order_refund') {
+                    Array.from(targetSelect.options).forEach((option) => option.hidden = option.dataset.targetType === 'booking');
+                } else {
+                    Array.from(targetSelect.options).forEach((option) => option.hidden = option.dataset.targetType === 'order');
+                }
+                if (targetSelect.selectedOptions[0]?.hidden) {
+                    targetSelect.value = '';
+                }
+            };
+            requestType.addEventListener('change', syncTarget);
+            targetSelect.addEventListener('change', syncTarget);
+            syncTarget();
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                feedback.textContent = '';
+                submitButton.disabled = true;
+                submitButton.textContent = 'Creating...';
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': token
+                    }
+                })
+                    .then(async (response) => {
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.message || 'Ticket could not be created.');
+                        }
+                        return data;
+                    })
+                    .then((data) => {
+                        feedback.textContent = data.message || 'Ticket created.';
+                        window.setTimeout(() => {
+                            window.location.href = '/help-center#support-tickets';
+                            window.location.reload();
+                        }, 700);
+                    })
+                    .catch((error) => {
+                        feedback.textContent = error.message;
+                    })
+                    .finally(() => {
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Create Ticket';
+                    });
+            });
+        });
+
+        document.querySelectorAll('[data-support-reply-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const feedback = form.querySelector('[data-support-reply-feedback]');
+                const button = form.querySelector('button[type="submit"]');
+                const conversation = form.closest('[data-ticket-card]')?.querySelector('[data-conversation]');
+                feedback.textContent = '';
+                button.disabled = true;
+                button.textContent = 'Sending...';
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': token
+                    }
+                })
+                    .then(async (response) => {
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.message || 'Reply could not be sent.');
+                        }
+                        return data;
+                    })
+                    .then((data) => {
+                        const reply = data.reply || {};
+                        const node = document.createElement('div');
+                        node.className = `support-message ${reply.senderRole === 'customer' ? 'from-customer' : 'from-support'}`;
+                        node.innerHTML = `
+                            <div><strong>${reply.senderName || 'You'}</strong><span>Just now</span></div>
+                            ${reply.messageBody ? `<p>${reply.messageBody.replace(/[<>&]/g, '')}</p>` : ''}
+                            ${reply.screenshotPath ? `<a href="${reply.screenshotPath}" target="_blank" rel="noopener"><img src="${reply.screenshotPath}" alt="Support screenshot"></a>` : ''}
+                        `;
+                        conversation.querySelector('.muted')?.remove();
+                        conversation.appendChild(node);
+                        form.reset();
+                        feedback.textContent = data.message || 'Reply sent.';
+                    })
+                    .catch((error) => {
+                        feedback.textContent = error.message;
+                    })
+                    .finally(() => {
+                        button.disabled = false;
+                        button.textContent = 'Send Reply';
+                    });
+            });
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

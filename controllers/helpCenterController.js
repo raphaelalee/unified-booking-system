@@ -57,6 +57,8 @@ const countOpenByCustomer = promisify(SupportRequest.countOpenByCustomer);
 const sendSupportToMerchant = promisify(SupportRequest.adminSendToMerchant);
 const merchantRespondToRequest = promisify(SupportRequest.merchantRespond);
 const adminResolveRequest = promisify(SupportRequest.adminResolve);
+const createSupportMessage = promisify(SupportRequest.createMessage);
+const getSupportMessagesForRequests = promisify(SupportRequest.getMessagesForRequests);
 
 function getFlash(req) {
     const flash = req.session.helpCenterFlash || null;
@@ -70,6 +72,21 @@ function setFlash(req, type, message) {
 
 function cleanText(value, maxLength = 1200) {
     return String(value || '').trim().slice(0, maxLength);
+}
+
+function wantsJson(req) {
+    return req.xhr
+        || (req.get('accept') || '').includes('application/json')
+        || String(req.body.responseType || '').toLowerCase() === 'json';
+}
+
+function sendSupportResponse(req, res, payload) {
+    if (wantsJson(req)) {
+        return res.status(payload.success ? 200 : 400).json(payload);
+    }
+
+    setFlash(req, payload.success ? 'success' : 'error', payload.message);
+    return res.redirect('/help-center');
 }
 
 function parseOrderTransactionId(value) {
@@ -282,6 +299,15 @@ function getRoleCopy(role) {
     };
 }
 
+async function attachMessages(requests = []) {
+    const messageMap = await getSupportMessagesForRequests(requests.map((request) => request.id));
+
+    return requests.map((request) => ({
+        ...request,
+        messages: messageMap[String(request.id)] || []
+    }));
+}
+
 async function showHelpCenter(req, res) {
     try {
         const role = req.session.user.role;
@@ -313,7 +339,7 @@ async function showHelpCenter(req, res) {
 
             return res.render('help-center', {
                 ...viewModel,
-                requests,
+                requests: await attachMessages(requests),
                 bookings,
                 orders: mergeCustomerOrders(transactionOrders, historyOrders)
             });
@@ -327,7 +353,7 @@ async function showHelpCenter(req, res) {
 
             return res.render('help-center', {
                 ...viewModel,
-                requests,
+                requests: await attachMessages(requests),
                 orders
             });
         }
@@ -336,13 +362,92 @@ async function showHelpCenter(req, res) {
 
         return res.render('help-center', {
             ...viewModel,
-            requests
+            requests: await attachMessages(requests)
         });
     } catch (error) {
         console.error(error);
         return res.status(500).render('error', {
             title: 'Help Center Error',
             message: 'The Help Center could not be loaded.'
+        });
+    }
+}
+
+function canReplyToRequest(req, request) {
+    if (!request || !req.session.user) {
+        return false;
+    }
+
+    if (req.session.user.role === 'admin') {
+        return true;
+    }
+
+    if (req.session.user.role === 'merchant') {
+        return String(request.merchantUserId) === String(req.session.user.id);
+    }
+
+    return String(request.customerUserId) === String(req.session.user.id);
+}
+
+async function replyToRequest(req, res) {
+    try {
+        const request = await findSupportRequest(req.params.requestId);
+
+        if (!canReplyToRequest(req, request)) {
+            throw new Error('You cannot reply to this support ticket.');
+        }
+
+        const messageBody = cleanText(req.body.messageBody, 1600);
+        const screenshot = req.file ? `/uploads/support/${req.file.filename}` : '';
+
+        if (!messageBody && !screenshot) {
+            throw new Error('Add a message or screenshot before sending.');
+        }
+
+        await createSupportMessage({
+            requestId: request.id,
+            senderUserId: req.session.user.id,
+            senderRole: req.session.user.role,
+            messageBody,
+            screenshotPath: screenshot
+        });
+
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'support_request',
+            title: `New reply on ticket #${request.id}`,
+            message: `${req.session.user.name || 'A user'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`,
+            linkUrl: '/help-center',
+            dedupeKey: `support-reply-admin-${request.id}-${Date.now()}`
+        });
+
+        if (req.session.user.role !== 'customer') {
+            notifyCustomer(request.customerUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: `Support replied to ticket #${request.id}`,
+                message: 'There is a new support reply waiting for you.',
+                linkUrl: '/help-center',
+                dedupeKey: `support-reply-customer-${request.id}-${Date.now()}`
+            });
+        }
+
+        return sendSupportResponse(req, res, {
+            success: true,
+            message: `Reply added to ticket #${request.id}.`,
+            reply: {
+                requestId: request.id,
+                senderRole: req.session.user.role,
+                senderName: req.session.user.name || req.session.user.role,
+                messageBody,
+                screenshotPath: screenshot,
+                createdAt: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        return sendSupportResponse(req, res, {
+            success: false,
+            message: error.message || 'The reply could not be sent.'
         });
     }
 }
@@ -392,7 +497,7 @@ async function buildOrderRequest(req, requestType, targetId, body) {
 }
 
 async function buildBookingRequest(req, requestType, targetId, body) {
-    const allowed = ['booking_refund', 'booking_cancel', 'booking_change'];
+    const allowed = ['booking_refund', 'booking_cancel'];
 
     if (!allowed.includes(requestType)) {
         throw new Error('This booking request type is not supported.');
@@ -421,8 +526,7 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         throw new Error('Past bookings cannot be changed or cancelled from the Help Center.');
     }
 
-    const isLateCancellation = requestType !== 'booking_change'
-        && dayDifference !== null
+    const isLateCancellation = dayDifference !== null
         && dayDifference >= 0
         && dayDifference <= 1;
     const refundAmount = Number(booking.service_price || 0);
@@ -434,11 +538,11 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         targetType: 'booking',
         targetId: String(booking.id),
         receiptId: String(booking.id),
-        status: requestType === 'booking_change' ? 'pending_merchant_review' : 'pending_admin_review',
+        status: 'pending_admin_review',
         reason: cleanText(body.reason, 160),
         customerNote: cleanText(body.customerNote),
-        requestedChange: cleanText(body.requestedChange),
-        refundAmount: requestType === 'booking_change' ? 0 : refundAmount,
+        requestedChange: null,
+        refundAmount,
         lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0,
         isLateCancellation
     };
@@ -459,13 +563,7 @@ async function createRequest(req, res) {
         }
 
         const note = cleanText(req.body.customerNote);
-        const requestedChange = cleanText(req.body.requestedChange);
-
-        if (requestType === 'booking_change' && requestedChange.length < 8) {
-            throw new Error('Please describe what you want to change for this booking.');
-        }
-
-        if (requestType !== 'booking_change' && note.length < 8) {
+        if (note.length < 8) {
             throw new Error('Please add a short reason so the support team can review your request properly.');
         }
 
@@ -488,6 +586,18 @@ async function createRequest(req, res) {
 
         const result = await createSupportRequest(data);
         const requestId = result.insertId;
+        const screenshotPath = req.file ? `/uploads/support/${req.file.filename}` : '';
+
+        if (screenshotPath) {
+            await createSupportMessage({
+                requestId,
+                senderUserId: req.session.user.id,
+                senderRole: req.session.user.role,
+                messageBody: 'Initial screenshot attached.',
+                screenshotPath
+            });
+        }
+
         const label = requestLabels[requestType] || 'Support request';
         const linkUrl = '/help-center';
 
@@ -519,12 +629,17 @@ async function createRequest(req, res) {
             });
         }
 
-        setFlash(req, 'success', `${label} #${requestId} was submitted successfully.`);
+        return sendSupportResponse(req, res, {
+            success: true,
+            message: `${label} #${requestId} was submitted successfully.`,
+            requestId
+        });
     } catch (error) {
-        setFlash(req, 'error', error.message || 'The request could not be submitted.');
+        return sendSupportResponse(req, res, {
+            success: false,
+            message: error.message || 'The request could not be submitted.'
+        });
     }
-
-    return res.redirect('/help-center');
 }
 
 async function adminSendToMerchant(req, res) {
@@ -784,6 +899,7 @@ module.exports = {
     adminSendToMerchant,
     createRequest,
     merchantRespond,
+    replyToRequest,
     showHelpCenter,
     updateOrderDeliveryStatus
 };

@@ -2,7 +2,7 @@
 > start
 > node app.js
 
-◇ injected env (25) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
-◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+◇ injected env (23) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
 Server is running on http://localhost:3000

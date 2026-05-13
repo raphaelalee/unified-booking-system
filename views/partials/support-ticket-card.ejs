@@ -1,0 +1,108 @@
+<article class="support-ticket-card <%= statusClass(request.status) %>" data-ticket-card data-help-card data-help-keywords="<%= `${requestLabel(request.requestType)} ${request.status} ${request.targetType} ${request.receiptId || request.targetId}`.toLowerCase() %>">
+    <div class="support-ticket-header">
+        <div>
+            <span class="support-ticket-id">Ticket #<%= request.id %></span>
+            <h3><%= requestLabel(request.requestType) %></h3>
+            <p><%= request.targetType === 'order' ? 'Order' : 'Booking' %> reference <strong><%= request.receiptId || request.targetId %></strong></p>
+        </div>
+        <span class="support-status-pill"><%= supportStatusLabel(request.status) %></span>
+    </div>
+
+    <div class="support-ticket-meta">
+        <p><span>Last updated</span><strong><%= formatDateTime(request.updatedAt || request.createdAt) %></strong></p>
+        <p><span>Priority</span><strong><%= priorityLabel(request) %></strong></p>
+        <p><span>Response time</span><strong><%= responseTimeLabel(request) %></strong></p>
+    </div>
+
+    <% if (request.reason || request.customerNote) { %>
+        <div class="support-ticket-summary">
+            <% if (request.reason) { %><p><strong>Reason:</strong> <%= request.reason %></p><% } %>
+            <% if (request.customerNote) { %><p><strong>Details:</strong> <%= request.customerNote %></p><% } %>
+        </div>
+    <% } %>
+
+    <details class="support-ticket-details">
+        <summary>View timeline and messages</summary>
+        <div class="support-ticket-timeline">
+            <% buildTimeline(request).forEach((event) => { %>
+                <p>
+                    <span aria-hidden="true"></span>
+                    <strong><%= event.label %></strong>
+                    <small><%= event.time %></small>
+                </p>
+            <% }) %>
+        </div>
+
+        <div class="support-conversation" data-conversation="<%= request.id %>">
+            <% if (!request.messages || request.messages.length === 0) { %>
+                <p class="muted">No replies yet.</p>
+            <% } else { %>
+                <% request.messages.forEach((message) => { %>
+                    <div class="support-message <%= message.senderRole === 'customer' ? 'from-customer' : 'from-support' %>">
+                        <div>
+                            <strong><%= message.senderName %></strong>
+                            <span><%= formatDateTime(message.createdAt) %></span>
+                        </div>
+                        <% if (message.messageBody) { %><p><%= message.messageBody %></p><% } %>
+                        <% if (message.screenshotPath) { %>
+                            <a href="<%= message.screenshotPath %>" target="_blank" rel="noopener">
+                                <img src="<%= message.screenshotPath %>" alt="Support screenshot">
+                            </a>
+                        <% } %>
+                    </div>
+                <% }) %>
+            <% } %>
+        </div>
+
+        <form class="support-reply-form" action="/help-center/requests/<%= request.id %>/replies" method="POST" enctype="multipart/form-data" data-support-reply-form>
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <input type="hidden" name="responseType" value="json">
+            <label>
+                Reply to support
+                <textarea name="messageBody" rows="3" maxlength="1600" placeholder="Add context, updates, or questions for this ticket."></textarea>
+            </label>
+            <label>
+                Screenshot
+                <input type="file" name="screenshot" accept="image/*">
+            </label>
+            <p class="support-reply-feedback" data-support-reply-feedback></p>
+            <button class="button primary" type="submit">Send Reply</button>
+        </form>
+    </details>
+
+    <% if (role === 'merchant' && request.status === 'pending_merchant_review') { %>
+        <div class="support-action-box">
+            <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <label for="merchant-note-<%= request.id %>">Merchant note</label>
+                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
+                <div class="inline-actions">
+                    <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
+                    <button class="button secondary danger-button" type="submit" name="decision" value="declined">Decline</button>
+                </div>
+            </form>
+        </div>
+    <% } %>
+
+    <% if (role === 'admin' && !isClosed(request)) { %>
+        <div class="support-action-box admin-support-actions">
+            <% if (request.status === 'pending_admin_review' && request.merchantUserId) { %>
+                <form action="/help-center/requests/<%= request.id %>/send-to-merchant" method="POST">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <label for="admin-send-note-<%= request.id %>">Message for merchant</label>
+                    <textarea id="admin-send-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Ask the merchant to approve or decline this request."></textarea>
+                    <button class="button secondary" type="submit">Send to merchant</button>
+                </form>
+            <% } %>
+            <form action="/help-center/requests/<%= request.id %>/admin-resolution" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <label for="admin-final-note-<%= request.id %>">Final admin note</label>
+                <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Explain the final decision."></textarea>
+                <div class="inline-actions">
+                    <button class="button primary" type="submit" name="decision" value="approved">Approve refund</button>
+                    <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
+                </div>
+            </form>
+        </div>
+    <% } %>
+</article>

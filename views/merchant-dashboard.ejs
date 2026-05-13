@@ -33,6 +33,7 @@
     const statusLabels = {
         pending: 'pending',
         confirmed: 'confirmed',
+        paid: 'paid',
         checked_in: 'checked-in',
         completed: 'completed',
         cancelled: 'cancelled',
@@ -147,6 +148,36 @@
                                         <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
                                     </div>
                                     <em><%= ['checked_in', 'completed'].includes(booking.status) ? 'QR checked' : 'QR pending' %></em>
+                                    <div class="merchant-booking-actions">
+                                        <% if (['pending', 'paid'].includes(booking.status)) { %>
+                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <input type="hidden" name="status" value="confirmed">
+                                                <button class="button secondary" type="submit">Approve</button>
+                                            </form>
+                                        <% } %>
+                                        <% if (['pending', 'confirmed', 'paid'].includes(booking.status)) { %>
+                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <input type="hidden" name="status" value="cancelled">
+                                                <button class="button secondary danger-button" type="submit">Reject</button>
+                                            </form>
+                                        <% } %>
+                                        <% if (['confirmed', 'paid', 'checked_in'].includes(booking.status)) { %>
+                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <input type="hidden" name="status" value="completed">
+                                                <button class="button secondary" type="submit">Complete</button>
+                                            </form>
+                                        <% } %>
+                                        <% if (!['cancelled', 'completed', 'checked_in'].includes(booking.status)) { %>
+                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <input type="hidden" name="status" value="no_show">
+                                                <button class="button secondary" type="submit">No-show</button>
+                                            </form>
+                                        <% } %>
+                                    </div>
                                 </article>
                             <% }) %>
                         </div>
@@ -270,6 +301,29 @@
                                         <% if (['checked_in', 'completed'].includes(booking.status)) { %>
                                             <b>QR</b>
                                         <% } %>
+                                        <div class="merchant-booking-actions calendar-actions">
+                                            <% if (['pending', 'paid'].includes(booking.status)) { %>
+                                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                    <input type="hidden" name="status" value="confirmed">
+                                                    <button type="submit">Approve</button>
+                                                </form>
+                                            <% } %>
+                                            <% if (['pending', 'confirmed', 'paid'].includes(booking.status)) { %>
+                                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                    <input type="hidden" name="status" value="cancelled">
+                                                    <button type="submit">Reject</button>
+                                                </form>
+                                            <% } %>
+                                            <% if (['confirmed', 'paid', 'checked_in'].includes(booking.status)) { %>
+                                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                    <input type="hidden" name="status" value="completed">
+                                                    <button type="submit">Complete</button>
+                                                </form>
+                                            <% } %>
+                                        </div>
                                     </article>
                                 <% }) %>
                             </div>
@@ -314,6 +368,22 @@
                                             <strong><%= booking.bookingTime || 'Time TBC' %></strong>
                                             <span><%= booking.serviceName %></span>
                                             <small><%= booking.customerName %></small>
+                                            <div class="merchant-booking-actions calendar-actions">
+                                                <% if (['pending', 'paid'].includes(booking.status)) { %>
+                                                    <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                        <input type="hidden" name="status" value="confirmed">
+                                                        <button type="submit">Approve</button>
+                                                    </form>
+                                                <% } %>
+                                                <% if (['pending', 'confirmed', 'paid'].includes(booking.status)) { %>
+                                                    <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                        <input type="hidden" name="status" value="cancelled">
+                                                        <button type="submit">Reject</button>
+                                                    </form>
+                                                <% } %>
+                                            </div>
                                         </article>
                                     <% }) %>
                                 </section>

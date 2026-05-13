@@ -76,6 +76,39 @@ function setProfileSuccess(req, message) {
     req.session.profileSuccess = message;
 }
 
+function wantsJson(req) {
+    return req.xhr
+        || (req.get('accept') || '').includes('application/json')
+        || String(req.body.responseType || '').toLowerCase() === 'json';
+}
+
+function respondProfileAction(req, res, payload, redirectPath = '/profile#bookings') {
+    if (wantsJson(req)) {
+        return res.status(payload.success ? 200 : 400).json(payload);
+    }
+
+    if (payload.success) {
+        setProfileSuccess(req, payload.message);
+    } else {
+        setProfileError(req, payload.message);
+    }
+
+    return res.redirect(redirectPath);
+}
+
+function getRefundStatusForCancellation(booking) {
+    const dateKey = getDayKey(booking.booking_date);
+    const bookingTime = normalizeBookingTime(booking.booking_time) || '23:59';
+    const appointmentDate = new Date(`${dateKey}T${bookingTime}:00`);
+    const hoursUntilBooking = (appointmentDate.getTime() - Date.now()) / (1000 * 60 * 60);
+
+    if (!dateKey || Number.isNaN(appointmentDate.getTime())) {
+        return 'review_required';
+    }
+
+    return hoursUntilBooking >= 24 ? 'eligible' : 'late_cancellation_review';
+}
+
 function removeUploadedReviewMedia(...mediaPaths) {
     mediaPaths.filter(Boolean).forEach((mediaPath) => {
         const normalized = String(mediaPath).replace(/^\/+/, '');
@@ -259,48 +292,81 @@ function confirmBooking(req, res) {
 function cancelBooking(req, res) {
     const bookingId = Number(req.params.bookingId);
     const userId = req.session.user?.id;
+    const reason = String(req.body.reason || req.body.cancellationReason || '').trim().slice(0, 180);
 
     if (!bookingId || !userId) {
-        setProfileError(req, 'The selected booking could not be found.');
-        return res.redirect('/profile#bookings');
+        return respondProfileAction(req, res, {
+            success: false,
+            message: 'The selected booking could not be found.'
+        });
+    }
+
+    if (!reason) {
+        return respondProfileAction(req, res, {
+            success: false,
+            message: 'Please choose a cancellation reason.'
+        });
     }
 
     return Booking.getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
         if (lookupError) {
             console.error(lookupError);
-            setProfileError(req, 'That booking could not be loaded.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'That booking could not be loaded.'
+            });
         }
 
         if (!booking) {
-            setProfileError(req, 'That booking could not be found on your account.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'That booking could not be found on your account.'
+            });
         }
 
         if (booking.status === 'cancelled') {
-            setProfileError(req, 'This booking is already cancelled.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'This booking is already cancelled.'
+            });
         }
 
         if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
-            setProfileError(req, 'Past or completed bookings cannot be cancelled.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'Past or completed bookings cannot be cancelled.'
+            });
         }
 
-        return Booking.cancelForCustomer(bookingId, userId, (updateError, result) => {
+        const refundStatus = getRefundStatusForCancellation(booking);
+
+        return Booking.cancelForCustomer(bookingId, userId, reason, refundStatus, (updateError, result) => {
             if (updateError) {
                 console.error(updateError);
-                setProfileError(req, 'This booking could not be cancelled.');
-                return res.redirect('/profile#bookings');
+                return respondProfileAction(req, res, {
+                    success: false,
+                    message: 'This booking could not be cancelled.'
+                });
             }
 
             if (!result?.affectedRows) {
-                setProfileError(req, 'This booking could not be cancelled.');
-                return res.redirect('/profile#bookings');
+                return respondProfileAction(req, res, {
+                    success: false,
+                    message: 'This booking could not be cancelled.'
+                });
             }
 
-            setProfileSuccess(req, 'Booking cancelled successfully.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: true,
+                message: 'Booking cancelled successfully.',
+                booking: {
+                    id: bookingId,
+                    status: 'cancelled',
+                    cancellationReason: reason,
+                    refundStatus,
+                    cancelledAt: new Date().toISOString()
+                }
+            });
         });
     });
 }
@@ -312,47 +378,63 @@ function rescheduleBooking(req, res) {
     const bookingTime = normalizeBookingTime(req.body.bookingTime);
 
     if (!bookingId || !userId) {
-        setProfileError(req, 'The selected booking could not be found.');
-        return res.redirect('/profile#bookings');
+        return respondProfileAction(req, res, {
+            success: false,
+            message: 'The selected booking could not be found.'
+        });
     }
 
     if (!isValidBookingDate(bookingDate)) {
-        setProfileError(req, 'Please choose today or a future booking date.');
-        return res.redirect('/profile#bookings');
+        return respondProfileAction(req, res, {
+            success: false,
+            message: 'Please choose today or a future booking date.'
+        });
     }
 
     if (!bookingTime) {
-        setProfileError(req, 'Please choose a valid booking time.');
-        return res.redirect('/profile#bookings');
+        return respondProfileAction(req, res, {
+            success: false,
+            message: 'Please choose a valid booking time.'
+        });
     }
 
     const holidayName = getPublicHolidayName(bookingDate);
 
     if (holidayName) {
-        setProfileError(req, `Bookings are unavailable on ${holidayName}. Please choose another date.`);
-        return res.redirect('/profile#bookings');
+        return respondProfileAction(req, res, {
+            success: false,
+            message: `Bookings are unavailable on ${holidayName}. Please choose another date.`
+        });
     }
 
     return Booking.getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
         if (lookupError) {
             console.error(lookupError);
-            setProfileError(req, 'That booking could not be loaded.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'That booking could not be loaded.'
+            });
         }
 
         if (!booking) {
-            setProfileError(req, 'That booking could not be found on your account.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'That booking could not be found on your account.'
+            });
         }
 
         if (booking.status === 'cancelled') {
-            setProfileError(req, 'Cancelled bookings cannot be rescheduled.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'Cancelled bookings cannot be rescheduled.'
+            });
         }
 
         if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
-            setProfileError(req, 'Past or completed bookings cannot be rescheduled.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: false,
+                message: 'Past or completed bookings cannot be rescheduled.'
+            });
         }
 
         const currentDate = getDayKey(booking.booking_date);
@@ -363,23 +445,43 @@ function rescheduleBooking(req, res) {
             return Booking.updateScheduleForCustomer(bookingId, userId, bookingDate, bookingTime, (updateError, result) => {
                 if (updateError) {
                     console.error(updateError);
-                    setProfileError(req, 'This booking could not be rescheduled.');
-                    return res.redirect('/profile#bookings');
+                    return respondProfileAction(req, res, {
+                        success: false,
+                        message: 'This booking could not be rescheduled.'
+                    });
                 }
 
                 if (!result?.affectedRows) {
-                    setProfileError(req, 'This booking could not be rescheduled.');
-                    return res.redirect('/profile#bookings');
+                    return respondProfileAction(req, res, {
+                        success: false,
+                        message: 'This booking could not be rescheduled.'
+                    });
                 }
 
-                setProfileSuccess(req, `Booking moved to ${bookingDate} at ${bookingTime}.`);
-                return res.redirect('/profile#bookings');
+                return respondProfileAction(req, res, {
+                    success: true,
+                    message: `Booking moved to ${bookingDate} at ${bookingTime}.`,
+                    booking: {
+                        id: bookingId,
+                        bookingDate,
+                        bookingTime,
+                        status: booking.status
+                    }
+                });
             });
         };
 
         if (isSameSlot) {
-            setProfileSuccess(req, 'Your booking already uses that date and time.');
-            return res.redirect('/profile#bookings');
+            return respondProfileAction(req, res, {
+                success: true,
+                message: 'Your booking already uses that date and time.',
+                booking: {
+                    id: bookingId,
+                    bookingDate,
+                    bookingTime,
+                    status: booking.status
+                }
+            });
         }
 
         return Booking.hasExistingBookingInDatabase(
@@ -390,13 +492,17 @@ function rescheduleBooking(req, res) {
             (slotError, slotTaken) => {
                 if (slotError) {
                     console.error(slotError);
-                    setProfileError(req, 'That booking slot could not be checked.');
-                    return res.redirect('/profile#bookings');
+                    return respondProfileAction(req, res, {
+                        success: false,
+                        message: 'That booking slot could not be checked.'
+                    });
                 }
 
                 if (slotTaken) {
-                    setProfileError(req, 'That date and time is already booked. Please choose another slot.');
-                    return res.redirect('/profile#bookings');
+                    return respondProfileAction(req, res, {
+                        success: false,
+                        message: 'That date and time is already booked. Please choose another slot.'
+                    });
                 }
 
                 return finishUpdate();

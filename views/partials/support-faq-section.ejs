@@ -1,0 +1,16 @@
+<div class="accordion support-faq-accordion" id="<%= accordionId %>">
+    <% faqs.forEach((faq, index) => { %>
+        <div class="accordion-item" data-help-card data-help-keywords="<%= faq.keywords %>">
+            <h3 class="accordion-header" id="<%= accordionId %>-heading-<%= index %>">
+                <button class="accordion-button <%= index === 0 ? '' : 'collapsed' %>" type="button" data-bs-toggle="collapse" data-bs-target="#<%= accordionId %>-collapse-<%= index %>" aria-expanded="<%= index === 0 ? 'true' : 'false' %>" aria-controls="<%= accordionId %>-collapse-<%= index %>">
+                    <%= faq.question %>
+                </button>
+            </h3>
+            <div id="<%= accordionId %>-collapse-<%= index %>" class="accordion-collapse collapse <%= index === 0 ? 'show' : '' %>" aria-labelledby="<%= accordionId %>-heading-<%= index %>" data-bs-parent="#<%= accordionId %>">
+                <div class="accordion-body">
+                    <p><%= faq.answer %></p>
+                </div>
+            </div>
+        </div>
+    <% }) %>
+</div>
