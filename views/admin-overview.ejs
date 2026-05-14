@@ -1,0 +1,68 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const platformBookings = Array.isArray(bookings) ? bookings : [];
+    const safeMerchants = Array.isArray(merchants) ? merchants : [];
+    const safeSupportSummary = supportSummary || { openCount: 0, pendingRefundCount: 0 };
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const pendingMerchants = safeMerchants.filter((merchant) => Number(merchant.service_count || 0) === 0 || !merchant.address || !merchant.description);
+    const pendingBookings = platformBookings.filter((booking) => String(booking.status || '').toLowerCase() === 'pending');
+    const checkedInCount = platformBookings.filter((booking) => ['checked_in', 'completed'].includes(String(booking.status || '').toLowerCase())).length;
+    const recentActivity = [
+        ...platformBookings.slice(0, 4).map((booking) => ({
+            title: `Booking #${booking.id} ${booking.status || 'pending'}`,
+            meta: `${booking.merchant_name || 'Merchant'} - ${booking.customer_name || 'Customer'}`
+        })),
+        ...safeMerchants.slice(0, 3).map((merchant) => ({
+            title: `${merchant.salon_name || 'Merchant'} profile checked`,
+            meta: `${Number(merchant.service_count || 0)} services listed`
+        }))
+    ].slice(0, 6);
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div>
+                <p class="eyebrow">Platform Command Center</p>
+                <h1>Admin Overview</h1>
+                <p>Monitor marketplace performance, pending work, revenue, and system health.</p>
+            </div>
+            <div class="admin-topbar-utilities">
+                <input type="search" placeholder="Search platform">
+                <a class="button primary" href="/admin/merchants/new">Quick create</a>
+            </div>
+        </header>
+
+        <section class="admin-stat-grid">
+            <article class="admin-stat-card accent-green"><strong><%= stats.customerCount %></strong><span>Total users</span><small><%= customerReport.bookedCustomers %> booked users</small></article>
+            <article class="admin-stat-card accent-blue"><strong><%= stats.merchantCount %></strong><span>Merchants</span><small><%= stats.merchantUserCount %> merchant accounts</small></article>
+            <article class="admin-stat-card accent-orange"><strong><%= stats.bookingCount %></strong><span>Bookings</span><small><%= checkedInCount %> checked in/completed</small></article>
+            <article class="admin-stat-card accent-green"><strong>$<%= formatCurrency(stats.bookingRevenue) %></strong><span>Revenue</span><small>booking revenue</small></article>
+            <article class="admin-stat-card accent-red"><strong><%= pendingMerchants.length %></strong><span>Pending actions</span><small>merchant profiles need review</small></article>
+            <article class="admin-stat-card accent-yellow"><strong><%= safeSupportSummary.openCount || 0 %></strong><span>Open support</span><small><%= safeSupportSummary.pendingRefundCount || 0 %> refund issues</small></article>
+        </section>
+
+        <section class="admin-grid">
+            <article class="admin-panel span-8">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Recent Activity</p><h2>Marketplace activity</h2></div></div>
+                <div class="admin-log-list">
+                    <% recentActivity.forEach((item) => { %>
+                        <article><strong><%= item.title %></strong><span><%= item.meta %></span></article>
+                    <% }) %>
+                </div>
+            </article>
+            <article class="admin-panel span-4">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Alerts</p><h2>Pending actions</h2></div></div>
+                <div class="admin-health-list">
+                    <a href="/admin/merchants"><span>Merchants missing setup</span><strong><%= pendingMerchants.length %></strong></a>
+                    <a href="/admin/bookings"><span>Pending bookings</span><strong><%= pendingBookings.length %></strong></a>
+                    <a href="/admin/platform-health"><span>Validation issues</span><strong><%= validationReport.issues.length %></strong></a>
+                </div>
+            </article>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

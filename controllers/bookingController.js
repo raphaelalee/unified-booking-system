@@ -4,6 +4,7 @@ const path = require('path');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Loyalty = require('../models/Loyalty');
+const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayName } = require('../utils/publicHolidays');
@@ -94,6 +95,101 @@ function respondProfileAction(req, res, payload, redirectPath = '/profile#bookin
     }
 
     return res.redirect(redirectPath);
+}
+
+function notifyUser(recipientUserId, role, notification) {
+    Notification.create({
+        ...notification,
+        recipientUserId,
+        recipientRole: role
+    }, (error) => {
+        if (error) {
+            console.error('Notification error:', error.message || error);
+        }
+    });
+}
+
+function isPeakHour(bookingTime) {
+    const minutes = Number(String(bookingTime || '').slice(0, 2)) * 60 + Number(String(bookingTime || '').slice(3, 5));
+    return (minutes >= 12 * 60 && minutes < 14 * 60) || minutes >= 17 * 60;
+}
+
+function evaluateRescheduleAutomation({ booking, bookingDate, bookingTime, settings, allowedSlots, overlaps, rescheduleCount }) {
+    const issues = [];
+    let score = 100;
+    const targetStart = new Date(`${bookingDate}T${bookingTime}:00`);
+    const hoursUntilTarget = (targetStart.getTime() - Date.now()) / 3600000;
+    const businessStart = String(settings.businessStart || '09:00').slice(0, 5);
+    const businessEnd = String(settings.businessEnd || '20:00').slice(0, 5);
+    const duration = Math.max(15, Number(booking.duration_mins || 60));
+    const slotMinutes = (Number(bookingTime.slice(0, 2)) * 60) + Number(bookingTime.slice(3, 5));
+    const businessStartMinutes = (Number(businessStart.slice(0, 2)) * 60) + Number(businessStart.slice(3, 5));
+    const businessEndMinutes = (Number(businessEnd.slice(0, 2)) * 60) + Number(businessEnd.slice(3, 5));
+    const blockedTimes = String(settings.blockedTimes || '')
+        .split(',')
+        .map((slot) => slot.trim().slice(0, 5))
+        .filter(Boolean);
+
+    if (!settings.autoApproveEnabled) {
+        score -= 40;
+        issues.push('Merchant auto-approval is disabled.');
+    }
+
+    if (!allowedSlots.includes(bookingTime)) {
+        score -= 45;
+        issues.push('Requested time is not configured for this service.');
+    }
+
+    if (slotMinutes < businessStartMinutes || slotMinutes + duration > businessEndMinutes) {
+        score -= 45;
+        issues.push('Requested time is outside merchant business hours.');
+    }
+
+    if (blockedTimes.includes(bookingTime)) {
+        score -= 50;
+        issues.push('Requested time is blocked by the merchant.');
+    }
+
+    if (overlaps.length > 0) {
+        score -= 55;
+        issues.push('Requested time overlaps another appointment.');
+    }
+
+    if (hoursUntilTarget < Number(settings.minimumNoticeHours || 24)) {
+        score -= 30;
+        issues.push(`Less than ${settings.minimumNoticeHours || 24} hours notice.`);
+    }
+
+    if (bookingDate === getDayKey(new Date())) {
+        score -= 25;
+        issues.push('Same-day reschedule.');
+    }
+
+    if (rescheduleCount >= Number(settings.maxReschedulesAllowed || 2)) {
+        score -= 50;
+        issues.push('Customer has reached the merchant reschedule limit.');
+    }
+
+    if (settings.peakHourRestrictions && isPeakHour(bookingTime)) {
+        score -= 20;
+        issues.push('Peak-hour request.');
+    }
+
+    if (/vip|bridal|wedding|package|special/i.test(`${booking.service_name || ''} ${booking.serviceName || ''}`)) {
+        score -= 20;
+        issues.push('Special service review recommended.');
+    }
+
+    const normalizedScore = Math.max(0, Math.min(100, Math.round(score)));
+    const confidenceLevel = normalizedScore >= 80 ? 'high' : normalizedScore >= 50 ? 'medium' : 'low';
+
+    return {
+        confidenceLevel,
+        confidenceScore: normalizedScore,
+        autoApprove: confidenceLevel === 'high' && issues.length === 0,
+        issues,
+        decisionReason: issues.length ? issues.join(' ') : 'All automated scheduling checks passed.'
+    };
 }
 
 function getRefundStatusForCancellation(booking) {
@@ -441,7 +537,7 @@ function rescheduleBooking(req, res) {
         const currentTime = normalizeBookingTime(booking.booking_time);
         const isSameSlot = currentDate === bookingDate && currentTime === bookingTime;
 
-        const finishUpdate = () => {
+        const finishUpdate = (automation) => {
             return Booking.updateScheduleForCustomer(bookingId, userId, bookingDate, bookingTime, (updateError, result) => {
                 if (updateError) {
                     console.error(updateError);
@@ -458,9 +554,46 @@ function rescheduleBooking(req, res) {
                     });
                 }
 
+                Booking.createRescheduleRequest({
+                    bookingId,
+                    userId,
+                    merchantId: booking.salon_id,
+                    serviceId: booking.service_id,
+                    oldBookingDate: currentDate,
+                    oldBookingTime: currentTime,
+                    requestedBookingDate: bookingDate,
+                    requestedBookingTime: bookingTime,
+                    status: 'auto_approved',
+                    confidenceLevel: automation.confidenceLevel,
+                    confidenceScore: automation.confidenceScore,
+                    decisionReason: automation.decisionReason
+                }, (requestError) => {
+                    if (requestError) {
+                        console.error(requestError);
+                    }
+                });
+
+                notifyUser(booking.merchant_user_id, 'merchant', {
+                    actorUserId: userId,
+                    type: 'booking_reschedule_auto_approved',
+                    title: 'Reschedule auto-approved',
+                    message: `${booking.service_name} for ${req.session.user.name || 'a customer'} moved to ${bookingDate} at ${bookingTime}.`,
+                    linkUrl: '/merchant/bookings',
+                    dedupeKey: `reschedule-auto-${bookingId}-${bookingDate}-${bookingTime}`
+                });
+                notifyUser(userId, 'customer', {
+                    actorUserId: userId,
+                    type: 'booking_reschedule_auto_approved',
+                    title: 'Booking rescheduled',
+                    message: `Your ${booking.service_name} booking was moved to ${bookingDate} at ${bookingTime}.`,
+                    linkUrl: '/profile#bookings',
+                    dedupeKey: `reschedule-customer-auto-${bookingId}-${bookingDate}-${bookingTime}`
+                });
+
                 return respondProfileAction(req, res, {
                     success: true,
                     message: `Booking moved to ${bookingDate} at ${bookingTime}.`,
+                    confidence: automation.confidenceLevel,
                     booking: {
                         id: bookingId,
                         bookingDate,
@@ -484,12 +617,16 @@ function rescheduleBooking(req, res) {
             });
         }
 
-        return Booking.hasExistingBookingInDatabase(
-            booking.salon_id,
-            booking.service_id,
-            bookingDate,
-            bookingTime,
-            (slotError, slotTaken) => {
+        return Booking.getRescheduleSettings(booking.salon_id, (settingsError, settings) => {
+            if (settingsError) {
+                console.error(settingsError);
+                return respondProfileAction(req, res, {
+                    success: false,
+                    message: 'Merchant reschedule rules could not be loaded.'
+                });
+            }
+
+            return Booking.getAllowedSlotsForBooking(bookingId, userId, (slotError, allowedSlots = []) => {
                 if (slotError) {
                     console.error(slotError);
                     return respondProfileAction(req, res, {
@@ -498,16 +635,142 @@ function rescheduleBooking(req, res) {
                     });
                 }
 
-                if (slotTaken) {
-                    return respondProfileAction(req, res, {
-                        success: false,
-                        message: 'That date and time is already booked. Please choose another slot.'
-                    });
-                }
+                return Booking.findOverlappingBookings(
+                    booking.salon_id,
+                    booking.id,
+                    bookingDate,
+                    bookingTime,
+                    booking.duration_mins,
+                    (overlapError, overlaps = []) => {
+                        if (overlapError) {
+                            console.error(overlapError);
+                            return respondProfileAction(req, res, {
+                                success: false,
+                                message: 'That booking slot could not be checked.'
+                            });
+                        }
 
-                return finishUpdate();
+                        return Booking.countReschedulesForBooking(bookingId, (countError, rescheduleCount = 0) => {
+                            if (countError) {
+                                console.error(countError);
+                                return respondProfileAction(req, res, {
+                                    success: false,
+                                    message: 'Reschedule history could not be checked.'
+                                });
+                            }
+
+                            const automation = evaluateRescheduleAutomation({
+                                booking,
+                                bookingDate,
+                                bookingTime,
+                                settings: settings || {},
+                                allowedSlots,
+                                overlaps,
+                                rescheduleCount
+                            });
+
+                            if (automation.autoApprove) {
+                                return finishUpdate(automation);
+                            }
+
+                            const reviewStatus = automation.confidenceLevel === 'low' ? 'manual review' : 'merchant review';
+                            return Booking.createRescheduleRequest({
+                                bookingId,
+                                userId,
+                                merchantId: booking.salon_id,
+                                serviceId: booking.service_id,
+                                oldBookingDate: currentDate,
+                                oldBookingTime: currentTime,
+                                requestedBookingDate: bookingDate,
+                                requestedBookingTime: bookingTime,
+                                status: 'pending_review',
+                                confidenceLevel: automation.confidenceLevel,
+                                confidenceScore: automation.confidenceScore,
+                                decisionReason: automation.decisionReason,
+                                reviewNotes: automation.issues.join('\n')
+                            }, (requestError, requestResult) => {
+                                if (requestError) {
+                                    console.error(requestError);
+                                    return respondProfileAction(req, res, {
+                                        success: false,
+                                        message: 'This reschedule request could not be submitted.'
+                                    });
+                                }
+
+                                notifyUser(booking.merchant_user_id, 'merchant', {
+                                    actorUserId: userId,
+                                    type: 'booking_reschedule_review',
+                                    title: 'Reschedule needs review',
+                                    message: `${booking.service_name} request for ${bookingDate} at ${bookingTime} needs ${reviewStatus}: ${automation.decisionReason}`,
+                                    linkUrl: '/merchant/bookings',
+                                    dedupeKey: `reschedule-review-${requestResult?.insertId || bookingId}`
+                                });
+                                notifyUser(userId, 'customer', {
+                                    actorUserId: userId,
+                                    type: 'booking_reschedule_review',
+                                    title: 'Reschedule sent for review',
+                                    message: `Your ${booking.service_name} request for ${bookingDate} at ${bookingTime} was sent to the merchant.`,
+                                    linkUrl: '/profile#bookings',
+                                    dedupeKey: `reschedule-customer-review-${requestResult?.insertId || bookingId}`
+                                });
+
+                                return respondProfileAction(req, res, {
+                                    success: true,
+                                    pendingReview: true,
+                                    confidence: automation.confidenceLevel,
+                                    message: `This request needs ${reviewStatus}. The merchant has been notified.`,
+                                    booking: {
+                                        id: bookingId,
+                                        bookingDate: currentDate,
+                                        bookingTime: currentTime,
+                                        status: booking.status
+                                    }
+                                });
+                            });
+                        });
+                    }
+                );
+            });
+        });
+    });
+}
+
+function getRescheduleSuggestions(req, res) {
+    const bookingId = Number(req.params.bookingId);
+    const userId = req.session.user?.id;
+
+    if (!bookingId || !userId) {
+        return res.status(404).json({
+            success: false,
+            message: 'The selected booking could not be found.'
+        });
+    }
+
+    return Booking.getRescheduleSuggestionCandidates(bookingId, userId, (error, booking, suggestions = []) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).json({
+                success: false,
+                message: 'Reschedule suggestions could not be loaded.'
+            });
+        }
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'That booking could not be found on your account.'
+            });
+        }
+
+        return res.json({
+            success: true,
+            suggestions,
+            booking: {
+                id: bookingId,
+                serviceName: booking.service_name,
+                durationMins: booking.duration_mins
             }
-        );
+        });
     });
 }
 
@@ -610,6 +873,7 @@ module.exports = {
     cancelBooking,
     confirmBooking,
     createBooking,
+    getRescheduleSuggestions,
     rescheduleBooking,
     submitReview,
     showBookFallback

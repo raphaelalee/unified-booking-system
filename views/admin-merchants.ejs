@@ -1,0 +1,43 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const safeMerchants = Array.isArray(merchants) ? merchants : [];
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div><p class="eyebrow">Users</p><h1>Merchant Management</h1><p>Manage merchant accounts, onboarding readiness, commission, and marketplace status.</p></div>
+            <div class="admin-topbar-utilities"><a class="button primary" href="/admin/merchants/new">Add merchant</a></div>
+        </header>
+
+        <section class="admin-stat-grid">
+            <article class="admin-stat-card accent-blue"><strong><%= safeMerchants.length %></strong><span>Total merchants</span></article>
+            <article class="admin-stat-card accent-yellow"><strong><%= merchantReport.merchantsWithoutServices.length %></strong><span>Missing services</span></article>
+            <article class="admin-stat-card accent-green"><strong><%= merchantReport.topMerchant?.salon_name || 'None' %></strong><span>Top merchant</span></article>
+        </section>
+
+        <section class="admin-panel">
+            <div class="admin-panel-heading"><div><p class="eyebrow">Directory</p><h2>Merchant accounts</h2></div></div>
+            <div class="admin-merchant-grid">
+                <% safeMerchants.forEach((merchant) => { %>
+                    <article class="admin-merchant-card">
+                        <div><strong><%= merchant.salon_name %></strong><span><%= merchant.owner_name || merchant.owner_email || 'Owner not set' %></span></div>
+                        <div class="admin-merchant-metrics">
+                            <p><span>Services</span><strong><%= merchant.service_count || 0 %></strong></p>
+                            <p><span>Commission</span><strong><%= Number(merchant.commission_rate || 15).toFixed(1) %>%</strong></p>
+                        </div>
+                        <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/commission" method="POST">
+                            <input type="number" name="commissionRate" min="0" max="80" step="0.1" value="<%= Number(merchant.commission_rate || 15).toFixed(1) %>">
+                            <button class="button secondary" type="submit">Save</button>
+                        </form>
+                    </article>
+                <% }) %>
+            </div>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

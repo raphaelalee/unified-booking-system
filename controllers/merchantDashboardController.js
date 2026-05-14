@@ -573,6 +573,43 @@ function buildAppointmentReport(bookings = []) {
     };
 }
 
+function buildRescheduleRecommendations(bookings = [], requests = []) {
+    const serviceCounts = {};
+    const hourCounts = {};
+    const pendingReviews = requests.filter((request) => request.status === 'pending_review');
+
+    bookings.forEach((booking) => {
+        const serviceName = booking.serviceName || booking.service_name || 'Service';
+        const hour = String(booking.bookingTime || booking.booking_time || '').slice(0, 2);
+        serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
+        if (hour) {
+            hourCounts[`${hour}:00`] = (hourCounts[`${hour}:00`] || 0) + 1;
+        }
+    });
+
+    const peakHour = topEntriesFromCounts(hourCounts, 'No peak hour', 1)[0];
+    const busiestService = topEntriesFromCounts(serviceCounts, 'No service', 1)[0];
+    const recommendations = [];
+
+    if (pendingReviews.length > 0) {
+        recommendations.push(`${pendingReviews.length} reschedule request${pendingReviews.length === 1 ? '' : 's'} need merchant review before the booking can move.`);
+    }
+
+    if (peakHour[1] > 1) {
+        recommendations.push(`Protect ${peakHour[0]} as a peak period and route risky moves to manual review.`);
+    }
+
+    if (busiestService[1] > 1) {
+        recommendations.push(`Suggest quieter alternatives around ${busiestService[0]} to reduce overlap risk.`);
+    }
+
+    if (!recommendations.length) {
+        recommendations.push('Automation is ready to approve clear reschedules and escalate edge cases.');
+    }
+
+    return recommendations.slice(0, 3);
+}
+
 function getAgeBand(age) {
     const value = Number(age);
 
@@ -714,11 +751,23 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 console.error(reviewListError);
                             }
 
+                            return Booking.listRescheduleRequestsForMerchant(req.session.user.id, (rescheduleError, rescheduleRequests = []) => {
+                                if (rescheduleError) {
+                                    console.error(rescheduleError);
+                                }
+
+                                return Booking.getRescheduleSettings(merchant.id, (rescheduleSettingsError, rescheduleSettings) => {
+                                    if (rescheduleSettingsError) {
+                                        console.error(rescheduleSettingsError);
+                                    }
+
                             const safeBookings = bookingError ? [] : bookings || [];
                             const safePromotions = promotionError ? [] : promotions || [];
                             const safeProducts = productError ? [] : products || [];
                             const safeOrders = orderError ? [] : orders || [];
                             const safeReviews = reviewListError ? [] : reviews || [];
+                            const safeRescheduleRequests = rescheduleError ? [] : rescheduleRequests || [];
+                            const safeRescheduleSettings = rescheduleSettingsError ? null : rescheduleSettings;
                             const safeReviewSummary = reviewSummaryError
                                 ? { reviewCount: 0, averageRating: null }
                                 : reviewSummary || { reviewCount: 0, averageRating: null };
@@ -780,6 +829,9 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             if (productError || orderError) {
                                 validationIssues.push('Product sales reporting could not be fully loaded.');
                             }
+                            if (rescheduleError || rescheduleSettingsError) {
+                                validationIssues.push('Reschedule automation reporting could not be fully loaded.');
+                            }
 
                             const reports = {
                                 stats: {
@@ -803,6 +855,13 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                     insights: customerInsightReport
                                 },
                                 appointmentReport,
+                                rescheduleAutomation: {
+                                    settings: safeRescheduleSettings,
+                                    requests: safeRescheduleRequests,
+                                    autoApproved: safeRescheduleRequests.filter((request) => request.status === 'auto_approved'),
+                                    pendingReviews: safeRescheduleRequests.filter((request) => request.status === 'pending_review'),
+                                    recommendations: buildRescheduleRecommendations(appointmentReport.allBookings, safeRescheduleRequests)
+                                },
                                 merchantReport: {
                                     categoryCount: Array.isArray(merchant.services)
                                         ? new Set(merchant.services.map((service) => service.category || '')).size
@@ -832,8 +891,8 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             req.session.merchantSuccess = null;
                             req.session.merchantError = null;
 
-                            return res.status(options.status || 200).render('merchant-dashboard', {
-                                title: 'Merchant Dashboard',
+                            return res.status(options.status || 200).render(options.viewName || 'merchant-dashboard', {
+                                title: options.title || 'Merchant Dashboard',
                                 merchant,
                                 success,
                                 error,
@@ -841,6 +900,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 stats: reports.stats,
                                 customerReport: reports.customerReport,
                                 appointmentReport: reports.appointmentReport,
+                                rescheduleAutomation: reports.rescheduleAutomation,
                                 merchantReport: reports.merchantReport,
                                 salesReport: reports.salesReport,
                                 validationReport: reports.validationReport,
@@ -849,6 +909,8 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 promotions: safePromotions,
                                 qrCodeDataUrl: options.qrCodeDataUrl || null,
                                 qrBookingUrl: options.qrBookingUrl || null
+                            });
+                                });
                             });
                         });
                     });
@@ -880,13 +942,30 @@ function showServices(req, res) {
             return handled;
         }
 
-        if (req.path === '/merchant/services') {
-            return renderMerchantServices(req, res, merchant);
-        }
-
-        return renderMerchantDashboard(req, res, merchant);
+        return renderMerchantServices(req, res, merchant);
     });
 }
+
+function renderPortalView(viewName, title) {
+    return (req, res) => {
+        return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+            const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+            if (handled) {
+                return handled;
+            }
+
+            return renderMerchantDashboard(req, res, merchant, { viewName, title });
+        });
+    };
+}
+
+const showDashboard = renderPortalView('merchant-dashboard', 'Merchant Dashboard');
+const showBookings = renderPortalView('merchant-bookings', 'Merchant Bookings');
+const showCustomers = renderPortalView('merchant-customers', 'Merchant Customers');
+const showAnalytics = renderPortalView('merchant-analytics', 'Merchant Analytics');
+const showSupport = renderPortalView('merchant-support', 'Merchant Support');
+const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
 
 function generateQr(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
@@ -907,12 +986,16 @@ function generateQr(req, res) {
                 console.error(qrError);
                 return renderMerchantDashboard(req, res, merchant, {
                     status: 500,
+                    viewName: req.body.returnTo === 'profile' ? 'merchant-profile' : 'merchant-dashboard',
+                    title: req.body.returnTo === 'profile' ? 'Merchant Profile' : 'Merchant Dashboard',
                     success: null,
                     error: 'QR code could not be generated. Please try again.'
                 });
             }
 
             return renderMerchantDashboard(req, res, merchant, {
+                viewName: req.body.returnTo === 'profile' ? 'merchant-profile' : 'merchant-dashboard',
+                title: req.body.returnTo === 'profile' ? 'Merchant Profile' : 'Merchant Dashboard',
                 success: 'Merchant QR code generated.',
                 error: null,
                 qrCodeDataUrl,
@@ -928,24 +1011,117 @@ function updateBookingStatus(req, res) {
 
     if (!bookingId || !status) {
         req.session.merchantError = 'Choose a valid booking action.';
-        return res.redirect('/merchant#merchant-calendar');
+        return res.redirect('/merchant/bookings');
     }
 
     return Booking.updateStatusForMerchant(bookingId, req.session.user.id, status, (error, result) => {
         if (error) {
             console.error(error);
             req.session.merchantError = 'Booking status could not be updated.';
-            return res.redirect('/merchant#merchant-calendar');
+            return res.redirect('/merchant/bookings');
         }
 
         if (!result?.affectedRows) {
             req.session.merchantError = 'That booking was not found for your merchant account.';
-            return res.redirect('/merchant#merchant-calendar');
+            return res.redirect('/merchant/bookings');
         }
 
         const statusCopy = status.replace(/_/g, ' ');
         req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.`;
-        return res.redirect('/merchant#merchant-calendar');
+        return res.redirect('/merchant/bookings');
+    });
+}
+
+function normalizeTimeInput(value, fallback) {
+    const rawValue = String(value || fallback || '').trim();
+    const match = rawValue.match(/^(\d{1,2}):(\d{2})/);
+
+    if (!match) {
+        return fallback;
+    }
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return fallback;
+    }
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function updateRescheduleSettings(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        const settings = {
+            autoApproveEnabled: isTruthyFormValue(req.body.autoApproveEnabled),
+            minimumNoticeHours: Number(req.body.minimumNoticeHours || 24),
+            maxReschedulesAllowed: Number(req.body.maxReschedulesAllowed || 2),
+            blockedTimes: String(req.body.blockedTimes || '').trim(),
+            peakHourRestrictions: isTruthyFormValue(req.body.peakHourRestrictions),
+            businessStart: normalizeTimeInput(req.body.businessStart, '09:00'),
+            businessEnd: normalizeTimeInput(req.body.businessEnd, '20:00')
+        };
+
+        return Booking.updateRescheduleSettings(merchant.id, settings, (error, result) => {
+            if (error) {
+                console.error(error);
+                req.session.merchantError = 'Reschedule automation settings could not be saved.';
+                return res.redirect('/merchant/bookings');
+            }
+
+            req.session.merchantSuccess = result?.affectedRows ? 'Reschedule automation settings saved.' : 'Reschedule automation settings checked.';
+            return res.redirect('/merchant/bookings');
+        });
+    });
+}
+
+function reviewRescheduleRequest(req, res) {
+    const requestId = Number(req.params.requestId);
+    const action = String(req.body.action || '').trim().toLowerCase();
+
+    if (!requestId || !['approve', 'reject'].includes(action)) {
+        req.session.merchantError = 'Choose a valid reschedule review action.';
+        return res.redirect('/merchant/bookings');
+    }
+
+    return Booking.reviewRescheduleRequest(requestId, req.session.user.id, action, (error, result, request) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Reschedule request could not be reviewed.';
+            return res.redirect('/merchant/bookings');
+        }
+
+        if (!result?.affectedRows) {
+            req.session.merchantError = 'That reschedule request was not found or was already reviewed.';
+            return res.redirect('/merchant/bookings');
+        }
+
+        const approved = action === 'approve';
+        if (request?.user_id) {
+            Notification.create({
+                recipientUserId: request.user_id,
+                recipientRole: 'customer',
+                actorUserId: req.session.user.id,
+                type: approved ? 'booking_reschedule_approved' : 'booking_reschedule_rejected',
+                title: approved ? 'Reschedule approved' : 'Reschedule declined',
+                message: approved
+                    ? `Your booking was moved to ${formatDateInputValue(request.requested_booking_date)} at ${String(request.requested_timeslot || '').slice(0, 5)}.`
+                    : 'Your reschedule request was declined by the merchant. Your original appointment remains unchanged.',
+                linkUrl: '/profile#bookings',
+                dedupeKey: `merchant-reschedule-review-${requestId}-${action}`
+            }, logNotificationError);
+        }
+
+        req.session.merchantSuccess = approved
+            ? 'Reschedule approved and booking updated.'
+            : 'Reschedule request rejected. The original booking was kept.';
+        return res.redirect('/merchant/bookings');
     });
 }
 
@@ -1824,9 +2000,17 @@ function deletePromotion(req, res) {
 }
 
 module.exports = {
+    showDashboard,
+    showBookings,
+    showCustomers,
+    showAnalytics,
+    showSupport,
+    showProfile,
     showServices,
     generateQr,
     updateBookingStatus,
+    updateRescheduleSettings,
+    reviewRescheduleRequest,
     showSchedule,
     showNewService,
     createService,

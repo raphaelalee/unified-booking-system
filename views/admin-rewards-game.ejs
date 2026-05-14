@@ -1,4 +1,7 @@
 <%- include('partials/header', { title }) %>
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
 
 <%
     const formatMoney = (value) => Number(value || 0).toFixed(2);
@@ -138,4 +141,6 @@
     <% } %>
 </section>
 
+    </div>
+</section>
 <%- include('partials/footer') %>

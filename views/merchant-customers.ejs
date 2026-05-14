@@ -1,0 +1,189 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const customerInsights = customerReport?.insights || {
+        totalCustomers: 0,
+        repeatCustomers: 0,
+        repeatRate: 0,
+        averageVisits: 0,
+        averageCustomerValue: 0,
+        topCustomers: [],
+        suggestedFocus: 'Promote repeat bookings once customer patterns appear.',
+        topServiceName: 'No service',
+        peakHour: 'No bookings',
+        chartPayload: {
+            ageLabels: ['Not set'],
+            ageValues: [0],
+            genderLabels: ['Not set'],
+            genderValues: [0],
+            serviceLabels: ['No service'],
+            serviceValues: [0],
+            hourLabels: ['No bookings'],
+            hourValues: [0]
+        }
+    };
+    const customerChartPayload = {
+        ageLabels: customerInsights.chartPayload?.ageLabels || ['Not set'],
+        ageValues: customerInsights.chartPayload?.ageValues || [0],
+        genderLabels: customerInsights.chartPayload?.genderLabels || ['Not set'],
+        genderValues: customerInsights.chartPayload?.genderValues || [0],
+        serviceLabels: customerInsights.chartPayload?.serviceLabels || ['No service'],
+        serviceValues: customerInsights.chartPayload?.serviceValues || [0],
+        hourLabels: customerInsights.chartPayload?.hourLabels || ['No bookings'],
+        hourValues: customerInsights.chartPayload?.hourValues || [0]
+    };
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+%>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Customers</p>
+                <h1>Customer insights</h1>
+                <span>Understand retention, visit frequency, value, and customer segments for <%= merchant.name %>.</span>
+            </div>
+        </header>
+
+        <section class="merchant-kpi-grid">
+            <article class="merchant-kpi-card accent-blue"><span>Total customers</span><strong><%= customerInsights.totalCustomers %></strong><small>unique booking customers</small></article>
+            <article class="merchant-kpi-card accent-green"><span>Repeat rate</span><strong><%= customerInsights.repeatRate %>%</strong><small><%= customerInsights.repeatCustomers %> repeat customers</small></article>
+            <article class="merchant-kpi-card accent-orange"><span>Average visits</span><strong><%= Number(customerInsights.averageVisits || 0).toFixed(1) %></strong><small>bookings per customer</small></article>
+            <article class="merchant-kpi-card accent-green"><span>Average value</span><strong>$<%= formatCurrency(customerInsights.averageCustomerValue) %></strong><small>estimated service spend</small></article>
+        </section>
+
+        <section class="merchant-insight-grid">
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">User Analysis</p>
+                        <h2>Age segments</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerAgeChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">User Analysis</p>
+                        <h2>Gender mix</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerGenderChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Demand</p>
+                        <h2>Top services by customers</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerServiceChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Timing</p>
+                        <h2>Booking hours</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerHourChart"></canvas></div>
+            </article>
+        </section>
+
+        <section class="merchant-dashboard-lower-grid">
+            <article class="merchant-orders-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Retention</p><h2>Top repeat customers</h2></div></div>
+                <% if (!customerInsights.topCustomers.length) { %>
+                    <p class="muted">Customer retention data will appear after bookings are made.</p>
+                <% } else { %>
+                    <div class="merchant-customer-list">
+                        <% customerInsights.topCustomers.forEach((customer) => { %>
+                            <article>
+                                <strong><%= customer.customerName %></strong>
+                                <span><%= customer.visits %> visit<%= customer.visits === 1 ? '' : 's' %> | $<%= formatCurrency(customer.spend) %></span>
+                                <small><%= customer.customerAge || 'Age not set' %> | <%= customer.customerGender || 'Gender not set' %> | Last: <%= customer.lastBookingDate || 'Not set' %></small>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </article>
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Recommendation</p><h2>Next best action</h2></div></div>
+                <div class="merchant-insight-callout">
+                    <strong><%= customerInsights.topServiceName || 'Build customer history' %></strong>
+                    <p><%= customerInsights.suggestedFocus || 'Promote repeat bookings once customer patterns appear.' %></p>
+                </div>
+            </article>
+        </section>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (() => {
+        const payload = <%- JSON.stringify(customerChartPayload) %>;
+        const palette = {
+            green: '#4f6847',
+            blue: '#20899c',
+            orange: '#df7c16',
+            yellow: '#d4a017',
+            red: '#a64032'
+        };
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 650 },
+            plugins: {
+                legend: { labels: { boxWidth: 10, usePointStyle: true } }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(79, 104, 71, 0.12)' } }
+            }
+        };
+        const makeChart = (id, config) => {
+            const canvas = document.getElementById(id);
+            if (!canvas || typeof Chart === 'undefined') return;
+            new Chart(canvas, config);
+        };
+
+        makeChart('merchantCustomerAgeChart', {
+            type: 'bar',
+            data: {
+                labels: payload.ageLabels,
+                datasets: [{ label: 'Customers', data: payload.ageValues, backgroundColor: 'rgba(79, 104, 71, 0.35)', borderColor: palette.green, borderWidth: 1 }]
+            },
+            options: chartOptions
+        });
+
+        makeChart('merchantCustomerGenderChart', {
+            type: 'doughnut',
+            data: {
+                labels: payload.genderLabels,
+                datasets: [{ data: payload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: chartOptions.plugins }
+        });
+
+        makeChart('merchantCustomerServiceChart', {
+            type: 'bar',
+            data: {
+                labels: payload.serviceLabels,
+                datasets: [{ label: 'Bookings', data: payload.serviceValues, backgroundColor: 'rgba(32, 137, 156, 0.28)', borderColor: palette.blue, borderWidth: 1 }]
+            },
+            options: { ...chartOptions, indexAxis: 'y' }
+        });
+
+        makeChart('merchantCustomerHourChart', {
+            type: 'line',
+            data: {
+                labels: payload.hourLabels,
+                datasets: [{ label: 'Bookings', data: payload.hourValues, borderColor: palette.orange, backgroundColor: 'rgba(223, 124, 22, 0.16)', tension: 0.35, fill: true }]
+            },
+            options: chartOptions
+        });
+    })();
+</script>
+
+<%- include('partials/footer') %>

@@ -496,7 +496,7 @@ function renderServiceForm(res, options) {
     });
 }
 
-function showDashboard(req, res) {
+function showDashboard(req, res, options = {}) {
     return MerchantService.getAdminOverview((merchantError, merchants) => {
         if (merchantError) {
             console.error(merchantError);
@@ -554,8 +554,8 @@ function showDashboard(req, res) {
                                     req.session.adminSuccess = null;
                                     req.session.adminError = null;
 
-                                    return res.render('admin-dashboard', {
-                                        title: 'Admin Dashboard',
+                                    return res.render(options.viewName || 'admin-overview', {
+                                        title: options.title || 'Admin Overview',
                                         merchants,
                                         bookings: dashboardBookings,
                                         reviews,
@@ -577,6 +577,18 @@ function showDashboard(req, res) {
         });
     });
 }
+
+function renderAdminView(viewName, title) {
+    return (req, res) => showDashboard(req, res, { viewName, title });
+}
+
+const showOverview = renderAdminView('admin-overview', 'Admin Overview');
+const showBookings = renderAdminView('admin-bookings', 'Admin Bookings');
+const showMerchants = renderAdminView('admin-merchants', 'Admin Merchants');
+const showReviews = renderAdminView('admin-reviews', 'Admin Reviews');
+const showAnalytics = renderAdminView('admin-analytics', 'Admin Analytics');
+const showAuditTrail = renderAdminView('admin-audit-trail', 'Admin Audit Trail');
+const showPlatformHealth = renderAdminView('admin-platform-health', 'Platform Health');
 
 function showNewMerchant(req, res) {
     return res.render('admin-merchant-form', {
@@ -639,10 +651,10 @@ function createMerchant(req, res) {
                 type: 'merchant_update',
                 title: 'Merchant onboarded',
                 message: `${form.salonName} was added as a merchant by ${req.session.user.name || 'admin'}.`,
-                linkUrl: '/admin',
+                linkUrl: '/admin/overview',
                 dedupeKey: `admin-merchant-created-${createdMerchant?.userId || Date.now()}`
             });
-            return res.redirect('/admin');
+            return res.redirect('/admin/overview');
         });
     });
 }
@@ -653,26 +665,26 @@ function updateMerchantCommission(req, res) {
 
     if (!Number.isInteger(salonId) || salonId < 1) {
         req.session.adminError = 'Invalid merchant selected for commission update.';
-        return res.redirect('/admin#admin-merchants');
+        return res.redirect('/admin/merchants');
     }
 
     if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
         req.session.adminError = 'Commission rate must be between 0 and 100.';
-        return res.redirect('/admin#admin-merchants');
+        return res.redirect('/admin/merchants');
     }
 
     return MerchantService.updateCommissionRate(salonId, commissionRate, (updateError, updated) => {
         if (updateError) {
             console.error(updateError);
             req.session.adminError = 'Merchant commission could not be updated.';
-            return res.redirect('/admin#admin-merchants');
+            return res.redirect('/admin/merchants');
         }
 
         req.session.adminSuccess = updated
             ? `Merchant commission updated to ${commissionRate.toFixed(2)}%.`
             : 'Merchant commission could not be updated.';
         req.session.adminError = updated ? null : 'Merchant commission could not be updated.';
-        return res.redirect('/admin#admin-merchants');
+        return res.redirect('/admin/merchants');
     });
 }
 
@@ -1385,6 +1397,13 @@ function updateDailyRewards(req, res) {
 
 module.exports = {
     showDashboard,
+    showOverview,
+    showBookings,
+    showMerchants,
+    showReviews,
+    showAnalytics,
+    showAuditTrail,
+    showPlatformHealth,
     showNewMerchant,
     createMerchant,
     updateMerchantCommission,

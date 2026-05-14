@@ -1,0 +1,49 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const adminReviews = Array.isArray(reviews) ? reviews : [];
+    const summary = reviewSummary || { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 };
+    const leaderboard = Array.isArray(reviewLeaderboard) ? reviewLeaderboard : [];
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div><p class="eyebrow">Moderation</p><h1>Review Moderation</h1><p>Track customer reviews, merchant quality signals, reports, and abuse monitoring.</p></div>
+        </header>
+
+        <section class="admin-stat-grid">
+            <article class="admin-stat-card accent-blue"><strong><%= summary.reviewCount %></strong><span>Total reviews</span></article>
+            <article class="admin-stat-card accent-green"><strong><%= summary.averageRating === null ? '0.0' : summary.averageRating.toFixed(1) %></strong><span>Average rating</span></article>
+            <article class="admin-stat-card accent-orange"><strong><%= summary.mediaReviewCount %></strong><span>Media reviews</span></article>
+            <article class="admin-stat-card accent-yellow"><strong><%= summary.merchantCount %></strong><span>Merchants reviewed</span></article>
+        </section>
+
+        <section class="admin-grid">
+            <article class="admin-panel span-4">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Leaderboard</p><h2>Best rated stores</h2></div></div>
+                <div class="admin-log-list">
+                    <% leaderboard.slice(0, 6).forEach((merchant, index) => { %>
+                        <article><strong>#<%= index + 1 %> <%= merchant.merchantName %></strong><span><%= merchant.averageRating?.toFixed(1) || '0.0' %> stars</span><small><%= merchant.reviewCount %> reviews</small></article>
+                    <% }) %>
+                </div>
+            </article>
+            <article class="admin-panel span-8">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Recent Reviews</p><h2>Customer feedback</h2></div></div>
+                <div class="admin-review-grid">
+                    <% adminReviews.forEach((review) => { %>
+                        <article class="admin-review-card">
+                            <div class="admin-review-card-top"><strong><%= review.merchantName || 'Merchant' %></strong><span><%= review.rating %>/5</span></div>
+                            <h3><%= review.serviceName || 'Service' %></h3>
+                            <p><%= review.comment || 'No written comment provided.' %></p>
+                            <small><%= review.customerName || 'Customer' %></small>
+                        </article>
+                    <% }) %>
+                </div>
+            </article>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

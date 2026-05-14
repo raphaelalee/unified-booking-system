@@ -1,0 +1,82 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const services = Array.isArray(merchant.services) ? merchant.services : [];
+    const rescheduleSettings = rescheduleAutomation?.settings || {};
+    const payoutSummary = salesReport?.payoutSummary || {
+        grossOrderSales: 0,
+        totalCommissionDeducted: 0,
+        totalNetPayout: 0
+    };
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+%>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Profile</p>
+                <h1><%= merchant.name %></h1>
+                <span>Business details, operating hours, service coverage, and payout/account settings.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button secondary" href="/profile">Account profile</a>
+                <a class="button primary" href="/merchant/services">Manage services</a>
+            </div>
+        </header>
+
+        <section class="merchant-dashboard-lower-grid">
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Business Info</p><h2>Merchant details</h2></div></div>
+                <div class="merchant-checkin-metrics">
+                    <p><span>Business name</span><strong><%= merchant.name %></strong></p>
+                    <p><span>Location</span><strong><%= merchant.location || merchant.address || 'Not set' %></strong></p>
+                    <p><span>Services</span><strong><%= services.length %></strong></p>
+                </div>
+            </article>
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Operating Hours</p><h2>Booking rules</h2></div></div>
+                <div class="merchant-checkin-metrics">
+                    <p><span>Business start</span><strong><%= rescheduleSettings.businessStart || '09:00' %></strong></p>
+                    <p><span>Business end</span><strong><%= rescheduleSettings.businessEnd || '20:00' %></strong></p>
+                    <p><span>Notice period</span><strong><%= Number(rescheduleSettings.minimumNoticeHours || 24) %>h</strong></p>
+                </div>
+            </article>
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Payout</p><h2>Account summary</h2></div></div>
+                <div class="merchant-checkin-metrics">
+                    <p><span>Gross sales</span><strong>$<%= formatCurrency(payoutSummary.grossOrderSales) %></strong></p>
+                    <p><span>Commission deducted</span><strong>$<%= formatCurrency(payoutSummary.totalCommissionDeducted) %></strong></p>
+                    <p><span>Net payout</span><strong>$<%= formatCurrency(payoutSummary.totalNetPayout) %></strong></p>
+                </div>
+            </article>
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Booking QR</p>
+                        <h2>Walk-in booking link</h2>
+                    </div>
+                </div>
+                <p class="muted">Generate a scannable booking QR for your counter, social profile, or customer follow-up messages.</p>
+                <div class="merchant-inline-actions">
+                    <form action="/merchant/generate-qr" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                        <input type="hidden" name="returnTo" value="profile">
+                        <button class="button primary" type="submit">Generate QR code</button>
+                    </form>
+                    <% if (merchant.id) { %>
+                        <a class="button secondary" href="/merchants/<%= merchant.id %>/qr">Open QR page</a>
+                    <% } %>
+                </div>
+                <% if (qrCodeDataUrl && qrBookingUrl) { %>
+                    <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
+                        <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+                    </a>
+                    <p class="muted qr-link-wrap"><%= qrBookingUrl %></p>
+                <% } %>
+            </article>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

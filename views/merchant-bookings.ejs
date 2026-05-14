@@ -1,0 +1,214 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
+    const weekDays = appointments.weekDays || [];
+    const monthView = appointments.monthView || { label: '', days: [] };
+    const allCalendarBookings = appointments.allBookings || [];
+    const upcomingBookings = appointments.upcomingBookings || [];
+    const pendingAppointments = appointments.pendingAppointments || [];
+    const rescheduleTools = typeof rescheduleAutomation !== 'undefined' && rescheduleAutomation ? rescheduleAutomation : {};
+    const rescheduleSettings = rescheduleTools.settings || {
+        autoApproveEnabled: 1,
+        minimumNoticeHours: 24,
+        maxReschedulesAllowed: 2,
+        blockedTimes: '',
+        peakHourRestrictions: 1,
+        businessStart: '09:00',
+        businessEnd: '20:00'
+    };
+    const pendingRescheduleReviews = Array.isArray(rescheduleTools.pendingReviews) ? rescheduleTools.pendingReviews : [];
+    const autoApprovedReschedules = Array.isArray(rescheduleTools.autoApproved) ? rescheduleTools.autoApproved : [];
+    const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const statusLabels = {
+        pending: 'pending',
+        confirmed: 'confirmed',
+        paid: 'paid',
+        checked_in: 'checked-in',
+        completed: 'completed',
+        cancelled: 'cancelled',
+        no_show: 'no-show'
+    };
+%>
+
+<section class="section compact merchant-analytics-page merchant-appointment-dashboard">
+    <% if (success) { %><div class="notice success"><p><%= success %></p></div><% } %>
+    <% if (error) { %><div class="notice error"><p><%= error %></p></div><% } %>
+
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Bookings</p>
+                <h1>Appointment operations</h1>
+                <span>Calendar, approvals, reschedule requests, and appointment search for <%= merchant.name %>.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button secondary" href="/merchant/schedule">Booking history</a>
+                <a class="button primary" href="/merchant/bookings">Review reschedules</a>
+            </div>
+        </header>
+
+        <section class="merchant-kpi-grid" aria-label="Booking summary">
+            <article class="merchant-kpi-card accent-green"><span>Upcoming</span><strong><%= upcomingBookings.length %></strong><small>next appointments</small></article>
+            <article class="merchant-kpi-card accent-yellow"><span>Pending approvals</span><strong><%= pendingAppointments.length %></strong><small>need action</small></article>
+            <article class="merchant-kpi-card accent-orange"><span>Reschedule reviews</span><strong><%= pendingRescheduleReviews.length %></strong><small>manual review queue</small></article>
+            <article class="merchant-kpi-card accent-blue"><span>Auto-approved</span><strong><%= autoApprovedReschedules.length %></strong><small>handled by rules</small></article>
+        </section>
+
+        <section class="merchant-dashboard-lower-grid" id="reschedule-requests">
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div><p class="eyebrow">Reschedules</p><h2>Pending manual reviews</h2></div>
+                </div>
+                <% if (!pendingRescheduleReviews.length) { %>
+                    <p class="muted">No reschedule requests need manual review.</p>
+                <% } else { %>
+                    <div class="merchant-appointment-list">
+                        <% pendingRescheduleReviews.forEach((request) => { %>
+                            <article>
+                                <span class="merchant-status-badge status-pending"><%= request.confidenceLevel %> confidence</span>
+                                <div>
+                                    <strong><%= request.customerName %></strong>
+                                    <small><%= request.serviceName %> - <%= String(request.oldBookingDate).slice(0, 10) %> <%= request.oldBookingTime || '' %> to <%= String(request.requestedBookingDate).slice(0, 10) %> at <%= request.requestedBookingTime %></small>
+                                    <small><%= request.decisionReason || 'Merchant review recommended.' %></small>
+                                </div>
+                                <div class="merchant-booking-actions">
+                                    <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <input type="hidden" name="action" value="approve">
+                                        <button class="button secondary" type="submit">Approve</button>
+                                    </form>
+                                    <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <input type="hidden" name="action" value="reject">
+                                        <button class="button secondary danger-button" type="submit">Reject</button>
+                                    </form>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </article>
+
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div><p class="eyebrow">Auto-approval Rules</p><h2>Reschedule settings</h2></div>
+                </div>
+                <form class="merchant-quick-actions" action="/merchant/reschedule-settings" method="POST">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <label><input type="checkbox" name="autoApproveEnabled" value="1" <%= Number(rescheduleSettings.autoApproveEnabled) ? 'checked' : '' %>> Auto approve simple requests</label>
+                    <label>Notice hours <input type="number" name="minimumNoticeHours" min="0" max="720" value="<%= Number(rescheduleSettings.minimumNoticeHours || 24) %>"></label>
+                    <label>Max reschedules <input type="number" name="maxReschedulesAllowed" min="0" max="20" value="<%= Number(rescheduleSettings.maxReschedulesAllowed || 2) %>"></label>
+                    <label>Business start <input type="time" name="businessStart" value="<%= rescheduleSettings.businessStart || '09:00' %>"></label>
+                    <label>Business end <input type="time" name="businessEnd" value="<%= rescheduleSettings.businessEnd || '20:00' %>"></label>
+                    <label>Blocked times <input type="text" name="blockedTimes" value="<%= rescheduleSettings.blockedTimes || '' %>" placeholder="13:00, 18:00"></label>
+                    <label><input type="checkbox" name="peakHourRestrictions" value="1" <%= Number(rescheduleSettings.peakHourRestrictions) ? 'checked' : '' %>> Send peak-hour moves to review</label>
+                    <button class="button primary" type="submit">Save rules</button>
+                </form>
+            </article>
+        </section>
+
+        <section class="merchant-calendar-shell">
+            <div class="merchant-card-heading">
+                <div><p class="eyebrow">Calendar</p><h2 data-calendar-title>Weekly schedule</h2></div>
+                <div class="merchant-calendar-view-toggle" aria-label="Calendar view">
+                    <button class="is-active" type="button" data-calendar-view-button="week">Week</button>
+                    <button type="button" data-calendar-view-button="month">Month</button>
+                </div>
+            </div>
+
+            <div class="merchant-calendar-toolbar" data-calendar-filters>
+                <label>Status<select data-calendar-status-filter><option value="">All statuses</option><% Object.keys(statusLabels).forEach((status) => { %><option value="<%= status %>"><%= statusLabels[status] %></option><% }) %></select></label>
+                <label>Service<select data-calendar-service-filter><option value="">All services</option><% serviceFilterOptions.forEach((serviceName) => { %><option value="<%= serviceName %>"><%= serviceName %></option><% }) %></select></label>
+                <label>Search<input type="search" placeholder="Customer or service" data-calendar-search-filter></label>
+                <button class="button secondary" type="button" data-calendar-reset>Reset</button>
+            </div>
+
+            <div class="merchant-calendar-grid" data-merchant-calendar data-calendar-view="week">
+                <% weekDays.forEach((day) => { %>
+                    <section class="merchant-calendar-day" data-calendar-day="<%= day.key %>">
+                        <header><span><%= day.label %></span><strong><%= day.day %></strong></header>
+                        <div class="merchant-calendar-dropzone">
+                            <% if (!day.appointments.length) { %><p class="merchant-calendar-empty">No appointments</p><% } %>
+                            <% day.appointments.forEach((booking) => { %>
+                                <article class="merchant-calendar-booking status-<%= booking.status %>" data-status="<%= booking.status %>" data-service="<%= booking.serviceName %>" data-search="<%= `${booking.customerName} ${booking.serviceName} ${booking.bookingTime} ${booking.bookingDate}`.toLowerCase() %>">
+                                    <div><strong><%= booking.bookingTime || 'Time TBC' %></strong><span><%= booking.serviceName %></span></div>
+                                    <small><%= booking.customerName %></small>
+                                    <em><%= statusLabels[booking.status] || booking.status %></em>
+                                </article>
+                            <% }) %>
+                        </div>
+                    </section>
+                <% }) %>
+            </div>
+
+            <div class="merchant-calendar-month is-hidden" data-calendar-month data-calendar-view="month">
+                <div class="merchant-calendar-month-heading"><strong><%= monthView.label %></strong><span><%= allCalendarBookings.length %> total bookings</span></div>
+                <div class="merchant-calendar-month-grid">
+                    <% monthView.days.forEach((day) => { %>
+                        <% if (day.isPlaceholder) { %><div class="merchant-calendar-month-day is-placeholder"></div><% } else { %>
+                            <section class="merchant-calendar-month-day" data-calendar-day="<%= day.key %>">
+                                <header><span><%= day.label %></span><strong><%= day.dayNumber %></strong></header>
+                                <% if (!day.appointments.length) { %><p class="merchant-calendar-empty compact">No bookings</p><% } %>
+                                <% day.appointments.forEach((booking) => { %>
+                                    <article class="merchant-calendar-booking merchant-calendar-booking-compact status-<%= booking.status %>" data-status="<%= booking.status %>" data-service="<%= booking.serviceName %>" data-search="<%= `${booking.customerName} ${booking.serviceName} ${booking.bookingTime} ${booking.bookingDate}`.toLowerCase() %>">
+                                        <strong><%= booking.bookingTime || 'Time TBC' %></strong><span><%= booking.serviceName %></span><small><%= booking.customerName %></small>
+                                    </article>
+                                <% }) %>
+                            </section>
+                        <% } %>
+                    <% }) %>
+                </div>
+            </div>
+        </section>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const calendar = document.querySelector('[data-merchant-calendar]');
+        const monthCalendar = document.querySelector('[data-calendar-month]');
+        const title = document.querySelector('[data-calendar-title]');
+        const viewButtons = Array.from(document.querySelectorAll('[data-calendar-view-button]'));
+        const statusFilter = document.querySelector('[data-calendar-status-filter]');
+        const serviceFilter = document.querySelector('[data-calendar-service-filter]');
+        const searchFilter = document.querySelector('[data-calendar-search-filter]');
+        const resetButton = document.querySelector('[data-calendar-reset]');
+        if (!calendar) return;
+
+        const applyFilters = () => {
+            const status = statusFilter?.value || '';
+            const service = serviceFilter?.value || '';
+            const search = (searchFilter?.value || '').trim().toLowerCase();
+            document.querySelectorAll('.merchant-calendar-booking').forEach((card) => {
+                const matchesStatus = !status || card.dataset.status === status;
+                const matchesService = !service || card.dataset.service === service;
+                const matchesSearch = !search || (card.dataset.search || '').includes(search);
+                card.hidden = !(matchesStatus && matchesService && matchesSearch);
+            });
+        };
+
+        viewButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const view = button.dataset.calendarViewButton;
+                viewButtons.forEach((item) => item.classList.toggle('is-active', item === button));
+                calendar.classList.toggle('is-hidden', view !== 'week');
+                monthCalendar?.classList.toggle('is-hidden', view !== 'month');
+                if (title) title.textContent = view === 'month' ? 'Monthly schedule' : 'Weekly schedule';
+                applyFilters();
+            });
+        });
+        [statusFilter, serviceFilter, searchFilter].forEach((input) => {
+            input?.addEventListener('input', applyFilters);
+            input?.addEventListener('change', applyFilters);
+        });
+        resetButton?.addEventListener('click', () => {
+            if (statusFilter) statusFilter.value = '';
+            if (serviceFilter) serviceFilter.value = '';
+            if (searchFilter) searchFilter.value = '';
+            applyFilters();
+        });
+    })();
+</script>
+
+<%- include('partials/footer') %>

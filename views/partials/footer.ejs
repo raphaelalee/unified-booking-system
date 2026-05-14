@@ -9,6 +9,38 @@
     <% } %>
     <script src="/js/booking-service-slots.js?v=1"></script>
     <script src="/js/site-transitions.js?v=1"></script>
+    <% if ((typeof useBootstrap !== 'undefined' && useBootstrap) || (currentUser && ['merchant', 'admin'].includes(currentUser.role))) { %>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+            (() => {
+                const links = Array.from(document.querySelectorAll('.merchant-primary-nav a[href], .merchant-primary-nav .dropdown-item[href], .merchant-nav-drawer a[href]'));
+                if (!links.length) return;
+
+                const setActiveMerchantNav = () => {
+                    const current = `${window.location.pathname}${window.location.hash || ''}`;
+
+                    document.querySelectorAll('.merchant-primary-nav .active, .merchant-nav-drawer .active').forEach((item) => {
+                        item.classList.remove('active');
+                    });
+
+                    links.forEach((link) => {
+                        const url = new URL(link.getAttribute('href'), window.location.origin);
+                        const target = `${url.pathname}${url.hash || ''}`;
+                        const isExact = target === current;
+                        const isSection = url.pathname === window.location.pathname && url.hash && url.hash === window.location.hash;
+
+                        if (isExact || isSection || (!window.location.hash && url.pathname === window.location.pathname && !url.hash)) {
+                            link.classList.add('active');
+                            link.closest('.dropdown')?.querySelector('.merchant-nav-link')?.classList.add('active');
+                        }
+                    });
+                };
+
+                setActiveMerchantNav();
+                window.addEventListener('hashchange', setActiveMerchantNav);
+            })();
+        </script>
+    <% } %>
     <script>
         (() => {
             const dropdown = document.querySelector('.nav-dropdown');

@@ -1,4 +1,7 @@
 <%- include('partials/header', { title }) %>
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
 
 <%
     const categoryMeta = [
@@ -54,7 +57,7 @@
                     <% }) %>
                 </select>
             </label>
-            <a class="button secondary" href="/admin">Back to admin</a>
+            <a class="button secondary" href="/admin/overview">Back to admin</a>
             <a class="button secondary" href="/admin/promotions/new">Add promotion</a>
         </div>
     </div>
@@ -152,4 +155,6 @@
     })();
 </script>
 
+    </div>
+</section>
 <%- include('partials/footer') %>

@@ -5818,6 +5818,26 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     display: inline-block;
 }
 
+.merchant-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.merchant-inline-actions form {
+    margin: 0;
+}
+
+.merchant-inline-actions .text-button {
+    padding: 0;
+}
+
+.qr-link-wrap {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
 .merchant-appointment-dashboard .merchant-analytics-shell {
     width: min(1280px, 100%);
 }
@@ -6661,7 +6681,8 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 .admin-sidebar nav a,
-.admin-sidebar-tab {
+.admin-sidebar-tab,
+.admin-sidebar-group-toggle {
     padding: 10px 12px;
     border-radius: 8px;
     color: var(--sage-readable);
@@ -6680,14 +6701,16 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 .admin-sidebar nav a:hover,
-.admin-sidebar-tab:hover {
+.admin-sidebar-tab:hover,
+.admin-sidebar-group-toggle:hover {
     transform: translateX(2px);
     background: rgba(72, 151, 86, 0.12);
     color: var(--sage-ink);
 }
 
 .admin-sidebar nav a.active,
-.admin-sidebar-tab.active {
+.admin-sidebar-tab.active,
+.admin-sidebar-group-toggle.active {
     background: rgba(72, 151, 86, 0.16);
     color: var(--sage-ink);
     box-shadow: inset 0 0 0 1px rgba(79, 104, 71, 0.16);
@@ -6845,6 +6868,105 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 .admin-stat-card.accent-blue { border-top-color: #20899c; }
 .admin-stat-card.accent-orange { border-top-color: #df7c16; }
 .admin-stat-card.accent-red { border-top-color: #a64032; }
+.admin-stat-card.accent-yellow { border-top-color: #d4a017; }
+
+.admin-sidebar-group .collapse.show,
+.admin-sidebar-group .collapsing {
+    padding-left: 10px;
+    display: grid;
+    gap: 6px;
+}
+
+.admin-sidebar-group .collapse.show a,
+.admin-sidebar-group .collapsing a {
+    padding: 8px 10px;
+    font-size: 0.88rem;
+}
+
+.admin-topbar-utilities {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-topbar-utilities input {
+    min-height: 42px;
+    min-width: min(260px, 100%);
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 999px;
+    padding: 0 14px;
+    background: rgba(255, 253, 247, 0.92);
+}
+
+.admin-nav-toggle {
+    width: 42px;
+    height: 42px;
+    display: none;
+    place-items: center;
+    gap: 4px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 50%;
+    background: rgba(232, 237, 223, 0.72);
+}
+
+.admin-nav-toggle span {
+    width: 17px;
+    height: 2px;
+    display: block;
+    border-radius: 999px;
+    background: var(--sage-ink);
+}
+
+.admin-nav-drawer {
+    background: #fffdf7;
+    color: var(--sage-ink);
+}
+
+.admin-nav-drawer h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.admin-drawer-link,
+.admin-nav-accordion .accordion-body a {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--sage-ink);
+    font-weight: 850;
+}
+
+.admin-nav-accordion .accordion-item {
+    border: 0;
+    background: transparent;
+}
+
+.admin-nav-accordion .accordion-button {
+    padding: 12px;
+    border-radius: 8px !important;
+    background: transparent;
+    color: var(--sage-ink);
+    box-shadow: none;
+    font-weight: 900;
+}
+
+.admin-nav-accordion .accordion-button:not(.collapsed),
+.admin-drawer-link.active,
+.admin-drawer-link:hover,
+.admin-nav-accordion .accordion-body a:hover {
+    background: rgba(79, 104, 71, 0.1);
+}
+
+.admin-nav-accordion .accordion-body {
+    padding: 4px 0 8px 12px;
+    display: grid;
+    gap: 4px;
+}
 
 .admin-stat-card-top,
 .admin-panel-heading,
@@ -7241,6 +7363,18 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 }
 
 @media (max-width: 900px) {
+    .admin-nav-toggle {
+        display: inline-grid;
+    }
+
+    .admin-dashboard-v2 {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard-v2 > .admin-sidebar {
+        display: none;
+    }
+
     .merchant-analytics-topbar,
     .merchant-dashboard-lower-grid {
         grid-template-columns: 1fr;
@@ -7364,6 +7498,201 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     .admin-booking-toolbar select,
     .admin-export-actions .button {
         width: 100%;
+    }
+}
+
+/* Merchant SaaS navigation */
+.merchant-primary-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.merchant-primary-nav > a,
+.merchant-nav-link {
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sage-ink);
+    font-size: 0.82rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: none;
+}
+
+.merchant-primary-nav > a:hover,
+.merchant-primary-nav > a.active,
+.merchant-nav-link:hover,
+.merchant-nav-link.active,
+.merchant-nav-dropdown.show .merchant-nav-link {
+    background: rgba(79, 104, 71, 0.1);
+    color: #30462d;
+}
+
+.merchant-primary-nav .dropdown-menu {
+    min-width: 220px;
+    padding: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.98);
+    box-shadow: 0 20px 44px rgba(49, 69, 44, 0.14);
+}
+
+.merchant-primary-nav .dropdown-item {
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: var(--sage-ink);
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+
+.merchant-primary-nav .dropdown-item:hover,
+.merchant-primary-nav .dropdown-item:focus {
+    background: rgba(79, 104, 71, 0.1);
+    color: #30462d;
+}
+
+.merchant-nav-toggle {
+    width: 42px;
+    height: 42px;
+    display: none;
+    place-items: center;
+    gap: 4px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 50%;
+    background: rgba(232, 237, 223, 0.72);
+}
+
+.merchant-nav-toggle span {
+    width: 17px;
+    height: 2px;
+    display: block;
+    border-radius: 999px;
+    background: var(--sage-ink);
+}
+
+.merchant-nav-drawer {
+    background: #fffdf7;
+    color: var(--sage-ink);
+}
+
+.merchant-nav-drawer .offcanvas-header {
+    border-bottom: 1px solid rgba(79, 104, 71, 0.12);
+}
+
+.merchant-nav-drawer h2 {
+    margin: 0;
+    color: var(--sage-ink);
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.merchant-drawer-link,
+.merchant-nav-accordion .accordion-body a {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--sage-ink);
+    font-weight: 850;
+}
+
+.merchant-drawer-link:hover,
+.merchant-drawer-link.active,
+.merchant-nav-accordion .accordion-body a:hover {
+    background: rgba(79, 104, 71, 0.1);
+}
+
+.merchant-nav-accordion {
+    margin: 8px 0;
+}
+
+.merchant-nav-accordion .accordion-item {
+    border: 0;
+    background: transparent;
+}
+
+.merchant-nav-accordion .accordion-button {
+    padding: 12px;
+    border-radius: 8px !important;
+    background: transparent;
+    color: var(--sage-ink);
+    box-shadow: none;
+    font-weight: 900;
+}
+
+.merchant-nav-accordion .accordion-button:not(.collapsed) {
+    background: rgba(79, 104, 71, 0.1);
+}
+
+.merchant-nav-accordion .accordion-body {
+    padding: 4px 0 8px 12px;
+    display: grid;
+    gap: 4px;
+}
+
+.merchant-dashboard-hero {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px;
+    align-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(255, 253, 247, 0.96), rgba(232, 237, 223, 0.72));
+    box-shadow: 0 18px 42px rgba(49, 69, 44, 0.08);
+}
+
+.merchant-dashboard-hero h1 {
+    margin: 0;
+    color: var(--sage-ink);
+    font-size: clamp(1.55rem, 3vw, 2.25rem);
+    letter-spacing: 0;
+}
+
+.merchant-dashboard-hero span {
+    color: var(--sage-readable);
+    font-weight: 750;
+}
+
+.merchant-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.merchant-dashboard-panel {
+    scroll-margin-top: 130px;
+}
+
+.merchant-dashboard-panel + .merchant-dashboard-panel {
+    margin-top: 22px;
+}
+
+@media (max-width: 1120px) {
+    .merchant-primary-nav {
+        display: none;
+    }
+
+    .merchant-nav-toggle {
+        display: inline-grid;
+    }
+}
+
+@media (max-width: 760px) {
+    .merchant-dashboard-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-hero-actions {
+        justify-content: flex-start;
     }
 }
 

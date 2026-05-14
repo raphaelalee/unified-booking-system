@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <% if (typeof useBootstrap !== 'undefined' && useBootstrap) { %>
+    <% if ((typeof useBootstrap !== 'undefined' && useBootstrap) || (currentUser && ['merchant', 'admin'].includes(currentUser.role))) { %>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <% } %>
     <link rel="stylesheet" href="/css/styles.css?v=sandy-editorial-1">
@@ -31,24 +31,11 @@
             </a>
             <div class="nav-links">
                 <% if (currentUser && currentUser.role === 'admin') { %>
-                    <a href="/admin">Dashboard</a>
-                    <a href="/help-center">Help Center</a>
-                    <a href="/admin/services">Manage Services</a>
-                    <a href="/admin/promotions">Manage Promotions</a>
-                    <a href="/admin/reward-shop">Reward Shop</a>
-                    <a href="/admin/rewards-game">Game Control</a>
-                    <a href="/admin/loyalty">Loyalty</a>
-                    <a href="/admin/services/new">Add Service</a>
-                    <a href="/admin/merchants/new">Add Merchant</a>
-                    <a href="/profile">Profile</a>
+                    <button class="admin-nav-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminNavDrawer" aria-controls="adminNavDrawer" aria-label="Open admin navigation">
+                        <span></span><span></span><span></span>
+                    </button>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
-                    <a href="/merchant">Dashboard</a>
-                    <a href="/help-center">Help Center</a>
-                    <a href="/merchant/services">My Services</a>
-                    <a href="/merchant/products">My Products</a>
-                    <a href="/merchant/promotions">My Promotions</a>
-                    <a href="/merchant/rewards-game">Game Rewards</a>
-                    <a href="/profile">Profile</a>
+                    <%- include('merchant-navbar') %>
                 <% } else { %>
                     <a href="/services">Services</a>
                     <div class="nav-dropdown">

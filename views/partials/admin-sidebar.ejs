@@ -1,0 +1,114 @@
+<%
+    const activePath = typeof currentPath !== 'undefined' ? currentPath : '';
+    const isActive = (paths) => paths.some((path) => activePath === path || activePath.startsWith(`${path}/`));
+    const adminGroups = [
+        {
+            label: 'Users',
+            active: isActive(['/admin/merchants']),
+            items: [
+                { label: 'Customers', href: '/admin/overview' },
+                { label: 'Merchants', href: '/admin/merchants' },
+                { label: 'Suspended Accounts', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'Bookings',
+            active: isActive(['/admin/bookings']),
+            items: [
+                { label: 'Active Bookings', href: '/admin/bookings' },
+                { label: 'Pending Approvals', href: '/admin/bookings' },
+                { label: 'Refund Disputes', href: '/admin/platform-health' },
+                { label: 'Escalated Issues', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'Marketplace',
+            active: isActive(['/admin/services', '/admin/promotions', '/admin/reward-shop', '/admin/rewards-game']),
+            items: [
+                { label: 'Services', href: '/admin/services' },
+                { label: 'Categories', href: '/admin/services' },
+                { label: 'Promotions', href: '/admin/promotions' },
+                { label: 'Reward Shop', href: '/admin/reward-shop' },
+                { label: 'Game Rewards', href: '/admin/rewards-game' }
+            ]
+        },
+        {
+            label: 'Analytics',
+            active: isActive(['/admin/analytics', '/admin/platform-health']),
+            items: [
+                { label: 'Revenue Analytics', href: '/admin/analytics' },
+                { label: 'QR Analytics', href: '/admin/analytics' },
+                { label: 'Platform Health', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'Moderation',
+            active: isActive(['/admin/reviews']),
+            items: [
+                { label: 'Reviews', href: '/admin/reviews' },
+                { label: 'Merchant Reports', href: '/admin/reviews' },
+                { label: 'Abuse Monitoring', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'System',
+            active: isActive(['/admin/audit-trail', '/admin/loyalty']),
+            items: [
+                { label: 'Audit Trail', href: '/admin/audit-trail' },
+                { label: 'AI Automation Logs', href: '/admin/audit-trail' },
+                { label: 'Settings', href: '/admin/loyalty' }
+            ]
+        }
+    ];
+%>
+
+<aside class="admin-sidebar">
+    <a class="admin-sidebar-brand" href="/admin/overview">Vaniday Admin</a>
+    <nav aria-label="Admin primary navigation">
+        <a class="<%= activePath === '/admin/overview' || activePath === '/admin' ? 'active' : '' %>" href="/admin/overview">Overview</a>
+        <% adminGroups.forEach((group, index) => { %>
+            <div class="admin-sidebar-group">
+                <button class="admin-sidebar-group-toggle <%= group.active ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#admin-sidebar-group-<%= index %>" aria-expanded="<%= group.active ? 'true' : 'false' %>" aria-controls="admin-sidebar-group-<%= index %>">
+                    <%= group.label %>
+                </button>
+                <div id="admin-sidebar-group-<%= index %>" class="collapse <%= group.active ? 'show' : '' %>">
+                    <% group.items.forEach((item) => { %>
+                        <a class="<%= activePath === item.href ? 'active' : '' %>" href="<%= item.href %>"><%= item.label %></a>
+                    <% }) %>
+                </div>
+            </div>
+        <% }) %>
+    </nav>
+    <div class="admin-sidebar-actions">
+        <a class="button primary" href="/admin/merchants/new">Add merchant</a>
+        <a class="button secondary" href="/admin/services/new">Add service</a>
+    </div>
+</aside>
+
+<div class="offcanvas offcanvas-start admin-nav-drawer" tabindex="-1" id="adminNavDrawer" aria-labelledby="adminNavDrawerLabel">
+    <div class="offcanvas-header">
+        <h2 id="adminNavDrawerLabel">Admin Menu</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <a class="admin-drawer-link <%= activePath === '/admin/overview' || activePath === '/admin' ? 'active' : '' %>" href="/admin/overview">Overview</a>
+        <% adminGroups.forEach((group, index) => { %>
+            <div class="accordion admin-nav-accordion" id="admin-drawer-group-<%= index %>">
+                <div class="accordion-item">
+                    <h3 class="accordion-header">
+                        <button class="accordion-button <%= group.active ? '' : 'collapsed' %>" type="button" data-bs-toggle="collapse" data-bs-target="#admin-drawer-collapse-<%= index %>">
+                            <%= group.label %>
+                        </button>
+                    </h3>
+                    <div id="admin-drawer-collapse-<%= index %>" class="accordion-collapse collapse <%= group.active ? 'show' : '' %>">
+                        <div class="accordion-body">
+                            <% group.items.forEach((item) => { %>
+                                <a href="<%= item.href %>"><%= item.label %></a>
+                            <% }) %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <% }) %>
+    </div>
+</div>

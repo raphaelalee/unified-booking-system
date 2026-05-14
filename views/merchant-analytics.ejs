@@ -1,0 +1,90 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
+    const customerInsights = customerReport?.insights || {};
+    const sales = salesReport || {};
+    const merchantChartPayload = {
+        salesLabels: (sales.dailySales || []).map((day) => day.label),
+        salesRevenue: (sales.dailySales || []).map((day) => Number(day.revenue || 0)),
+        salesOrders: (sales.dailySales || []).map((day) => Number(day.orders || 0)),
+        ageLabels: customerInsights.chartPayload?.ageLabels || ['Not set'],
+        ageValues: customerInsights.chartPayload?.ageValues || [0],
+        genderLabels: customerInsights.chartPayload?.genderLabels || ['Not set'],
+        genderValues: customerInsights.chartPayload?.genderValues || [0],
+        serviceLabels: customerInsights.chartPayload?.serviceLabels || ['No service'],
+        serviceValues: customerInsights.chartPayload?.serviceValues || [0],
+        hourLabels: customerInsights.chartPayload?.hourLabels || ['No bookings'],
+        hourValues: customerInsights.chartPayload?.hourValues || [0]
+    };
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+%>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Analytics</p>
+                <h1>Revenue and booking performance</h1>
+                <span>Track revenue, booking demand, customer trends, and promotion contribution.</span>
+            </div>
+        </header>
+
+        <section class="merchant-kpi-grid">
+            <article class="merchant-kpi-card accent-green"><span>Monthly revenue</span><strong>$<%= formatCurrency(appointments.monthlyRevenue) %></strong><small>service booking revenue</small></article>
+            <article class="merchant-kpi-card accent-orange"><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong><small>campaign usage</small></article>
+            <article class="merchant-kpi-card accent-blue"><span>Repeat customers</span><strong><%= appointments.repeatCustomers || 0 %></strong><small>retention signal</small></article>
+            <article class="merchant-kpi-card accent-yellow"><span>Top service</span><strong><%= customerInsights.topServiceName || 'No service' %></strong><small>highest demand</small></article>
+        </section>
+
+        <section class="merchant-insight-grid">
+            <article class="merchant-chart-card span-8">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Sales Analytics</p><h2>Revenue and orders</h2></div></div>
+                <div class="merchant-chart-box"><canvas id="merchantSalesChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-4">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Demand</p><h2>Peak booking hour</h2></div></div>
+                <div class="merchant-insight-callout">
+                    <strong><%= customerInsights.peakHour || 'No bookings' %></strong>
+                    <p><%= customerInsights.suggestedFocus || 'Customer patterns will appear after more bookings.' %></p>
+                </div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Bookings</p><h2>Top services</h2></div></div>
+                <div class="merchant-chart-box small"><canvas id="merchantServiceChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Timing</p><h2>Booking trends by hour</h2></div></div>
+                <div class="merchant-chart-box small"><canvas id="merchantHourChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading"><div><p class="eyebrow">User Analysis</p><h2>Age segments</h2></div></div>
+                <div class="merchant-chart-box small"><canvas id="merchantAgeChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading"><div><p class="eyebrow">User Analysis</p><h2>Gender mix</h2></div></div>
+                <div class="merchant-chart-box small"><canvas id="merchantGenderChart"></canvas></div>
+            </article>
+        </section>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (() => {
+        const chartPayload = <%- JSON.stringify(merchantChartPayload) %>;
+        const chartPalette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16' };
+        const options = { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } };
+        const makeChart = (id, config) => {
+            const canvas = document.getElementById(id);
+            if (canvas && typeof Chart !== 'undefined') new Chart(canvas, config);
+        };
+        makeChart('merchantSalesChart', { type: 'line', data: { labels: chartPayload.salesLabels, datasets: [{ label: 'Revenue', data: chartPayload.salesRevenue, borderColor: chartPalette.green, backgroundColor: 'rgba(79,104,71,.12)', fill: true }, { label: 'Orders', data: chartPayload.salesOrders, borderColor: chartPalette.blue }] }, options });
+        makeChart('merchantServiceChart', { type: 'bar', data: { labels: chartPayload.serviceLabels, datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(79,104,71,.3)' }] }, options: { ...options, indexAxis: 'y' } });
+        makeChart('merchantHourChart', { type: 'bar', data: { labels: chartPayload.hourLabels, datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223,124,22,.32)' }] }, options });
+        makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.28)' }] }, options });
+        makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [chartPalette.green, chartPalette.blue, chartPalette.orange, '#d4a017', '#a64032'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: options.plugins } });
+    })();
+</script>
+
+<%- include('partials/footer') %>

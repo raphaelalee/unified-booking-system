@@ -1023,9 +1023,29 @@
 
             suggestionWrap.innerHTML = suggestions.map((item) => `
                 <button type="button" data-suggestion-date="${item.dateKey}" data-suggestion-time="${item.slot}">
-                    ${formatDateLabel(item.dateKey)} <strong>${item.slot}</strong>
+                    ${item.label ? `<span>${item.label}</span>` : ''}${formatDateLabel(item.dateKey)} <strong>${item.slot}</strong>
                 </button>
             `).join('');
+
+            fetch(`/profile/bookings/${activeBooking.id}/reschedule-suggestions`, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then((response) => response.ok ? response.json() : null)
+                .then((data) => {
+                    if (!data?.success || !Array.isArray(data.suggestions) || !data.suggestions.length) {
+                        return;
+                    }
+
+                    suggestionWrap.innerHTML = data.suggestions.slice(0, 3).map((item) => `
+                        <button type="button" data-suggestion-date="${item.dateKey}" data-suggestion-time="${item.slot}">
+                            <span>${item.label || 'Suggested slot'}</span>${formatDateLabel(item.dateKey)} <strong>${item.slot}</strong>
+                        </button>
+                    `).join('');
+                })
+                .catch(() => {});
         };
 
         const updateCancellationRefund = () => {
@@ -1159,8 +1179,23 @@
                 }
 
                 const booking = data.booking || {};
+                const statusBadge = activeCard.querySelector('[data-booking-status]');
+
+                if (data.pendingReview) {
+                    if (statusBadge) {
+                        statusBadge.textContent = 'reschedule review';
+                        statusBadge.className = 'status-badge status-pending';
+                    }
+                    rescheduleModal.querySelector('[data-reschedule-feedback]').textContent = data.message || 'Request sent for merchant review.';
+                    setTimeout(closeModals, 900);
+                    return;
+                }
+
                 const displayDate = new Date(`${booking.bookingDate}T00:00:00`).toLocaleDateString('en-SG', { dateStyle: 'medium' });
                 activeCard.querySelector('[data-booking-datetime]').textContent = `${displayDate} at ${booking.bookingTime}`;
+                if (statusBadge) {
+                    statusBadge.textContent = booking.status || 'pending';
+                }
                 activeBooking.bookingDate = booking.bookingDate;
                 activeBooking.bookingTime = booking.bookingTime;
                 activeCard.dataset.booking = encodeURIComponent(JSON.stringify(activeBooking));

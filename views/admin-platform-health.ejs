@@ -1,0 +1,41 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const safeSupportSummary = supportSummary || { openCount: 0, pendingRefundCount: 0, pendingRefundAmount: 0 };
+    const missingServices = merchantReport.merchantsWithoutServices || [];
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div><p class="eyebrow">System Health</p><h1>Platform Health</h1><p>Operational risk, validation issues, refund disputes, and system monitoring.</p></div>
+        </header>
+
+        <section class="admin-stat-grid">
+            <article class="admin-stat-card accent-yellow"><strong><%= missingServices.length %></strong><span>Merchants missing services</span></article>
+            <article class="admin-stat-card accent-red"><strong><%= safeSupportSummary.openCount || 0 %></strong><span>Open support issues</span></article>
+            <article class="admin-stat-card accent-orange"><strong><%= safeSupportSummary.pendingRefundCount || 0 %></strong><span>Pending refunds</span></article>
+            <article class="admin-stat-card accent-blue"><strong><%= validationReport.issues.length %></strong><span>Validation issues</span></article>
+        </section>
+
+        <section class="admin-grid">
+            <article class="admin-panel span-6">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Validation</p><h2>Platform checks</h2></div></div>
+                <div class="admin-health-list">
+                    <% if (!validationReport.issues.length) { %><a><span>Platform setup looks healthy</span><strong>OK</strong></a><% } %>
+                    <% validationReport.issues.forEach((issue) => { %><a><span><%= issue %></span><strong>Review</strong></a><% }) %>
+                </div>
+            </article>
+            <article class="admin-panel span-6">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Merchant Readiness</p><h2>Missing setup</h2></div></div>
+                <div class="admin-log-list">
+                    <% if (!missingServices.length) { %><article><span>No merchants missing services.</span></article><% } %>
+                    <% missingServices.forEach((merchant) => { %><article><strong><%= merchant.salon_name %></strong><span>Needs service setup</span></article><% }) %>
+                </div>
+            </article>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

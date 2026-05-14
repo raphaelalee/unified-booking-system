@@ -1,0 +1,52 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const platformBookings = Array.isArray(bookings) ? bookings : [];
+    const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value || '').slice(0, 10) : date.toISOString().slice(0, 10);
+    };
+    const pendingBookings = platformBookings.filter((booking) => normalizeStatus(booking.status) === 'pending');
+    const activeBookings = platformBookings.filter((booking) => !['cancelled', 'completed', 'no_show'].includes(normalizeStatus(booking.status)));
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div><p class="eyebrow">Bookings</p><h1>Booking Operations</h1><p>Review active bookings, pending approvals, refund disputes, and escalated issues.</p></div>
+            <div class="admin-topbar-utilities"><input type="search" placeholder="Search bookings" data-booking-search></div>
+        </header>
+
+        <section class="admin-stat-grid">
+            <article class="admin-stat-card accent-blue"><strong><%= activeBookings.length %></strong><span>Active bookings</span></article>
+            <article class="admin-stat-card accent-yellow"><strong><%= pendingBookings.length %></strong><span>Pending approvals</span></article>
+            <article class="admin-stat-card accent-orange"><strong><%= supportSummary?.pendingRefundCount || 0 %></strong><span>Refund disputes</span></article>
+            <article class="admin-stat-card accent-red"><strong><%= supportSummary?.openCount || 0 %></strong><span>Escalated issues</span></article>
+        </section>
+
+        <section class="admin-panel">
+            <div class="admin-panel-heading"><div><p class="eyebrow">Records</p><h2>Platform bookings</h2></div></div>
+            <div class="admin-responsive-table">
+                <table class="admin-booking-table">
+                    <thead><tr><th>Booking</th><th>Customer</th><th>Merchant</th><th>Service</th><th>Date</th><th>Status</th></tr></thead>
+                    <tbody>
+                        <% platformBookings.forEach((booking) => { %>
+                            <tr>
+                                <td>#<%= booking.id %></td>
+                                <td><%= booking.customer_name || 'Customer' %></td>
+                                <td><%= booking.merchant_name || 'Merchant' %></td>
+                                <td><%= booking.service_name || 'Service' %></td>
+                                <td><%= formatDate(booking.booking_date) %> <%= booking.booking_time || '' %></td>
+                                <td><span class="admin-status-pill status-<%= normalizeStatus(booking.status) %>"><%= normalizeStatus(booking.status).replace(/_/g, ' ') %></span></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

@@ -7,6 +7,9 @@ let bookingManagementSchemaQueue = [];
 let whatsappReminderSchemaReady = false;
 let whatsappReminderSchemaPending = false;
 let whatsappReminderSchemaQueue = [];
+let rescheduleAutomationSchemaReady = false;
+let rescheduleAutomationSchemaPending = false;
+let rescheduleAutomationSchemaQueue = [];
 
 function flushBookingManagementSchema(error) {
     const queue = bookingManagementSchemaQueue;
@@ -108,6 +111,82 @@ function ensureWhatsAppReminderSchema(callback) {
     });
 }
 
+function flushRescheduleAutomationSchema(error) {
+    const queue = rescheduleAutomationSchemaQueue;
+    rescheduleAutomationSchemaQueue = [];
+    rescheduleAutomationSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureRescheduleAutomationSchema(callback) {
+    if (rescheduleAutomationSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    rescheduleAutomationSchemaQueue.push(callback);
+
+    if (rescheduleAutomationSchemaPending) {
+        return;
+    }
+
+    rescheduleAutomationSchemaPending = true;
+
+    const settingsSql = `
+        CREATE TABLE IF NOT EXISTS merchant_reschedule_settings (
+            salon_id INT NOT NULL,
+            auto_approve_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            minimum_notice_hours INT NOT NULL DEFAULT 24,
+            max_reschedules_allowed INT NOT NULL DEFAULT 2,
+            blocked_times TEXT,
+            peak_hour_restrictions TINYINT(1) NOT NULL DEFAULT 1,
+            business_start TIME NOT NULL DEFAULT '09:00:00',
+            business_end TIME NOT NULL DEFAULT '20:00:00',
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (salon_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+    const requestsSql = `
+        CREATE TABLE IF NOT EXISTS booking_reschedule_requests (
+            request_id INT NOT NULL AUTO_INCREMENT,
+            booking_id INT NOT NULL,
+            user_id INT NOT NULL,
+            merchant_id INT NOT NULL,
+            service_id INT NOT NULL,
+            old_booking_date DATE NOT NULL,
+            old_timeslot TIME DEFAULT NULL,
+            requested_booking_date DATE NOT NULL,
+            requested_timeslot TIME NOT NULL,
+            status ENUM('auto_approved','pending_review','approved','rejected') NOT NULL DEFAULT 'pending_review',
+            confidence_level ENUM('high','medium','low') NOT NULL DEFAULT 'medium',
+            confidence_score INT NOT NULL DEFAULT 0,
+            decision_reason VARCHAR(255) DEFAULT NULL,
+            review_notes TEXT,
+            reviewed_by INT DEFAULT NULL,
+            reviewed_at DATETIME DEFAULT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (request_id),
+            KEY idx_reschedule_merchant_status (merchant_id, status, created_at),
+            KEY idx_reschedule_booking (booking_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(settingsSql, (settingsError) => {
+        if (settingsError) {
+            flushRescheduleAutomationSchema(settingsError);
+            return;
+        }
+
+        db.query(requestsSql, (requestsError) => {
+            if (!requestsError) {
+                rescheduleAutomationSchemaReady = true;
+            }
+
+            flushRescheduleAutomationSchema(requestsError);
+        });
+    });
+}
+
 function normalizeTimeForDatabase(value) {
     if (!value) {
         return value;
@@ -150,6 +229,36 @@ function normalizeTimeForDatabase(value) {
         String(minutes).padStart(2, '0'),
         String(seconds).padStart(2, '0')
     ].join(':');
+}
+
+function getDateKey(value) {
+    if (!value) {
+        return '';
+    }
+
+    if (value instanceof Date) {
+        return value.toISOString().slice(0, 10);
+    }
+
+    return String(value).slice(0, 10);
+}
+
+function normalizeTimeMinutes(value) {
+    const normalized = normalizeTimeForDatabase(value);
+    const match = String(normalized || '').match(/^(\d{2}):(\d{2})/);
+
+    if (!match) {
+        return null;
+    }
+
+    return (Number(match[1]) * 60) + Number(match[2]);
+}
+
+function parseBlockedTimes(value) {
+    return String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 function create(bookingData) {
@@ -472,6 +581,405 @@ function getAvailabilityByBookingIds(userId, bookingIds, callback) {
     });
 }
 
+function getRescheduleSettings(salonId, callback) {
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT IGNORE INTO merchant_reschedule_settings (salon_id)
+            VALUES (?)
+        `;
+
+        db.query(sql, [salonId], (insertError) => {
+            if (insertError) {
+                callback(insertError);
+                return;
+            }
+
+            db.query(
+                `SELECT
+                    salon_id AS salonId,
+                    auto_approve_enabled AS autoApproveEnabled,
+                    minimum_notice_hours AS minimumNoticeHours,
+                    max_reschedules_allowed AS maxReschedulesAllowed,
+                    blocked_times AS blockedTimes,
+                    peak_hour_restrictions AS peakHourRestrictions,
+                    TIME_FORMAT(business_start, '%H:%i') AS businessStart,
+                    TIME_FORMAT(business_end, '%H:%i') AS businessEnd
+                 FROM merchant_reschedule_settings
+                 WHERE salon_id = ?
+                 LIMIT 1`,
+                [salonId],
+                (selectError, rows = []) => {
+                    if (selectError) {
+                        callback(selectError);
+                        return;
+                    }
+
+                    callback(null, rows[0] || null);
+                }
+            );
+        });
+    });
+}
+
+function updateRescheduleSettings(salonId, settings, callback) {
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT INTO merchant_reschedule_settings
+                (salon_id, auto_approve_enabled, minimum_notice_hours, max_reschedules_allowed, blocked_times, peak_hour_restrictions, business_start, business_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                auto_approve_enabled = VALUES(auto_approve_enabled),
+                minimum_notice_hours = VALUES(minimum_notice_hours),
+                max_reschedules_allowed = VALUES(max_reschedules_allowed),
+                blocked_times = VALUES(blocked_times),
+                peak_hour_restrictions = VALUES(peak_hour_restrictions),
+                business_start = VALUES(business_start),
+                business_end = VALUES(business_end)
+        `;
+
+        db.query(sql, [
+            salonId,
+            settings.autoApproveEnabled ? 1 : 0,
+            Math.max(0, Math.min(Number(settings.minimumNoticeHours || 24), 720)),
+            Math.max(0, Math.min(Number(settings.maxReschedulesAllowed || 2), 20)),
+            String(settings.blockedTimes || '').slice(0, 500),
+            settings.peakHourRestrictions ? 1 : 0,
+            normalizeTimeForDatabase(settings.businessStart || '09:00'),
+            normalizeTimeForDatabase(settings.businessEnd || '20:00')
+        ], callback);
+    });
+}
+
+function countReschedulesForBooking(bookingId, callback) {
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `SELECT COUNT(*) AS total
+             FROM booking_reschedule_requests
+             WHERE booking_id = ? AND status IN ('auto_approved', 'approved')`,
+            [bookingId],
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, Number(rows[0]?.total || 0));
+            }
+        );
+    });
+}
+
+function getAllowedSlotsForBooking(bookingId, userId, callback) {
+    const sql = `
+        SELECT
+            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS slot_time
+        FROM bookings
+        INNER JOIN service_slots ON service_slots.service_id = bookings.service_id
+        WHERE bookings.booking_id = ?
+            AND bookings.user_id = ?
+        ORDER BY service_slots.timeslot ASC
+    `;
+
+    db.query(sql, [bookingId, userId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows.map((row) => row.slot_time).filter(Boolean));
+    });
+}
+
+function findOverlappingBookings(merchantId, bookingId, bookingDate, bookingTime, durationMins, callback) {
+    const startMinutes = normalizeTimeMinutes(bookingTime);
+    const duration = Math.max(15, Number(durationMins || 60));
+
+    if (startMinutes === null) {
+        callback(null, []);
+        return;
+    }
+
+    const endMinutes = startMinutes + duration;
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            services.duration_mins,
+            users.name AS customer_name,
+            services.service_name
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN users ON users.user_id = bookings.user_id
+        WHERE bookings.merchant_id = ?
+            AND bookings.booking_id <> ?
+            AND bookings.booking_date = ?
+            AND bookings.status NOT IN ('cancelled', 'completed', 'no_show')
+    `;
+
+    db.query(sql, [merchantId, bookingId, bookingDate], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const overlaps = rows.filter((row) => {
+            const rowStart = normalizeTimeMinutes(row.booking_time);
+            const rowEnd = rowStart === null ? null : rowStart + Math.max(15, Number(row.duration_mins || 60));
+
+            return rowStart !== null && rowEnd !== null && startMinutes < rowEnd && endMinutes > rowStart;
+        });
+
+        callback(null, overlaps);
+    });
+}
+
+function createRescheduleRequest(data, callback) {
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT INTO booking_reschedule_requests
+                (booking_id, user_id, merchant_id, service_id, old_booking_date, old_timeslot, requested_booking_date, requested_timeslot, status, confidence_level, confidence_score, decision_reason, review_notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [
+            data.bookingId,
+            data.userId,
+            data.merchantId,
+            data.serviceId,
+            data.oldBookingDate,
+            normalizeTimeForDatabase(data.oldBookingTime),
+            data.requestedBookingDate,
+            normalizeTimeForDatabase(data.requestedBookingTime),
+            data.status,
+            data.confidenceLevel,
+            data.confidenceScore,
+            String(data.decisionReason || '').slice(0, 255),
+            data.reviewNotes || null
+        ], callback);
+    });
+}
+
+function listRescheduleRequestsForMerchant(merchantUserId, callback) {
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                booking_reschedule_requests.request_id AS id,
+                booking_reschedule_requests.booking_id AS bookingId,
+                booking_reschedule_requests.user_id AS userId,
+                booking_reschedule_requests.merchant_id AS salonId,
+                booking_reschedule_requests.service_id AS serviceId,
+                booking_reschedule_requests.old_booking_date AS oldBookingDate,
+                TIME_FORMAT(booking_reschedule_requests.old_timeslot, '%H:%i') AS oldBookingTime,
+                booking_reschedule_requests.requested_booking_date AS requestedBookingDate,
+                TIME_FORMAT(booking_reschedule_requests.requested_timeslot, '%H:%i') AS requestedBookingTime,
+                booking_reschedule_requests.status,
+                booking_reschedule_requests.confidence_level AS confidenceLevel,
+                booking_reschedule_requests.confidence_score AS confidenceScore,
+                booking_reschedule_requests.decision_reason AS decisionReason,
+                booking_reschedule_requests.review_notes AS reviewNotes,
+                booking_reschedule_requests.created_at AS createdAt,
+                users.name AS customerName,
+                users.email AS customerEmail,
+                services.service_name AS serviceName
+            FROM booking_reschedule_requests
+            INNER JOIN salons ON salons.salon_id = booking_reschedule_requests.merchant_id
+            INNER JOIN users ON users.user_id = booking_reschedule_requests.user_id
+            INNER JOIN services ON services.service_id = booking_reschedule_requests.service_id
+            WHERE salons.merchant_id = ?
+            ORDER BY booking_reschedule_requests.created_at DESC, booking_reschedule_requests.request_id DESC
+            LIMIT 80
+        `;
+
+        db.query(sql, [merchantUserId], callback);
+    });
+}
+
+function reviewRescheduleRequest(requestId, merchantUserId, action, callback) {
+    const nextStatus = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : '';
+
+    if (!nextStatus) {
+        callback(new Error('Invalid reschedule review action.'));
+        return;
+    }
+
+    ensureRescheduleAutomationSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const lookupSql = `
+            SELECT
+                booking_reschedule_requests.*,
+                salons.merchant_id AS merchant_user_id,
+                services.duration_mins
+            FROM booking_reschedule_requests
+            INNER JOIN salons ON salons.salon_id = booking_reschedule_requests.merchant_id
+            INNER JOIN services ON services.service_id = booking_reschedule_requests.service_id
+            WHERE booking_reschedule_requests.request_id = ?
+                AND salons.merchant_id = ?
+                AND booking_reschedule_requests.status = 'pending_review'
+            LIMIT 1
+        `;
+
+        db.query(lookupSql, [requestId, merchantUserId], (lookupError, rows = []) => {
+            if (lookupError) {
+                callback(lookupError);
+                return;
+            }
+
+            const request = rows[0];
+
+            if (!request) {
+                callback(null, { affectedRows: 0 });
+                return;
+            }
+
+            const updateRequest = (done) => {
+                db.query(
+                    `UPDATE booking_reschedule_requests
+                     SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                     WHERE request_id = ?`,
+                    [nextStatus, merchantUserId, requestId],
+                    done
+                );
+            };
+
+            if (nextStatus === 'rejected') {
+                updateRequest((updateError, result) => callback(updateError, result, request));
+                return;
+            }
+
+            const requestedDate = getDateKey(request.requested_booking_date);
+            findOverlappingBookings(
+                request.merchant_id,
+                request.booking_id,
+                requestedDate,
+                request.requested_timeslot,
+                request.duration_mins,
+                (overlapError, overlaps = []) => {
+                    if (overlapError || overlaps.length > 0) {
+                        callback(overlapError || new Error('Requested slot now overlaps another booking.'));
+                        return;
+                    }
+
+                    updateScheduleForCustomer(
+                        request.booking_id,
+                        request.user_id,
+                        requestedDate,
+                        request.requested_timeslot,
+                        (scheduleError, scheduleResult) => {
+                            if (scheduleError || !scheduleResult?.affectedRows) {
+                                callback(scheduleError || new Error('Booking could not be updated for this request.'));
+                                return;
+                            }
+
+                            updateRequest((updateError, result) => callback(updateError, result, request));
+                        }
+                    );
+                }
+            );
+        });
+    });
+}
+
+function getRescheduleSuggestionCandidates(bookingId, userId, callback) {
+    getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
+        if (lookupError || !booking) {
+            callback(lookupError, booking, []);
+            return;
+        }
+
+        getAllowedSlotsForBooking(bookingId, userId, (slotError, slots = []) => {
+            if (slotError) {
+                callback(slotError, booking, []);
+                return;
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const candidates = [];
+            let pending = 0;
+            let failed = false;
+
+            const done = () => {
+                pending -= 1;
+                if (!pending && !failed) {
+                    candidates.sort((left, right) => {
+                        if (left.crowdScore === right.crowdScore) {
+                            return `${left.dateKey} ${left.slot}`.localeCompare(`${right.dateKey} ${right.slot}`);
+                        }
+
+                        return left.crowdScore - right.crowdScore;
+                    });
+                    callback(null, booking, candidates.slice(0, 6));
+                }
+            };
+
+            for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + dayOffset);
+                const dateKey = getDateKey(date);
+
+                slots.forEach((slot) => {
+                    pending += 1;
+                    findOverlappingBookings(booking.salon_id, booking.id, dateKey, slot, booking.duration_mins, (overlapError, overlaps = []) => {
+                        if (failed) {
+                            return;
+                        }
+
+                        if (overlapError) {
+                            failed = true;
+                            callback(overlapError, booking, []);
+                            return;
+                        }
+
+                        if (!overlaps.length) {
+                            candidates.push({
+                                dateKey,
+                                slot,
+                                crowdScore: overlaps.length,
+                                label: dayOffset === 0 ? 'Nearest available' : dayOffset <= 3 ? 'Same-week opening' : 'Least crowded'
+                            });
+                        }
+
+                        done();
+                    });
+                });
+            }
+
+            if (!pending) {
+                callback(null, booking, []);
+            }
+        });
+    });
+}
+
 function getSupportBookingsByUserId(userId, callback) {
     const sql = `
         SELECT
@@ -545,6 +1053,7 @@ function getManageableByIdForCustomer(bookingId, userId, callback) {
             services.service_id,
             services.duration_mins,
             salons.salon_id,
+            salons.merchant_id AS merchant_user_id,
             salons.salon_name AS merchant_name,
             services.service_name,
             services.price AS service_price
@@ -864,10 +1373,16 @@ module.exports = {
     createInDatabase,
     cancelForCustomer,
     getAvailabilityByBookingIds,
+    countReschedulesForBooking,
+    createRescheduleRequest,
     findSupportBookingForCustomer,
+    findOverlappingBookings,
     getManageableByIdForCustomer,
+    getAllowedSlotsForBooking,
     getByUserId,
     getReceiptById,
+    getRescheduleSettings,
+    getRescheduleSuggestionCandidates,
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
@@ -882,6 +1397,9 @@ module.exports = {
     markCancelled,
     markCompleted,
     markCheckedIn,
+    listRescheduleRequestsForMerchant,
+    reviewRescheduleRequest,
+    updateRescheduleSettings,
     updateSchedule,
     updateScheduleForCustomer,
     updateStatusForMerchant
