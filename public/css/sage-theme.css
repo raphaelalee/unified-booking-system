@@ -5813,6 +5813,151 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     width: 100%;
 }
 
+.merchant-quick-actions label {
+    min-width: 0;
+}
+
+.merchant-quick-actions select,
+.merchant-quick-actions input[type="number"] {
+    width: 100%;
+}
+
+.merchant-quick-actions select[multiple] {
+    min-height: 150px;
+    padding-block: 10px;
+}
+
+.merchant-settings-wide {
+    grid-column: 1 / -1;
+}
+
+.merchant-settings-wide small {
+    display: block;
+    margin-top: 6px;
+    line-height: 1.35;
+}
+
+.merchant-reschedule-settings {
+    align-items: start;
+}
+
+.merchant-reschedule-settings .merchant-settings-field,
+.merchant-reschedule-settings .merchant-toggle-row {
+    display: grid;
+    gap: 8px;
+    color: var(--sage-ink);
+    font-weight: 800;
+}
+
+.merchant-reschedule-settings .merchant-settings-field > span,
+.merchant-reschedule-settings .merchant-settings-field > label {
+    color: var(--sage-ink);
+}
+
+.merchant-reschedule-settings select,
+.merchant-reschedule-settings input[type="number"] {
+    min-height: 48px;
+    border-radius: 18px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    background-color: rgba(255, 253, 248, 0.92);
+    color: var(--sage-ink);
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+
+.merchant-toggle-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 12px;
+    background: rgba(238, 244, 233, 0.42);
+}
+
+.merchant-toggle-row input[type="checkbox"],
+.merchant-time-chip input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    accent-color: #20899c;
+}
+
+.merchant-toggle-row strong,
+.merchant-toggle-row small {
+    display: block;
+}
+
+.merchant-toggle-row small {
+    margin-top: 2px;
+    color: var(--sage-readable);
+    font-weight: 700;
+}
+
+.merchant-time-picker {
+    position: relative;
+}
+
+.merchant-time-picker summary {
+    min-height: 48px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 18px;
+    background: rgba(255, 253, 248, 0.92);
+    color: var(--sage-ink);
+    cursor: pointer;
+    list-style: none;
+}
+
+.merchant-time-picker summary::-webkit-details-marker {
+    display: none;
+}
+
+.merchant-time-picker summary::after {
+    content: "v";
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.merchant-time-picker[open] summary {
+    border-radius: 18px 18px 10px 10px;
+}
+
+.merchant-time-chip-grid {
+    max-height: 220px;
+    margin-top: 8px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: auto;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 253, 248, 0.96);
+}
+
+.merchant-time-chip {
+    min-width: 0;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 999px;
+    background: rgba(238, 244, 233, 0.42);
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+
+.merchant-settings-submit {
+    align-self: end;
+    min-height: 56px;
+    border-radius: 999px;
+}
+
 .merchant-actions-card .qr-code-link {
     margin-top: 14px;
     display: inline-block;

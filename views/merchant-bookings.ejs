@@ -20,6 +20,21 @@
     const pendingRescheduleReviews = Array.isArray(rescheduleTools.pendingReviews) ? rescheduleTools.pendingReviews : [];
     const autoApprovedReschedules = Array.isArray(rescheduleTools.autoApproved) ? rescheduleTools.autoApproved : [];
     const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const timeOptions = [];
+    for (let hour = 0; hour < 24; hour += 1) {
+        [0, 30].forEach((minute) => {
+            const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+            const displayHour = hour % 12 || 12;
+            const period = hour < 12 ? 'AM' : 'PM';
+            timeOptions.push({ value, label: `${String(displayHour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}` });
+        });
+    }
+    const selectedBusinessStart = String(rescheduleSettings.businessStart || '09:00').slice(0, 5);
+    const selectedBusinessEnd = String(rescheduleSettings.businessEnd || '20:00').slice(0, 5);
+    const selectedBlockedTimes = new Set(String(rescheduleSettings.blockedTimes || '').split(',').map((time) => time.trim().slice(0, 5)).filter(Boolean));
+    const selectedBlockedLabels = timeOptions
+        .filter((option) => selectedBlockedTimes.has(option.value))
+        .map((option) => option.label);
     const statusLabels = {
         pending: 'pending',
         confirmed: 'confirmed',
@@ -94,16 +109,52 @@
                 <div class="merchant-card-heading">
                     <div><p class="eyebrow">Auto-approval Rules</p><h2>Reschedule settings</h2></div>
                 </div>
-                <form class="merchant-quick-actions" action="/merchant/reschedule-settings" method="POST">
+                <form class="merchant-quick-actions merchant-reschedule-settings" action="/merchant/reschedule-settings" method="POST">
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                    <label><input type="checkbox" name="autoApproveEnabled" value="1" <%= Number(rescheduleSettings.autoApproveEnabled) ? 'checked' : '' %>> Auto approve simple requests</label>
-                    <label>Notice hours <input type="number" name="minimumNoticeHours" min="0" max="720" value="<%= Number(rescheduleSettings.minimumNoticeHours || 24) %>"></label>
-                    <label>Max reschedules <input type="number" name="maxReschedulesAllowed" min="0" max="20" value="<%= Number(rescheduleSettings.maxReschedulesAllowed || 2) %>"></label>
-                    <label>Business start <input type="time" name="businessStart" value="<%= rescheduleSettings.businessStart || '09:00' %>"></label>
-                    <label>Business end <input type="time" name="businessEnd" value="<%= rescheduleSettings.businessEnd || '20:00' %>"></label>
-                    <label>Blocked times <input type="text" name="blockedTimes" value="<%= rescheduleSettings.blockedTimes || '' %>" placeholder="13:00, 18:00"></label>
-                    <label><input type="checkbox" name="peakHourRestrictions" value="1" <%= Number(rescheduleSettings.peakHourRestrictions) ? 'checked' : '' %>> Send peak-hour moves to review</label>
-                    <button class="button primary" type="submit">Save rules</button>
+                    <label class="merchant-toggle-row merchant-settings-wide">
+                        <input type="checkbox" name="autoApproveEnabled" value="1" <%= Number(rescheduleSettings.autoApproveEnabled) ? 'checked' : '' %>>
+                        <span><strong>Auto approve simple requests</strong><small>Approve low-risk reschedules when rules pass.</small></span>
+                    </label>
+                    <label class="merchant-settings-field">Notice hours <input type="number" name="minimumNoticeHours" min="0" max="720" value="<%= Number(rescheduleSettings.minimumNoticeHours || 24) %>"></label>
+                    <label class="merchant-settings-field">Max reschedules <input type="number" name="maxReschedulesAllowed" min="0" max="20" value="<%= Number(rescheduleSettings.maxReschedulesAllowed || 2) %>"></label>
+                    <label class="merchant-settings-field">
+                        <span>Business start</span>
+                        <select name="businessStart" required>
+                            <% timeOptions.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= option.value === selectedBusinessStart ? 'selected' : '' %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+                    <label class="merchant-settings-field">
+                        <span>Business end</span>
+                        <select name="businessEnd" required>
+                            <% timeOptions.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= option.value === selectedBusinessEnd ? 'selected' : '' %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+                    <div class="merchant-settings-wide merchant-settings-field">
+                        <span>Blocked times</span>
+                        <details class="merchant-time-picker">
+                            <summary>
+                                <span><%= selectedBlockedLabels.length ? selectedBlockedLabels.join(', ') : 'No blocked times selected' %></span>
+                            </summary>
+                            <div class="merchant-time-chip-grid">
+                                <% timeOptions.forEach((option) => { %>
+                                    <label class="merchant-time-chip">
+                                        <input type="checkbox" name="blockedTimes" value="<%= option.value %>" <%= selectedBlockedTimes.has(option.value) ? 'checked' : '' %>>
+                                        <span><%= option.label %></span>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </details>
+                        <small id="blocked-times-help" class="muted">Pick unavailable appointment start times. Leave all unselected if none are blocked.</small>
+                    </div>
+                    <label class="merchant-toggle-row merchant-settings-wide">
+                        <input type="checkbox" name="peakHourRestrictions" value="1" <%= Number(rescheduleSettings.peakHourRestrictions) ? 'checked' : '' %>>
+                        <span><strong>Send peak-hour moves to review</strong><small>Keep high-demand time changes in the manual queue.</small></span>
+                    </label>
+                    <button class="button primary merchant-settings-submit" type="submit">Save rules</button>
                 </form>
             </article>
         </section>

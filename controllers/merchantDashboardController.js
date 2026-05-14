@@ -1095,6 +1095,28 @@ function normalizeTimeInput(value, fallback) {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
+function timeToMinutes(value) {
+    const normalized = normalizeTimeInput(value, '');
+
+    if (!normalized) {
+        return null;
+    }
+
+    return (Number(normalized.slice(0, 2)) * 60) + Number(normalized.slice(3, 5));
+}
+
+function normalizeBlockedTimes(value) {
+    const rawValues = Array.isArray(value)
+        ? value
+        : String(value || '').split(',');
+
+    return [...new Set(rawValues
+        .map((item) => normalizeTimeInput(item, ''))
+        .filter(Boolean))]
+        .sort()
+        .join(', ');
+}
+
 function updateRescheduleSettings(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
@@ -1103,14 +1125,22 @@ function updateRescheduleSettings(req, res) {
             return handled;
         }
 
+        const businessStart = normalizeTimeInput(req.body.businessStart, '09:00');
+        const businessEnd = normalizeTimeInput(req.body.businessEnd, '20:00');
+
+        if (timeToMinutes(businessEnd) <= timeToMinutes(businessStart)) {
+            req.session.merchantError = 'Business end time must be later than business start time.';
+            return res.redirect('/merchant/bookings');
+        }
+
         const settings = {
             autoApproveEnabled: isTruthyFormValue(req.body.autoApproveEnabled),
             minimumNoticeHours: Number(req.body.minimumNoticeHours || 24),
             maxReschedulesAllowed: Number(req.body.maxReschedulesAllowed || 2),
-            blockedTimes: String(req.body.blockedTimes || '').trim(),
+            blockedTimes: normalizeBlockedTimes(req.body.blockedTimes),
             peakHourRestrictions: isTruthyFormValue(req.body.peakHourRestrictions),
-            businessStart: normalizeTimeInput(req.body.businessStart, '09:00'),
-            businessEnd: normalizeTimeInput(req.body.businessEnd, '20:00')
+            businessStart,
+            businessEnd
         };
 
         return Booking.updateRescheduleSettings(merchant.id, settings, (error, result) => {
