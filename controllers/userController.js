@@ -22,6 +22,16 @@ const membershipTiers = [
     { name: 'Platinum', points: '10,000+', detail: 'VIP benefits', className: 'platinum' }
 ];
 
+const genderOptions = [
+    { value: 'female', label: 'Female' },
+    { value: 'male', label: 'Male' },
+    { value: 'non_binary', label: 'Non-binary' },
+    { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+    { value: 'other', label: 'Other' }
+];
+
+const allowedGenderValues = new Set(genderOptions.map((option) => option.value));
+
 function logNotificationError(error) {
     if (error) {
         console.error('Notification error:', error.message || error);
@@ -34,10 +44,31 @@ function buildSessionUser(user) {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
+        age: user.age || '',
+        birthday: formatDateInputValue(user.birthday),
+        gender: user.gender || '',
         referralCode: user.referral_code || '',
         role: user.role,
         glintsBalance: user.glints_balance || 0
     };
+}
+
+function formatDateInputValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value).slice(0, 10);
+    }
+
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0')
+    ].join('-');
 }
 
 function getMemberTier(points) {
@@ -298,6 +329,51 @@ function isValidOptionalPhone(phone) {
     return phone === '' || /^[689]\d{7}$/.test(phone);
 }
 
+function getCustomerDetailsForm(body = {}) {
+    return {
+        age: String(body.age || '').trim(),
+        birthday: String(body.birthday || '').trim(),
+        gender: String(body.gender || '').trim()
+    };
+}
+
+function validateCustomerDetails(form, { required = false } = {}) {
+    const errors = [];
+    const age = Number(form.age);
+    const birthday = form.birthday ? new Date(`${form.birthday}T00:00:00`) : null;
+
+    if (required || form.age) {
+        if (!Number.isInteger(age) || age < 1 || age > 120) {
+            errors.push('Please enter a valid age from 1 to 120.');
+        }
+    }
+
+    if (required || form.birthday) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (!birthday || Number.isNaN(birthday.getTime()) || birthday > today) {
+            errors.push('Please enter a valid birthday that is not in the future.');
+        }
+    }
+
+    if (required || form.gender) {
+        if (!allowedGenderValues.has(form.gender)) {
+            errors.push('Please select a valid gender.');
+        }
+    }
+
+    return errors;
+}
+
+function buildCustomerDetailsPayload(form) {
+    return {
+        age: form.age ? Number(form.age) : null,
+        birthday: form.birthday || null,
+        gender: form.gender || null
+    };
+}
+
 function getDashboardPath(role) {
     if (role === 'admin') return '/admin';
     if (role === 'merchant') return '/merchant';
@@ -335,7 +411,10 @@ function setAuthenticatedSession(req, user, message, callback) {
         req.session.profile = {
             name: user.name,
             email: user.email,
-            phone: user.phone || ''
+            phone: user.phone || '',
+            age: user.age || '',
+            birthday: formatDateInputValue(user.birthday),
+            gender: user.gender || ''
         };
         req.session.profileSuccess = message || 'You are logged in.';
         callback(null);
@@ -600,10 +679,19 @@ function signupUser(req, res) {
     const password = req.body.password || '';
     const confirmPassword = req.body.confirmPassword || '';
     const enteredReferralCode = (req.body.referralCode || '').trim().toUpperCase();
-    const signupForm = { name, email, phone, referralCode: enteredReferralCode };
+    const customerDetailsForm = getCustomerDetailsForm(req.body);
+    const signupForm = { name, email, phone, ...customerDetailsForm, referralCode: enteredReferralCode };
 
     if (name.length < 2 || !isValidEmail(email) || !/^[689]\d{7}$/.test(phone)) {
         req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';
+        req.session.signupForm = signupForm;
+        return res.redirect('/signup');
+    }
+
+    const customerDetailErrors = validateCustomerDetails(customerDetailsForm, { required: true });
+
+    if (customerDetailErrors.length > 0) {
+        req.session.signupError = customerDetailErrors.join(' ');
         req.session.signupForm = signupForm;
         return res.redirect('/signup');
     }
@@ -640,7 +728,13 @@ function signupUser(req, res) {
                 return res.redirect('/signup');
             }
 
-            return User.create({ name, email, phone, password: passwordHash }, (createError, result) => {
+            return User.create({
+                name,
+                email,
+                phone,
+                ...buildCustomerDetailsPayload(customerDetailsForm),
+                password: passwordHash
+            }, (createError, result) => {
                 if (createError) {
                     console.error(createError);
                     req.session.signupError = createError.code === 'ER_DUP_ENTRY'
@@ -655,6 +749,7 @@ function signupUser(req, res) {
                     name,
                     email,
                     phone,
+                    ...buildCustomerDetailsPayload(customerDetailsForm),
                     referral_code: '',
                     role: 'customer',
                     glints_balance: 0
@@ -740,6 +835,9 @@ function showProfile(req, res) {
             name: accountUser?.name || sessionProfile.name || req.session.user.name,
             email: accountUser?.email || sessionProfile.email || req.session.user.email,
             phone: accountUser?.phone || sessionProfile.phone || '',
+            age: accountUser?.age ?? sessionProfile.age ?? req.session.user.age ?? '',
+            birthday: formatDateInputValue(accountUser?.birthday ?? sessionProfile.birthday ?? req.session.user.birthday),
+            gender: accountUser?.gender || sessionProfile.gender || req.session.user.gender || '',
             glintsBalance: Number(accountUser?.glints_balance ?? req.session.user.glintsBalance ?? 0)
         };
 
@@ -777,6 +875,7 @@ function showProfile(req, res) {
                 bookingAvailability: customerExtras.bookingAvailability,
                 reviewableBookings: customerExtras.reviewableBookings,
                 isCustomer,
+                genderOptions,
                 dashboardPath: getDashboardPath(req.session.user.role),
                 roleLabel: getRoleLabel(req.session.user.role),
                 success: success || loyaltySuccess,
@@ -896,13 +995,22 @@ function updateProfile(req, res) {
     const name = (req.body.name || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
     const phone = (req.body.phone || '').trim();
+    const customerDetailsForm = getCustomerDetailsForm(req.body);
+    const customerDetailErrors = validateCustomerDetails(customerDetailsForm);
 
     if (name.length < 2 || !isValidEmail(email) || !isValidOptionalPhone(phone)) {
         req.session.profileError = 'Please enter a valid name, email, and Singapore handphone number.';
         return res.redirect('/profile');
     }
 
-    return User.updateProfile(req.session.user.id, { name, email, phone }, (error) => {
+    if (customerDetailErrors.length > 0) {
+        req.session.profileError = customerDetailErrors.join(' ');
+        return res.redirect('/profile');
+    }
+
+    const customerDetails = buildCustomerDetailsPayload(customerDetailsForm);
+
+    return User.updateProfile(req.session.user.id, { name, email, phone, ...customerDetails }, (error) => {
         if (error) {
             console.error(error);
             req.session.profileError = error.code === 'ER_DUP_ENTRY'
@@ -911,12 +1019,13 @@ function updateProfile(req, res) {
             return res.redirect('/profile');
         }
 
-        req.session.profile = { name, email, phone };
+        req.session.profile = { name, email, phone, ...customerDetails };
         req.session.user = {
             ...req.session.user,
             name,
             email,
-            phone
+            phone,
+            ...customerDetails
         };
         req.session.profileSuccess = 'Profile updated successfully.';
 

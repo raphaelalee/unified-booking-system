@@ -398,6 +398,38 @@ function countOpenByCustomer(customerUserId, callback) {
     });
 }
 
+function getSummary(callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS pending_refund_count,
+                COALESCE(SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN refund_amount ELSE 0 END), 0) AS pending_refund_amount
+            FROM support_requests
+        `;
+
+        db.query(sql, [...RESOLVED_STATUSES, ...RESOLVED_STATUSES, ...RESOLVED_STATUSES], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, {
+                totalCount: Number(rows[0]?.total_count || 0),
+                openCount: Number(rows[0]?.open_count || 0),
+                pendingRefundCount: Number(rows[0]?.pending_refund_count || 0),
+                pendingRefundAmount: Number(rows[0]?.pending_refund_amount || 0)
+            });
+        });
+    });
+}
+
 function adminSendToMerchant(requestId, adminUserId, note, callback) {
     ensureSchema((schemaError) => {
         if (schemaError) {
@@ -557,6 +589,7 @@ module.exports = {
     getForCustomer,
     getForMerchant,
     getMessagesForRequests,
+    getSummary,
     hasActiveRequest,
     merchantRespond
 };

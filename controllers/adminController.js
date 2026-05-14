@@ -5,8 +5,10 @@ const Promotion = require('../models/Promotion');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
+const Loyalty = require('../models/Loyalty');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
+const SupportRequest = require('../models/SupportRequest');
 
 function getBookingAmount(booking) {
     return Number(booking.service_price || booking.price || 0);
@@ -529,30 +531,44 @@ function showDashboard(req, res) {
                                 console.error(reviewListError);
                             }
 
-                            const dashboardBookings = bookingError ? Booking.getAll() : bookings;
-                            const reports = buildAdminReports(
-                                merchants,
-                                dashboardBookings,
-                                userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
-                                Boolean(bookingError),
-                                Boolean(userError)
-                            );
-                            const success = req.session.adminSuccess;
-                            const error = req.session.adminError;
-                            req.session.adminSuccess = null;
-                            req.session.adminError = null;
+                            return Loyalty.getPlatformSummary((loyaltyError, loyaltySummary = {}) => {
+                                if (loyaltyError) {
+                                    console.error(loyaltyError);
+                                }
 
-                            return res.render('admin-dashboard', {
-                                title: 'Admin Dashboard',
-                                merchants,
-                                bookings: dashboardBookings,
-                                reviews,
-                                reviewSummary: reviewSummaryError ? { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 } : reviewSummary,
-                                reviewLeaderboard: reviewLeaderboardError ? [] : reviewLeaderboard,
-                                databaseError: Boolean(bookingError || userError || reviewSummaryError || reviewLeaderboardError || reviewListError),
-                                success,
-                                error,
-                                ...reports
+                                return SupportRequest.getSummary((supportError, supportSummary = {}) => {
+                                    if (supportError) {
+                                        console.error(supportError);
+                                    }
+
+                                    const dashboardBookings = bookingError ? Booking.getAll() : bookings;
+                                    const reports = buildAdminReports(
+                                        merchants,
+                                        dashboardBookings,
+                                        userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
+                                        Boolean(bookingError),
+                                        Boolean(userError)
+                                    );
+                                    const success = req.session.adminSuccess;
+                                    const error = req.session.adminError;
+                                    req.session.adminSuccess = null;
+                                    req.session.adminError = null;
+
+                                    return res.render('admin-dashboard', {
+                                        title: 'Admin Dashboard',
+                                        merchants,
+                                        bookings: dashboardBookings,
+                                        reviews,
+                                        reviewSummary: reviewSummaryError ? { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 } : reviewSummary,
+                                        reviewLeaderboard: reviewLeaderboardError ? [] : reviewLeaderboard,
+                                        loyaltySummary: loyaltyError ? { transactionCount: 0, redemptionCount: 0, pointsDeltaTotal: 0, cashbackDeltaTotal: 0 } : loyaltySummary,
+                                        supportSummary: supportError ? { totalCount: 0, openCount: 0, pendingRefundCount: 0, pendingRefundAmount: 0 } : supportSummary,
+                                        databaseError: Boolean(bookingError || userError || reviewSummaryError || reviewLeaderboardError || reviewListError || loyaltyError || supportError),
+                                        success,
+                                        error,
+                                        ...reports
+                                    });
+                                });
                             });
                         });
                     });

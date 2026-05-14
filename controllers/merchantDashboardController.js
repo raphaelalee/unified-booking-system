@@ -434,6 +434,28 @@ function normalizeDashboardDate(value) {
     return String(value).slice(0, 10);
 }
 
+function formatCustomerBirthday(value) {
+    const date = parseDashboardDate(value);
+
+    if (!date) {
+        return '';
+    }
+
+    return getLocalDateKey(date);
+}
+
+function formatCustomerGender(value) {
+    const labels = {
+        female: 'Female',
+        male: 'Male',
+        non_binary: 'Non-binary',
+        prefer_not_to_say: 'Prefer not to say',
+        other: 'Other'
+    };
+
+    return labels[String(value || '').trim()] || '';
+}
+
 function buildDashboardWeekDays(startDate) {
     const weekDays = [];
 
@@ -500,6 +522,11 @@ function buildAppointmentReport(bookings = []) {
             status,
             serviceName: booking.service_name || booking.serviceName || 'Service',
             customerName: booking.customer_name || booking.customerName || 'Customer',
+            customerEmail: booking.email || booking.customer_email || '',
+            customerPhone: booking.customer_phone || booking.phone || '',
+            customerAge: booking.customer_age || booking.customerAge || '',
+            customerBirthday: formatCustomerBirthday(booking.customer_birthday || booking.customerBirthday),
+            customerGender: formatCustomerGender(booking.customer_gender || booking.customerGender),
             amount: Number(booking.service_price || booking.price || 0)
         };
     });
@@ -540,9 +567,119 @@ function buildAppointmentReport(bookings = []) {
         monthlyRevenue: normalizedBookings
             .filter((booking) => booking.bookingDate.slice(0, 7) === monthKey)
             .reduce((sum, booking) => sum + booking.amount, 0),
-        loyaltyRedemptions: Math.max(0, Math.round(normalizedBookings.length / 4)),
+        loyaltyRedemptions: 0,
         weekDays,
         monthView: buildDashboardMonthDays(calendarStartDate, normalizedBookings)
+    };
+}
+
+function getAgeBand(age) {
+    const value = Number(age);
+
+    if (!Number.isFinite(value) || value <= 0) {
+        return 'Not set';
+    }
+
+    if (value < 18) return 'Under 18';
+    if (value <= 24) return '18-24';
+    if (value <= 34) return '25-34';
+    if (value <= 44) return '35-44';
+    if (value <= 54) return '45-54';
+    return '55+';
+}
+
+function addCount(map, key, increment = 1) {
+    const safeKey = key || 'Not set';
+    map[safeKey] = (map[safeKey] || 0) + increment;
+}
+
+function topEntriesFromCounts(counts, fallbackLabel = 'No data', limit = 6) {
+    const entries = Object.entries(counts)
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, limit);
+
+    return entries.length ? entries : [[fallbackLabel, 0]];
+}
+
+function buildCustomerInsightReport(bookings = []) {
+    const customerMap = new Map();
+    const serviceCounts = {};
+    const ageBandCounts = {};
+    const genderCounts = {};
+    const hourCounts = {};
+
+    bookings.forEach((booking) => {
+        const customerKey = booking.customerEmail || booking.email || booking.customerName || booking.customer_name || `booking-${booking.id}`;
+        const serviceName = booking.serviceName || booking.service_name || 'Service';
+        const gender = booking.customerGender || formatCustomerGender(booking.customer_gender) || 'Not set';
+        const ageBand = getAgeBand(booking.customerAge || booking.customer_age);
+        const hour = String(booking.bookingTime || booking.booking_time || '').slice(0, 2);
+
+        addCount(serviceCounts, serviceName);
+        addCount(ageBandCounts, ageBand);
+        addCount(genderCounts, gender);
+        if (hour) {
+            addCount(hourCounts, `${hour}:00`);
+        }
+
+        const current = customerMap.get(customerKey) || {
+            customerName: booking.customerName || booking.customer_name || 'Customer',
+            customerEmail: booking.customerEmail || booking.email || '',
+            customerPhone: booking.customerPhone || booking.customer_phone || '',
+            customerAge: booking.customerAge || booking.customer_age || '',
+            customerGender: gender,
+            visits: 0,
+            spend: 0,
+            lastBookingDate: ''
+        };
+
+        current.visits += 1;
+        current.spend += Number(booking.amount || booking.service_price || booking.price || 0);
+        if (!current.lastBookingDate || String(booking.bookingDate || booking.booking_date || '') > current.lastBookingDate) {
+            current.lastBookingDate = String(booking.bookingDate || booking.booking_date || '');
+        }
+
+        customerMap.set(customerKey, current);
+    });
+
+    const customers = Array.from(customerMap.values());
+    const repeatCustomers = customers.filter((customer) => customer.visits > 1);
+    const topCustomers = customers
+        .slice()
+        .sort((left, right) => {
+            if (right.visits === left.visits) {
+                return right.spend - left.spend;
+            }
+
+            return right.visits - left.visits;
+        })
+        .slice(0, 5);
+    const topService = topEntriesFromCounts(serviceCounts, 'No service')[0];
+    const peakHour = topEntriesFromCounts(hourCounts, 'No bookings')[0];
+    const suggestedFocus = topService[1] > 0
+        ? `Promote ${topService[0]} to your most active customer groups.`
+        : 'Customer patterns will appear after more bookings.';
+
+    return {
+        totalCustomers: customers.length,
+        repeatCustomers: repeatCustomers.length,
+        repeatRate: customers.length ? Math.round((repeatCustomers.length / customers.length) * 100) : 0,
+        averageVisits: customers.length ? customers.reduce((sum, customer) => sum + customer.visits, 0) / customers.length : 0,
+        averageCustomerValue: customers.length ? customers.reduce((sum, customer) => sum + customer.spend, 0) / customers.length : 0,
+        topCustomers,
+        suggestedFocus,
+        topServiceName: topService[0],
+        peakHour: peakHour[0],
+        chartPayload: {
+            ageLabels: topEntriesFromCounts(ageBandCounts, 'Not set').map((entry) => entry[0]),
+            ageValues: topEntriesFromCounts(ageBandCounts, 'Not set').map((entry) => entry[1]),
+            genderLabels: topEntriesFromCounts(genderCounts, 'Not set').map((entry) => entry[0]),
+            genderValues: topEntriesFromCounts(genderCounts, 'Not set').map((entry) => entry[1]),
+            serviceLabels: topEntriesFromCounts(serviceCounts, 'No service').map((entry) => entry[0]),
+            serviceValues: topEntriesFromCounts(serviceCounts, 'No service').map((entry) => entry[1]),
+            hourLabels: topEntriesFromCounts(hourCounts, 'No bookings').map((entry) => entry[0]),
+            hourValues: topEntriesFromCounts(hourCounts, 'No bookings').map((entry) => entry[1])
+        }
     };
 }
 
@@ -615,6 +752,9 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             const lowStockProducts = safeProducts.filter((product) => Number(product.stockQuantity || 0) <= 5);
                             const salesDays = getLastSevenSalesDays(safeOrders);
                             const appointmentReport = buildAppointmentReport(safeBookings);
+                            const promotionRedemptions = safePromotions.reduce((total, promotion) => total + Number(promotion.redemptionCount || 0), 0);
+                            appointmentReport.loyaltyRedemptions = promotionRedemptions;
+                            const customerInsightReport = buildCustomerInsightReport(appointmentReport.allBookings);
                             const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
                             const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
                             const growthPercent = previousRevenue > 0
@@ -659,7 +799,8 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 },
                                 customerReport: {
                                     totalCustomers: uniqueCustomers,
-                                    recentBookings: safeBookings.slice(0, 5)
+                                    recentBookings: safeBookings.slice(0, 5),
+                                    insights: customerInsightReport
                                 },
                                 appointmentReport,
                                 merchantReport: {

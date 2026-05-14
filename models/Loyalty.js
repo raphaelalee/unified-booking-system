@@ -229,6 +229,38 @@ function getWalletView(userId, callback) {
     });
 }
 
+function getPlatformSummary(callback) {
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                COUNT(*) AS transaction_count,
+                SUM(CASE WHEN transaction_type IN ('redeem', 'redeem_points') THEN 1 ELSE 0 END) AS redemption_count,
+                COALESCE(SUM(points_delta), 0) AS points_delta_total,
+                COALESCE(SUM(cashback_delta), 0) AS cashback_delta_total
+            FROM loyalty_transactions
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, {
+                transactionCount: Number(rows[0]?.transaction_count || 0),
+                redemptionCount: Number(rows[0]?.redemption_count || 0),
+                pointsDeltaTotal: Number(rows[0]?.points_delta_total || 0),
+                cashbackDeltaTotal: Number(rows[0]?.cashback_delta_total || 0)
+            });
+        });
+    });
+}
+
 function roundMoney(value) {
     return Math.round(Number(value || 0) * 100) / 100;
 }
@@ -595,6 +627,7 @@ module.exports = {
     awardForReceipt,
     awardReviewBonus,
     ensureWallet,
+    getPlatformSummary,
     getRules,
     getWalletView,
     redeemCashback,

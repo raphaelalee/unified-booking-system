@@ -5,6 +5,8 @@
     const safeMerchants = Array.isArray(merchants) ? merchants : [];
     const adminReviews = Array.isArray(reviews) ? reviews : [];
     const safeReviewSummary = reviewSummary || { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 };
+    const safeLoyaltySummary = loyaltySummary || { transactionCount: 0, redemptionCount: 0, pointsDeltaTotal: 0, cashbackDeltaTotal: 0 };
+    const safeSupportSummary = supportSummary || { totalCount: 0, openCount: 0, pendingRefundCount: 0, pendingRefundAmount: 0 };
     const safeReviewLeaderboard = Array.isArray(reviewLeaderboard) ? reviewLeaderboard : [];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
     const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
@@ -54,7 +56,29 @@
     const merchantRevenue = {};
     const serviceCounts = {};
     const peakHourCounts = {};
+    const customerAgeBands = {};
+    const customerGenderCounts = {};
     const bookingMerchants = new Set();
+    const getCustomerAgeBand = (age) => {
+        const value = Number(age);
+        if (!Number.isFinite(value) || value <= 0) return 'Not set';
+        if (value < 18) return 'Under 18';
+        if (value <= 24) return '18-24';
+        if (value <= 34) return '25-34';
+        if (value <= 44) return '35-44';
+        if (value <= 54) return '45-54';
+        return '55+';
+    };
+    const getCustomerGenderLabel = (value) => ({
+        female: 'Female',
+        male: 'Male',
+        non_binary: 'Non-binary',
+        prefer_not_to_say: 'Prefer not to say',
+        other: 'Other'
+    }[String(value || '').trim()] || 'Not set');
+    const addCount = (map, key) => {
+        map[key] = (map[key] || 0) + 1;
+    };
 
     platformBookings.forEach((booking) => {
         const status = normalizeStatus(booking.status);
@@ -70,6 +94,8 @@
         merchantBookingCounts[merchantName] = (merchantBookingCounts[merchantName] || 0) + 1;
         merchantRevenue[merchantName] = (merchantRevenue[merchantName] || 0) + amount;
         serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
+        addCount(customerAgeBands, getCustomerAgeBand(booking.customer_age || booking.customerAge));
+        addCount(customerGenderCounts, getCustomerGenderLabel(booking.customer_gender || booking.customerGender));
         bookingMerchants.add(merchantName);
 
         const hour = String(getBookingTime(booking)).slice(0, 2) || 'NA';
@@ -96,10 +122,12 @@
     const topMerchantEntries = Object.entries(merchantBookingCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const topServiceEntries = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const peakHourEntries = Object.entries(peakHourCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const ageBandEntries = Object.entries(customerAgeBands).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const genderEntries = Object.entries(customerGenderCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
     const mostScannedMerchant = topMerchantEntries[0]?.[0] || 'No QR scans yet';
     const topMerchantName = topMerchantEntries[0]?.[0] || merchantReport.topMerchant?.salon_name || 'No merchant yet';
     const topServiceName = topServiceEntries[0]?.[0] || 'No service yet';
-    const loyaltyRedemptions = Math.max(0, Math.round(Number(customerReport.totalGlints || stats.totalGlints || 0) / 500));
+    const loyaltyRedemptions = Number(safeLoyaltySummary.redemptionCount || 0);
     const weeklyRevenue = days.reduce((sum, day) => sum + day.revenue, 0);
     const revenueSparkline = days.map((day) => day.revenue > 0 ? Math.max(12, (day.revenue / Math.max(...days.map((item) => item.revenue), 1)) * 100) : 8);
     const bookingSparkline = days.map((day) => day.bookings > 0 ? Math.max(12, (day.bookings / Math.max(...days.map((item) => item.bookings), 1)) * 100) : 8);
@@ -143,7 +171,7 @@
         { label: 'Suspicious QR activity', value: failedQrScans, severity: failedQrScans > 0 ? 'red' : 'green', action: '#admin-qr' },
         { label: 'Low-rated merchants', value: Math.max(merchantRows.filter((merchant) => merchant.rating < 4).length, lowRatedReviewMerchants.filter((merchant) => Number(merchant.averageRating || 0) < 4).length), severity: 'green', action: '#admin-reviews' },
         { label: 'Inactive merchants', value: inactiveMerchants.length, severity: inactiveMerchants.length > 0 ? 'yellow' : 'green', action: '#admin-merchants' },
-        { label: 'Pending refund requests', value: 0, severity: 'green', action: '#admin-bookings' }
+        { label: 'Pending refund requests', value: Number(safeSupportSummary.pendingRefundCount || 0), severity: safeSupportSummary.pendingRefundCount > 0 ? 'yellow' : 'green', action: '/help-center' }
     ];
     const activityFeed = [
         ...platformBookings.slice(0, 4).map((booking) => ({
@@ -158,7 +186,7 @@
             time: 'Today',
             type: 'Merchant'
         })),
-        { title: `User loyalty redemptions reviewed`, meta: `${loyaltyRedemptions} estimated loyalty events`, time: 'Today', type: 'Loyalty' },
+        { title: `User loyalty activity synced`, meta: `${loyaltyRedemptions} real redemption event${loyaltyRedemptions === 1 ? '' : 's'}`, time: 'Today', type: 'Loyalty' },
         { title: `QR ecosystem scanned`, meta: `${totalQrScans} tracked QR events`, time: 'Live', type: 'QR' }
     ].slice(0, 8);
     const qrLogs = platformBookings.slice(0, 5).map((booking) => ({
@@ -193,7 +221,11 @@
         topServiceLabels: topServiceEntries.length ? topServiceEntries.map((entry) => entry[0]) : ['No services'],
         topServiceValues: topServiceEntries.length ? topServiceEntries.map((entry) => entry[1]) : [0],
         peakHourLabels: peakHourEntries.length ? peakHourEntries.map((entry) => `${entry[0]}:00`) : ['No data'],
-        peakHourValues: peakHourEntries.length ? peakHourEntries.map((entry) => entry[1]) : [0]
+        peakHourValues: peakHourEntries.length ? peakHourEntries.map((entry) => entry[1]) : [0],
+        ageBandLabels: ageBandEntries.length ? ageBandEntries.map((entry) => entry[0]) : ['Not set'],
+        ageBandValues: ageBandEntries.length ? ageBandEntries.map((entry) => entry[1]) : [0],
+        genderLabels: genderEntries.length ? genderEntries.map((entry) => entry[0]) : ['Not set'],
+        genderValues: genderEntries.length ? genderEntries.map((entry) => entry[1]) : [0]
     };
     const adminTabAlerts = {
         overview: healthItems.filter((item) => item.value > 0).length,
@@ -316,6 +348,29 @@
                 <article class="admin-panel admin-chart-panel span-3">
                     <div class="admin-panel-heading"><div><p class="eyebrow">Peak Hours</p><h2>Booking peak hours</h2></div></div>
                     <div class="admin-chart-box small"><canvas id="peakHoursChart"></canvas></div>
+                </article>
+            </section>
+
+            <section class="admin-grid">
+                <article class="admin-panel admin-chart-panel span-6">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <p class="eyebrow">Customers</p>
+                            <h2>Customer age mix</h2>
+                        </div>
+                        <span class="admin-live-pill">From bookings</span>
+                    </div>
+                    <div class="admin-chart-box small"><canvas id="customerAgeChart"></canvas></div>
+                </article>
+                <article class="admin-panel admin-chart-panel span-6">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <p class="eyebrow">Customers</p>
+                            <h2>Customer gender mix</h2>
+                        </div>
+                        <span class="admin-live-pill">From bookings</span>
+                    </div>
+                    <div class="admin-chart-box small"><canvas id="customerGenderChart"></canvas></div>
                 </article>
             </section>
         </section>
@@ -573,6 +628,11 @@
                     <strong><%= safeReviewSummary.merchantCount %></strong>
                     <span>Merchants reviewed</span>
                 </article>
+                <article class="admin-stat-card accent-orange">
+                    <div class="admin-stat-card-top"><span class="admin-stat-icon">RF</span></div>
+                    <strong><%= safeSupportSummary.pendingRefundCount %></strong>
+                    <span>Pending refunds</span>
+                </article>
             </section>
 
             <section class="admin-grid">
@@ -771,6 +831,16 @@
             type: 'bar',
             data: { labels: payload.peakHourLabels, datasets: [{ label: 'Bookings', data: payload.peakHourValues, backgroundColor: 'rgba(223, 124, 22, 0.35)', borderColor: palette.orange, borderWidth: 2 }] },
             options: baseOptions
+        });
+        makeChart('customerAgeChart', {
+            type: 'bar',
+            data: { labels: payload.ageBandLabels, datasets: [{ label: 'Customers', data: payload.ageBandValues, backgroundColor: 'rgba(32, 137, 156, 0.3)', borderColor: palette.blue, borderWidth: 2 }] },
+            options: baseOptions
+        });
+        makeChart('customerGenderChart', {
+            type: 'doughnut',
+            data: { labels: payload.genderLabels, datasets: [{ data: payload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: { duration: 700 }, plugins: { legend: { position: 'bottom' } } }
         });
 
         const rows = Array.from(document.querySelectorAll('.admin-booking-table tbody tr'));

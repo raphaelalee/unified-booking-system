@@ -37,6 +37,8 @@
     const formatDuration = (value) => Number(value || 0) > 0 ? `${Number(value)} mins` : 'Duration TBC';
     const formatRefundStatus = (value) => String(value || 'not_requested').replace(/_/g, ' ');
     const profileImageFallback = '/images/vaniday-service-placeholder.svg';
+    const profileGenderOptions = typeof genderOptions !== 'undefined' && Array.isArray(genderOptions) ? genderOptions : [];
+    const profileGenderLabel = (profileGenderOptions.find((option) => option.value === profile.gender) || {}).label || 'Not set';
     const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
     const bookingDataFor = (booking) => {
@@ -82,6 +84,11 @@
             <h2><%= profile.name %></h2>
             <p><%= profile.email %></p>
             <p><%= profile.phone || 'Phone not set' %></p>
+            <p>
+                Age: <strong><%= profile.age || 'Not set' %></strong>
+                &middot; Birthday: <strong><%= profile.birthday || 'Not set' %></strong>
+                &middot; Gender: <strong><%= profileGenderLabel %></strong>
+            </p>
             <% if (isCustomer) { %>
                 <p>VaniGlints: <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</strong></p>
                 <p>Membership: <strong><%= member.tier %></strong></p>
@@ -128,6 +135,18 @@
                 <div>
                     <dt>Phone</dt>
                     <dd><%= profile.phone || 'Not set' %></dd>
+                </div>
+                <div>
+                    <dt>Age</dt>
+                    <dd><%= profile.age || 'Not set' %></dd>
+                </div>
+                <div>
+                    <dt>Birthday</dt>
+                    <dd><%= profile.birthday || 'Not set' %></dd>
+                </div>
+                <div>
+                    <dt>Gender</dt>
+                    <dd><%= profileGenderLabel %></dd>
                 </div>
                 <% if (isCustomer) { %>
                     <div>
@@ -194,6 +213,26 @@
                     <label>
                         Handphone number
                         <input type="tel" name="phone" value="<%= profile.phone %>" placeholder="81234567" maxlength="8" pattern="[689][0-9]{7}" autocomplete="tel">
+                    </label>
+
+                    <label>
+                        Age
+                        <input type="number" name="age" value="<%= profile.age || '' %>" placeholder="21" min="1" max="120">
+                    </label>
+
+                    <label>
+                        Birthday
+                        <input type="date" name="birthday" value="<%= profile.birthday || '' %>" max="<%= new Date().toISOString().slice(0, 10) %>">
+                    </label>
+
+                    <label>
+                        Gender
+                        <select name="gender">
+                            <option value="">Select gender</option>
+                            <% profileGenderOptions.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= profile.gender === option.value ? 'selected' : '' %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
                     </label>
                 </div>
 

@@ -1,18 +1,90 @@
 const db = require('../db');
 
-function create(user, callback) {
-    const sql = `
-        INSERT INTO users (name, email, phone, password, role)
-        VALUES (?, ?, ?, ?, ?)
-    `;
+let customerDetailsSchemaReady = false;
+let customerDetailsSchemaPending = false;
+let customerDetailsSchemaQueue = [];
 
-    db.query(sql, [
-        user.name,
-        user.email,
-        user.phone || null,
-        user.password,
-        user.role || 'customer'
-    ], callback);
+function flushCustomerDetailsSchema(error) {
+    const queue = customerDetailsSchemaQueue;
+    customerDetailsSchemaQueue = [];
+    customerDetailsSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureCustomerDetailsSchema(callback) {
+    if (customerDetailsSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    customerDetailsSchemaQueue.push(callback);
+
+    if (customerDetailsSchemaPending) {
+        return;
+    }
+
+    customerDetailsSchemaPending = true;
+
+    db.query('SHOW COLUMNS FROM users', (columnError, columns = []) => {
+        if (columnError) {
+            flushCustomerDetailsSchema(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('age')) {
+            alters.push('ADD COLUMN age INT DEFAULT NULL AFTER phone');
+        }
+
+        if (!fields.has('birthday')) {
+            alters.push('ADD COLUMN birthday DATE DEFAULT NULL AFTER age');
+        }
+
+        if (!fields.has('gender')) {
+            alters.push("ADD COLUMN gender ENUM('female','male','non_binary','prefer_not_to_say','other') DEFAULT NULL AFTER birthday");
+        }
+
+        if (alters.length === 0) {
+            customerDetailsSchemaReady = true;
+            flushCustomerDetailsSchema(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE users ${alters.join(', ')}`, (alterError) => {
+            if (!alterError) {
+                customerDetailsSchemaReady = true;
+            }
+
+            flushCustomerDetailsSchema(alterError);
+        });
+    });
+}
+
+function create(user, callback) {
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT INTO users (name, email, phone, age, birthday, gender, password, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [
+            user.name,
+            user.email,
+            user.phone || null,
+            user.age || null,
+            user.birthday || null,
+            user.gender || null,
+            user.password,
+            user.role || 'customer'
+        ], callback);
+    });
 }
 
 function findByReferralCode(referralCode, callback) {
@@ -34,38 +106,52 @@ function findByReferralCode(referralCode, callback) {
 }
 
 function findByEmail(email, callback) {
-    const sql = `
-        SELECT user_id, name, email, phone, referral_code, password, role, glints_balance, created_at
-        FROM users
-        WHERE email = ?
-        LIMIT 1
-    `;
-
-    db.query(sql, [email], (error, results) => {
-        if (error) {
-            callback(error);
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        callback(null, results[0] || null);
+        const sql = `
+            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            FROM users
+            WHERE email = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [email], (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, results[0] || null);
+        });
     });
 }
 
 function findById(userId, callback) {
-    const sql = `
-        SELECT user_id, name, email, phone, referral_code, password, role, glints_balance, created_at
-        FROM users
-        WHERE user_id = ?
-        LIMIT 1
-    `;
-
-    db.query(sql, [userId], (error, results) => {
-        if (error) {
-            callback(error);
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        callback(null, results[0] || null);
+        const sql = `
+            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            FROM users
+            WHERE user_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [userId], (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, results[0] || null);
+        });
     });
 }
 
@@ -74,21 +160,28 @@ function findCustomerByPhone(phone, callback) {
     const localPhone = digits.startsWith('65') && digits.length === 10
         ? digits.slice(2)
         : digits;
-    const sql = `
-        SELECT user_id, name, email, phone, referral_code, password, role, glints_balance, created_at
-        FROM users
-        WHERE role = 'customer'
-            AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
-        LIMIT 1
-    `;
-
-    db.query(sql, [digits, localPhone], (error, results) => {
-        if (error) {
-            callback(error);
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        callback(null, results[0] || null);
+        const sql = `
+            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            FROM users
+            WHERE role = 'customer'
+                AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
+            LIMIT 1
+        `;
+
+        db.query(sql, [digits, localPhone], (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, results[0] || null);
+        });
     });
 }
 
@@ -111,13 +204,28 @@ function findByRole(role, callback) {
 }
 
 function updateProfile(userId, profile, callback) {
-    const sql = `
-        UPDATE users
-        SET name = ?, email = ?, phone = ?
-        WHERE user_id = ?
-    `;
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    db.query(sql, [profile.name, profile.email, profile.phone || null, userId], callback);
+        const sql = `
+            UPDATE users
+            SET name = ?, email = ?, phone = ?, age = ?, birthday = ?, gender = ?
+            WHERE user_id = ?
+        `;
+
+        db.query(sql, [
+            profile.name,
+            profile.email,
+            profile.phone || null,
+            profile.age || null,
+            profile.birthday || null,
+            profile.gender || null,
+            userId
+        ], callback);
+    });
 }
 
 function updatePassword(userId, passwordHash, callback) {
@@ -222,6 +330,7 @@ function getDashboardSummary(callback) {
 
 module.exports = {
     create,
+    ensureCustomerDetailsSchema,
     findByReferralCode,
     findByEmail,
     findCustomerByPhone,

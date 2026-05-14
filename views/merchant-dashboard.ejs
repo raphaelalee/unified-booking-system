@@ -11,6 +11,27 @@
     const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const recentOrders = salesReport?.recentOrders || [];
     const lowStockProducts = salesReport?.lowStockProducts || [];
+    const customerInsights = customerReport?.insights || {
+        totalCustomers: 0,
+        repeatCustomers: 0,
+        repeatRate: 0,
+        averageVisits: 0,
+        averageCustomerValue: 0,
+        topCustomers: [],
+        suggestedFocus: 'Customer patterns will appear after more bookings.',
+        topServiceName: 'No service',
+        peakHour: 'No bookings',
+        chartPayload: {
+            ageLabels: ['Not set'],
+            ageValues: [0],
+            genderLabels: ['Not set'],
+            genderValues: [0],
+            serviceLabels: ['No service'],
+            serviceValues: [0],
+            hourLabels: ['No bookings'],
+            hourValues: [0]
+        }
+    };
     const payoutSummary = salesReport?.payoutSummary || {
         grossOrderSales: 0,
         totalCommissionDeducted: 0,
@@ -28,7 +49,7 @@
         { label: 'Pending Appointments', value: pendingAppointments.length, icon: 'PA', trend: pendingAppointments.length > 0 ? -3 : 0, detail: 'need confirmation', accent: pendingAppointments.length > 0 ? 'yellow' : 'green', sparkline: makeSparkline(pendingAppointments.length) },
         { label: 'Repeat Customers', value: appointments.repeatCustomers || 0, icon: 'RC', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: 'booked more than once', accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
         { label: 'QR Walk-ins', value: appointments.qrWalkIns || 0, icon: 'QR', trend: checkedInBookings > 0 ? 7 : 0, detail: 'checked in today', accent: 'blue', sparkline: makeSparkline(checkedInBookings) },
-        { label: 'Loyalty Redemptions', value: appointments.loyaltyRedemptions || 0, icon: 'LR', trend: appointments.loyaltyRedemptions > 0 ? 5 : 0, detail: 'estimated rewards usage', accent: 'green', sparkline: makeSparkline(appointments.loyaltyRedemptions || 0) }
+        { label: 'Promo Redemptions', value: appointments.loyaltyRedemptions || 0, icon: 'PR', trend: appointments.loyaltyRedemptions > 0 ? 5 : 0, detail: 'real promotion uses', accent: 'green', sparkline: makeSparkline(appointments.loyaltyRedemptions || 0) }
     ];
     const statusLabels = {
         pending: 'pending',
@@ -47,8 +68,22 @@
     const merchantTabAlerts = {
         dashboard: pendingCheckIns + (validationReport?.issues?.length || 0),
         calendar: pendingAppointments.length,
+        insights: Math.max(0, Number(customerInsights.repeatCustomers || 0)),
         inventory: lowStockProducts.length,
         reviews: merchantReviews.length
+    };
+    const merchantChartPayload = {
+        salesLabels: (salesReport?.dailySales || []).map((day) => day.label),
+        salesRevenue: (salesReport?.dailySales || []).map((day) => Number(day.revenue || 0)),
+        salesOrders: (salesReport?.dailySales || []).map((day) => Number(day.orders || 0)),
+        ageLabels: customerInsights.chartPayload.ageLabels,
+        ageValues: customerInsights.chartPayload.ageValues,
+        genderLabels: customerInsights.chartPayload.genderLabels,
+        genderValues: customerInsights.chartPayload.genderValues,
+        serviceLabels: customerInsights.chartPayload.serviceLabels,
+        serviceValues: customerInsights.chartPayload.serviceValues,
+        hourLabels: customerInsights.chartPayload.hourLabels,
+        hourValues: customerInsights.chartPayload.hourValues
     };
     const merchantBadgeKey = `merchant-tab-badges:${merchant.id || merchant.salon_id || merchant.name || 'default'}`;
 %>
@@ -67,6 +102,7 @@
             <nav aria-label="Merchant dashboard sections">
                 <button type="button" class="merchant-topbar-tab active" data-merchant-tab="dashboard">Dashboard<% if (merchantTabAlerts.dashboard > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.dashboard > 99 ? '99+' : merchantTabAlerts.dashboard %></span><% } %></button>
                 <button type="button" class="merchant-topbar-tab" data-merchant-tab="calendar">Calendar<% if (merchantTabAlerts.calendar > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.calendar > 99 ? '99+' : merchantTabAlerts.calendar %></span><% } %></button>
+                <button type="button" class="merchant-topbar-tab" data-merchant-tab="insights">Customer Insights<% if (merchantTabAlerts.insights > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.insights > 99 ? '99+' : merchantTabAlerts.insights %></span><% } %></button>
                 <button type="button" class="merchant-topbar-tab" data-merchant-tab="inventory">Inventory<% if (merchantTabAlerts.inventory > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.inventory > 99 ? '99+' : merchantTabAlerts.inventory %></span><% } %></button>
                 <button type="button" class="merchant-topbar-tab" data-merchant-tab="reviews">Reviews<% if (merchantTabAlerts.reviews > 0) { %><span class="merchant-tab-badge" data-merchant-tab-badge><%= merchantTabAlerts.reviews > 99 ? '99+' : merchantTabAlerts.reviews %></span><% } %></button>
                 <a href="/merchant/promotions">Promotions</a>
@@ -122,6 +158,32 @@
                 </article>
             </section>
 
+            <section class="merchant-insight-grid">
+                <article class="merchant-chart-card span-8">
+                    <div class="merchant-card-heading">
+                        <div>
+                            <p class="eyebrow">Sales Analytics</p>
+                            <h2>Revenue and orders</h2>
+                        </div>
+                        <span class="merchant-data-pill">7 days</span>
+                    </div>
+                    <div class="merchant-chart-box"><canvas id="merchantSalesChart"></canvas></div>
+                </article>
+                <article class="merchant-chart-card span-4">
+                    <div class="merchant-card-heading">
+                        <div>
+                            <p class="eyebrow">Customer Signal</p>
+                            <h2>Smart recommendation</h2>
+                        </div>
+                    </div>
+                    <div class="merchant-insight-callout">
+                        <strong><%= customerInsights.topServiceName %></strong>
+                        <span>Peak demand: <%= customerInsights.peakHour %></span>
+                        <p><%= customerInsights.suggestedFocus %></p>
+                    </div>
+                </article>
+            </section>
+
             <div class="merchant-dashboard-lower-grid merchant-appointment-lower-grid">
                 <section class="merchant-orders-card">
                     <div class="merchant-card-heading">
@@ -146,6 +208,8 @@
                                     <div>
                                         <strong><%= booking.customerName %></strong>
                                         <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
+                                        <small>Age: <%= booking.customerAge || 'Not set' %> | Birthday: <%= booking.customerBirthday || 'Not set' %> | Gender: <%= booking.customerGender || 'Not set' %></small>
+                                        <small><%= booking.customerPhone || booking.customerEmail || 'Contact not set' %></small>
                                     </div>
                                     <em><%= ['checked_in', 'completed'].includes(booking.status) ? 'QR checked' : 'QR pending' %></em>
                                     <div class="merchant-booking-actions">
@@ -226,6 +290,86 @@
             </section>
         </section>
 
+        <section class="merchant-dashboard-panel" id="merchant-insights" data-merchant-panel="insights" hidden>
+            <section class="merchant-insight-grid">
+                <article class="merchant-kpi-card accent-blue">
+                    <span>Total customers</span>
+                    <strong><%= customerInsights.totalCustomers %></strong>
+                    <small>Unique customers who booked this merchant</small>
+                </article>
+                <article class="merchant-kpi-card accent-green">
+                    <span>Repeat rate</span>
+                    <strong><%= customerInsights.repeatRate %>%</strong>
+                    <small><%= customerInsights.repeatCustomers %> repeat customer<%= customerInsights.repeatCustomers === 1 ? '' : 's' %></small>
+                </article>
+                <article class="merchant-kpi-card accent-orange">
+                    <span>Avg visits</span>
+                    <strong><%= Number(customerInsights.averageVisits || 0).toFixed(1) %></strong>
+                    <small>Bookings per customer</small>
+                </article>
+                <article class="merchant-kpi-card accent-green">
+                    <span>Avg customer value</span>
+                    <strong>$<%= formatCurrency(customerInsights.averageCustomerValue) %></strong>
+                    <small>Estimated service spend per customer</small>
+                </article>
+            </section>
+
+            <section class="merchant-insight-grid">
+                <article class="merchant-chart-card span-6">
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Audience</p><h2>Age groups</h2></div></div>
+                    <div class="merchant-chart-box small"><canvas id="merchantAgeChart"></canvas></div>
+                </article>
+                <article class="merchant-chart-card span-6">
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Audience</p><h2>Gender mix</h2></div></div>
+                    <div class="merchant-chart-box small"><canvas id="merchantGenderChart"></canvas></div>
+                </article>
+                <article class="merchant-chart-card span-6">
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Demand</p><h2>Top services</h2></div></div>
+                    <div class="merchant-chart-box small"><canvas id="merchantServiceChart"></canvas></div>
+                </article>
+                <article class="merchant-chart-card span-6">
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Timing</p><h2>Peak booking hours</h2></div></div>
+                    <div class="merchant-chart-box small"><canvas id="merchantHourChart"></canvas></div>
+                </article>
+            </section>
+
+            <section class="merchant-dashboard-lower-grid">
+                <article class="merchant-orders-card">
+                    <div class="merchant-card-heading">
+                        <div>
+                            <p class="eyebrow">Retention</p>
+                            <h2>Top repeat customers</h2>
+                        </div>
+                    </div>
+                    <% if (!customerInsights.topCustomers.length) { %>
+                        <p class="muted">Customer retention data will appear after bookings are made.</p>
+                    <% } else { %>
+                        <div class="merchant-customer-list">
+                            <% customerInsights.topCustomers.forEach((customer) => { %>
+                                <article>
+                                    <strong><%= customer.customerName %></strong>
+                                    <span><%= customer.visits %> visit<%= customer.visits === 1 ? '' : 's' %> | $<%= formatCurrency(customer.spend) %></span>
+                                    <small><%= customer.customerAge || 'Age not set' %> | <%= customer.customerGender || 'Gender not set' %> | Last: <%= customer.lastBookingDate || 'Not set' %></small>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </article>
+                <article class="merchant-alert-card">
+                    <div class="merchant-card-heading">
+                        <div>
+                            <p class="eyebrow">Idea</p>
+                            <h2>What this means</h2>
+                        </div>
+                    </div>
+                    <div class="merchant-insight-callout">
+                        <strong>Use customer mix for smarter promos</strong>
+                        <p>Age, gender, service choice, and visit frequency help you decide which services to bundle, when to open more slots, and which customers to invite back.</p>
+                    </div>
+                </article>
+            </section>
+        </section>
+
         <section class="merchant-dashboard-panel" id="merchant-calendar" data-merchant-panel="calendar" hidden>
             <section class="merchant-calendar-shell">
                 <div class="merchant-card-heading">
@@ -297,6 +441,7 @@
                                             <span><%= booking.serviceName %></span>
                                         </div>
                                         <small><%= booking.customerName %></small>
+                                        <small>Age: <%= booking.customerAge || 'Not set' %> | <%= booking.customerGender || 'Gender not set' %></small>
                                         <em><%= statusLabels[booking.status] || booking.status %></em>
                                         <% if (['checked_in', 'completed'].includes(booking.status)) { %>
                                             <b>QR</b>
@@ -368,6 +513,7 @@
                                             <strong><%= booking.bookingTime || 'Time TBC' %></strong>
                                             <span><%= booking.serviceName %></span>
                                             <small><%= booking.customerName %></small>
+                                            <small>Age: <%= booking.customerAge || 'Not set' %> | <%= booking.customerGender || 'Gender not set' %></small>
                                             <div class="merchant-booking-actions calendar-actions">
                                                 <% if (['pending', 'paid'].includes(booking.status)) { %>
                                                     <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
@@ -514,13 +660,74 @@
     </div>
 </section>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     (() => {
+        const chartPayload = <%- JSON.stringify(merchantChartPayload) %>;
+        const chartPalette = {
+            green: '#4f6847',
+            blue: '#20899c',
+            orange: '#df7c16',
+            yellow: '#d4a017',
+            red: '#a64032'
+        };
+        const merchantCharts = [];
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 650 },
+            plugins: { legend: { labels: { boxWidth: 10, usePointStyle: true } } },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(79, 104, 71, 0.12)' } }
+            }
+        };
+        const makeChart = (id, config) => {
+            const canvas = document.getElementById(id);
+            if (!canvas || typeof Chart === 'undefined') return null;
+            const chart = new Chart(canvas, config);
+            merchantCharts.push(chart);
+            return chart;
+        };
+
+        makeChart('merchantSalesChart', {
+            type: 'line',
+            data: {
+                labels: chartPayload.salesLabels,
+                datasets: [
+                    { label: 'Revenue', data: chartPayload.salesRevenue, borderColor: chartPalette.green, backgroundColor: 'rgba(79, 104, 71, 0.12)', tension: 0.35, fill: true },
+                    { label: 'Orders', data: chartPayload.salesOrders, borderColor: chartPalette.blue, backgroundColor: 'rgba(32, 137, 156, 0.1)', tension: 0.35, fill: true }
+                ]
+            },
+            options: chartOptions
+        });
+        makeChart('merchantAgeChart', {
+            type: 'bar',
+            data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32, 137, 156, 0.28)', borderColor: chartPalette.blue, borderWidth: 2 }] },
+            options: chartOptions
+        });
+        makeChart('merchantGenderChart', {
+            type: 'doughnut',
+            data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [chartPalette.green, chartPalette.blue, chartPalette.orange, chartPalette.yellow, chartPalette.red] }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: { duration: 650 }, plugins: { legend: { position: 'bottom' } } }
+        });
+        makeChart('merchantServiceChart', {
+            type: 'bar',
+            data: { labels: chartPayload.serviceLabels, datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(79, 104, 71, 0.3)', borderColor: chartPalette.green, borderWidth: 2 }] },
+            options: { ...chartOptions, indexAxis: 'y' }
+        });
+        makeChart('merchantHourChart', {
+            type: 'bar',
+            data: { labels: chartPayload.hourLabels, datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223, 124, 22, 0.32)', borderColor: chartPalette.orange, borderWidth: 2 }] },
+            options: chartOptions
+        });
+
         const merchantTabButtons = Array.from(document.querySelectorAll('[data-merchant-tab]'));
         const merchantPanels = Array.from(document.querySelectorAll('[data-merchant-panel]'));
         const merchantHashMap = {
             '#merchant-overview': 'dashboard',
             '#merchant-calendar': 'calendar',
+            '#merchant-insights': 'insights',
             '#merchant-inventory': 'inventory',
             '#merchant-reviews': 'reviews'
         };
@@ -586,6 +793,9 @@
             }
 
             clearMerchantTabBadge(nextPanel);
+            requestAnimationFrame(() => {
+                merchantCharts.forEach((chart) => chart.resize());
+            });
         };
 
         merchantTabButtons.forEach((button) => {

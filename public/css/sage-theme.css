@@ -5879,6 +5879,106 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     line-height: 1;
 }
 
+.merchant-insight-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merchant-insight-grid > .span-8 {
+    grid-column: span 8;
+}
+
+.merchant-insight-grid > .span-6 {
+    grid-column: span 6;
+}
+
+.merchant-insight-grid > .span-4 {
+    grid-column: span 4;
+}
+
+.merchant-insight-grid > .merchant-kpi-card {
+    grid-column: span 3;
+}
+
+.merchant-chart-card {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.88);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.merchant-chart-box {
+    position: relative;
+    min-height: 260px;
+    margin-top: 12px;
+}
+
+.merchant-chart-box.small {
+    min-height: 230px;
+}
+
+.merchant-chart-box canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.merchant-data-pill {
+    align-self: start;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(72, 151, 86, 0.12);
+    color: var(--sage-ink);
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.merchant-insight-callout {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.62);
+}
+
+.merchant-insight-callout strong {
+    color: var(--sage-ink);
+    font-size: 1.25rem;
+}
+
+.merchant-insight-callout span,
+.merchant-insight-callout p {
+    margin: 0;
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-customer-list {
+    display: grid;
+    gap: 10px;
+}
+
+.merchant-customer-list article {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.48);
+}
+
+.merchant-customer-list strong {
+    color: var(--sage-ink);
+}
+
+.merchant-customer-list span,
+.merchant-customer-list small {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
 .merchant-kpi-card:hover,
 .merchant-calendar-booking:hover {
     transform: translateY(-2px);
@@ -7162,6 +7262,13 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .merchant-insight-grid > .span-8,
+    .merchant-insight-grid > .span-6,
+    .merchant-insight-grid > .span-4,
+    .merchant-insight-grid > .merchant-kpi-card {
+        grid-column: span 6;
+    }
+
     .admin-analytics-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -7213,8 +7320,16 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     }
 
     .merchant-kpi-grid,
+    .merchant-insight-grid,
     .merchant-appointment-list article {
         grid-template-columns: 1fr;
+    }
+
+    .merchant-insight-grid > .span-8,
+    .merchant-insight-grid > .span-6,
+    .merchant-insight-grid > .span-4,
+    .merchant-insight-grid > .merchant-kpi-card {
+        grid-column: span 1;
     }
 
     .admin-dashboard-header,
