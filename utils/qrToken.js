@@ -63,13 +63,43 @@ function verifyBookingCheckInToken(token) {
 }
 
 function getPublicBaseUrl(req) {
-    const configuredUrl = process.env.PUBLIC_BASE_URL;
+    const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+    return BASE_URL.replace(/\/$/, '');
+}
 
-    if (configuredUrl) {
-        return configuredUrl.replace(/\/$/, '');
+function slugify(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'merchant';
+}
+
+function getMerchantStorefrontSlug(merchant) {
+    const merchantId = merchant?.id || merchant?.salonId || merchant;
+    if (merchant?.slug) {
+        return String(merchant.slug);
     }
 
-    return `${req.protocol}://${req.get('host')}`;
+    if (merchant?.qrToken) {
+        return `${merchant.qrToken}-${merchantId}`;
+    }
+
+    const base = typeof merchant === 'object' ? slugify(merchant.name || merchant.salonName) : 'merchant';
+    return `${base}-${merchantId}`;
+}
+
+function parseMerchantStorefrontSlug(slug) {
+    const match = String(slug || '').match(/-(\d+)$/);
+    return match ? match[1] : null;
+}
+
+function getMerchantStorefrontPath(merchant) {
+    return `/m/${encodeURIComponent(getMerchantStorefrontSlug(merchant))}`;
+}
+
+function getMerchantStorefrontUrl(req, merchant) {
+    return `${getPublicBaseUrl(req)}${getMerchantStorefrontPath(merchant)}`;
 }
 
 function getMerchantScanPath(merchantId) {
@@ -81,7 +111,7 @@ function getMerchantScanUrl(req, merchantId) {
 }
 
 function getBookingCheckInPath(bookingId) {
-    return `/merchant/check-in/${encodeURIComponent(signBookingCheckInToken(bookingId))}`;
+    return `/checkin/${encodeURIComponent(signBookingCheckInToken(bookingId))}`;
 }
 
 function getBookingCheckInUrl(req, bookingId) {
@@ -91,8 +121,13 @@ function getBookingCheckInUrl(req, bookingId) {
 module.exports = {
     getBookingCheckInPath,
     getBookingCheckInUrl,
+    getMerchantStorefrontPath,
+    getMerchantStorefrontUrl,
+    getMerchantStorefrontSlug,
     getMerchantScanPath,
     getMerchantScanUrl,
+    getPublicBaseUrl,
+    parseMerchantStorefrontSlug,
     signMerchantToken,
     signBookingCheckInToken,
     verifyBookingCheckInToken,

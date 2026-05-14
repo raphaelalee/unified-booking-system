@@ -127,7 +127,7 @@
             </div>
         <% } %>
 
-        <form action="/book/<%= requestedServiceId || 'select' %>" method="POST" class="booking-form js-immediate-booking-form">
+        <form action="<%= bookingPath %>" method="POST" class="booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>">
             <div class="form-row">
                 <label>
                     Full name
@@ -214,6 +214,15 @@
                 <a class="button whatsapp-button full" href="<%= whatsappEnquiryUrl %>" target="_blank" rel="noopener">Continue on WhatsApp</a>
             </div>
         <% } %>
+        <% if (typeof qrDebug !== 'undefined' && qrDebug) { %>
+            <div class="whatsapp-booking-panel qr-debug-panel">
+                <p class="eyebrow">QR Debug</p>
+                <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
+                <p class="muted"><strong>URL:</strong> <%= qrDebug.url %></p>
+                <p class="muted"><strong>Token:</strong> <%= qrDebug.token %></p>
+                <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
+            </div>
+        <% } %>
     </aside>
 </section>
 
@@ -290,8 +299,10 @@
             return;
         }
 
+        const baseAction = bookingForm.dataset.bookingAction || bookingForm.action;
+
         const syncBookingAction = () => {
-            bookingForm.action = `/book/${encodeURIComponent(serviceSelect.value || 'select')}`;
+            bookingForm.action = baseAction;
             if (purchaseTypeField) {
                 purchaseTypeField.value = serviceSelect.selectedOptions[0]?.dataset.purchaseType || 'single';
             }

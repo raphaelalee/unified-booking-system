@@ -8,6 +8,7 @@
         totalCommissionDeducted: 0,
         totalNetPayout: 0
     };
+    const storefrontQrImage = typeof qrImage !== 'undefined' && qrImage ? qrImage : (typeof qrCodeDataUrl !== 'undefined' ? qrCodeDataUrl : null);
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
 %>
 
@@ -53,26 +54,38 @@
             <article class="merchant-alert-card">
                 <div class="merchant-card-heading">
                     <div>
-                        <p class="eyebrow">Booking QR</p>
-                        <h2>Walk-in booking link</h2>
+                        <p class="eyebrow">Scan to Book</p>
+                        <h2>Storefront booking QR</h2>
                     </div>
                 </div>
-                <p class="muted">Generate a scannable booking QR for your counter, social profile, or customer follow-up messages.</p>
+                <p class="muted">Customers can scan this QR to book directly from your storefront.</p>
                 <div class="merchant-inline-actions">
                     <form action="/merchant/generate-qr" method="POST">
                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                         <input type="hidden" name="returnTo" value="profile">
-                        <button class="button primary" type="submit">Generate QR code</button>
+                        <button class="button primary" type="submit">Generate storefront QR</button>
                     </form>
                     <% if (merchant.id) { %>
                         <a class="button secondary" href="/merchants/<%= merchant.id %>/qr">Open QR page</a>
                     <% } %>
                 </div>
-                <% if (qrCodeDataUrl && qrBookingUrl) { %>
+                <% if (storefrontQrImage && qrBookingUrl) { %>
                     <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
-                        <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+                        <img class="qr-code" src="<%= storefrontQrImage %>" alt="Merchant QR">
                     </a>
                     <p class="muted qr-link-wrap"><%= qrBookingUrl %></p>
+                    <div class="merchant-inline-actions">
+                        <a class="button secondary" href="<%= storefrontQrImage %>" download="vaniday-storefront-qr.png">Download QR</a>
+                        <button class="button secondary" type="button" onclick="window.print()">Print QR</button>
+                    </div>
+                    <% if (qrDebug) { %>
+                        <div class="qr-debug-panel">
+                            <p class="eyebrow">QR Debug</p>
+                            <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
+                            <p class="muted"><strong>Token:</strong> <%= qrDebug.token %></p>
+                            <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
+                        </div>
+                    <% } %>
                 <% } %>
             </article>
         </section>

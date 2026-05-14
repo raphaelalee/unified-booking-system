@@ -21,6 +21,7 @@
     const autoApprovedReschedules = Array.isArray(rescheduleTools.autoApproved) ? rescheduleTools.autoApproved : [];
     const pendingRescheduleReviews = Array.isArray(rescheduleTools.pendingReviews) ? rescheduleTools.pendingReviews : [];
     const rescheduleRecommendations = Array.isArray(rescheduleTools.recommendations) ? rescheduleTools.recommendations : [];
+    const storefrontQrImage = typeof qrImage !== 'undefined' && qrImage ? qrImage : (typeof qrCodeDataUrl !== 'undefined' ? qrCodeDataUrl : null);
     const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const recentOrders = salesReport?.recentOrders || [];
     const lowStockProducts = salesReport?.lowStockProducts || [];
@@ -352,13 +353,13 @@
                 <section class="merchant-alert-card">
                     <div class="merchant-card-heading">
                         <div>
-                            <p class="eyebrow">Check-in</p>
-                            <h2>QR check-in status</h2>
+                            <p class="eyebrow">Scan to Book</p>
+                            <h2>Storefront booking QR</h2>
                         </div>
                         <div class="merchant-inline-actions">
                             <form action="/merchant/generate-qr" method="POST">
                                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                <button class="text-button" type="submit">Generate QR</button>
+                                <button class="text-button" type="submit">Generate storefront QR</button>
                             </form>
                             <% if (qrBookingUrl) { %>
                                 <a class="text-button" href="<%= qrBookingUrl %>">Open booking link</a>
@@ -368,17 +369,30 @@
                         </div>
                     </div>
                     <div class="merchant-checkin-metrics">
-                        <p><span>QR walk-ins</span><strong><%= appointments.qrWalkIns || 0 %></strong></p>
+                        <p><span>Storefront walk-ins</span><strong><%= appointments.qrWalkIns || 0 %></strong></p>
                         <p><span>Checked-in/completed</span><strong><%= checkedInBookings %></strong></p>
                         <p><span>Pending check-ins</span><strong><%= pendingCheckIns %></strong></p>
                     </div>
-                    <% if (qrCodeDataUrl && qrBookingUrl) { %>
-                        <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open signed QR booking page">
-                            <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="QR code for <%= merchant.name %> booking page">
+                    <p class="muted">Customers can scan this QR to book directly from your storefront.</p>
+                    <% if (storefrontQrImage && qrBookingUrl) { %>
+                        <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open storefront booking page">
+                            <img class="qr-code" src="<%= storefrontQrImage %>" alt="Merchant QR">
                         </a>
                         <p class="muted qr-link-wrap"><%= qrBookingUrl %></p>
+                        <div class="merchant-inline-actions">
+                            <a class="button secondary" href="<%= storefrontQrImage %>" download="vaniday-storefront-qr.png">Download QR</a>
+                            <button class="button secondary" type="button" onclick="window.print()">Print QR</button>
+                        </div>
+                        <% if (qrDebug) { %>
+                            <div class="qr-debug-panel">
+                                <p class="eyebrow">QR Debug</p>
+                                <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
+                                <p class="muted"><strong>Token:</strong> <%= qrDebug.token %></p>
+                                <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
+                            </div>
+                        <% } %>
                     <% } else { %>
-                        <p class="muted">Generate your merchant QR code for walk-in customers and in-store booking displays.</p>
+                        <p class="muted">Generate your permanent Scan to Book QR for walk-in customers and in-store booking displays.</p>
                     <% } %>
                 </section>
             </div>

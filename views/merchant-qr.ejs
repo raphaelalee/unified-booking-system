@@ -1,27 +1,42 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const storefrontQrImage = typeof qrImage !== 'undefined' && qrImage ? qrImage : qrCodeDataUrl;
+%>
+
 <section class="page-title split">
     <div>
-        <p class="eyebrow">Merchant QR code</p>
+        <p class="eyebrow">Scan to Book</p>
         <h1><%= merchant.name %></h1>
         <p>
-            Display this QR code at the shop or online. Customers can scan it to open
-            this merchant's booking page without installing an app.
+            Display this permanent storefront QR code at the shop or online. Customers can scan it to browse services and book without installing an app.
         </p>
         <p class="muted"><%= merchant.location %> &middot; <%= merchant.category %></p>
     </div>
 
     <div class="promo-panel qr-panel">
-        <p class="eyebrow">Scan to book</p>
+        <p class="eyebrow">Storefront QR</p>
         <a class="qr-code-link" href="<%= bookingUrl %>" aria-label="Open booking page for <%= merchant.name %>">
             <img
                 class="qr-code"
-                src="<%= qrCodeDataUrl %>"
+                src="<%= storefrontQrImage %>"
                 alt="QR code for <%= merchant.name %> booking page"
             >
         </a>
         <p class="muted">Encoded booking link:</p>
         <a class="text-link qr-link" href="<%= bookingUrl %>"><%= bookingUrl %></a>
+        <div class="hero-actions">
+            <a class="button secondary" href="<%= storefrontQrImage %>" download="vaniday-storefront-qr.png">Download QR</a>
+            <button class="button secondary" type="button" onclick="window.print()">Print QR</button>
+        </div>
+        <% if (typeof qrDebug !== 'undefined' && qrDebug) { %>
+            <div class="qr-debug-panel">
+                <p class="eyebrow">QR Debug</p>
+                <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
+                <p class="muted"><strong>Token:</strong> <%= qrDebug.token %></p>
+                <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
+            </div>
+        <% } %>
     </div>
 </section>
 

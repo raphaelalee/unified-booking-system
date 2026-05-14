@@ -5838,6 +5838,19 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     overflow-wrap: anywhere;
 }
 
+.qr-debug-panel {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px dashed rgba(79, 104, 71, 0.35);
+    border-radius: 8px;
+    background: rgba(246, 248, 241, 0.72);
+}
+
+.qr-debug-panel p {
+    margin: 0 0 6px;
+    overflow-wrap: anywhere;
+}
+
 .merchant-appointment-dashboard .merchant-analytics-shell {
     width: min(1280px, 100%);
 }

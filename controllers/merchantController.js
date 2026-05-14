@@ -17,8 +17,11 @@ const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publ
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const {
     getBookingCheckInUrl,
-    getMerchantScanPath,
-    getMerchantScanUrl,
+    getMerchantStorefrontPath,
+    getMerchantStorefrontSlug,
+    getMerchantStorefrontUrl,
+    parseMerchantStorefrontSlug,
+    signMerchantToken,
     verifyBookingCheckInToken,
     verifyMerchantToken
 } = require('../utils/qrToken');
@@ -203,8 +206,8 @@ function getBookingPath(merchant, service = null) {
 }
 
 function getSecureBookingPath(merchant, service = null) {
-    const path = getMerchantScanPath(merchant.id);
-    const serviceQuery = service ? `&serviceId=${encodeURIComponent(service.id)}` : '';
+    const path = getMerchantStorefrontPath(merchant);
+    const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
 
     return `${path}${serviceQuery}`;
 }
@@ -214,9 +217,9 @@ function getBookingUrl(req, merchant, service = null) {
 }
 
 function getSecureBookingUrl(req, merchant, service = null) {
-    const serviceQuery = service ? `&serviceId=${encodeURIComponent(service.id)}` : '';
+    const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
 
-    return `${getMerchantScanUrl(req, merchant.id)}${serviceQuery}`;
+    return `${getMerchantStorefrontUrl(req, merchant)}${serviceQuery}`;
 }
 
 function getPromotionQueryParams(promotion = null) {
@@ -457,6 +460,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         bookingUrl,
         encodedBookingUrl: encodeURIComponent(bookingUrl),
         whatsappEnquiryUrl: getWhatsAppEnquiryUrl(bookingMerchant, selectedService, bookingUrl),
+        qrDebug: options.qrDebug || null,
         todayDate: getTodayInputValue(),
         publicHolidays: getPublicHolidayDateMap()
     });
@@ -945,7 +949,7 @@ function buildPublicPromotionOffer(promotion, service) {
         priceTier: pricing.price < 30 ? '$' : pricing.price < 55 ? '$$' : pricing.price < 80 ? '$$$' : '$$$$',
         regions: [promotion.address || 'No address set', service.category || service.name],
         serviceBookingPath: appendQueryParams(
-            getMerchantScanPath(promotion.salonId),
+            getMerchantStorefrontPath({ id: promotion.salonId, name: promotion.salonName }),
             {
                 source: 'promotions',
                 promotionId: promotion.id,
@@ -1337,7 +1341,8 @@ function showMerchantQr(req, res) {
             });
         }
 
-        const bookingUrl = getMerchantScanUrl(req, merchant.id);
+        const bookingUrl = getMerchantStorefrontUrl(req, merchant);
+        const storefrontSlug = getMerchantStorefrontSlug(merchant);
 
         return QRCode.toDataURL(bookingUrl, { errorCorrectionLevel: 'M', margin: 2, width: 280 }, (qrError, qrCodeDataUrl) => {
             if (qrError) {
@@ -1352,9 +1357,111 @@ function showMerchantQr(req, res) {
                 title: `${merchant.name} QR Code`,
                 merchant,
                 bookingUrl,
-                qrCodeDataUrl
+                qrImage: qrCodeDataUrl,
+                qrCodeDataUrl,
+                qrDebug: {
+                    system: 'storefront',
+                    label: 'Scan to Book',
+                    token: storefrontSlug,
+                    routeTarget: `/m/${storefrontSlug}`,
+                    url: bookingUrl
+                }
             });
         });
+    });
+}
+
+function loadStorefrontMerchant(req, res, callback) {
+    const merchantId = parseMerchantStorefrontSlug(req.params.merchantSlug);
+
+    if (merchantId) {
+        return MerchantService.getMerchantBySalonId(merchantId, (error, merchant) => {
+            if (error) {
+                console.error(error);
+                return res.status(500).render('error', {
+                    title: 'Storefront Error',
+                    message: 'The merchant storefront could not be loaded.'
+                });
+            }
+
+            if (!merchant) {
+                return res.status(404).render('error', {
+                    title: 'Storefront Not Found',
+                    message: 'This merchant storefront could not be found.'
+                });
+            }
+
+            return callback(merchant);
+        });
+    }
+
+    return MerchantService.getSalons((listError, salons = []) => {
+        if (listError) {
+            console.error(listError);
+            return res.status(500).render('error', {
+                title: 'Storefront Error',
+                message: 'The merchant storefront could not be loaded.'
+            });
+        }
+
+        const matchedSalon = salons.find((salon) => {
+            const generatedSlug = getMerchantStorefrontSlug({
+                id: salon.salon_id,
+                name: salon.salon_name
+            });
+            const cleanSlug = generatedSlug.replace(/-\d+$/, '');
+
+            return cleanSlug === req.params.merchantSlug || generatedSlug === req.params.merchantSlug;
+        });
+
+        if (!matchedSalon) {
+            return res.status(404).render('error', {
+                title: 'Storefront Not Found',
+                message: 'This merchant storefront QR link is invalid.'
+            });
+        }
+
+        return MerchantService.getMerchantBySalonId(matchedSalon.salon_id, (error, merchant) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Storefront Error',
+                message: 'The merchant storefront could not be loaded.'
+            });
+        }
+
+        if (!merchant) {
+            return res.status(404).render('error', {
+                title: 'Storefront Not Found',
+                message: 'This merchant storefront could not be found.'
+            });
+        }
+
+        return callback(merchant);
+        });
+    });
+}
+
+function showMerchantStorefront(req, res) {
+    return loadStorefrontMerchant(req, res, (merchant) => {
+        return renderBookingPage(req, res, merchant, {
+            secureQr: true,
+            qrDebug: {
+                system: 'storefront',
+                label: 'Scan to Book',
+                token: req.params.merchantSlug,
+                routeTarget: `/m/${req.params.merchantSlug}`,
+                url: getMerchantStorefrontUrl(req, merchant)
+            }
+        });
+    });
+}
+
+function saveStorefrontBooking(req, res) {
+    return loadStorefrontMerchant(req, res, (merchant) => {
+        req.params.merchantId = merchant.id;
+        req.query.token = signMerchantToken(merchant.id);
+        return saveSecureScanBooking(req, res);
     });
 }
 
@@ -2714,10 +2821,12 @@ module.exports = {
     listMerchants,
     showMerchant,
     showMerchantQr,
+    showMerchantStorefront,
     showBookingPage,
     showPublicMerchantBooking,
     showSecureScanBooking,
     saveQrBooking,
+    saveStorefrontBooking,
     saveSecureScanBooking,
     showBookingCheckIn,
     confirmBookingCheckIn,

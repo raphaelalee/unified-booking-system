@@ -46,9 +46,16 @@
         </article>
 
         <aside class="receipt-qr-panel">
-            <p class="eyebrow">Email QR preview</p>
+            <p class="eyebrow">Scan to Check In</p>
             <img class="qr-code" src="<%= booking.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= booking.id %>">
-            <p class="muted"><%= emailSkipped ? 'Use this QR code when checking in.' : 'This is the same QR code included in your booking email.' %></p>
+            <p class="muted"><%= emailSkipped ? 'Use this dynamic QR when checking in.' : 'This is the same attendance QR included in your booking email.' %></p>
+            <a class="qr-link" href="<%= booking.checkinUrl %>"><%= booking.checkinUrl %></a>
+            <div class="qr-debug-panel">
+                <p class="eyebrow">QR Debug</p>
+                <p class="muted"><strong>System:</strong> booking-check-in</p>
+                <p class="muted"><strong>Token:</strong> <%= booking.checkinToken %></p>
+                <p class="muted"><strong>Route target:</strong> /checkin/<%= booking.checkinToken %></p>
+            </div>
         </aside>
     </div>
 </section>

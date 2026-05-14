@@ -8,10 +8,11 @@ const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayName } = require('../utils/publicHolidays');
-
-function getPublicBaseUrl(req) {
-    return (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-}
+const {
+    getBookingCheckInUrl,
+    signBookingCheckInToken,
+    verifyBookingCheckInToken
+} = require('../utils/qrToken');
 
 function isValidBookingDate(value) {
     if (!value) {
@@ -75,6 +76,21 @@ function setProfileError(req, message) {
 
 function setProfileSuccess(req, message) {
     req.session.profileSuccess = message;
+}
+
+function isCheckInExpired(booking) {
+    const rawDate = booking.booking_date instanceof Date
+        ? booking.booking_date.toISOString().slice(0, 10)
+        : String(booking.booking_date || '').slice(0, 10);
+    const bookingDate = new Date(`${rawDate}T23:59:59`);
+
+    if (Number.isNaN(bookingDate.getTime())) {
+        return false;
+    }
+
+    const expiry = new Date(bookingDate);
+    expiry.setDate(expiry.getDate() + 1);
+    return new Date() > expiry;
 }
 
 function wantsJson(req) {
@@ -291,7 +307,8 @@ function createBooking(req, res) {
 
             try {
                 const bookingId = result.insertId;
-                const checkinUrl = `${getPublicBaseUrl(req)}/booking/confirm/${encodeURIComponent(bookingId)}`;
+                const checkinUrl = getBookingCheckInUrl(req, bookingId);
+                const checkinToken = signBookingCheckInToken(bookingId);
                 const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
                     errorCorrectionLevel: 'M',
                     margin: 2,
@@ -311,6 +328,7 @@ function createBooking(req, res) {
                         bookingDate,
                         bookingTime,
                         checkinUrl,
+                        checkinToken,
                         qrCodeDataUrl
                     });
                     emailSkipped = Boolean(emailResult?.skipped);
@@ -332,6 +350,7 @@ function createBooking(req, res) {
                         bookingDate,
                         bookingTime,
                         checkinUrl,
+                        checkinToken,
                         qrCodeDataUrl
                     },
                     emailSkipped
@@ -461,6 +480,113 @@ function cancelBooking(req, res) {
                     cancellationReason: reason,
                     refundStatus,
                     cancelledAt: new Date().toISOString()
+                }
+            });
+        });
+    });
+}
+
+function showCheckIn(req, res) {
+    const bookingId = verifyBookingCheckInToken(req.params.signedToken);
+
+    if (!bookingId) {
+        return res.status(403).render('error', {
+            title: 'Invalid Check-In QR',
+            message: 'This booking check-in QR is invalid.'
+        });
+    }
+
+    return Booking.getReceiptById(bookingId, (lookupError, booking) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Check-In Error',
+                message: 'The booking could not be loaded.'
+            });
+        }
+
+        if (!booking) {
+            return res.status(404).render('error', {
+                title: 'Booking Not Found',
+                message: 'This booking could not be found.'
+            });
+        }
+
+        if (isCheckInExpired(booking)) {
+            return res.status(410).render('error', {
+                title: 'Check-In Expired',
+                message: 'This booking check-in QR has expired after the appointment window.'
+            });
+        }
+
+        return res.render('booking-checkin', {
+            title: 'Scan to Check In',
+            booking,
+            checkinUrl: getBookingCheckInUrl(req, bookingId),
+            qrDebug: {
+                system: 'booking-check-in',
+                label: 'Scan to Check In',
+                token: req.params.signedToken,
+                routeTarget: `/checkin/${req.params.signedToken}`,
+                url: getBookingCheckInUrl(req, bookingId)
+            }
+        });
+    });
+}
+
+function confirmCheckIn(req, res) {
+    const bookingId = verifyBookingCheckInToken(req.params.signedToken);
+
+    if (!bookingId) {
+        return res.status(403).render('error', {
+            title: 'Invalid Check-In QR',
+            message: 'This booking check-in QR is invalid.'
+        });
+    }
+
+    return Booking.getReceiptById(bookingId, (lookupError, booking) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Check-In Error',
+                message: 'The booking could not be loaded.'
+            });
+        }
+
+        if (!booking) {
+            return res.status(404).render('error', {
+                title: 'Booking Not Found',
+                message: 'This booking could not be found.'
+            });
+        }
+
+        if (isCheckInExpired(booking)) {
+            return res.status(410).render('error', {
+                title: 'Check-In Expired',
+                message: 'This booking check-in QR has expired after the appointment window.'
+            });
+        }
+
+        return Booking.markCheckedInByToken(bookingId, (updateError) => {
+            if (updateError) {
+                console.error(updateError);
+                return res.status(500).render('error', {
+                    title: 'Check-In Error',
+                    message: 'The booking could not be checked in.'
+                });
+            }
+
+            return res.render('booking-checkin', {
+                title: 'Checked In',
+                booking: { ...booking, status: 'checked_in' },
+                success: 'You are checked in for this appointment.',
+                checkinUrl: getBookingCheckInUrl(req, bookingId),
+                qrDebug: {
+                    system: 'booking-check-in',
+                    label: 'Scan to Check In',
+                    token: req.params.signedToken,
+                    routeTarget: `/checkin/${req.params.signedToken}`,
+                    url: getBookingCheckInUrl(req, bookingId)
                 }
             });
         });
@@ -871,10 +997,12 @@ function submitReview(req, res) {
 
 module.exports = {
     cancelBooking,
+    confirmCheckIn,
     confirmBooking,
     createBooking,
     getRescheduleSuggestions,
     rescheduleBooking,
+    showCheckIn,
     submitReview,
     showBookFallback
 };

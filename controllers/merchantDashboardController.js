@@ -6,7 +6,10 @@ const Promotion = require('../models/Promotion');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
-const { getMerchantScanUrl } = require('../utils/qrToken');
+const {
+    getMerchantStorefrontSlug,
+    getMerchantStorefrontUrl
+} = require('../utils/qrToken');
 
 function renderMerchantLookupError(res, error, merchant) {
     if (error) {
@@ -27,6 +30,37 @@ function renderMerchantLookupError(res, error, merchant) {
     }
 
     return false;
+}
+
+function buildStorefrontQrPayload(req, merchant, callback) {
+    const storefrontSlug = getMerchantStorefrontSlug(merchant);
+    const merchantWithSlug = { ...merchant, slug: storefrontSlug };
+    const qrUrl = getMerchantStorefrontUrl(req, merchantWithSlug);
+
+    return QRCode.toDataURL(qrUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 320
+    }, (error, qrImage) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, {
+            merchant: merchantWithSlug,
+            qrImage,
+            qrCodeDataUrl: qrImage,
+            qrBookingUrl: qrUrl,
+            qrDebug: {
+                system: 'storefront',
+                label: 'Scan to Book',
+                token: storefrontSlug,
+                routeTarget: `/m/${storefrontSlug}`,
+                url: qrUrl
+            }
+        });
+    });
 }
 
 function formatDateInputValue(value) {
@@ -891,9 +925,9 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             req.session.merchantSuccess = null;
                             req.session.merchantError = null;
 
-                            return res.status(options.status || 200).render(options.viewName || 'merchant-dashboard', {
+                            const renderView = (qrPayload = {}) => res.status(options.status || 200).render(options.viewName || 'merchant-dashboard', {
                                 title: options.title || 'Merchant Dashboard',
-                                merchant,
+                                merchant: qrPayload.merchant || { ...merchant, slug: getMerchantStorefrontSlug(merchant) },
                                 success,
                                 error,
                                 databaseError: Boolean(bookingError || promotionError || productError || orderError || reviewSummaryError || reviewListError),
@@ -907,8 +941,23 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 reviewSummary: safeReviewSummary,
                                 reviews: safeReviews,
                                 promotions: safePromotions,
-                                qrCodeDataUrl: options.qrCodeDataUrl || null,
-                                qrBookingUrl: options.qrBookingUrl || null
+                                qrImage: options.qrImage || qrPayload.qrImage || options.qrCodeDataUrl || null,
+                                qrCodeDataUrl: options.qrCodeDataUrl || qrPayload.qrCodeDataUrl || options.qrImage || null,
+                                qrBookingUrl: options.qrBookingUrl || qrPayload.qrBookingUrl || null,
+                                qrDebug: options.qrDebug || qrPayload.qrDebug || null
+                            });
+
+                            if (options.qrImage || options.qrCodeDataUrl) {
+                                return renderView();
+                            }
+
+                            return buildStorefrontQrPayload(req, merchant, (qrError, qrPayload) => {
+                                if (qrError) {
+                                    console.error(qrError);
+                                    return renderView();
+                                }
+
+                                return renderView(qrPayload);
                             });
                                 });
                             });
@@ -975,13 +1024,7 @@ function generateQr(req, res) {
             return handled;
         }
 
-        const qrBookingUrl = getMerchantScanUrl(req, merchant.id);
-
-        return QRCode.toDataURL(qrBookingUrl, {
-            errorCorrectionLevel: 'M',
-            margin: 2,
-            width: 280
-        }, (qrError, qrCodeDataUrl) => {
+        return buildStorefrontQrPayload(req, merchant, (qrError, qrPayload) => {
             if (qrError) {
                 console.error(qrError);
                 return renderMerchantDashboard(req, res, merchant, {
@@ -998,8 +1041,10 @@ function generateQr(req, res) {
                 title: req.body.returnTo === 'profile' ? 'Merchant Profile' : 'Merchant Dashboard',
                 success: 'Merchant QR code generated.',
                 error: null,
-                qrCodeDataUrl,
-                qrBookingUrl
+                qrImage: qrPayload.qrImage,
+                qrCodeDataUrl: qrPayload.qrCodeDataUrl,
+                qrBookingUrl: qrPayload.qrBookingUrl,
+                qrDebug: qrPayload.qrDebug
             });
         });
     });

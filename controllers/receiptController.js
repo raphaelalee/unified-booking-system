@@ -5,16 +5,17 @@ const PDFDocument = require('pdfkit');
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const {
+    getBookingCheckInUrl,
+    getPublicBaseUrl,
+    signBookingCheckInToken
+} = require('../utils/qrToken');
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
         || process.env.QR_TOKEN_SECRET
         || process.env.SESSION_SECRET
         || 'vaniday_secret_key';
-}
-
-function getPublicBaseUrl(req) {
-    return (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 }
 
 function signCheckinToken(receipt) {
@@ -171,10 +172,10 @@ async function buildReceiptViewModel(req, id) {
         return null;
     }
 
-    const token = signCheckinToken(receipt);
+    const token = receipt.type === 'booking' ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
     const checkinUrl = receipt.type === 'booking'
-        ? `${getPublicBaseUrl(req)}/booking/confirm/${encodeURIComponent(receipt.id)}`
-        : `${getPublicBaseUrl(req)}/checkin/${encodeURIComponent(receipt.id)}?token=${encodeURIComponent(token)}`;
+        ? getBookingCheckInUrl(req, receipt.id)
+        : `${getPublicBaseUrl(req)}/receipt-checkin/${encodeURIComponent(receipt.id)}?token=${encodeURIComponent(token)}`;
     const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
         errorCorrectionLevel: 'M',
         margin: 2,
@@ -186,6 +187,7 @@ async function buildReceiptViewModel(req, id) {
         receipt,
         supportRequestPath: `/help-center?receiptId=${encodeURIComponent(receipt.id)}`,
         checkinUrl,
+        checkinToken: token,
         qrCodeDataUrl,
         paidAtLabel: new Date(receipt.paidAt).toLocaleString('en-SG', {
             dateStyle: 'medium',

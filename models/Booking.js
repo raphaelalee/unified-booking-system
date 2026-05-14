@@ -1334,6 +1334,17 @@ function markCheckedIn(bookingId, merchantUserId, callback) {
     db.query(sql, [bookingId, merchantUserId], callback);
 }
 
+function markCheckedInByToken(bookingId, callback) {
+    const sql = `
+        UPDATE bookings
+        SET status = 'checked_in'
+        WHERE booking_id = ?
+            AND status NOT IN ('cancelled', 'completed', 'no_show')
+    `;
+
+    db.query(sql, [bookingId], callback);
+}
+
 function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
     const allowedStatuses = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
     const nextStatus = String(status || '').trim().toLowerCase();
@@ -1397,6 +1408,7 @@ module.exports = {
     markCancelled,
     markCompleted,
     markCheckedIn,
+    markCheckedInByToken,
     listRescheduleRequestsForMerchant,
     reviewRescheduleRequest,
     updateRescheduleSettings,
