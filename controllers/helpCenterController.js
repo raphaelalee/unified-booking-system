@@ -12,12 +12,12 @@ const {
 const ACTIVE_REQUEST_LIMIT = 5;
 const SHIPPED_STATUSES = ['shipped', 'delivered'];
 const ORDER_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
+const REFUND_REQUEST_TYPES = ['order_refund', 'booking_refund'];
+const REFUND_TERMS_VERSION = 'refund-policy-2026-05';
 
 const requestLabels = {
     order_refund: 'Order refund',
-    booking_refund: 'Booking refund',
-    booking_cancel: 'Booking cancellation',
-    booking_change: 'Booking change'
+    booking_refund: 'Booking refund'
 };
 
 const statusLabels = {
@@ -138,6 +138,14 @@ function calculateLateFee(amount) {
     }
 
     return Math.round(Math.max(8, base * 0.2) * 100) / 100;
+}
+
+function getApprovedRefundAmount(request) {
+    return Math.max(0, Math.round((Number(request.refundAmount || 0) - Number(request.lateFeeAmount || 0)) * 100) / 100);
+}
+
+function isRefundRequest(requestType) {
+    return REFUND_REQUEST_TYPES.includes(requestType);
 }
 
 function normalizeRequestDate(value) {
@@ -279,23 +287,23 @@ function getRoleCopy(role) {
     if (role === 'admin') {
         return {
             eyebrow: 'Vaniday admin support',
-            heading: 'Help Center control desk',
-            description: 'Review customer refund requests, send them to merchants, and close the final decision with a clear audit trail.'
+            heading: 'Refund approval desk',
+            description: 'Review customer refund submissions, ask the merchant for approval, and issue the final refund only after the policy checks pass.'
         };
     }
 
     if (role === 'merchant') {
         return {
             eyebrow: 'Merchant support',
-            heading: 'Refunds, booking changes, and fulfilment',
-            description: 'Respond to customer requests that admin sends to you, and update order delivery progress from one clean workspace.'
+            heading: 'Merchant refund review',
+            description: 'Review refund requests that Vaniday admin sends to you, then approve or decline with a clear note.'
         };
     }
 
     return {
         eyebrow: 'Customer Help Center',
-        heading: 'Refunds and booking support',
-        description: 'Request help for paid orders and service bookings. Vaniday reviews refund cases first, then checks with the merchant where needed.'
+        heading: 'Refund requests',
+        description: 'Submit refund requests for paid orders or bookings. Vaniday reviews the case first, then asks the merchant before any refund is issued.'
     };
 }
 
@@ -412,14 +420,18 @@ async function replyToRequest(req, res) {
             screenshotPath: screenshot
         });
 
-        notifyAdmins({
-            actorUserId: req.session.user.id,
-            type: 'support_request',
-            title: `New reply on ticket #${request.id}`,
-            message: `${req.session.user.name || 'A user'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`,
-            linkUrl: '/help-center',
-            dedupeKey: `support-reply-admin-${request.id}-${Date.now()}`
-        });
+        const replyEventKey = `${request.id}-${Date.now()}`;
+
+        if (req.session.user.role !== 'admin') {
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: `New reply on ticket #${request.id}`,
+                message: `${req.session.user.name || 'A user'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-reply-admin-${replyEventKey}`
+            });
+        }
 
         if (req.session.user.role !== 'customer') {
             notifyCustomer(request.customerUserId, {
@@ -428,7 +440,20 @@ async function replyToRequest(req, res) {
                 title: `Support replied to ticket #${request.id}`,
                 message: 'There is a new support reply waiting for you.',
                 linkUrl: '/help-center',
-                dedupeKey: `support-reply-customer-${request.id}-${Date.now()}`
+                dedupeKey: `support-reply-customer-${replyEventKey}`
+            });
+        }
+
+        if (request.merchantUserId && req.session.user.role !== 'merchant') {
+            notifyMerchant(request.merchantUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: `New reply on ticket #${request.id}`,
+                message: req.session.user.role === 'customer'
+                    ? `${req.session.user.name || 'A customer'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`
+                    : `Vaniday admin replied to ${(requestLabels[request.requestType] || 'a support ticket').toLowerCase()} #${request.id}.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-reply-merchant-${replyEventKey}`
             });
         }
 
@@ -481,6 +506,14 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         throw new Error('This order is already cancelled.');
     }
 
+    if (order.refundStatus === 'refunded' || Number(order.refundedAmount || 0) > 0) {
+        throw new Error('This order has already been refunded.');
+    }
+
+    if (!order.merchantUserIds[0]) {
+        throw new Error('This order cannot be refunded through the Help Center because the merchant could not be verified.');
+    }
+
     return {
         customerUserId: req.session.user.id,
         merchantUserId: order.merchantUserIds[0] || null,
@@ -492,12 +525,15 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         reason: cleanText(body.reason, 160),
         customerNote: cleanText(body.customerNote),
         refundAmount: Number(order.totalAmount || 0),
+        approvedRefundAmount: Number(order.totalAmount || 0),
+        customerTermsAccepted: true,
+        customerTermsVersion: REFUND_TERMS_VERSION,
         deliveryStatus: order.deliveryStatus
     };
 }
 
 async function buildBookingRequest(req, requestType, targetId, body) {
-    const allowed = ['booking_refund', 'booking_cancel'];
+    const allowed = ['booking_refund'];
 
     if (!allowed.includes(requestType)) {
         throw new Error('This booking request type is not supported.');
@@ -517,6 +553,10 @@ async function buildBookingRequest(req, requestType, targetId, body) {
 
     if (booking.status === 'cancelled') {
         throw new Error('This booking is already cancelled.');
+    }
+
+    if (!booking.transaction_id && booking.status !== 'paid') {
+        throw new Error('Only paid bookings can be submitted for refund review.');
     }
 
     const dayDifference = getDayDifferenceFromToday(booking.booking_date);
@@ -543,8 +583,11 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         customerNote: cleanText(body.customerNote),
         requestedChange: null,
         refundAmount,
+        approvedRefundAmount: Math.max(0, refundAmount - (isLateCancellation ? calculateLateFee(refundAmount) : 0)),
         lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0,
-        isLateCancellation
+        isLateCancellation,
+        customerTermsAccepted: true,
+        customerTermsVersion: REFUND_TERMS_VERSION
     };
 }
 
@@ -554,8 +597,8 @@ async function createRequest(req, res) {
         const targetType = cleanText(req.body.targetType, 20);
         const targetId = cleanText(req.body.targetId, 80);
 
-        if (!requestLabels[requestType]) {
-            throw new Error('Please choose a valid request type.');
+        if (!isRefundRequest(requestType)) {
+            throw new Error('Please choose a valid refund request type.');
         }
 
         if (!['order', 'booking'].includes(targetType)) {
@@ -578,6 +621,10 @@ async function createRequest(req, res) {
         const duplicateExists = await hasActiveRequest(req.session.user.id, targetType, duplicateTargetId, []);
         if (duplicateExists) {
             throw new Error('There is already an open support request for this order or booking.');
+        }
+
+        if (req.body.acceptRefundTerms !== 'on') {
+            throw new Error('Please accept the refund terms before submitting your request.');
         }
 
         const data = targetType === 'order'
@@ -604,7 +651,7 @@ async function createRequest(req, res) {
         notifyUser(req.session.user, {
             type: 'support_request',
             title: 'Support request submitted',
-            message: `${label} #${requestId} has been submitted. We will update you once it moves to the next step.`,
+            message: `${label} #${requestId} has been submitted and is pending admin review. We will notify you at each next step.`,
             linkUrl,
             dedupeKey: `support-customer-created-${requestId}`
         });
@@ -617,17 +664,6 @@ async function createRequest(req, res) {
             linkUrl,
             dedupeKey: `support-admin-created-${requestId}`
         });
-
-        if (data.status === 'pending_merchant_review') {
-            notifyMerchant(data.merchantUserId, {
-                actorUserId: req.session.user.id,
-                type: 'support_request',
-                title: 'Booking change request',
-                message: `${req.session.user.name || 'A customer'} requested a booking change. Please approve or decline it in Help Center.`,
-                linkUrl,
-                dedupeKey: `support-merchant-created-${requestId}`
-            });
-        }
 
         return sendSupportResponse(req, res, {
             success: true,
@@ -648,6 +684,10 @@ async function adminSendToMerchant(req, res) {
 
         if (!request) {
             throw new Error('Support request not found.');
+        }
+
+        if (!isRefundRequest(request.requestType) || request.status !== 'pending_admin_review') {
+            throw new Error('Only new refund requests can be sent to the merchant.');
         }
 
         if (!request.merchantUserId) {
@@ -701,25 +741,18 @@ async function merchantRespond(req, res) {
         const decision = req.body.decision === 'approved' ? 'approved' : 'declined';
         const note = cleanText(req.body.merchantNote);
 
-        if (request.requestType === 'booking_change' && decision === 'approved') {
-            await applyApprovedBookingChange(request);
+        if (!isRefundRequest(request.requestType)) {
+            throw new Error('Only refund requests can be reviewed here.');
+        }
+
+        if (note.length < 8) {
+            throw new Error('Please add a short merchant note for the refund decision.');
         }
 
         const result = await merchantRespondToRequest(request.id, req.session.user.id, decision, note);
 
         if (!result.affectedRows) {
             throw new Error('This request is not ready for a merchant decision.');
-        }
-
-        if (request.requestType === 'booking_change') {
-            await adminResolveRequest(
-                request.id,
-                null,
-                decision === 'approved' ? 'approved' : 'rejected',
-                decision === 'approved'
-                    ? 'Merchant approved the booking change request.'
-                    : 'Merchant declined the booking change request.'
-            );
         }
 
         notifyAdmins({
@@ -735,9 +768,7 @@ async function merchantRespond(req, res) {
             actorUserId: req.session.user.id,
             type: 'support_request',
             title: decision === 'approved' ? 'Merchant approved your request' : 'Merchant declined your request',
-            message: request.requestType === 'booking_change'
-                ? `Your booking change request #${request.id} was ${decision}.`
-                : `The merchant ${decision} request #${request.id}. Vaniday admin will close the final decision.`,
+            message: `The merchant ${decision} refund request #${request.id}. Vaniday admin will complete the final decision.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-merchant-${request.id}-${decision}`
         });
@@ -759,8 +790,21 @@ async function adminResolve(req, res) {
         }
 
         const decision = req.body.decision === 'approved' ? 'approved' : 'rejected';
+        const adminNote = cleanText(req.body.adminNote);
 
-        if (decision === 'approved' && request.merchantUserId && request.requestType !== 'booking_change') {
+        if (!isRefundRequest(request.requestType)) {
+            throw new Error('Only refund requests can be resolved from this desk.');
+        }
+
+        if (adminNote.length < 8) {
+            throw new Error('Please add a final admin note for the refund decision.');
+        }
+
+        if (decision === 'approved') {
+            if (!request.customerTermsAccepted || request.customerTermsVersion !== REFUND_TERMS_VERSION) {
+                throw new Error('The customer must accept the current refund terms before approval.');
+            }
+
             if (request.merchantDecision === 'declined') {
                 throw new Error('The merchant declined this request, so it must be rejected.');
             }
@@ -794,7 +838,7 @@ async function adminResolve(req, res) {
             request.id,
             req.session.user.id,
             decision,
-            cleanText(req.body.adminNote)
+            adminNote
         );
 
         if (!result.affectedRows) {
@@ -802,22 +846,23 @@ async function adminResolve(req, res) {
         }
 
         if (decision === 'approved') {
+            const approvedRefundAmount = getApprovedRefundAmount(request);
             if (request.requestType === 'order_refund') {
                 const transactionId = parseOrderTransactionId(request.targetId);
 
                 if (transactionId) {
                     await updateDeliveryStatus(transactionId, 'cancelled', {});
-                    await recordTransactionRefund(transactionId, request.refundAmount);
+                    await recordTransactionRefund(transactionId, approvedRefundAmount);
 
                     if (request.receiptId) {
                         await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
-                        await recordHistoryRefund(request.receiptId, request.refundAmount);
+                        await recordHistoryRefund(request.receiptId, approvedRefundAmount);
                     }
                 } else {
                     await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
-                    await recordHistoryRefund(request.receiptId || request.targetId, request.refundAmount);
+                    await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
                 }
-            } else if (request.targetType === 'booking' && request.requestType !== 'booking_change') {
+            } else if (request.targetType === 'booking') {
                 await markBookingCancelled(request.targetId);
                 await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
                     console.error('WhatsApp cancellation notification failed:', error.message);
@@ -826,8 +871,9 @@ async function adminResolve(req, res) {
         }
 
         const label = requestLabels[request.requestType] || 'Support request';
-        const moneyMessage = decision === 'approved' && request.refundAmount > 0
-            ? ` Refund recorded: $${request.refundAmount.toFixed(2)}.`
+        const approvedRefundAmount = getApprovedRefundAmount(request);
+        const moneyMessage = decision === 'approved' && approvedRefundAmount > 0
+            ? ` Refund recorded: $${approvedRefundAmount.toFixed(2)}.`
             : '';
         const feeMessage = decision === 'approved' && request.lateFeeAmount > 0
             ? ` Late cancellation fee recorded: $${request.lateFeeAmount.toFixed(2)}.`

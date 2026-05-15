@@ -936,6 +936,41 @@ textarea:focus {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.home-partner-grid {
+    gap: clamp(18px, 2vw, 26px);
+    border: 0;
+    background: transparent;
+}
+
+.home-partner-grid .merchant-card {
+    min-height: 470px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.92);
+    box-shadow: 0 18px 44px rgba(79, 104, 71, 0.1);
+}
+
+.home-partner-grid .merchant-card:nth-child(even) {
+    background: rgba(255, 253, 247, 0.92);
+}
+
+.home-partner-grid .merchant-card-image {
+    min-height: 230px;
+}
+
+.home-partner-grid .merchant-card > div:not(.merchant-card-image),
+.home-partner-grid .merchant-card .card-footer {
+    padding: 22px;
+}
+
+.home-partner-grid .merchant-card h3 {
+    font-size: 1.7rem;
+}
+
+.home-partner-grid .card-footer {
+    gap: 12px;
+}
+
 .merchant-card {
     min-height: 520px;
     overflow: hidden;
@@ -3565,6 +3600,10 @@ form.is-submitting button[type="submit"] {
     font-weight: 700;
 }
 
+.support-hub-hero.role-desk-hero {
+    min-height: auto;
+}
+
 .support-search-wrap {
     max-width: 760px;
     margin-top: 24px;
@@ -3607,6 +3646,10 @@ form.is-submitting button[type="submit"] {
     cursor: pointer;
 }
 
+.role-desk-actions {
+    justify-content: flex-start;
+}
+
 .support-hub-page {
     display: grid;
     gap: 18px;
@@ -3636,6 +3679,37 @@ form.is-submitting button[type="submit"] {
 .support-section-heading > span {
     color: var(--sage-readable);
     font-weight: 900;
+}
+
+.support-role-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.support-role-steps article {
+    min-width: 0;
+    padding: 16px;
+    display: grid;
+    gap: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.82);
+}
+
+.support-role-steps span {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(223, 232, 212, 0.9);
+    color: var(--sage-strong);
+    font-weight: 900;
+}
+
+.support-role-steps p {
+    margin: 0;
 }
 
 .support-category-grid {
@@ -4073,6 +4147,7 @@ form.is-submitting button[type="submit"] {
 
     .support-search-wrap,
     .support-category-grid,
+    .support-role-steps,
     .support-ticket-meta,
     .support-order-row,
     .support-contact-panel form,
@@ -4753,7 +4828,9 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 .services-spacious-page .service-shop-card {
     min-height: auto !important;
     display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: 230px auto auto !important;
+    justify-content: stretch !important;
     overflow: hidden;
     border: 1px solid rgba(79, 104, 71, 0.12) !important;
     border-radius: 12px !important;
@@ -7798,7 +7875,7 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 .merchant-dashboard-hero {
     padding: 24px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(280px, 1fr) minmax(220px, 360px);
     gap: 22px;
     align-items: center;
     border: 1px solid rgba(79, 104, 71, 0.14);
@@ -7824,6 +7901,10 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
+}
+
+.merchant-hero-actions .button {
+    flex: 1 1 150px;
 }
 
 .merchant-dashboard-panel {

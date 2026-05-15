@@ -103,8 +103,11 @@ function ensureSchema(callback) {
             merchant_note TEXT,
             admin_note TEXT,
             refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            approved_refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
             late_fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
             is_late_cancellation TINYINT(1) NOT NULL DEFAULT 0,
+            customer_terms_accepted TINYINT(1) NOT NULL DEFAULT 0,
+            customer_terms_version VARCHAR(40) DEFAULT NULL,
             delivery_status VARCHAR(30) DEFAULT NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -118,11 +121,43 @@ function ensureSchema(callback) {
     `;
 
     db.query(sql, (error) => {
-        if (!error) {
-            schemaReady = true;
+        if (error) {
+            flushSchemaQueue(error);
+            return;
         }
 
-        flushSchemaQueue(error);
+        db.query('SHOW COLUMNS FROM support_requests', (columnError, columns = []) => {
+            if (columnError) {
+                flushSchemaQueue(columnError);
+                return;
+            }
+
+            const fields = new Set(columns.map((column) => column.Field));
+            const alters = [];
+
+            if (!fields.has('approved_refund_amount')) {
+                alters.push('ADD COLUMN approved_refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER refund_amount');
+            }
+            if (!fields.has('customer_terms_accepted')) {
+                alters.push('ADD COLUMN customer_terms_accepted TINYINT(1) NOT NULL DEFAULT 0 AFTER is_late_cancellation');
+            }
+            if (!fields.has('customer_terms_version')) {
+                alters.push('ADD COLUMN customer_terms_version VARCHAR(40) DEFAULT NULL AFTER customer_terms_accepted');
+            }
+
+            if (!alters.length) {
+                schemaReady = true;
+                flushSchemaQueue(null);
+                return;
+            }
+
+            db.query(`ALTER TABLE support_requests ${alters.join(', ')}`, (alterError) => {
+                if (!alterError) {
+                    schemaReady = true;
+                }
+                flushSchemaQueue(alterError);
+            });
+        });
     });
 }
 
@@ -148,8 +183,11 @@ function mapRow(row = {}) {
         merchantNote: row.merchant_note,
         adminNote: row.admin_note,
         refundAmount: Number(row.refund_amount || 0),
+        approvedRefundAmount: Number(row.approved_refund_amount || 0),
         lateFeeAmount: Number(row.late_fee_amount || 0),
         isLateCancellation: Boolean(row.is_late_cancellation),
+        customerTermsAccepted: Boolean(row.customer_terms_accepted),
+        customerTermsVersion: row.customer_terms_version || '',
         deliveryStatus: row.delivery_status,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -218,11 +256,14 @@ function create(data, callback) {
                     customer_note,
                     requested_change,
                     refund_amount,
+                    approved_refund_amount,
                     late_fee_amount,
                     is_late_cancellation,
+                    customer_terms_accepted,
+                    customer_terms_version,
                     delivery_status
                 )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
@@ -237,8 +278,11 @@ function create(data, callback) {
             data.customerNote || null,
             data.requestedChange || null,
             Number(data.refundAmount || 0),
+            Number(data.approvedRefundAmount || 0),
             Number(data.lateFeeAmount || 0),
             data.isLateCancellation ? 1 : 0,
+            data.customerTermsAccepted ? 1 : 0,
+            data.customerTermsVersion || null,
             data.deliveryStatus || null
         ];
 
@@ -276,7 +320,9 @@ function getForMerchant(merchantUserId, callback) {
         }
 
         db.query(
-            selectSql('WHERE support_requests.merchant_user_id = ?'),
+            selectSql(`WHERE support_requests.merchant_user_id = ?
+                AND support_requests.request_type IN ('order_refund', 'booking_refund')
+                AND support_requests.status IN ('pending_merchant_review', 'merchant_approved', 'merchant_declined', 'resolved_approved', 'resolved_rejected')`),
             [merchantUserId],
             (error, rows = []) => {
                 if (error) {
@@ -297,7 +343,7 @@ function getForAdmin(callback) {
             return;
         }
 
-        db.query(selectSql(''), (error, rows = []) => {
+        db.query(selectSql(`WHERE support_requests.request_type IN ('order_refund', 'booking_refund')`), (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;

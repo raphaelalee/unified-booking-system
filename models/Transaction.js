@@ -409,6 +409,8 @@ function getCustomerOrders(userId, callback) {
                 transactions.payment_status,
                 transactions.payment_method,
                 transactions.delivery_status,
+                transactions.refund_status,
+                transactions.refunded_amount,
                 transactions.created_at,
                 COUNT(order_items.order_item_id) AS item_count,
                 GROUP_CONCAT(products.name ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
@@ -427,6 +429,8 @@ function getCustomerOrders(userId, callback) {
                 transactions.payment_status,
                 transactions.payment_method,
                 transactions.delivery_status,
+                transactions.refund_status,
+                transactions.refunded_amount,
                 transactions.created_at
             ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
         `;
@@ -452,6 +456,8 @@ function getCustomerOrders(userId, callback) {
                 paymentStatus: row.payment_status || 'paid',
                 paymentMethod: row.payment_method || 'card',
                 deliveryStatus: row.delivery_status || 'processing',
+                refundStatus: row.refund_status || 'none',
+                refundedAmount: Number(row.refunded_amount || 0),
                 createdAt: row.created_at
             })));
         });
@@ -473,6 +479,8 @@ function getOrderById(transactionId, callback) {
                 transactions.payment_status,
                 transactions.payment_method,
                 transactions.delivery_status,
+                transactions.refund_status,
+                transactions.refunded_amount,
                 transactions.created_at,
                 users.name AS customer_name,
                 users.email AS customer_email,
@@ -493,6 +501,8 @@ function getOrderById(transactionId, callback) {
                 transactions.payment_status,
                 transactions.payment_method,
                 transactions.delivery_status,
+                transactions.refund_status,
+                transactions.refunded_amount,
                 transactions.created_at,
                 users.name,
                 users.email
@@ -529,6 +539,8 @@ function getOrderById(transactionId, callback) {
                 paymentStatus: row.payment_status || 'paid',
                 paymentMethod: row.payment_method || 'card',
                 deliveryStatus: row.delivery_status || 'processing',
+                refundStatus: row.refund_status || 'none',
+                refundedAmount: Number(row.refunded_amount || 0),
                 createdAt: row.created_at
             });
         });

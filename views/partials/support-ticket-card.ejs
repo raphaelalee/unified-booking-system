@@ -18,6 +18,13 @@
         <div class="support-ticket-summary">
             <% if (request.reason) { %><p><strong>Reason:</strong> <%= request.reason %></p><% } %>
             <% if (request.customerNote) { %><p><strong>Details:</strong> <%= request.customerNote %></p><% } %>
+            <% if (request.refundAmount > 0) { %>
+                <p><strong>Requested refund:</strong> $<%= Number(request.refundAmount || 0).toFixed(2) %></p>
+                <% if (request.lateFeeAmount > 0) { %>
+                    <p><strong>Late fee:</strong> $<%= Number(request.lateFeeAmount || 0).toFixed(2) %></p>
+                <% } %>
+                <p><strong>Refund after policy checks:</strong> $<%= Math.max(0, Number(request.refundAmount || 0) - Number(request.lateFeeAmount || 0)).toFixed(2) %></p>
+            <% } %>
         </div>
     <% } %>
 
@@ -75,7 +82,7 @@
             <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                 <label for="merchant-note-<%= request.id %>">Merchant note</label>
-                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
+                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" minlength="8" required placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
                 <div class="inline-actions">
                     <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
                     <button class="button secondary danger-button" type="submit" name="decision" value="declined">Decline</button>
@@ -91,15 +98,17 @@
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                     <label for="admin-send-note-<%= request.id %>">Message for merchant</label>
                     <textarea id="admin-send-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Ask the merchant to approve or decline this request."></textarea>
-                    <button class="button secondary" type="submit">Send to merchant</button>
+                    <button class="button secondary" type="submit">Request merchant approval</button>
                 </form>
             <% } %>
             <form action="/help-center/requests/<%= request.id %>/admin-resolution" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                 <label for="admin-final-note-<%= request.id %>">Final admin note</label>
-                <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Explain the final decision."></textarea>
+                <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" minlength="8" required placeholder="Explain the final decision."></textarea>
                 <div class="inline-actions">
-                    <button class="button primary" type="submit" name="decision" value="approved">Approve refund</button>
+                    <% if (request.merchantDecision === 'approved') { %>
+                        <button class="button primary" type="submit" name="decision" value="approved">Issue refund</button>
+                    <% } %>
                     <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
                 </div>
             </form>

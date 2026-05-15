@@ -1,10 +1,12 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const pendingBookings = appointmentReport?.pendingAppointments || [];
-    const rescheduleTools = typeof rescheduleAutomation !== 'undefined' && rescheduleAutomation ? rescheduleAutomation : {};
-    const pendingRescheduleReviews = Array.isArray(rescheduleTools.pendingReviews) ? rescheduleTools.pendingReviews : [];
-    const lowStockProducts = salesReport?.lowStockProducts || [];
+    const supportSteps = [
+        'Customer submits a refund request from Help Center.',
+        'Vaniday admin reviews the case and forwards eligible requests.',
+        'Merchant approves or declines with a clear reason.',
+        'Admin issues the final refund decision and the customer is notified.'
+    ];
 %>
 
 <section class="section compact merchant-analytics-page">
@@ -13,43 +15,27 @@
             <div>
                 <p class="eyebrow">Support</p>
                 <h1>Merchant support center</h1>
-                <span>Review unresolved operational issues, customer disputes, and tickets for <%= merchant.name %>.</span>
+                <span>Handle merchant-facing refund work and open the shared Help Center queue for <%= merchant.name %>.</span>
             </div>
             <div class="merchant-hero-actions">
-                <a class="button primary" href="/help-center">Open help center</a>
+                <a class="button primary" href="/help-center">Open refund requests</a>
             </div>
         </header>
 
-        <section class="merchant-kpi-grid">
-            <article class="merchant-kpi-card accent-yellow"><span>Pending approvals</span><strong><%= pendingBookings.length %></strong><small>booking actions</small></article>
-            <article class="merchant-kpi-card accent-orange"><span>Reschedule reviews</span><strong><%= pendingRescheduleReviews.length %></strong><small>customer requests</small></article>
-            <article class="merchant-kpi-card accent-blue"><span>Low stock alerts</span><strong><%= lowStockProducts.length %></strong><small>inventory risks</small></article>
-        </section>
-
         <section class="merchant-dashboard-lower-grid">
             <article class="merchant-alert-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Issues</p><h2>Unresolved merchant actions</h2></div></div>
+                <div class="merchant-card-heading"><div><p class="eyebrow">Refund Workflow</p><h2>How requests move</h2></div></div>
                 <div class="merchant-alert-list">
-                    <% if (!pendingBookings.length && !pendingRescheduleReviews.length && !lowStockProducts.length) { %>
-                        <p>No unresolved operational issues right now.</p>
-                    <% } %>
-                    <% pendingBookings.slice(0, 5).forEach((booking) => { %>
-                        <p>Pending approval: <%= booking.customerName %> for <%= booking.serviceName %> on <%= booking.bookingDate %>.</p>
-                    <% }) %>
-                    <% pendingRescheduleReviews.slice(0, 5).forEach((request) => { %>
-                        <p>Reschedule review: <%= request.customerName %> requested <%= request.requestedBookingTime %> on <%= String(request.requestedBookingDate).slice(0, 10) %>.</p>
-                    <% }) %>
-                    <% lowStockProducts.slice(0, 5).forEach((product) => { %>
-                        <p>Low stock: <%= product.name %> has <%= product.stockQuantity %> left.</p>
+                    <% supportSteps.forEach((step) => { %>
+                        <p><%= step %></p>
                     <% }) %>
                 </div>
             </article>
             <article class="merchant-actions-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Support Tools</p><h2>Quick actions</h2></div></div>
+                <div class="merchant-card-heading"><div><p class="eyebrow">Support Tools</p><h2>Merchant queue</h2></div></div>
+                <p class="muted">Refund requests themselves live in Help Center so every reply, note, and final decision stays in one auditable place.</p>
                 <div class="merchant-quick-actions">
-                    <a class="button secondary" href="/help-center">Help center</a>
-                    <a class="button secondary" href="/merchant/bookings">Review bookings</a>
-                    <a class="button secondary" href="/merchant/products">Check inventory</a>
+                    <a class="button secondary" href="/notifications">View notifications</a>
                 </div>
             </article>
         </section>

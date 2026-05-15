@@ -19,13 +19,18 @@
     };
 %>
 
-<section class="page-title">
-    <p class="eyebrow">Merchant Portal</p>
-    <h1>Manage promotions</h1>
-    <p><%= merchant.name %> can only manage promotions under this merchant profile.</p>
-</section>
-
-<section class="section compact">
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Promotions</p>
+                <h1>Campaigns</h1>
+                <span>Create and manage customer-facing offers for <%= merchant.name %>.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button primary" href="/merchant/promotions/new">Add promotion</a>
+            </div>
+        </header>
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -48,7 +53,6 @@
                     <% }) %>
                 </select>
             </label>
-            <a class="button primary" href="/merchant/promotions/new">Add promotion</a>
         </div>
     </div>
 
@@ -100,6 +104,7 @@
             <% }) %>
         </div>
     <% } %>
+    </div>
 </section>
 
 <script>

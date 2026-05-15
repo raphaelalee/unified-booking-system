@@ -98,9 +98,40 @@ function markAllRead(req, res) {
     });
 }
 
+function deleteNotification(req, res) {
+    return Notification.deleteOneForUser(req.session.user.id, req.params.notificationId, (error) => {
+        if (error) {
+            console.error(error);
+            req.session.notificationSuccess = null;
+        } else {
+            req.session.notificationSuccess = 'Notification deleted.';
+        }
+
+        return res.redirect('/notifications');
+    });
+}
+
+function clearReadNotifications(req, res) {
+    return Notification.deleteReadForUser(req.session.user.id, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.notificationSuccess = null;
+        } else {
+            const deletedCount = Number(result?.affectedRows || 0);
+            req.session.notificationSuccess = deletedCount > 0
+                ? `${deletedCount} read notification${deletedCount === 1 ? '' : 's'} deleted.`
+                : 'There were no read notifications to delete.';
+        }
+
+        return res.redirect('/notifications');
+    });
+}
+
 module.exports = {
     showNotifications,
     openNotification,
     markNotificationRead,
-    markAllRead
+    markAllRead,
+    deleteNotification,
+    clearReadNotifications
 };

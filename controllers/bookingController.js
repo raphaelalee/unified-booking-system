@@ -125,6 +125,54 @@ function notifyUser(recipientUserId, role, notification) {
     });
 }
 
+function notifyRole(role, notification) {
+    Notification.createForRole(role, notification, (error) => {
+        if (error) {
+            console.error('Notification error:', error.message || error);
+        }
+    });
+}
+
+function notifyBookingCreated(bookingId) {
+    Booking.getNotificationDetailsById(bookingId, (error, booking) => {
+        if (error || !booking) {
+            if (error) {
+                console.error('Booking notification lookup failed:', error.message || error);
+            }
+            return;
+        }
+
+        const appointmentLabel = `${String(booking.booking_date).slice(0, 10)} at ${booking.booking_time}`;
+
+        notifyUser(booking.user_id, 'customer', {
+            actorUserId: booking.merchant_user_id || null,
+            type: 'booking_confirmed',
+            title: 'Booking request submitted',
+            message: `${booking.service_name} at ${booking.merchant_name} is booked for ${appointmentLabel}.`,
+            linkUrl: `/receipt/${booking.id}`,
+            dedupeKey: `web-booking-customer-${booking.id}`
+        });
+
+        notifyUser(booking.merchant_user_id, 'merchant', {
+            actorUserId: booking.user_id,
+            type: 'booking',
+            title: 'New booking received',
+            message: `${booking.customer_name || 'A customer'} booked ${booking.service_name} for ${appointmentLabel}.`,
+            linkUrl: '/merchant/bookings',
+            dedupeKey: `web-booking-merchant-${booking.id}`
+        });
+
+        notifyRole('admin', {
+            actorUserId: booking.user_id,
+            type: 'booking',
+            title: 'New customer booking',
+            message: `${booking.customer_name || 'A customer'} booked ${booking.service_name} at ${booking.merchant_name}.`,
+            linkUrl: '/admin/bookings',
+            dedupeKey: `web-booking-admin-${booking.id}`
+        });
+    });
+}
+
 function isPeakHour(bookingTime) {
     const minutes = Number(String(bookingTime || '').slice(0, 2)) * 60 + Number(String(bookingTime || '').slice(3, 5));
     return (minutes >= 12 * 60 && minutes < 14 * 60) || minutes >= 17 * 60;
@@ -307,6 +355,7 @@ function createBooking(req, res) {
 
             try {
                 const bookingId = result.insertId;
+                notifyBookingCreated(bookingId);
                 const checkinUrl = getBookingCheckInUrl(req, bookingId);
                 const checkinToken = signBookingCheckInToken(bookingId);
                 const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
@@ -393,6 +442,23 @@ function confirmBooking(req, res) {
                 });
             }
 
+            notifyUser(booking.user_id, 'customer', {
+                actorUserId: booking.merchant_user_id,
+                type: 'booking_completed',
+                title: 'Booking completed',
+                message: `${booking.service_name} at ${booking.merchant_name} has been marked completed.`,
+                linkUrl: '/profile#bookings',
+                dedupeKey: `booking-completed-customer-${booking.id}`
+            });
+            notifyUser(booking.merchant_user_id, 'merchant', {
+                actorUserId: booking.user_id,
+                type: 'booking_completed',
+                title: 'Booking completed',
+                message: `${booking.customer_name || 'A customer'} completed ${booking.service_name}.`,
+                linkUrl: '/merchant/bookings',
+                dedupeKey: `booking-completed-merchant-${booking.id}`
+            });
+
             return res.render('booking-confirmed', {
                 title: 'Booking Confirmed',
                 booking: {
@@ -468,6 +534,34 @@ function cancelBooking(req, res) {
                 return respondProfileAction(req, res, {
                     success: false,
                     message: 'This booking could not be cancelled.'
+                });
+            }
+
+            notifyUser(userId, 'customer', {
+                actorUserId: userId,
+                type: 'booking_cancelled',
+                title: 'Booking cancelled',
+                message: `Your ${booking.service_name} booking was cancelled. Refund status: ${refundStatus.replace(/_/g, ' ')}.`,
+                linkUrl: '/profile#bookings',
+                dedupeKey: `booking-cancelled-customer-${bookingId}`
+            });
+            notifyUser(booking.merchant_user_id, 'merchant', {
+                actorUserId: userId,
+                type: 'booking_cancelled',
+                title: 'Customer cancelled booking',
+                message: `${req.session.user.name || 'A customer'} cancelled ${booking.service_name} for ${String(booking.booking_date).slice(0, 10)} at ${booking.booking_time}.`,
+                linkUrl: '/merchant/bookings',
+                dedupeKey: `booking-cancelled-merchant-${bookingId}`
+            });
+
+            if (refundStatus !== 'eligible') {
+                notifyRole('admin', {
+                    actorUserId: userId,
+                    type: 'booking_cancelled',
+                    title: 'Cancellation needs refund review',
+                    message: `${req.session.user.name || 'A customer'} cancelled booking #${bookingId}; refund status is ${refundStatus.replace(/_/g, ' ')}.`,
+                    linkUrl: '/help-center',
+                    dedupeKey: `booking-cancelled-admin-${bookingId}`
                 });
             }
 
@@ -575,6 +669,23 @@ function confirmCheckIn(req, res) {
                     message: 'The booking could not be checked in.'
                 });
             }
+
+            notifyUser(booking.user_id, 'customer', {
+                actorUserId: booking.merchant_user_id,
+                type: 'booking_checked_in',
+                title: 'Checked in',
+                message: `You are checked in for ${booking.service_name} at ${booking.merchant_name}.`,
+                linkUrl: '/profile#bookings',
+                dedupeKey: `booking-checkin-customer-${booking.id}`
+            });
+            notifyUser(booking.merchant_user_id, 'merchant', {
+                actorUserId: booking.user_id,
+                type: 'booking_checked_in',
+                title: 'Customer checked in',
+                message: `${booking.customer_name || 'A customer'} checked in for ${booking.service_name}.`,
+                linkUrl: '/merchant/bookings',
+                dedupeKey: `booking-checkin-merchant-${booking.id}`
+            });
 
             return res.render('booking-checkin', {
                 title: 'Checked In',
@@ -969,6 +1080,15 @@ function submitReview(req, res) {
                     return res.redirect('/profile#bookings');
                 }
 
+                notifyUser(booking.merchant_user_id, 'merchant', {
+                    actorUserId: userId,
+                    type: 'review_received',
+                    title: 'New customer review',
+                    message: `${req.session.user.name || 'A customer'} left a ${rating}-star review for ${booking.service_name}.`,
+                    linkUrl: '/merchant/analytics',
+                    dedupeKey: `review-merchant-${bookingId}`
+                });
+
                 const reviewReward = {
                     basePoints: 10,
                     mediaPoints: imagePath || videoPath ? 50 : 0,
@@ -986,6 +1106,17 @@ function submitReview(req, res) {
                     const rewardMessage = awardedPoints > 0
                         ? ` Review reward: +${awardedPoints} points.`
                         : '';
+
+                    if (awardedPoints > 0) {
+                        notifyUser(userId, 'customer', {
+                            actorUserId: null,
+                            type: 'reward_update',
+                            title: 'Review reward earned',
+                            message: `You earned ${awardedPoints} points for reviewing ${booking.service_name}.`,
+                            linkUrl: '/profile#bookings',
+                            dedupeKey: `review-reward-customer-${bookingId}`
+                        });
+                    }
 
                     setProfileSuccess(req, `Review submitted successfully.${rewardMessage}`);
                     return res.redirect('/profile#bookings');

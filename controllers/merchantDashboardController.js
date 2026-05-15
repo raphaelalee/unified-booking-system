@@ -1072,6 +1072,36 @@ function updateBookingStatus(req, res) {
         }
 
         const statusCopy = status.replace(/_/g, ' ');
+        Booking.getNotificationDetailsById(bookingId, (lookupError, booking) => {
+            if (lookupError) {
+                console.error(lookupError);
+                return;
+            }
+
+            if (!booking) {
+                return;
+            }
+
+            const customerMessages = {
+                pending: 'Your booking is pending merchant review.',
+                confirmed: 'Your booking has been confirmed by the merchant.',
+                completed: 'Your booking has been completed.',
+                cancelled: 'Your booking was cancelled by the merchant.',
+                no_show: 'Your booking was marked as no show by the merchant.'
+            };
+
+            Notification.create({
+                recipientUserId: booking.user_id,
+                recipientRole: 'customer',
+                actorUserId: req.session.user.id,
+                type: `booking_${status}`,
+                title: `Booking ${statusCopy}`,
+                message: `${customerMessages[status] || `Your booking is now ${statusCopy}.`} ${booking.service_name} at ${booking.merchant_name}.`,
+                linkUrl: '/profile#bookings',
+                dedupeKey: `merchant-booking-status-${bookingId}-${status}`
+            }, logNotificationError);
+        });
+
         req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.`;
         return res.redirect('/merchant/bookings');
     });

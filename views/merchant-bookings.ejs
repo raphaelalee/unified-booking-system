@@ -55,11 +55,10 @@
             <div>
                 <p class="eyebrow">Bookings</p>
                 <h1>Appointment operations</h1>
-                <span>Calendar, approvals, reschedule requests, and appointment search for <%= merchant.name %>.</span>
+                <span>Approve appointments, review reschedule requests, and manage booking rules for <%= merchant.name %>.</span>
             </div>
             <div class="merchant-hero-actions">
-                <a class="button secondary" href="/merchant/schedule">Booking history</a>
-                <a class="button primary" href="/merchant/bookings">Review reschedules</a>
+                <a class="button secondary" href="/merchant/schedule">Open calendar</a>
             </div>
         </header>
 
@@ -159,107 +158,39 @@
             </article>
         </section>
 
-        <section class="merchant-calendar-shell">
+        <section class="merchant-orders-card">
             <div class="merchant-card-heading">
-                <div><p class="eyebrow">Calendar</p><h2 data-calendar-title>Weekly schedule</h2></div>
-                <div class="merchant-calendar-view-toggle" aria-label="Calendar view">
-                    <button class="is-active" type="button" data-calendar-view-button="week">Week</button>
-                    <button type="button" data-calendar-view-button="month">Month</button>
-                </div>
+                <div><p class="eyebrow">Approvals</p><h2>Pending appointments</h2></div>
             </div>
-
-            <div class="merchant-calendar-toolbar" data-calendar-filters>
-                <label>Status<select data-calendar-status-filter><option value="">All statuses</option><% Object.keys(statusLabels).forEach((status) => { %><option value="<%= status %>"><%= statusLabels[status] %></option><% }) %></select></label>
-                <label>Service<select data-calendar-service-filter><option value="">All services</option><% serviceFilterOptions.forEach((serviceName) => { %><option value="<%= serviceName %>"><%= serviceName %></option><% }) %></select></label>
-                <label>Search<input type="search" placeholder="Customer or service" data-calendar-search-filter></label>
-                <button class="button secondary" type="button" data-calendar-reset>Reset</button>
-            </div>
-
-            <div class="merchant-calendar-grid" data-merchant-calendar data-calendar-view="week">
-                <% weekDays.forEach((day) => { %>
-                    <section class="merchant-calendar-day" data-calendar-day="<%= day.key %>">
-                        <header><span><%= day.label %></span><strong><%= day.day %></strong></header>
-                        <div class="merchant-calendar-dropzone">
-                            <% if (!day.appointments.length) { %><p class="merchant-calendar-empty">No appointments</p><% } %>
-                            <% day.appointments.forEach((booking) => { %>
-                                <article class="merchant-calendar-booking status-<%= booking.status %>" data-status="<%= booking.status %>" data-service="<%= booking.serviceName %>" data-search="<%= `${booking.customerName} ${booking.serviceName} ${booking.bookingTime} ${booking.bookingDate}`.toLowerCase() %>">
-                                    <div><strong><%= booking.bookingTime || 'Time TBC' %></strong><span><%= booking.serviceName %></span></div>
-                                    <small><%= booking.customerName %></small>
-                                    <em><%= statusLabels[booking.status] || booking.status %></em>
-                                </article>
-                            <% }) %>
-                        </div>
-                    </section>
-                <% }) %>
-            </div>
-
-            <div class="merchant-calendar-month is-hidden" data-calendar-month data-calendar-view="month">
-                <div class="merchant-calendar-month-heading"><strong><%= monthView.label %></strong><span><%= allCalendarBookings.length %> total bookings</span></div>
-                <div class="merchant-calendar-month-grid">
-                    <% monthView.days.forEach((day) => { %>
-                        <% if (day.isPlaceholder) { %><div class="merchant-calendar-month-day is-placeholder"></div><% } else { %>
-                            <section class="merchant-calendar-month-day" data-calendar-day="<%= day.key %>">
-                                <header><span><%= day.label %></span><strong><%= day.dayNumber %></strong></header>
-                                <% if (!day.appointments.length) { %><p class="merchant-calendar-empty compact">No bookings</p><% } %>
-                                <% day.appointments.forEach((booking) => { %>
-                                    <article class="merchant-calendar-booking merchant-calendar-booking-compact status-<%= booking.status %>" data-status="<%= booking.status %>" data-service="<%= booking.serviceName %>" data-search="<%= `${booking.customerName} ${booking.serviceName} ${booking.bookingTime} ${booking.bookingDate}`.toLowerCase() %>">
-                                        <strong><%= booking.bookingTime || 'Time TBC' %></strong><span><%= booking.serviceName %></span><small><%= booking.customerName %></small>
-                                    </article>
-                                <% }) %>
-                            </section>
-                        <% } %>
+            <% if (!pendingAppointments.length) { %>
+                <p class="muted">No appointments are waiting for approval.</p>
+            <% } else { %>
+                <div class="merchant-appointment-list">
+                    <% pendingAppointments.forEach((booking) => { %>
+                        <article>
+                            <span class="merchant-status-badge status-<%= booking.status %>"><%= statusLabels[booking.status] || booking.status %></span>
+                            <div>
+                                <strong><%= booking.customerName %></strong>
+                                <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
+                            </div>
+                            <div class="merchant-booking-actions">
+                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <input type="hidden" name="status" value="confirmed">
+                                    <button class="button secondary" type="submit">Approve</button>
+                                </form>
+                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <input type="hidden" name="status" value="cancelled">
+                                    <button class="button secondary danger-button" type="submit">Reject</button>
+                                </form>
+                            </div>
+                        </article>
                     <% }) %>
                 </div>
-            </div>
+            <% } %>
         </section>
     </div>
 </section>
-
-<script>
-    (() => {
-        const calendar = document.querySelector('[data-merchant-calendar]');
-        const monthCalendar = document.querySelector('[data-calendar-month]');
-        const title = document.querySelector('[data-calendar-title]');
-        const viewButtons = Array.from(document.querySelectorAll('[data-calendar-view-button]'));
-        const statusFilter = document.querySelector('[data-calendar-status-filter]');
-        const serviceFilter = document.querySelector('[data-calendar-service-filter]');
-        const searchFilter = document.querySelector('[data-calendar-search-filter]');
-        const resetButton = document.querySelector('[data-calendar-reset]');
-        if (!calendar) return;
-
-        const applyFilters = () => {
-            const status = statusFilter?.value || '';
-            const service = serviceFilter?.value || '';
-            const search = (searchFilter?.value || '').trim().toLowerCase();
-            document.querySelectorAll('.merchant-calendar-booking').forEach((card) => {
-                const matchesStatus = !status || card.dataset.status === status;
-                const matchesService = !service || card.dataset.service === service;
-                const matchesSearch = !search || (card.dataset.search || '').includes(search);
-                card.hidden = !(matchesStatus && matchesService && matchesSearch);
-            });
-        };
-
-        viewButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                const view = button.dataset.calendarViewButton;
-                viewButtons.forEach((item) => item.classList.toggle('is-active', item === button));
-                calendar.classList.toggle('is-hidden', view !== 'week');
-                monthCalendar?.classList.toggle('is-hidden', view !== 'month');
-                if (title) title.textContent = view === 'month' ? 'Monthly schedule' : 'Weekly schedule';
-                applyFilters();
-            });
-        });
-        [statusFilter, serviceFilter, searchFilter].forEach((input) => {
-            input?.addEventListener('input', applyFilters);
-            input?.addEventListener('change', applyFilters);
-        });
-        resetButton?.addEventListener('click', () => {
-            if (statusFilter) statusFilter.value = '';
-            if (serviceFilter) serviceFilter.value = '';
-            if (searchFilter) searchFilter.value = '';
-            applyFilters();
-        });
-    })();
-</script>
 
 <%- include('partials/footer') %>

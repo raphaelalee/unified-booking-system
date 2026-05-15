@@ -5,8 +5,20 @@
         booking: 'B',
         booking_confirmed: 'B',
         booking_paid: 'P',
+        booking_cancelled: 'B',
+        booking_checked_in: 'B',
+        booking_completed: 'B',
+        booking_pending: 'B',
+        booking_no_show: 'B',
+        booking_reschedule_auto_approved: 'B',
+        booking_reschedule_review: 'B',
+        booking_reschedule_approved: 'B',
+        booking_reschedule_rejected: 'B',
         order_paid: 'O',
         order_received: 'O',
+        order_update: 'O',
+        support_request: 'H',
+        review_received: 'R',
         offer_update: '%',
         reward_update: 'R',
         merchant_update: 'M',
@@ -70,6 +82,11 @@
                 <button class="button secondary" type="submit">Mark all read</button>
             </form>
         <% } %>
+        <% if (notifications.some((notification) => notification.status === 'read')) { %>
+            <form action="/notifications/clear-read" method="POST">
+                <button class="button secondary" type="submit">Delete read</button>
+            </form>
+        <% } %>
     </div>
 
     <% if (notifications.length === 0) { %>
@@ -103,6 +120,9 @@
                                     <button class="button secondary" type="submit">Mark read</button>
                                 </form>
                             <% } %>
+                            <form action="/notifications/<%= notification.id %>/delete" method="POST">
+                                <button class="button secondary" type="submit">Delete</button>
+                            </form>
                         </div>
                     </div>
                     <% if (notification.status === 'unread') { %>

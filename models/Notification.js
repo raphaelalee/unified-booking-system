@@ -316,6 +316,38 @@ function markAllRead(userId, callback) {
     });
 }
 
+function deleteOneForUser(userId, notificationId, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `DELETE FROM notifications
+             WHERE notification_id = ? AND recipient_user_id = ?`,
+            [notificationId, userId],
+            callback
+        );
+    });
+}
+
+function deleteReadForUser(userId, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `DELETE FROM notifications
+             WHERE recipient_user_id = ? AND status = 'read'`,
+            [userId],
+            callback
+        );
+    });
+}
+
 module.exports = {
     create,
     createMany,
@@ -324,5 +356,7 @@ module.exports = {
     getForUser,
     getOneForUser,
     markRead,
-    markAllRead
+    markAllRead,
+    deleteOneForUser,
+    deleteReadForUser
 };

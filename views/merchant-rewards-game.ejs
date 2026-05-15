@@ -6,13 +6,18 @@
     const prizeTypeLabel = (type) => String(type || '').replace(/_/g, ' ');
 %>
 
-<section class="page-title">
-    <p class="eyebrow">Merchant Portal</p>
-    <h1>Game rewards for <%= merchant.name %>.</h1>
-    <p>Create voucher and benefit rewards that customers can win from the Vaniday rewards game.</p>
-</section>
-
-<section class="section compact">
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Game rewards</p>
+                <h1>Reward pool</h1>
+                <span>Create voucher and benefit rewards that customers can win from the Vaniday rewards game.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button primary" href="/merchant/rewards-game/prizes/new">Add reward</a>
+            </div>
+        </header>
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -37,9 +42,9 @@
             <small>Relative chance share</small>
         </div>
         <div class="portal-stat">
-            <span>Merchant</span>
-            <strong><%= merchant.services.length %></strong>
-            <small>Listed services</small>
+            <span>Inactive</span>
+            <strong><%= prizes.length - activePrizes.length %></strong>
+            <small>Hidden from the game</small>
         </div>
     </div>
 
@@ -49,7 +54,6 @@
             <h2>Your customer game rewards</h2>
             <p class="muted">Admin controls the game rules. You control the rewards linked to your own merchant profile.</p>
         </div>
-        <a class="button primary" href="/merchant/rewards-game/prizes/new">Add reward</a>
     </div>
 
     <% if (prizes.length === 0) { %>
@@ -90,6 +94,7 @@
             <% }) %>
         </div>
     <% } %>
+    </div>
 </section>
 
 <%- include('partials/footer') %>

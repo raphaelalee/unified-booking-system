@@ -5457,7 +5457,9 @@ select:focus {
     padding: 0;
     overflow: hidden;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 214px minmax(0, 1fr) auto;
+    justify-content: stretch;
     gap: 0;
     background: rgba(255, 250, 245, 0.96);
     transform: translateY(0);

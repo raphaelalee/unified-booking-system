@@ -1,8 +1,4 @@
-
-> start
-> node app.js
-
-◇ injected env (23) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
-◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (17) from .env // tip: ⌘ enable debugging { debug: true }
 ◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 Server is running on http://localhost:3000

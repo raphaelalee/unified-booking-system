@@ -3,13 +3,7 @@
 <%
     const services = Array.isArray(merchant.services) ? merchant.services : [];
     const rescheduleSettings = rescheduleAutomation?.settings || {};
-    const payoutSummary = salesReport?.payoutSummary || {
-        grossOrderSales: 0,
-        totalCommissionDeducted: 0,
-        totalNetPayout: 0
-    };
     const storefrontQrImage = typeof qrImage !== 'undefined' && qrImage ? qrImage : (typeof qrCodeDataUrl !== 'undefined' ? qrCodeDataUrl : null);
-    const formatCurrency = (value) => Number(value || 0).toFixed(2);
 %>
 
 <section class="section compact merchant-analytics-page">
@@ -18,7 +12,7 @@
             <div>
                 <p class="eyebrow">Profile</p>
                 <h1><%= merchant.name %></h1>
-                <span>Business details, operating hours, service coverage, and payout/account settings.</span>
+                <span>Business identity, operating rules, and storefront tools for this merchant account.</span>
             </div>
             <div class="merchant-hero-actions">
                 <a class="button secondary" href="/profile">Account profile</a>
@@ -41,14 +35,6 @@
                     <p><span>Business start</span><strong><%= rescheduleSettings.businessStart || '09:00' %></strong></p>
                     <p><span>Business end</span><strong><%= rescheduleSettings.businessEnd || '20:00' %></strong></p>
                     <p><span>Notice period</span><strong><%= Number(rescheduleSettings.minimumNoticeHours || 24) %>h</strong></p>
-                </div>
-            </article>
-            <article class="merchant-alert-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Payout</p><h2>Account summary</h2></div></div>
-                <div class="merchant-checkin-metrics">
-                    <p><span>Gross sales</span><strong>$<%= formatCurrency(payoutSummary.grossOrderSales) %></strong></p>
-                    <p><span>Commission deducted</span><strong>$<%= formatCurrency(payoutSummary.totalCommissionDeducted) %></strong></p>
-                    <p><span>Net payout</span><strong>$<%= formatCurrency(payoutSummary.totalNetPayout) %></strong></p>
                 </div>
             </article>
             <article class="merchant-alert-card">

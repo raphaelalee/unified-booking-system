@@ -1,12 +1,17 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Merchant Portal</p>
-    <h1><%= product ? 'Edit product.' : 'Add product.' %></h1>
-    <p><%= merchant.name %> can only manage products under this merchant profile.</p>
-</section>
+<section class="section compact merchant-products-page">
+    <header class="merchant-products-hero">
+        <div class="merchant-products-hero-copy">
+            <p class="eyebrow">Products</p>
+            <h1><%= product ? 'Edit product' : 'Add product' %></h1>
+            <p>Maintain product details, copy, pricing, and stock for <%= merchant.name %>.</p>
+        </div>
+        <div class="merchant-products-hero-actions">
+            <a class="button secondary" href="/merchant/products">Back to inventory</a>
+        </div>
+    </header>
 
-<section class="section compact">
     <form class="merchant-product-editor" action="<%= product ? `/merchant/products/${product.id}` : '/merchant/products' %>" method="POST">
         <% if (errors.length > 0) { %>
             <div class="notice error">

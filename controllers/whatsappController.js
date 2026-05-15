@@ -240,6 +240,45 @@ async function handleTimeStep(phone, text, session) {
         }
     });
 
+    Booking.getNotificationDetailsById(bookingId, (error, notificationBooking) => {
+        if (error || !notificationBooking) {
+            if (error) {
+                console.error('WhatsApp booking notification lookup failed:', error.message || error);
+            }
+            return;
+        }
+
+        Notification.create({
+            recipientUserId: notificationBooking.merchant_user_id,
+            recipientRole: 'merchant',
+            actorUserId: session.user.user_id,
+            type: 'booking',
+            title: 'New WhatsApp booking received',
+            message: `${session.user.name || 'A customer'} booked ${booking.serviceName} for ${booking.bookingDate} at ${booking.bookingTime}.`,
+            linkUrl: '/merchant/bookings',
+            dedupeKey: `whatsapp-booking-merchant-${bookingId}`,
+            metadata: { bookingId }
+        }, (notificationError) => {
+            if (notificationError) {
+                console.error(notificationError);
+            }
+        });
+
+        Notification.createForRole('admin', {
+            actorUserId: session.user.user_id,
+            type: 'booking',
+            title: 'New WhatsApp booking',
+            message: `${session.user.name || 'A customer'} booked ${booking.serviceName} at ${booking.merchantName}.`,
+            linkUrl: '/admin/bookings',
+            dedupeKey: `whatsapp-booking-admin-${bookingId}`,
+            metadata: { bookingId }
+        }, (notificationError) => {
+            if (notificationError) {
+                console.error(notificationError);
+            }
+        });
+    });
+
     await sendBookingNotification(booking).catch((error) => {
         console.error('WhatsApp booking confirmation failed:', error.message);
     });

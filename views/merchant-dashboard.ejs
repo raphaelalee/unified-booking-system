@@ -169,120 +169,33 @@
                 </article>
             </section>
 
-            <section class="merchant-insight-grid" id="merchant-reschedules">
-                <article class="merchant-chart-card span-8">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Reschedule Automation</p>
-                            <h2>AI-assisted review queue</h2>
-                        </div>
-                        <span class="merchant-data-pill"><%= autoApprovedReschedules.length %> auto-approved</span>
-                    </div>
-
-                    <% if (!pendingRescheduleReviews.length) { %>
-                        <p class="muted">No reschedule requests need manual review.</p>
-                    <% } else { %>
-                        <div class="merchant-appointment-list">
-                            <% pendingRescheduleReviews.slice(0, 4).forEach((request) => { %>
-                                <article>
-                                    <span class="merchant-status-badge status-pending"><%= request.confidenceLevel %> confidence</span>
-                                    <div>
-                                        <strong><%= request.customerName %></strong>
-                                        <small><%= request.serviceName %> - <%= String(request.oldBookingDate).slice(0, 10) %> <%= request.oldBookingTime || '' %> to <%= String(request.requestedBookingDate).slice(0, 10) %> at <%= request.requestedBookingTime %></small>
-                                        <small><%= request.decisionReason || 'Merchant review recommended.' %></small>
-                                    </div>
-                                    <div class="merchant-booking-actions">
-                                        <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
-                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                            <input type="hidden" name="action" value="approve">
-                                            <button class="button secondary" type="submit">Approve</button>
-                                        </form>
-                                        <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
-                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                            <input type="hidden" name="action" value="reject">
-                                            <button class="button secondary danger-button" type="submit">Reject</button>
-                                        </form>
-                                    </div>
-                                </article>
-                            <% }) %>
-                        </div>
-                    <% } %>
-                </article>
-
+            <section class="merchant-insight-grid">
                 <article class="merchant-chart-card span-4">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Scheduling Signals</p>
-                            <h2>Recommendations</h2>
-                        </div>
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Bookings</p><h2>Needs attention</h2></div></div>
+                    <div class="merchant-checkin-metrics">
+                        <p><span>Pending approvals</span><strong><%= pendingAppointments.length %></strong></p>
+                        <p><span>Reschedule reviews</span><strong><%= pendingRescheduleReviews.length %></strong></p>
+                        <p><span>Auto-approved</span><strong><%= autoApprovedReschedules.length %></strong></p>
                     </div>
-                    <div class="merchant-alert-list">
-                        <% rescheduleRecommendations.forEach((recommendation) => { %>
-                            <p><%= recommendation %></p>
-                        <% }) %>
-                    </div>
-                </article>
-            </section>
-
-            <section class="merchant-insight-grid" id="merchant-analytics">
-                <article class="merchant-chart-card span-8">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Sales Analytics</p>
-                            <h2>Revenue and orders</h2>
-                        </div>
-                        <span class="merchant-data-pill">7 days</span>
-                    </div>
-                    <div class="merchant-chart-box"><canvas id="merchantSalesChart"></canvas></div>
+                    <a class="text-button" href="/merchant/bookings">Open booking operations</a>
                 </article>
                 <article class="merchant-chart-card span-4">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Customer Signal</p>
-                            <h2>Smart recommendation</h2>
-                        </div>
-                    </div>
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Customers</p><h2>Current signal</h2></div></div>
                     <div class="merchant-insight-callout">
                         <strong><%= customerInsights.topServiceName %></strong>
                         <span>Peak demand: <%= customerInsights.peakHour %></span>
                         <p><%= customerInsights.suggestedFocus %></p>
                     </div>
+                    <a class="text-button" href="/merchant/customers">Open customer insights</a>
                 </article>
-                <article class="merchant-chart-card span-6">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Customer Insights</p>
-                            <h2>Age segments</h2>
-                        </div>
+                <article class="merchant-chart-card span-4">
+                    <div class="merchant-card-heading"><div><p class="eyebrow">Analytics</p><h2>Performance</h2></div></div>
+                    <div class="merchant-checkin-metrics">
+                        <p><span>Revenue growth</span><strong><%= Number(stats.growthPercent || 0).toFixed(1) %>%</strong></p>
+                        <p><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong></p>
+                        <p><span>Average order</span><strong>$<%= formatCurrency(stats.averageOrderValue) %></strong></p>
                     </div>
-                    <div class="merchant-chart-box small"><canvas id="merchantAgeChart"></canvas></div>
-                </article>
-                <article class="merchant-chart-card span-6">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Customer Insights</p>
-                            <h2>Gender mix</h2>
-                        </div>
-                    </div>
-                    <div class="merchant-chart-box small"><canvas id="merchantGenderChart"></canvas></div>
-                </article>
-                <article class="merchant-chart-card span-6">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Customer Demand</p>
-                            <h2>Top services</h2>
-                        </div>
-                    </div>
-                    <div class="merchant-chart-box small"><canvas id="merchantServiceChart"></canvas></div>
-                </article>
-                <article class="merchant-chart-card span-6">
-                    <div class="merchant-card-heading">
-                        <div>
-                            <p class="eyebrow">Customer Timing</p>
-                            <h2>Booking hours</h2>
-                        </div>
-                    </div>
-                    <div class="merchant-chart-box small"><canvas id="merchantHourChart"></canvas></div>
+                    <a class="text-button" href="/merchant/analytics">Open analytics</a>
                 </article>
             </section>
 
@@ -314,39 +227,10 @@
                                         <small><%= booking.customerPhone || booking.customerEmail || 'Contact not set' %></small>
                                     </div>
                                     <em><%= ['checked_in', 'completed'].includes(booking.status) ? 'QR checked' : 'QR pending' %></em>
-                                    <div class="merchant-booking-actions">
-                                        <% if (['pending', 'paid'].includes(booking.status)) { %>
-                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                                <input type="hidden" name="status" value="confirmed">
-                                                <button class="button secondary" type="submit">Approve</button>
-                                            </form>
-                                        <% } %>
-                                        <% if (['pending', 'confirmed', 'paid'].includes(booking.status)) { %>
-                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                                <input type="hidden" name="status" value="cancelled">
-                                                <button class="button secondary danger-button" type="submit">Reject</button>
-                                            </form>
-                                        <% } %>
-                                        <% if (['confirmed', 'paid', 'checked_in'].includes(booking.status)) { %>
-                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                                <input type="hidden" name="status" value="completed">
-                                                <button class="button secondary" type="submit">Complete</button>
-                                            </form>
-                                        <% } %>
-                                        <% if (!['cancelled', 'completed', 'checked_in'].includes(booking.status)) { %>
-                                            <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                                <input type="hidden" name="status" value="no_show">
-                                                <button class="button secondary" type="submit">No-show</button>
-                                            </form>
-                                        <% } %>
-                                    </div>
                                 </article>
                             <% }) %>
                         </div>
+                        <a class="text-button" href="/merchant/bookings">Manage appointments</a>
                     <% } %>
                 </section>
 
@@ -357,15 +241,7 @@
                             <h2>Storefront booking QR</h2>
                         </div>
                         <div class="merchant-inline-actions">
-                            <form action="/merchant/generate-qr" method="POST">
-                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                <button class="text-button" type="submit">Generate storefront QR</button>
-                            </form>
-                            <% if (qrBookingUrl) { %>
-                                <a class="text-button" href="<%= qrBookingUrl %>">Open booking link</a>
-                            <% } else if (merchant.id) { %>
-                                <a class="text-button" href="/merchants/<%= merchant.id %>/qr">View QR page</a>
-                            <% } %>
+                            <a class="text-button" href="/merchant/profile">Manage QR tools</a>
                         </div>
                     </div>
                     <div class="merchant-checkin-metrics">
@@ -373,27 +249,7 @@
                         <p><span>Checked-in/completed</span><strong><%= checkedInBookings %></strong></p>
                         <p><span>Pending check-ins</span><strong><%= pendingCheckIns %></strong></p>
                     </div>
-                    <p class="muted">Customers can scan this QR to book directly from your storefront.</p>
-                    <% if (storefrontQrImage && qrBookingUrl) { %>
-                        <a class="qr-code-link" href="<%= qrBookingUrl %>" aria-label="Open storefront booking page">
-                            <img class="qr-code" src="<%= storefrontQrImage %>" alt="Merchant QR">
-                        </a>
-                        <p class="muted qr-link-wrap"><%= qrBookingUrl %></p>
-                        <div class="merchant-inline-actions">
-                            <a class="button secondary" href="<%= storefrontQrImage %>" download="vaniday-storefront-qr.png">Download QR</a>
-                            <button class="button secondary" type="button" onclick="window.print()">Print QR</button>
-                        </div>
-                        <% if (qrDebug) { %>
-                            <div class="qr-debug-panel">
-                                <p class="eyebrow">QR Debug</p>
-                                <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
-                                <p class="muted"><strong>Token:</strong> <%= qrDebug.token %></p>
-                                <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
-                            </div>
-                        <% } %>
-                    <% } else { %>
-                        <p class="muted">Generate your permanent Scan to Book QR for walk-in customers and in-store booking displays.</p>
-                    <% } %>
+                    <p class="muted">QR setup and downloads now live in Profile so this dashboard stays focused on daily performance.</p>
                 </section>
             </div>
 
@@ -417,126 +273,5 @@
         </section>
     </div>
 </section>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    (() => {
-        const chartPayload = <%- JSON.stringify(merchantChartPayload) %>;
-        const chartPalette = {
-            green: '#4f6847',
-            blue: '#20899c',
-            orange: '#df7c16',
-            yellow: '#d4a017',
-            red: '#a64032'
-        };
-        const merchantCharts = [];
-        const chartOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 650 },
-            plugins: { legend: { labels: { boxWidth: 10, usePointStyle: true } } },
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, grid: { color: 'rgba(79, 104, 71, 0.12)' } }
-            }
-        };
-        const makeChart = (id, config) => {
-            const canvas = document.getElementById(id);
-            if (!canvas || typeof Chart === 'undefined') return null;
-            const chart = new Chart(canvas, config);
-            merchantCharts.push(chart);
-            return chart;
-        };
-
-        makeChart('merchantSalesChart', {
-            type: 'line',
-            data: {
-                labels: chartPayload.salesLabels,
-                datasets: [
-                    { label: 'Revenue', data: chartPayload.salesRevenue, borderColor: chartPalette.green, backgroundColor: 'rgba(79, 104, 71, 0.12)', tension: 0.35, fill: true },
-                    { label: 'Orders', data: chartPayload.salesOrders, borderColor: chartPalette.blue, backgroundColor: 'rgba(32, 137, 156, 0.1)', tension: 0.35, fill: true }
-                ]
-            },
-            options: chartOptions
-        });
-
-        makeChart('merchantAgeChart', {
-            type: 'bar',
-            data: {
-                labels: chartPayload.ageLabels,
-                datasets: [
-                    {
-                        label: 'Customers',
-                        data: chartPayload.ageValues,
-                        borderColor: chartPalette.green,
-                        backgroundColor: 'rgba(79, 104, 71, 0.32)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: chartOptions
-        });
-
-        makeChart('merchantGenderChart', {
-            type: 'doughnut',
-            data: {
-                labels: chartPayload.genderLabels,
-                datasets: [
-                    {
-                        data: chartPayload.genderValues,
-                        backgroundColor: [
-                            chartPalette.green,
-                            chartPalette.blue,
-                            chartPalette.orange,
-                            chartPalette.yellow,
-                            chartPalette.red
-                        ]
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 650 },
-                plugins: chartOptions.plugins
-            }
-        });
-
-        makeChart('merchantServiceChart', {
-            type: 'bar',
-            data: {
-                labels: chartPayload.serviceLabels,
-                datasets: [
-                    {
-                        label: 'Bookings',
-                        data: chartPayload.serviceValues,
-                        borderColor: chartPalette.blue,
-                        backgroundColor: 'rgba(32, 137, 156, 0.28)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: { ...chartOptions, indexAxis: 'y' }
-        });
-
-        makeChart('merchantHourChart', {
-            type: 'line',
-            data: {
-                labels: chartPayload.hourLabels,
-                datasets: [
-                    {
-                        label: 'Bookings',
-                        data: chartPayload.hourValues,
-                        borderColor: chartPalette.orange,
-                        backgroundColor: 'rgba(223, 124, 22, 0.16)',
-                        tension: 0.35,
-                        fill: true
-                    }
-                ]
-            },
-            options: chartOptions
-        });
-    })();
-</script>
 
 <%- include('partials/footer') %>

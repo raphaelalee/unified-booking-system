@@ -6,19 +6,16 @@
             label: 'Bookings',
             active: activePath === '/merchant/bookings' || activePath === '/merchant/schedule',
             items: [
-                { label: 'Calendar', href: '/merchant/bookings' },
-                { label: 'Pending Appointments', href: '/merchant/bookings' },
-                { label: 'Reschedule Requests', href: '/merchant/bookings' },
-                { label: 'Booking History', href: '/merchant/schedule' }
+                { label: 'Approvals & Reschedules', href: '/merchant/bookings' },
+                { label: 'Calendar & History', href: '/merchant/schedule' }
             ]
         },
         {
             label: 'Services',
             active: isActive(['/merchant/services']),
             items: [
-                { label: 'My Services', href: '/merchant/services' },
-                { label: 'Availability', href: '/merchant/bookings' },
-                { label: 'Staff Schedule', href: '/merchant/schedule' }
+                { label: 'Service Menu', href: '/merchant/services' },
+                { label: 'Add Service', href: '/merchant/services/new' }
             ]
         },
         {
@@ -26,8 +23,7 @@
             active: isActive(['/merchant/products']),
             items: [
                 { label: 'Inventory', href: '/merchant/products' },
-                { label: 'Orders', href: '/merchant/products' },
-                { label: 'Product Management', href: '/merchant/products' }
+                { label: 'Add Product', href: '/merchant/products/new' }
             ]
         },
         {
@@ -35,16 +31,15 @@
             active: isActive(['/merchant/promotions', '/merchant/rewards-game']),
             items: [
                 { label: 'Campaigns', href: '/merchant/promotions' },
-                { label: 'Game Rewards', href: '/merchant/rewards-game' },
-                { label: 'Voucher Analytics', href: '/merchant/analytics' }
+                { label: 'Game Rewards', href: '/merchant/rewards-game' }
             ]
         },
         {
             label: 'Support',
             active: isActive(['/merchant/support', '/help-center']),
             items: [
-                { label: 'Help Center', href: '/merchant/support' },
-                { label: 'Support Tickets', href: '/merchant/support' }
+                { label: 'Support Overview', href: '/merchant/support' },
+                { label: 'Refund Requests', href: '/help-center' }
             ]
         }
     ];
