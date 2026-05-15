@@ -1,4 +1,5 @@
 const Loyalty = require('../models/Loyalty');
+const PurchaseHistory = require('../models/PurchaseHistory');
 
 function getRulesForm(body = {}) {
     return {
@@ -32,8 +33,59 @@ function validateRules(rules) {
     return errors;
 }
 
+function mapWalletReceipt(row) {
+    return {
+        id: String(row.receipt_id || '').replace(/^order-/, ''),
+        receiptId: row.receipt_id,
+        itemNames: row.item_names || 'Paid receipt',
+        totalAmount: Number(row.total_amount || 0),
+        paymentStatus: row.payment_status || 'paid',
+        createdAt: row.created_at
+    };
+}
+
+function awardReceiptSeries(userId, receipts, callback) {
+    let index = 0;
+
+    function next(error) {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        if (index >= receipts.length) {
+            callback(null);
+            return;
+        }
+
+        const receipt = receipts[index];
+        index += 1;
+
+        Loyalty.awardPointsForReceipt(userId, receipt.receiptId, (awardError) => {
+            if (awardError) {
+                console.error(awardError);
+            }
+
+            next(null);
+        });
+    }
+
+    next();
+}
+
 function renderWallet(req, res, viewName, title) {
-    return Loyalty.getWalletView(req.session.user.id, (error, viewModel) => {
+    const userId = req.session.user.id;
+
+    return PurchaseHistory.getByUserId(userId, (historyError, rows = []) => {
+        if (historyError) {
+            console.error(historyError);
+        }
+
+        const receipts = (historyError ? [] : rows)
+            .filter((row) => String(row.payment_status || '').toLowerCase() === 'paid')
+            .map(mapWalletReceipt);
+
+        return awardReceiptSeries(userId, receipts, () => Loyalty.getWalletView(userId, (error, viewModel) => {
         if (error) {
             console.error(error);
             return res.status(500).render('error', {
@@ -52,14 +104,16 @@ function renderWallet(req, res, viewName, title) {
             wallet: viewModel.wallet,
             rules: viewModel.rules,
             transactions: viewModel.transactions,
+            receipts,
             success,
             error: redeemError
         });
+        }));
     });
 }
 
 function showWallet(req, res) {
-    return res.redirect('/profile#wallet');
+    return renderWallet(req, res, 'wallet', 'Rewards Wallet');
 }
 
 function showCashback(req, res) {
@@ -68,15 +122,40 @@ function showCashback(req, res) {
 
 function redeemPoints(req, res) {
     const points = req.body.points;
+    const redirectPath = req.originalUrl.startsWith('/customer/') ? '/customer/wallet' : '/profile#wallet';
 
     return Loyalty.redeemPointsForCashback(req.session.user.id, points, (error, result) => {
         if (error) {
-            req.session.loyaltyError = error.message || 'Rewards could not be redeemed.';
-            return res.redirect('/profile#wallet');
+            const message = String(error.message || '');
+            req.session.loyaltyError = message.includes('Minimum redemption')
+                ? message
+                : message.includes('Not enough') || message.includes('points')
+                    ? 'Insufficient points'
+                    : 'Rewards could not be redeemed.';
+            return res.redirect(redirectPath);
         }
 
-        req.session.loyaltySuccess = `${result.points} points converted into $${Number(result.cashback).toFixed(2)} cashback.`;
-        return res.redirect('/profile#wallet');
+        req.session.loyaltySuccess = 'Points redeemed successfully';
+        return res.redirect(redirectPath);
+    });
+}
+
+function applyCashback(req, res) {
+    return Loyalty.getWalletView(req.session.user.id, (error, loyalty) => {
+        if (error) {
+            console.error(error);
+            req.session.success = 'Cashback could not be applied.';
+            return res.redirect('/cart');
+        }
+
+        if (Number(loyalty?.wallet?.cashbackBalance || 0) <= 0) {
+            req.session.success = 'No cashback available yet.';
+            return res.redirect('/cart');
+        }
+
+        req.session.applyCashback = true;
+        req.session.success = 'Cashback applied successfully';
+        return res.redirect('/cart');
     });
 }
 
@@ -126,6 +205,7 @@ function updateAdminRules(req, res) {
 }
 
 module.exports = {
+    applyCashback,
     redeemPoints,
     showAdminRules,
     showCashback,

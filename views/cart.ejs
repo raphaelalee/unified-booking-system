@@ -118,6 +118,7 @@
 
             <aside class="booking-panel cart-summary-card cart-checkout-panel">
                 <form id="cart-checkout-form" action="/checkout" method="POST">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                     <div class="cart-summary-heading">
                         <p class="eyebrow">Checkout</p>
                         <h2 id="cart-summary-total">$<%= Number(total).toFixed(2) %></h2>
@@ -137,6 +138,7 @@
                                     <small>Available $<%= cashbackBalance.toFixed(2) %>. Applying <span id="cart-cashback-copy">$<%= cashbackApplied.toFixed(2) %></span>.</small>
                                 </span>
                             </label>
+                            <button class="button secondary compact" type="submit" formaction="/customer/checkout/apply-cashback" formmethod="POST">Apply cashback</button>
                         <% } else { %>
                             <span>
                                 <strong>No cashback available yet</strong>

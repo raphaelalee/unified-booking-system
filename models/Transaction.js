@@ -75,6 +75,14 @@ function ensureFulfilmentSchema(callback) {
             alters.push('ADD COLUMN collected_at DATETIME DEFAULT NULL');
         }
 
+        if (!fields.has('original_amount')) {
+            alters.push('ADD COLUMN original_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+
+        if (!fields.has('cashback_used')) {
+            alters.push('ADD COLUMN cashback_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+
         if (alters.length === 0) {
             fulfilmentSchemaReady = true;
             callback(null);
@@ -111,30 +119,45 @@ function normalizePickupStatus(status, deliveryStatus) {
     return 'pending_pickup';
 }
 
-function createPaidTransaction(userId, amount, paymentMethod, items, callback) {
-    db.getConnection((connectionError, connection) => {
+function createPaidTransaction(userId, amount, paymentMethod, items, options = {}, callback) {
+    const done = typeof options === 'function' ? options : callback;
+    const transactionOptions = typeof options === 'function' ? {} : options || {};
+
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            done(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
         if (connectionError) {
-            callback(connectionError);
+            done(connectionError);
             return;
         }
 
         connection.beginTransaction((transactionError) => {
             if (transactionError) {
                 connection.release();
-                callback(transactionError);
+                done(transactionError);
                 return;
             }
 
             const transactionSql = `
-                INSERT INTO transactions (user_id, total_amount, payment_status, payment_method)
-                VALUES (?, ?, 'paid', ?)
+                INSERT INTO transactions (user_id, total_amount, payment_status, payment_method, original_amount, cashback_used)
+                VALUES (?, ?, 'paid', ?, ?, ?)
             `;
 
-            connection.query(transactionSql, [userId, amount, paymentMethod || 'card'], (insertError, transactionResult) => {
+            connection.query(transactionSql, [
+                userId,
+                amount,
+                paymentMethod || 'card',
+                Number(transactionOptions.originalAmount || amount || 0),
+                Number(transactionOptions.cashbackUsed || 0)
+            ], (insertError, transactionResult) => {
                 if (insertError) {
                     return connection.rollback(() => {
                         connection.release();
-                        callback(insertError);
+                        done(insertError);
                     });
                 }
 
@@ -150,7 +173,7 @@ function createPaidTransaction(userId, amount, paymentMethod, items, callback) {
                 if (orderItems.length === 0) {
                     return connection.commit((commitError) => {
                         connection.release();
-                        callback(commitError, transactionResult);
+                        done(commitError, transactionResult);
                     });
                 }
 
@@ -163,17 +186,18 @@ function createPaidTransaction(userId, amount, paymentMethod, items, callback) {
                     if (itemError) {
                         return connection.rollback(() => {
                             connection.release();
-                            callback(itemError);
+                            done(itemError);
                         });
                     }
 
                     return connection.commit((commitError) => {
                         connection.release();
-                        callback(commitError, transactionResult);
+                        done(commitError, transactionResult);
                     });
                 });
             });
         });
+    });
     });
 }
 

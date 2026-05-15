@@ -1,5 +1,11 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const safeViewerRole = typeof viewerRole !== 'undefined' ? viewerRole : 'customer';
+    const returnPath = safeViewerRole === 'admin' ? '/admin/bookings' : (safeViewerRole === 'merchant' ? '/merchant/schedule' : '/services');
+    const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
+%>
+
 <section class="page-title receipt-title">
     <p class="eyebrow"><%= isBooking ? 'Booking receipt' : 'Product receipt' %></p>
     <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
@@ -28,8 +34,10 @@
     <% if (!pdfMode) { %>
         <div class="hero-actions">
             <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download PDF</a>
-            <a class="button secondary" href="<%= supportRequestPath %>">Need help</a>
-            <a class="button secondary" href="/services">Continue browsing</a>
+            <% if (safeViewerRole === 'customer') { %>
+                <a class="button secondary" href="<%= supportRequestPath %>">Need help</a>
+            <% } %>
+            <a class="button secondary" href="<%= returnPath %>"><%= returnLabel %></a>
         </div>
     <% } %>
 </section>
@@ -45,6 +53,9 @@
                 <% if (isBooking) { %>
                     <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
                     <p><span>Appointment</span><strong><%= receipt.bookingDate || '-' %><%= receipt.bookingTime ? ` at ${receipt.bookingTime}` : '' %></strong></p>
+                    <% if (receipt.checkedInAt) { %>
+                        <p><span>Checked-in At</span><strong><%= new Date(receipt.checkedInAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></strong></p>
+                    <% } %>
                 <% } %>
                 <% if (isProductPickup) { %>
                     <p><span>Fulfilment Method</span><strong><%= fulfilmentLabel %></strong></p>

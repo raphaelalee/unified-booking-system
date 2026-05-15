@@ -8,6 +8,18 @@ const DEFAULT_RULES = {
     isEnabled: true
 };
 
+const ACTIVITY_TYPES = {
+    EARNED: 'EARNED',
+    REDEEMED: 'REDEEMED',
+    CASHBACK_USED: 'CASHBACK_USED'
+};
+
+const LEGACY_TYPE_MAP = {
+    earn: ACTIVITY_TYPES.EARNED,
+    redeem_points: ACTIVITY_TYPES.REDEEMED,
+    redeem: ACTIVITY_TYPES.CASHBACK_USED
+};
+
 function runSeries(tasks, callback) {
     let index = 0;
 
@@ -98,12 +110,19 @@ function mapWallet(row = {}) {
 }
 
 function mapTransaction(row = {}) {
+    const rawType = String(row.transaction_type || '').trim();
+
     return {
         id: row.loyalty_transaction_id,
+        activityId: row.loyalty_transaction_id,
         sourceReceiptId: row.source_receipt_id,
-        type: row.transaction_type,
+        receiptId: row.source_receipt_id,
+        type: LEGACY_TYPE_MAP[rawType] || rawType.toUpperCase(),
+        activityType: LEGACY_TYPE_MAP[rawType] || rawType.toUpperCase(),
         pointsDelta: Number(row.points_delta || 0),
+        pointsChange: Number(row.points_delta || 0),
         cashbackDelta: Number(row.cashback_delta || 0),
+        cashbackChange: Number(row.cashback_delta || 0),
         description: row.description,
         createdAt: row.created_at
     };
@@ -239,7 +258,7 @@ function getPlatformSummary(callback) {
         const sql = `
             SELECT
                 COUNT(*) AS transaction_count,
-                SUM(CASE WHEN transaction_type IN ('redeem', 'redeem_points') THEN 1 ELSE 0 END) AS redemption_count,
+                SUM(CASE WHEN transaction_type IN ('REDEEMED', 'redeem_points') THEN 1 ELSE 0 END) AS redemption_count,
                 COALESCE(SUM(points_delta), 0) AS points_delta_total,
                 COALESCE(SUM(cashback_delta), 0) AS cashback_delta_total
             FROM loyalty_transactions
@@ -267,8 +286,9 @@ function roundMoney(value) {
 
 function awardForReceipt(receipt, callback) {
     const totalAmount = Number(receipt.totalAmount || 0);
+    const paymentStatus = String(receipt.paymentStatus || '').toLowerCase();
 
-    if (!receipt.userId || totalAmount <= 0 || !['paid', 'completed'].includes(String(receipt.paymentStatus || '').toLowerCase())) {
+    if (!receipt.userId || totalAmount <= 0 || paymentStatus !== 'paid') {
         callback(null, { awarded: false });
         return;
     }
@@ -285,7 +305,6 @@ function awardForReceipt(receipt, callback) {
         }
 
         const points = Math.floor(totalAmount * rules.pointsPerDollar);
-        const cashback = roundMoney(totalAmount * (rules.cashbackPercent / 100));
         const description = `Earned from receipt ${receipt.displayId || receipt.id}`;
         const sourceReceiptId = String(receipt.id);
 
@@ -302,17 +321,38 @@ function awardForReceipt(receipt, callback) {
                     return;
                 }
 
+                connection.query(
+                    `SELECT loyalty_transaction_id
+                     FROM loyalty_transactions
+                     WHERE source_receipt_id = ?
+                        AND transaction_type IN ('EARNED', 'earn')
+                     LIMIT 1`,
+                    [sourceReceiptId],
+                    (duplicateError, duplicateRows = []) => {
+                        if (duplicateError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(duplicateError);
+                            });
+                        }
+
+                        if (duplicateRows.length) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(null, { awarded: false, duplicate: true });
+                            });
+                        }
+
                 const insertSql = `
                     INSERT IGNORE INTO loyalty_transactions
                         (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
-                    VALUES (?, ?, 'earn', ?, ?, ?)
+                    VALUES (?, ?, 'EARNED', ?, 0, ?)
                 `;
 
                 connection.query(insertSql, [
                     receipt.userId,
                     sourceReceiptId,
                     points,
-                    cashback,
                     description
                 ], (insertError, result) => {
                     if (insertError) {
@@ -331,17 +371,15 @@ function awardForReceipt(receipt, callback) {
 
                     const updateSql = `
                         INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (?, ?, 0, ?)
                         ON DUPLICATE KEY UPDATE
                             points_balance = points_balance + VALUES(points_balance),
-                            cashback_balance = cashback_balance + VALUES(cashback_balance),
                             lifetime_points = lifetime_points + VALUES(lifetime_points)
                     `;
 
                     connection.query(updateSql, [
                         receipt.userId,
                         points,
-                        cashback,
                         points
                     ], (updateError) => {
                         if (updateError) {
@@ -356,13 +394,120 @@ function awardForReceipt(receipt, callback) {
                             callback(commitError, {
                                 awarded: !commitError,
                                 points,
-                                cashback
+                                cashback: 0
                             });
                         });
                     });
                 });
+                    }
+                );
             });
         });
+    });
+}
+
+function loadReceiptForAward(userId, receiptId, callback) {
+    const receiptKey = String(receiptId || '').trim();
+
+    if (!userId || !receiptKey) {
+        callback(null, null);
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const historySql = `
+            SELECT
+                receipt_id AS id,
+                user_id,
+                total_amount,
+                payment_status,
+                created_at
+            FROM purchase_history
+            WHERE receipt_id = ?
+                AND user_id = ?
+            LIMIT 1
+        `;
+
+        db.query(historySql, [receiptKey, userId], (historyError, rows = []) => {
+            if (historyError) {
+                callback(historyError);
+                return;
+            }
+
+            if (rows[0]) {
+                callback(null, {
+                    id: rows[0].id,
+                    userId: rows[0].user_id,
+                    totalAmount: Number(rows[0].total_amount || 0),
+                    paymentStatus: rows[0].payment_status || 'paid',
+                    paidAt: rows[0].created_at
+                });
+                return;
+            }
+
+            const bookingId = receiptKey.replace(/^booking-/, '');
+
+            if (!/^\d+$/.test(bookingId)) {
+                callback(null, null);
+                return;
+            }
+
+            const bookingSql = `
+                SELECT
+                    bookings.booking_id AS id,
+                    bookings.user_id,
+                    services.price AS total_amount,
+                    COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE bookings.status END) AS payment_status
+                FROM bookings
+                INNER JOIN services ON services.service_id = bookings.service_id
+                LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
+                WHERE bookings.booking_id = ?
+                    AND bookings.user_id = ?
+                LIMIT 1
+            `;
+
+            db.query(bookingSql, [bookingId, userId], (bookingError, bookingRows = []) => {
+                if (bookingError) {
+                    callback(bookingError);
+                    return;
+                }
+
+                const booking = bookingRows[0];
+
+                if (!booking) {
+                    callback(null, null);
+                    return;
+                }
+
+                callback(null, {
+                    id: booking.id,
+                    userId: booking.user_id,
+                    totalAmount: Number(booking.total_amount || 0),
+                    paymentStatus: booking.payment_status || 'pending'
+                });
+            });
+        });
+    });
+}
+
+function awardPointsForReceipt(userId, receiptId, callback) {
+    loadReceiptForAward(userId, receiptId, (lookupError, receipt) => {
+        if (lookupError) {
+            callback(lookupError);
+            return;
+        }
+
+        if (!receipt) {
+            callback(null, { awarded: false, missing: true });
+            return;
+        }
+
+        awardForReceipt(receipt, callback);
     });
 }
 
@@ -494,14 +639,14 @@ function redeemCashback(userId, amount, sourceReceiptId, callback) {
                 const insertSql = `
                     INSERT IGNORE INTO loyalty_transactions
                         (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
-                    VALUES (?, ?, 'redeem', 0, ?, ?)
+                    VALUES (?, ?, 'CASHBACK_USED', 0, ?, ?)
                 `;
 
                 connection.query(insertSql, [
                     userId,
                     String(sourceReceiptId),
                     -redeemAmount,
-                    `Redeemed for receipt ${sourceReceiptId}`
+                    `Cashback used at checkout for ${String(sourceReceiptId).replace(/^cashback-/, '')}`
                 ], (insertError, insertResult) => {
                     if (insertError || insertResult.affectedRows === 0) {
                         return connection.rollback(() => {
@@ -554,7 +699,7 @@ function redeemPointsForCashback(userId, points, callback) {
         }
 
         if (requestedPoints < rules.minPointsToRedeem) {
-            callback(new Error(`Redeem at least ${rules.minPointsToRedeem} points.`));
+            callback(new Error(`Minimum redemption is ${rules.minPointsToRedeem} points`));
             return;
         }
 
@@ -592,7 +737,7 @@ function redeemPointsForCashback(userId, points, callback) {
                     const insertSql = `
                         INSERT INTO loyalty_transactions
                             (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
-                        VALUES (?, ?, 'redeem_points', ?, ?, ?)
+                        VALUES (?, ?, 'REDEEMED', ?, ?, ?)
                     `;
 
                     connection.query(insertSql, [
@@ -600,7 +745,7 @@ function redeemPointsForCashback(userId, points, callback) {
                         `points-${Date.now()}`,
                         -requestedPoints,
                         cashback,
-                        'Converted reward points into booking cashback'
+                        `Redeemed ${requestedPoints} points for $${cashback.toFixed(2)} cashback`
                     ], (insertError) => {
                         if (insertError) {
                             return connection.rollback(() => {
@@ -624,7 +769,9 @@ function redeemPointsForCashback(userId, points, callback) {
 }
 
 module.exports = {
+    ACTIVITY_TYPES,
     awardForReceipt,
+    awardPointsForReceipt,
     awardReviewBonus,
     ensureWallet,
     getPlatformSummary,

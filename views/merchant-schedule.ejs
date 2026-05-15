@@ -3,15 +3,21 @@
 <%
     const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
     const allBookings = appointments.allBookings || [];
-    const weekDays = appointments.weekDays || [];
+    const todayKey = appointments.todayKey || new Date().toISOString().slice(0, 10);
     const statusLabels = {
-        pending: 'pending',
-        confirmed: 'confirmed',
-        checked_in: 'checked-in',
-        completed: 'completed',
-        cancelled: 'cancelled',
-        no_show: 'no-show'
+        pending: 'Pending',
+        paid: 'Paid',
+        confirmed: 'Confirmed',
+        checked_in: 'Checked-in',
+        completed: 'Completed',
+        cancelled: 'Cancelled',
+        no_show: 'No-show'
     };
+    const schedulePayload = JSON.stringify({
+        bookings: allBookings,
+        todayKey,
+        statusLabels
+    }).replace(/</g, '\\u003c');
 %>
 
 <section class="section compact merchant-analytics-page merchant-appointment-dashboard merchant-schedule-page">
@@ -19,146 +25,672 @@
         <header class="merchant-dashboard-hero">
             <div>
                 <p class="eyebrow">Schedule</p>
-                <h1>Calendar and booking history</h1>
-                <span>Review appointment timing, status, and complete booking history for <%= merchant.name %>.</span>
+                <h1>Calendar and booking management</h1>
+                <span>Review monthly appointments, booking history, and QR check-in records for <%= merchant.name %>.</span>
             </div>
             <div class="merchant-hero-actions">
                 <a class="button secondary" href="/merchant/bookings">Booking operations</a>
             </div>
         </header>
 
+        <% if (typeof success !== 'undefined' && success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
         <% if (databaseError) { %>
             <div class="notice error">
-                <p>Appointment records could not be loaded from the database.</p>
+                <p>Appointment records or QR codes could not be fully loaded from the database.</p>
             </div>
         <% } %>
 
-        <section class="merchant-calendar-shell">
-            <div class="merchant-card-heading">
-                <div>
-                    <p class="eyebrow">Schedule</p>
-                    <h2>Appointment calendar</h2>
-                </div>
-                <div class="merchant-calendar-legend">
-                    <% Object.keys(statusLabels).forEach((status) => { %>
-                        <span class="merchant-status-dot status-<%= status %>"><%= statusLabels[status] %></span>
-                    <% }) %>
-                </div>
-            </div>
+        <nav class="merchant-schedule-tabs" aria-label="Schedule sections">
+            <button class="merchant-schedule-tab is-active" type="button" data-schedule-tab="calendar">Calendar View</button>
+            <button class="merchant-schedule-tab" type="button" data-schedule-tab="upcoming">Upcoming Appointments</button>
+            <button class="merchant-schedule-tab" type="button" data-schedule-tab="history">Past Appointment History</button>
+            <button class="merchant-schedule-tab" type="button" data-schedule-tab="qr">QR / Check-in Records</button>
+        </nav>
 
-            <div class="merchant-calendar-grid" data-merchant-calendar>
-                <% weekDays.forEach((day) => { %>
-                    <section class="merchant-calendar-day" data-calendar-day="<%= day.key %>">
-                        <header>
-                            <span><%= day.label %></span>
-                            <strong><%= day.day %></strong>
-                        </header>
-                        <div class="merchant-calendar-dropzone">
-                            <% if (!day.appointments.length) { %>
-                                <p class="merchant-calendar-empty">No appointments</p>
-                            <% } %>
-                            <% day.appointments.forEach((booking) => { %>
-                                <article class="merchant-calendar-booking status-<%= booking.status %>" draggable="true" data-booking-id="<%= booking.id %>">
-                                    <div>
-                                        <strong><%= booking.bookingTime || 'Time TBC' %></strong>
-                                        <span><%= booking.serviceName %></span>
-                                    </div>
-                                    <small><%= booking.customerName %></small>
-                                    <em><%= statusLabels[booking.status] || booking.status %></em>
-                                    <% if (['checked_in', 'completed'].includes(booking.status)) { %>
-                                        <b>QR</b>
-                                    <% } %>
-                                </article>
-                            <% }) %>
-                        </div>
-                    </section>
-                <% }) %>
-            </div>
+        <section class="merchant-schedule-panel is-active" data-schedule-panel="calendar">
+            <article class="merchant-calendar-shell merchant-schedule-card">
+                <div class="merchant-card-heading merchant-calendar-toolbar">
+                    <div>
+                        <p class="eyebrow">Calendar</p>
+                        <h2 data-calendar-title>Monthly appointments</h2>
+                    </div>
+                    <div class="merchant-calendar-controls">
+                        <button class="button secondary compact" type="button" data-calendar-prev>Previous</button>
+                        <select aria-label="Calendar month" data-calendar-month></select>
+                        <select aria-label="Calendar year" data-calendar-year></select>
+                        <button class="button secondary compact" type="button" data-calendar-next>Next</button>
+                        <button class="button secondary compact" type="button" data-calendar-today>Today</button>
+                    </div>
+                </div>
+
+                <div class="merchant-calendar-modebar">
+                    <div class="merchant-calendar-legend">
+                        <% Object.keys(statusLabels).forEach((status) => { %>
+                            <span class="merchant-status-dot status-<%= status %>"><%= statusLabels[status] %></span>
+                        <% }) %>
+                    </div>
+                    <div class="merchant-calendar-view-toggle" role="group" aria-label="Calendar view">
+                        <button class="is-active" type="button" data-calendar-view="month">Month</button>
+                        <button type="button" data-calendar-view="year">Year</button>
+                    </div>
+                </div>
+
+                <div class="merchant-month-calendar" data-month-calendar>
+                    <div class="merchant-calendar-weekdays">
+                        <span>Sun</span>
+                        <span>Mon</span>
+                        <span>Tue</span>
+                        <span>Wed</span>
+                        <span>Thu</span>
+                        <span>Fri</span>
+                        <span>Sat</span>
+                    </div>
+                    <div class="merchant-month-grid" data-calendar-grid></div>
+                </div>
+
+                <div class="merchant-year-grid" data-year-grid hidden></div>
+            </article>
+
+            <article class="merchant-schedule-card merchant-selected-day-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Selected Date</p>
+                        <h2 data-selected-day-title>Choose a date</h2>
+                    </div>
+                </div>
+                <div class="merchant-selected-day-list" data-selected-day-list>
+                    <p class="muted">Click a date in the calendar to review all bookings on that day.</p>
+                </div>
+            </article>
         </section>
 
-        <section class="merchant-orders-card merchant-all-appointments-card">
-            <div class="merchant-card-heading">
-                <div>
-                    <p class="eyebrow">All Appointments</p>
-                    <h2>Complete appointment list</h2>
+        <section class="merchant-schedule-panel" data-schedule-panel="upcoming" hidden>
+            <article class="merchant-orders-card merchant-all-appointments-card merchant-schedule-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Upcoming</p>
+                        <h2>Upcoming appointments</h2>
+                    </div>
                 </div>
-            </div>
-
-            <% if (!allBookings.length) { %>
-                <div class="merchant-empty-state">
-                    <span>BK</span>
-                    <strong>No appointments yet</strong>
-                    <a class="text-button" href="/merchant/services">Review services</a>
-                </div>
-            <% } else { %>
                 <div class="admin-table-wrap merchant-schedule-table-wrap">
                     <table class="admin-table merchant-schedule-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
+                                <th>Booking ID</th>
                                 <th>Date</th>
                                 <th>Time</th>
-                                <th>Customer</th>
+                                <th>Customer name</th>
+                                <th>Customer email</th>
                                 <th>Service</th>
                                 <th>Status</th>
-                                <th>QR</th>
+                                <th>Payment status</th>
+                                <th>QR status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <% allBookings.forEach((booking) => { %>
-                                <tr>
-                                    <td>#<%= booking.id %></td>
-                                    <td><%= booking.bookingDate %></td>
-                                    <td><%= booking.bookingTime || 'Time TBC' %></td>
-                                    <td>
-                                        <strong><%= booking.customerName %></strong><br>
-                                        <span><%= booking.email || 'No email' %></span>
-                                    </td>
-                                    <td><%= booking.serviceName %></td>
-                                    <td><span class="merchant-status-badge status-<%= booking.status %>"><%= statusLabels[booking.status] || booking.status %></span></td>
-                                    <td><%= ['checked_in', 'completed'].includes(booking.status) ? 'Checked in' : 'Pending' %></td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
+                        <tbody data-upcoming-table></tbody>
                     </table>
                 </div>
-            <% } %>
+            </article>
+        </section>
+
+        <section class="merchant-schedule-panel" data-schedule-panel="history" hidden>
+            <article class="merchant-orders-card merchant-all-appointments-card merchant-schedule-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Appointment History</p>
+                        <h2>Past appointment history</h2>
+                    </div>
+                </div>
+                <div class="merchant-history-filters">
+                    <label>Status
+                        <select data-history-status>
+                            <option value="all">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="checked_in">Checked-in</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="no_show">No-show</option>
+                        </select>
+                    </label>
+                    <label>Month <select data-history-month></select></label>
+                    <label>Year <select data-history-year></select></label>
+                </div>
+                <div class="admin-table-wrap merchant-schedule-table-wrap">
+                    <table class="admin-table merchant-schedule-table">
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Customer name</th>
+                                <th>Customer email</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Payment status</th>
+                                <th>QR status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody data-history-table></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="merchant-schedule-panel" data-schedule-panel="qr" hidden>
+            <article class="merchant-orders-card merchant-all-appointments-card merchant-schedule-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">QR / Check-in Records</p>
+                        <h2>QR and attendance status</h2>
+                    </div>
+                </div>
+                <div class="merchant-history-filters">
+                    <label>QR status
+                        <select data-qr-status>
+                            <option value="all">All</option>
+                            <option value="QR Not Generated">QR Not Generated</option>
+                            <option value="QR Generated">QR Generated</option>
+                            <option value="Awaiting Customer Check-in">Awaiting Customer Check-in</option>
+                            <option value="Checked-in">Checked-in</option>
+                            <option value="Expired">Expired</option>
+                        </select>
+                    </label>
+                    <label>Month <select data-qr-month></select></label>
+                    <label>Year <select data-qr-year></select></label>
+                </div>
+                <div class="admin-table-wrap merchant-schedule-table-wrap">
+                    <table class="admin-table merchant-schedule-table">
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Customer name</th>
+                                <th>Customer email</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Payment status</th>
+                                <th>QR status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody data-qr-table></tbody>
+                    </table>
+                </div>
+            </article>
         </section>
     </div>
 </section>
 
+<div class="merchant-schedule-modal" data-booking-modal hidden>
+    <section class="merchant-schedule-modal-panel" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+        <button class="merchant-modal-close" type="button" data-close-modal aria-label="Close booking details">&times;</button>
+        <p class="eyebrow">Booking Details</p>
+        <h2 id="booking-modal-title" data-detail-title>Booking</h2>
+        <div class="merchant-detail-grid" data-detail-body></div>
+        <div class="merchant-modal-actions" data-detail-actions></div>
+    </section>
+</div>
+
+<div class="merchant-schedule-modal" data-qr-modal hidden>
+    <section class="merchant-schedule-modal-panel merchant-qr-modal-panel" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+        <button class="merchant-modal-close" type="button" data-close-modal aria-label="Close QR details">&times;</button>
+        <p class="eyebrow">QR / Check-in</p>
+        <h2 id="qr-modal-title" data-qr-title>Booking QR</h2>
+        <div class="merchant-qr-modal-summary" data-qr-summary></div>
+        <div class="merchant-qr-display-grid" data-qr-body></div>
+    </section>
+</div>
+
 <script>
     (() => {
-        const calendar = document.querySelector('[data-merchant-calendar]');
-        if (!calendar) return;
-
-        let draggedCard = null;
-
-        calendar.querySelectorAll('.merchant-calendar-booking').forEach((card) => {
-            card.addEventListener('dragstart', () => {
-                draggedCard = card;
-                card.classList.add('is-dragging');
-            });
-            card.addEventListener('dragend', () => {
-                card.classList.remove('is-dragging');
-                draggedCard = null;
-            });
+        const scheduleData = <%- schedulePayload %>;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const bookings = (scheduleData.bookings || []).map((booking) => ({
+            ...booking,
+            id: Number(booking.id),
+            status: String(booking.status || 'pending'),
+            bookingDate: String(booking.bookingDate || ''),
+            bookingTime: String(booking.bookingTime || ''),
+            paymentStatus: String(booking.paymentStatus || 'pending'),
+            qrStatus: String(booking.qrStatus || 'QR Not Generated')
+        })).sort((left, right) => {
+            return `${left.bookingDate} ${left.bookingTime}`.localeCompare(`${right.bookingDate} ${right.bookingTime}`);
         });
+        const bookingById = new Map(bookings.map((booking) => [String(booking.id), booking]));
+        const todayKey = scheduleData.todayKey;
+        const statusLabels = scheduleData.statusLabels || {};
+        const monthFormatter = new Intl.DateTimeFormat('en-SG', { month: 'long', year: 'numeric' });
+        const dayFormatter = new Intl.DateTimeFormat('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        let visibleDate = todayKey ? new Date(`${todayKey}T00:00:00`) : new Date();
+        let selectedDate = todayKey || '';
+        let calendarMode = 'month';
 
-        calendar.querySelectorAll('.merchant-calendar-day').forEach((day) => {
-            day.addEventListener('dragover', (event) => {
+        const selectors = {
+            grid: document.querySelector('[data-calendar-grid]'),
+            yearGrid: document.querySelector('[data-year-grid]'),
+            monthCalendar: document.querySelector('[data-month-calendar]'),
+            title: document.querySelector('[data-calendar-title]'),
+            monthSelect: document.querySelector('[data-calendar-month]'),
+            yearSelect: document.querySelector('[data-calendar-year]'),
+            selectedTitle: document.querySelector('[data-selected-day-title]'),
+            selectedList: document.querySelector('[data-selected-day-list]'),
+            upcomingTable: document.querySelector('[data-upcoming-table]'),
+            historyTable: document.querySelector('[data-history-table]'),
+            qrTable: document.querySelector('[data-qr-table]')
+        };
+
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+
+        const formatStatus = (status) => statusLabels[status] || String(status || 'pending').replace(/_/g, ' ');
+        const formatPaymentStatus = (status) => {
+            const value = String(status || 'pending').toLowerCase();
+            if (value === 'paid') return 'Paid';
+            if (value === 'pending') return 'Payment Pending';
+            return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+        };
+        const statusClass = (status) => `status-${String(status || 'pending').replace(/[^a-z0-9_]/gi, '_')}`;
+        const formatMoney = (value) => Number(value || 0).toLocaleString('en-SG', { style: 'currency', currency: 'SGD' });
+        const monthKey = (booking) => String(booking.bookingDate || '').slice(5, 7);
+        const yearKey = (booking) => String(booking.bookingDate || '').slice(0, 4);
+        const getBookingsForDate = (dateKey) => bookings.filter((booking) => booking.bookingDate === dateKey);
+        const toDateKey = (date) => [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-');
+
+        function fillMonthSelect(select) {
+            if (!select) return;
+            select.innerHTML = Array.from({ length: 12 }, (_, index) => {
+                const label = new Date(2026, index, 1).toLocaleDateString('en-SG', { month: 'long' });
+                return `<option value="${String(index + 1).padStart(2, '0')}">${label}</option>`;
+            }).join('');
+        }
+
+        function fillYearSelect(select, includeAll = false) {
+            if (!select) return;
+            const currentYear = new Date().getFullYear();
+            const years = new Set([currentYear, visibleDate.getFullYear()]);
+            bookings.forEach((booking) => {
+                if (yearKey(booking)) years.add(Number(yearKey(booking)));
+            });
+            const options = Array.from(years).filter(Boolean).sort((a, b) => b - a);
+            select.innerHTML = `${includeAll ? '<option value="all">All years</option>' : ''}${options.map((year) => `<option value="${year}">${year}</option>`).join('')}`;
+        }
+
+        function fillFilterSelects(monthSelector, yearSelector) {
+            const monthSelect = document.querySelector(monthSelector);
+            const yearSelect = document.querySelector(yearSelector);
+            if (monthSelect) {
+                monthSelect.innerHTML = '<option value="all">All months</option>' + Array.from({ length: 12 }, (_, index) => {
+                    const value = String(index + 1).padStart(2, '0');
+                    const label = new Date(2026, index, 1).toLocaleDateString('en-SG', { month: 'long' });
+                    return `<option value="${value}">${label}</option>`;
+                }).join('');
+            }
+            fillYearSelect(yearSelect, true);
+        }
+
+        function syncCalendarControls() {
+            if (selectors.monthSelect) selectors.monthSelect.value = String(visibleDate.getMonth() + 1).padStart(2, '0');
+            if (selectors.yearSelect) selectors.yearSelect.value = String(visibleDate.getFullYear());
+            if (selectors.title) selectors.title.textContent = calendarMode === 'year'
+                ? `${visibleDate.getFullYear()} appointment overview`
+                : monthFormatter.format(visibleDate);
+        }
+
+        function renderCalendar() {
+            syncCalendarControls();
+            if (!selectors.grid || !selectors.yearGrid || !selectors.monthCalendar) return;
+            selectors.monthCalendar.hidden = calendarMode !== 'month';
+            selectors.yearGrid.hidden = calendarMode !== 'year';
+
+            if (calendarMode === 'year') {
+                selectors.yearGrid.innerHTML = Array.from({ length: 12 }, (_, monthIndex) => {
+                    const monthBookings = bookings.filter((booking) => {
+                        return Number(yearKey(booking)) === visibleDate.getFullYear()
+                            && Number(monthKey(booking)) === monthIndex + 1;
+                    });
+                    const label = new Date(visibleDate.getFullYear(), monthIndex, 1).toLocaleDateString('en-SG', { month: 'long' });
+                    return `
+                        <button class="merchant-year-month" type="button" data-year-month="${monthIndex}">
+                            <strong>${label}</strong>
+                            <span>${monthBookings.length} booking${monthBookings.length === 1 ? '' : 's'}</span>
+                        </button>
+                    `;
+                }).join('');
+                return;
+            }
+
+            const year = visibleDate.getFullYear();
+            const month = visibleDate.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const cells = [];
+
+            for (let index = 0; index < firstDay.getDay(); index += 1) {
+                cells.push('<div class="merchant-month-day is-placeholder"></div>');
+            }
+
+            for (let day = 1; day <= lastDay.getDate(); day += 1) {
+                const date = new Date(year, month, day);
+                const key = toDateKey(date);
+                const dayBookings = getBookingsForDate(key);
+                const entries = dayBookings.slice(0, 3).map((booking) => `
+                    <button class="merchant-calendar-entry ${statusClass(booking.status)}" type="button" data-detail-id="${booking.id}">
+                        <strong>${escapeHtml(booking.bookingTime || 'Time TBC')} ${escapeHtml(booking.customerName || 'Customer')}</strong>
+                        <small>${escapeHtml(booking.serviceName || 'Service')} - ${escapeHtml(formatStatus(booking.status))}</small>
+                    </button>
+                `).join('');
+                cells.push(`
+                    <div class="merchant-month-day ${dayBookings.length ? 'has-bookings' : ''} ${key === selectedDate ? 'is-selected' : ''}" role="button" tabindex="0" data-date="${key}">
+                        <span class="merchant-month-day-number">${day}</span>
+                        <span class="merchant-month-day-count">${dayBookings.length ? `${dayBookings.length} booking${dayBookings.length === 1 ? '' : 's'}` : ''}</span>
+                        <span class="merchant-month-day-entries">${entries}${dayBookings.length > 3 ? `<em>+${dayBookings.length - 3} more</em>` : ''}</span>
+                    </div>
+                `);
+            }
+
+            while (cells.length % 7 !== 0) {
+                cells.push('<div class="merchant-month-day is-placeholder is-after-month"></div>');
+            }
+
+            selectors.grid.innerHTML = cells.join('');
+        }
+
+        function renderSelectedDay() {
+            if (!selectors.selectedTitle || !selectors.selectedList) return;
+            const date = selectedDate ? new Date(`${selectedDate}T00:00:00`) : null;
+            const dayBookings = selectedDate ? getBookingsForDate(selectedDate) : [];
+            selectors.selectedTitle.textContent = date ? dayFormatter.format(date) : 'Choose a date';
+            selectors.selectedList.innerHTML = dayBookings.length
+                ? `
+                    <div class="merchant-selected-day-summary">
+                        <strong>Selected Date: ${escapeHtml(selectedDate)}</strong>
+                        <span>Total Appointments: ${dayBookings.length}</span>
+                    </div>
+                    ${dayBookings.map((booking) => `
+                    <article class="merchant-selected-booking ${statusClass(booking.status)}">
+                        <div>
+                            <strong>${escapeHtml(booking.bookingTime || 'Time TBC')} | ${escapeHtml(booking.customerName || 'Customer')} | ${escapeHtml(booking.serviceName || 'Service')}</strong>
+                            <small>${escapeHtml(formatStatus(booking.status))} | ${escapeHtml(formatPaymentStatus(booking.paymentStatus))} | ${escapeHtml(booking.qrStatus)}</small>
+                        </div>
+                        <div class="merchant-row-actions">
+                            <button class="button secondary compact" type="button" data-detail-id="${booking.id}">View Details</button>
+                            <button class="button secondary compact" type="button" data-qr-id="${booking.id}">View QR</button>
+                        </div>
+                    </article>
+                `).join('')}`
+                : '<p class="muted">No bookings on this date.</p>';
+        }
+
+        function actionForms(booking) {
+            const forms = [];
+            const addForm = (status, label) => {
+                forms.push(`
+                    <form action="/merchant/bookings/${booking.id}/status" method="POST">
+                        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+                        <input type="hidden" name="returnTo" value="schedule">
+                        <input type="hidden" name="status" value="${status}">
+                        <button class="button secondary compact" type="submit">${label}</button>
+                    </form>
+                `);
+            };
+
+            if (booking.status === 'pending') addForm('confirmed', 'Confirm');
+            if (['confirmed', 'checked_in', 'paid'].includes(booking.status)) addForm('completed', 'Mark Completed');
+            if (!['completed', 'cancelled', 'no_show'].includes(booking.status)) addForm('no_show', 'Mark No-show');
+
+            return forms.join('');
+        }
+
+        function tableRows(rows) {
+            if (!rows.length) {
+                return '<tr><td colspan="10"><div class="merchant-empty-row">No appointments match this view.</div></td></tr>';
+            }
+
+            return rows.map((booking) => `
+                <tr>
+                    <td>#${booking.id}</td>
+                    <td>${escapeHtml(booking.bookingDate || 'Date TBC')}</td>
+                    <td>${escapeHtml(booking.bookingTime || 'Time TBC')}</td>
+                    <td><strong>${escapeHtml(booking.customerName || 'Customer')}</strong></td>
+                    <td>${escapeHtml(booking.customerEmail || booking.email || 'No email')}</td>
+                    <td>${escapeHtml(booking.serviceName || 'Service')}</td>
+                    <td><span class="merchant-status-badge ${statusClass(booking.status)}">${escapeHtml(formatStatus(booking.status))}</span></td>
+                    <td>${escapeHtml(formatPaymentStatus(booking.paymentStatus))}</td>
+                    <td><span class="merchant-qr-status">${escapeHtml(booking.qrStatus)}</span></td>
+                    <td>
+                        <div class="merchant-row-actions">
+                            <button class="button secondary compact" type="button" data-detail-id="${booking.id}">View Details</button>
+                            <button class="button secondary compact" type="button" data-qr-id="${booking.id}">View QR</button>
+                            ${actionForms(booking)}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderTables() {
+            const upcoming = bookings.filter((booking) => booking.bookingDate >= todayKey && !['cancelled', 'completed', 'no_show'].includes(booking.status));
+            if (selectors.upcomingTable) selectors.upcomingTable.innerHTML = tableRows(upcoming);
+
+            const historyStatus = document.querySelector('[data-history-status]')?.value || 'all';
+            const historyMonth = document.querySelector('[data-history-month]')?.value || 'all';
+            const historyYear = document.querySelector('[data-history-year]')?.value || 'all';
+            const history = bookings.filter((booking) => {
+                return (historyStatus === 'all' || booking.status === historyStatus)
+                    && (historyMonth === 'all' || monthKey(booking) === historyMonth)
+                    && (historyYear === 'all' || yearKey(booking) === historyYear);
+            }).sort((left, right) => `${right.bookingDate} ${right.bookingTime}`.localeCompare(`${left.bookingDate} ${left.bookingTime}`));
+            if (selectors.historyTable) selectors.historyTable.innerHTML = tableRows(history);
+
+            const qrStatus = document.querySelector('[data-qr-status]')?.value || 'all';
+            const qrMonth = document.querySelector('[data-qr-month]')?.value || 'all';
+            const qrYear = document.querySelector('[data-qr-year]')?.value || 'all';
+            const qrRows = bookings.filter((booking) => {
+                return (qrStatus === 'all' || booking.qrStatus === qrStatus)
+                    && (qrMonth === 'all' || monthKey(booking) === qrMonth)
+                    && (qrYear === 'all' || yearKey(booking) === qrYear);
+            }).sort((left, right) => `${right.bookingDate} ${right.bookingTime}`.localeCompare(`${left.bookingDate} ${left.bookingTime}`));
+            if (selectors.qrTable) selectors.qrTable.innerHTML = tableRows(qrRows);
+        }
+
+        function openModal(modal) {
+            if (!modal) return;
+            modal.hidden = false;
+            document.body.classList.add('modal-open');
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.merchant-schedule-modal').forEach((modal) => {
+                modal.hidden = true;
+            });
+            document.body.classList.remove('modal-open');
+        }
+
+        function openDetails(booking) {
+            const modal = document.querySelector('[data-booking-modal]');
+            if (!modal || !booking) return;
+            modal.querySelector('[data-detail-title]').textContent = `Booking #${booking.id}`;
+            modal.querySelector('[data-detail-body]').innerHTML = `
+                <p><span>Customer name</span><strong>${escapeHtml(booking.customerName || 'Customer')}</strong></p>
+                <p><span>Customer email</span><strong>${escapeHtml(booking.customerEmail || booking.email || 'No email')}</strong></p>
+                <p><span>Customer phone</span><strong>${escapeHtml(booking.customerPhone || 'No phone')}</strong></p>
+                <p><span>Service</span><strong>${escapeHtml(booking.serviceName || 'Service')}</strong></p>
+                <p><span>Service amount</span><strong>${formatMoney(booking.amount)}</strong></p>
+                <p><span>Date</span><strong>${escapeHtml(booking.bookingDate || 'Date TBC')}</strong></p>
+                <p><span>Time</span><strong>${escapeHtml(booking.bookingTime || 'Time TBC')}</strong></p>
+                <p><span>Booking status</span><strong>${escapeHtml(formatStatus(booking.status))}</strong></p>
+                <p><span>Payment status</span><strong>${escapeHtml(formatPaymentStatus(booking.paymentStatus))}</strong></p>
+                <p><span>QR/check-in status</span><strong>${escapeHtml(booking.qrStatus)}</strong></p>
+                <p><span>Receipt</span><strong>${booking.receiptUrl ? `<a class="text-link" href="${escapeHtml(booking.receiptUrl)}">Open Receipt</a>` : 'Receipt not available'}</strong></p>
+            `;
+            modal.querySelector('[data-detail-actions]').innerHTML = `
+                <button class="button secondary" type="button" data-qr-id="${booking.id}">View QR</button>
+                ${actionForms(booking)}
+            `;
+            openModal(modal);
+        }
+
+        function openQr(booking) {
+            const modal = document.querySelector('[data-qr-modal]');
+            if (!modal || !booking) return;
+            modal.querySelector('[data-qr-title]').textContent = `Booking #${booking.id} QR`;
+            modal.querySelector('[data-qr-summary]').innerHTML = `
+                <p><span>Booking ID</span><strong>#${booking.id}</strong></p>
+                <p><span>Customer</span><strong>${escapeHtml(booking.customerName || 'Customer')}</strong></p>
+                <p><span>Appointment</span><strong>${escapeHtml(booking.bookingDate || 'Date TBC')} ${escapeHtml(booking.bookingTime || '')}</strong></p>
+                <p><span>QR status</span><strong>${escapeHtml(booking.qrStatus)}</strong></p>
+                ${booking.checkedInAt ? `<p><span>Checked-in At</span><strong>${escapeHtml(new Date(booking.checkedInAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }))}</strong></p>` : ''}
+            `;
+            const qrPanel = (title, image, url, emptyText, fallbackImage = '', fallbackUrl = '') => `
+                <article class="merchant-qr-card">
+                    <h3>${title}</h3>
+                    ${image ? `<img class="qr-code" src="${escapeHtml(image)}" alt="${title} for booking ${booking.id}">` : `<p class="muted">${emptyText}</p>`}
+                    ${url ? `<a class="qr-link-wrap text-link" href="${escapeHtml(url)}">${escapeHtml(url)}</a>` : ''}
+                    ${image ? '' : `<button class="button secondary compact" type="button" data-generate-visible-qr data-fallback-image="${escapeHtml(fallbackImage)}" data-fallback-url="${escapeHtml(fallbackUrl)}">Generate QR</button>`}
+                </article>
+            `;
+            modal.querySelector('[data-qr-body]').innerHTML = `
+                ${qrPanel('Booking QR code', booking.bookingQrDataUrl, booking.bookingQrUrl, 'QR Not Generated', booking.checkinQrDataUrl, booking.checkinUrl)}
+                ${qrPanel('Check-in QR code', booking.checkinQrDataUrl, booking.checkinUrl, 'Check-in QR is not available yet.')}
+            `;
+            openModal(modal);
+        }
+
+        document.addEventListener('click', (event) => {
+            const tab = event.target.closest('[data-schedule-tab]');
+            if (tab) {
+                const target = tab.dataset.scheduleTab;
+                document.querySelectorAll('[data-schedule-tab]').forEach((button) => button.classList.toggle('is-active', button === tab));
+                document.querySelectorAll('[data-schedule-panel]').forEach((panel) => {
+                    const active = panel.dataset.schedulePanel === target;
+                    panel.hidden = !active;
+                    panel.classList.toggle('is-active', active);
+                });
+            }
+
+            const day = event.target.closest('[data-date]');
+            if (day && !event.target.closest('[data-detail-id]')) {
+                selectedDate = day.dataset.date;
+                renderCalendar();
+                renderSelectedDay();
+            }
+
+            const detailButton = event.target.closest('[data-detail-id]');
+            if (detailButton) {
                 event.preventDefault();
-                day.classList.add('is-drag-over');
-            });
-            day.addEventListener('dragleave', () => day.classList.remove('is-drag-over'));
-            day.addEventListener('drop', () => {
-                day.classList.remove('is-drag-over');
-                if (!draggedCard) return;
-                const dropzone = day.querySelector('.merchant-calendar-dropzone');
-                dropzone.querySelector('.merchant-calendar-empty')?.remove();
-                dropzone.appendChild(draggedCard);
+                openDetails(bookingById.get(String(detailButton.dataset.detailId)));
+            }
+
+            const qrButton = event.target.closest('[data-qr-id]');
+            if (qrButton) {
+                event.preventDefault();
+                openQr(bookingById.get(String(qrButton.dataset.qrId)));
+            }
+
+            if (event.target.closest('[data-close-modal]') || event.target.classList.contains('merchant-schedule-modal')) {
+                closeModals();
+            }
+
+            const generateQrButton = event.target.closest('[data-generate-visible-qr]');
+            if (generateQrButton) {
+                const card = generateQrButton.closest('.merchant-qr-card');
+                const image = generateQrButton.dataset.fallbackImage;
+                const url = generateQrButton.dataset.fallbackUrl;
+                if (card && image) {
+                    card.innerHTML = `
+                        <h3>Generated check-in QR</h3>
+                        <img class="qr-code" src="${escapeHtml(image)}" alt="Generated check-in QR">
+                        ${url ? `<a class="qr-link-wrap text-link" href="${escapeHtml(url)}">${escapeHtml(url)}</a>` : ''}
+                    `;
+                }
+            }
+
+            const monthButton = event.target.closest('[data-year-month]');
+            if (monthButton) {
+                visibleDate = new Date(visibleDate.getFullYear(), Number(monthButton.dataset.yearMonth), 1);
+                calendarMode = 'month';
+                document.querySelectorAll('[data-calendar-view]').forEach((button) => button.classList.toggle('is-active', button.dataset.calendarView === 'month'));
+                renderCalendar();
+            }
+        });
+
+        document.querySelector('[data-calendar-prev]')?.addEventListener('click', () => {
+            visibleDate = calendarMode === 'year'
+                ? new Date(visibleDate.getFullYear() - 1, visibleDate.getMonth(), 1)
+                : new Date(visibleDate.getFullYear(), visibleDate.getMonth() - 1, 1);
+            renderCalendar();
+        });
+        document.querySelector('[data-calendar-next]')?.addEventListener('click', () => {
+            visibleDate = calendarMode === 'year'
+                ? new Date(visibleDate.getFullYear() + 1, visibleDate.getMonth(), 1)
+                : new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 1);
+            renderCalendar();
+        });
+        document.querySelector('[data-calendar-today]')?.addEventListener('click', () => {
+            visibleDate = todayKey ? new Date(`${todayKey}T00:00:00`) : new Date();
+            selectedDate = todayKey;
+            calendarMode = 'month';
+            document.querySelectorAll('[data-calendar-view]').forEach((button) => button.classList.toggle('is-active', button.dataset.calendarView === 'month'));
+            renderCalendar();
+            renderSelectedDay();
+        });
+        selectors.monthSelect?.addEventListener('change', (event) => {
+            visibleDate = new Date(visibleDate.getFullYear(), Number(event.target.value) - 1, 1);
+            renderCalendar();
+        });
+        selectors.yearSelect?.addEventListener('change', (event) => {
+            visibleDate = new Date(Number(event.target.value), visibleDate.getMonth(), 1);
+            fillYearSelect(selectors.yearSelect);
+            renderCalendar();
+        });
+        document.querySelectorAll('[data-calendar-view]').forEach((button) => {
+            button.addEventListener('click', () => {
+                calendarMode = button.dataset.calendarView;
+                document.querySelectorAll('[data-calendar-view]').forEach((item) => item.classList.toggle('is-active', item === button));
+                renderCalendar();
             });
         });
+        document.querySelectorAll('[data-history-status], [data-history-month], [data-history-year], [data-qr-status], [data-qr-month], [data-qr-year]').forEach((input) => {
+            input.addEventListener('change', renderTables);
+        });
+        document.addEventListener('keydown', (event) => {
+            const day = event.target.closest?.('[data-date]');
+            if (day && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault();
+                selectedDate = day.dataset.date;
+                renderCalendar();
+                renderSelectedDay();
+            }
+            if (event.key === 'Escape') closeModals();
+        });
+
+        fillMonthSelect(selectors.monthSelect);
+        fillYearSelect(selectors.yearSelect);
+        fillFilterSelects('[data-history-month]', '[data-history-year]');
+        fillFilterSelects('[data-qr-month]', '[data-qr-year]');
+        renderCalendar();
+        renderSelectedDay();
+        renderTables();
     })();
 </script>
 

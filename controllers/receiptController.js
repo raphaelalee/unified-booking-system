@@ -5,6 +5,7 @@ const PDFDocument = require('pdfkit');
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const MerchantService = require('../models/MerchantService');
 const {
     getBookingCheckInUrl,
     getPublicBaseUrl,
@@ -141,10 +142,6 @@ function getSessionReceipt(req, id) {
         return null;
     }
 
-    if (req.session.user && String(receipt.userId) !== String(req.session.user.id)) {
-        return null;
-    }
-
     return receipt;
 }
 
@@ -171,12 +168,15 @@ function mapBookingReceipt(row, req) {
             }
         ],
         totalAmount: Number(row.service_price || 0),
-        paymentMethod: 'No payment required',
-        paymentStatus: row.status,
-        paidAt: new Date().toISOString(),
+        paymentMethod: row.payment_status === 'paid' ? 'Paid booking' : 'No payment required',
+        paymentStatus: row.payment_status || row.status,
+        paidAt: row.checked_in_at || new Date().toISOString(),
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
-        status: row.status
+        status: row.status,
+        transactionId: row.transaction_id || null,
+        qrCodeToken: row.qr_code_token || '',
+        checkedInAt: row.checked_in_at || null
     };
 }
 
@@ -190,18 +190,146 @@ function mapOrderReceipt(order) {
         displayId: order.id,
         type: 'order',
         userId: order.userId,
-        userName: order.userName,
+        userName: order.userName || order.customerName || 'Customer',
         merchantName: order.merchantName || 'Vaniday merchant',
         items: order.items,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         deliveryStatus: order.deliveryStatus,
+        merchantUserIds: order.merchantUserIds || [],
         fulfilment: 'pickup',
         pickupMerchantName: order.merchantName || 'Vaniday merchant',
-        pickupStatus: getPickupStatusLabel(order.deliveryStatus),
+        pickupStatus: getPickupStatusLabel(order.pickupStatus || order.deliveryStatus),
+        pickupAt: order.collectedAt || null,
         paidAt: order.createdAt || new Date().toISOString()
     };
+}
+
+function getBookingReceiptById(id) {
+    return new Promise((resolve, reject) => {
+        Booking.getReceiptById(id, (error, booking) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(mapBookingReceipt(booking));
+        });
+    });
+}
+
+function getCustomerPurchaseHistoryReceipt(id, userId) {
+    return new Promise((resolve, reject) => {
+        PurchaseHistory.getByReceiptId(id, userId, (error, row) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(PurchaseHistory.mapReceipt(row));
+        });
+    });
+}
+
+function getAnyPurchaseHistoryReceipt(id) {
+    return new Promise((resolve, reject) => {
+        PurchaseHistory.getByReceiptIdAny(id, (error, row) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(PurchaseHistory.mapReceipt(row));
+        });
+    });
+}
+
+function getCustomerOrderReceipt(orderId, userId) {
+    return new Promise((resolve, reject) => {
+        Transaction.getOrderReceiptById(orderId, userId, (error, order) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(mapOrderReceipt(order));
+        });
+    });
+}
+
+function getAnyOrderReceipt(orderId) {
+    return new Promise((resolve, reject) => {
+        Transaction.getPickupVerificationById(orderId, (error, order) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(mapOrderReceipt(order));
+        });
+    });
+}
+
+function getMerchantForUser(userId) {
+    if (!userId) {
+        return Promise.resolve(null);
+    }
+
+    return new Promise((resolve, reject) => {
+        MerchantService.getMerchantByUserId(userId, (error, merchant) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(merchant || null);
+        });
+    });
+}
+
+function receiptItemsBelongToMerchant(receipt, merchant, merchantUserId) {
+    const merchantId = merchant?.id ? String(merchant.id) : '';
+    const userId = merchantUserId ? String(merchantUserId) : '';
+
+    if (receipt?.merchantUserId && userId && String(receipt.merchantUserId) === userId) {
+        return true;
+    }
+
+    if (Array.isArray(receipt?.merchantUserIds) && userId && receipt.merchantUserIds.some((id) => String(id) === userId)) {
+        return true;
+    }
+
+    if (merchantId && receipt?.pickupMerchantId && String(receipt.pickupMerchantId) === merchantId) {
+        return true;
+    }
+
+    return (receipt?.items || []).some((item) => {
+        return (merchantId && String(item.merchantId || item.salonId || '') === merchantId)
+            || (userId && String(item.merchantUserId || '') === userId);
+    });
+}
+
+function canViewReceipt(req, receipt, merchant = null) {
+    const user = req.session.user;
+
+    if (!user || !receipt) {
+        return false;
+    }
+
+    if (user.role === 'admin') {
+        return true;
+    }
+
+    if (user.role === 'customer') {
+        return String(receipt.userId) === String(user.id);
+    }
+
+    if (user.role === 'merchant') {
+        return receiptItemsBelongToMerchant(receipt, merchant, user.id);
+    }
+
+    return false;
 }
 
 function verifyPickupToken(orderId, token) {
@@ -223,64 +351,48 @@ function verifyPickupToken(orderId, token) {
     }
 }
 
-function loadReceipt(req, id) {
+async function loadReceipt(req, id) {
+    const user = req.session.user;
+    const merchant = user?.role === 'merchant' ? await getMerchantForUser(user.id) : null;
     const sessionReceipt = getSessionReceipt(req, id);
 
-    if (sessionReceipt) {
-        return Promise.resolve(sessionReceipt);
+    if (sessionReceipt && canViewReceipt(req, sessionReceipt, merchant)) {
+        return sessionReceipt;
     }
 
-    const persistentReceipt = new Promise((resolve, reject) => {
-        PurchaseHistory.getByReceiptId(id, req.session.user.id, (error, row) => {
-            if (error) {
-                reject(error);
-                return;
-            }
+    if (/^\d+$/.test(String(id))) {
+        const bookingReceipt = await getBookingReceiptById(id);
+        if (bookingReceipt) {
+            return canViewReceipt(req, bookingReceipt, merchant) ? bookingReceipt : null;
+        }
+    }
 
-            const receipt = PurchaseHistory.mapReceipt(row);
-            if (receipt) {
-                receipt.userName = req.session.user.name || receipt.userName || 'Customer';
-            }
-            resolve(receipt);
-        });
-    });
+    const orderMatch = String(id).match(/^order-(\d+)$/);
 
-    return persistentReceipt.then((receipt) => {
-        if (receipt) {
-            return receipt;
+    if (orderMatch) {
+        const orderReceipt = user.role === 'customer'
+            ? await getCustomerOrderReceipt(orderMatch[1], user.id)
+            : await getAnyOrderReceipt(orderMatch[1]);
+        if (orderReceipt) {
+            return canViewReceipt(req, orderReceipt, merchant) ? orderReceipt : null;
+        }
+    }
+
+    const persistentReceipt = user.role === 'customer'
+        ? await getCustomerPurchaseHistoryReceipt(id, user.id)
+        : await getAnyPurchaseHistoryReceipt(id);
+
+    if (persistentReceipt) {
+        if (user.role === 'customer') {
+            persistentReceipt.userName = user.name || persistentReceipt.userName || 'Customer';
+        } else {
+            persistentReceipt.userName = persistentReceipt.userName || 'Customer';
         }
 
-        const orderMatch = String(id).match(/^order-(\d+)$/);
+        return canViewReceipt(req, persistentReceipt, merchant) ? persistentReceipt : null;
+    }
 
-        if (orderMatch) {
-            return new Promise((resolve, reject) => {
-                Transaction.getOrderReceiptById(orderMatch[1], req.session.user.id, (error, order) => {
-                    if (error) {
-                        reject(error);
-                        return;
-                    }
-
-                    resolve(mapOrderReceipt(order));
-                });
-            });
-        }
-
-        return new Promise((resolve, reject) => {
-            Booking.getReceiptById(id, (error, booking) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-
-                if (booking && req.session.user && String(booking.user_id) !== String(req.session.user.id)) {
-                    resolve(null);
-                    return;
-                }
-
-                resolve(mapBookingReceipt(booking, req));
-            });
-        });
-    });
+    return null;
 }
 
 async function buildReceiptViewModel(req, id) {
@@ -306,6 +418,7 @@ async function buildReceiptViewModel(req, id) {
         receipt,
         ...receiptMode,
         supportRequestPath: `/help-center?receiptId=${encodeURIComponent(receipt.id)}`,
+        viewerRole: req.session.user?.role || '',
         checkinUrl: verificationUrl,
         verificationUrl,
         checkinToken: token,
@@ -318,10 +431,7 @@ async function buildReceiptViewModel(req, id) {
             ? `/checkin/${token}`
             : `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`,
         qrCodeDataUrl,
-        paidAtLabel: new Date(receipt.paidAt).toLocaleString('en-SG', {
-            dateStyle: 'medium',
-            timeStyle: 'short'
-        })
+        paidAtLabel: formatReceiptDateTime(receipt.paidAt || receipt.checkedInAt || new Date())
     };
 }
 

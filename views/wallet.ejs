@@ -3,7 +3,7 @@
 <section class="page-title">
     <p class="eyebrow">Rewards wallet</p>
     <h1>Your loyalty balance.</h1>
-    <p>Earn points and cashback from completed Vaniday payments, then redeem them for future bookings.</p>
+    <p>Earn points from paid receipts, convert points into cashback, and apply cashback at checkout.</p>
 </section>
 
 <section class="section compact loyalty-page">
@@ -33,13 +33,13 @@
             </div>
         </article>
 
-        <form class="account-panel loyalty-redeem-card" action="/wallet/redeem" method="POST">
+        <form class="account-panel loyalty-redeem-card" action="/customer/wallet/redeem" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div>
                 <p class="eyebrow">Redeem</p>
                 <h2>Convert points to cashback</h2>
                 <p class="muted">
-                    Minimum <%= rules.minPointsToRedeem %> points. Every point becomes
-                    $<%= Number(rules.pointsToCashRate || 0).toFixed(2) %> cashback.
+                    Minimum <%= rules.minPointsToRedeem %> points. 100 points = $1.00 cashback.
                 </p>
             </div>
             <label>
@@ -60,10 +60,46 @@
         </div>
         <div class="loyalty-rule-strip">
             <p><span>Points</span><strong><%= rules.pointsPerDollar %> / $1</strong></p>
-            <p><span>Cashback</span><strong><%= rules.cashbackPercent %>%</strong></p>
+            <p><span>Minimum redeem</span><strong><%= rules.minPointsToRedeem %> pts</strong></p>
+            <p><span>Points value</span><strong>$<%= Number(rules.pointsToCashRate || 0).toFixed(2) %> / pt</strong></p>
             <p><span>Status</span><strong><%= rules.isEnabled ? 'Active' : 'Paused' %></strong></p>
         </div>
     </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">Receipts</p>
+        <h2>Recent linked receipts</h2>
+    </div>
+
+    <% const safeReceipts = typeof receipts !== 'undefined' && Array.isArray(receipts) ? receipts : []; %>
+    <% if (!safeReceipts.length) { %>
+        <div class="notice">No paid receipts linked to this wallet yet</div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Receipt ID</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% safeReceipts.slice(0, 8).forEach((receipt) => { %>
+                        <tr>
+                            <td>#<%= receipt.id %></td>
+                            <td><%= receipt.itemNames %></td>
+                            <td>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></td>
+                            <td><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></td>
+                            <td><a class="button secondary compact" href="/receipt/<%= encodeURIComponent(receipt.receiptId) %>">Open receipt</a></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
 
     <div class="section-heading profile-heading">
         <p class="eyebrow">History</p>

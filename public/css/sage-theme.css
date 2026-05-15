@@ -6704,7 +6704,9 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-calendar-booking.status-confirmed,
 .merchant-status-dot.status-confirmed,
-.merchant-status-badge.status-confirmed {
+.merchant-status-badge.status-confirmed,
+.merchant-status-dot.status-paid,
+.merchant-status-badge.status-paid {
     border-color: #20899c;
     background: rgba(32, 137, 156, 0.12);
     color: #20899c;
@@ -6822,6 +6824,267 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     width: min(1320px, 100%);
 }
 
+.merchant-schedule-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0;
+}
+
+.merchant-schedule-tab,
+.merchant-calendar-view-toggle button {
+    min-height: 38px;
+    padding: 9px 14px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.88);
+    color: var(--sage-readable);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.merchant-schedule-tab.is-active,
+.merchant-calendar-view-toggle button.is-active {
+    background: rgba(72, 151, 86, 0.16);
+    color: var(--sage-ink);
+    box-shadow: inset 0 0 0 1px rgba(79, 104, 71, 0.16);
+}
+
+.merchant-schedule-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.merchant-schedule-card {
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.merchant-calendar-toolbar {
+    align-items: start;
+    gap: 12px;
+}
+
+.merchant-calendar-controls,
+.merchant-history-filters,
+.merchant-row-actions,
+.merchant-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.merchant-calendar-controls select,
+.merchant-history-filters select {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-ink);
+    font-weight: 800;
+}
+
+.merchant-history-filters {
+    margin: 12px 0 14px;
+}
+
+.merchant-history-filters label {
+    display: grid;
+    gap: 5px;
+    color: var(--sage-readable);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.button.compact {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 0.72rem;
+}
+
+.merchant-calendar-modebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.merchant-calendar-view-toggle {
+    display: flex;
+    gap: 6px;
+}
+
+.merchant-month-calendar {
+    display: grid;
+    gap: 8px;
+}
+
+.merchant-calendar-weekdays,
+.merchant-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.merchant-calendar-weekdays span {
+    color: var(--sage-readable);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.merchant-month-day {
+    min-height: 138px;
+    padding: 10px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.72);
+    color: var(--sage-ink);
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 6px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.merchant-month-day.is-placeholder {
+    background: rgba(79, 104, 71, 0.04);
+    border-style: dashed;
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+
+.merchant-month-day.has-bookings {
+    border-color: rgba(32, 137, 156, 0.32);
+    background: rgba(229, 244, 241, 0.55);
+}
+
+.merchant-month-day.is-selected {
+    box-shadow: inset 0 0 0 2px rgba(32, 137, 156, 0.55);
+}
+
+.merchant-month-day-number {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(79, 104, 71, 0.08);
+    font-weight: 900;
+}
+
+.merchant-month-day-count {
+    min-height: 16px;
+    color: var(--sage-readable);
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.merchant-month-day-entries,
+.merchant-selected-day-list {
+    display: grid;
+    gap: 6px;
+}
+
+.merchant-selected-day-summary {
+    padding: 12px;
+    border: 1px solid rgba(32, 137, 156, 0.22);
+    border-radius: 8px;
+    background: rgba(229, 244, 241, 0.6);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.merchant-selected-day-summary strong,
+.merchant-selected-day-summary span {
+    color: var(--sage-ink);
+    font-weight: 900;
+}
+
+.merchant-calendar-entry,
+.merchant-selected-booking {
+    border: 0;
+    border-left: 3px solid #20899c;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.74);
+    color: var(--sage-ink);
+    display: grid;
+    gap: 2px;
+    padding: 7px 8px;
+    text-align: left;
+}
+
+.merchant-calendar-entry span,
+.merchant-calendar-entry small,
+.merchant-selected-booking small {
+    overflow-wrap: anywhere;
+}
+
+.merchant-calendar-entry strong,
+.merchant-selected-booking strong {
+    font-weight: 900;
+}
+
+.merchant-calendar-entry small,
+.merchant-selected-booking small,
+.merchant-month-day-entries em {
+    color: var(--sage-readable);
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 800;
+}
+
+.merchant-year-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.merchant-year-month {
+    min-height: 94px;
+    padding: 14px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.78);
+    color: var(--sage-ink);
+    display: grid;
+    align-content: center;
+    gap: 6px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.merchant-year-month strong {
+    font-size: 1rem;
+}
+
+.merchant-year-month span {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-selected-booking {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-left-width: 4px;
+}
+
 .merchant-all-appointments-card {
     padding: 16px;
 }
@@ -6830,9 +7093,197 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     overflow-x: auto;
 }
 
+.merchant-schedule-table {
+    min-width: 1180px;
+}
+
 .merchant-schedule-table td span {
     color: var(--sage-readable);
     font-weight: 800;
+}
+
+.merchant-schedule-table th,
+.merchant-schedule-table td {
+    vertical-align: top;
+}
+
+.merchant-row-actions form {
+    margin: 0;
+}
+
+.merchant-qr-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(79, 104, 71, 0.08);
+    color: var(--sage-ink);
+    font-size: 0.74rem;
+    font-weight: 900;
+}
+
+.merchant-empty-row {
+    padding: 26px;
+    color: var(--sage-readable);
+    font-weight: 900;
+    text-align: center;
+}
+
+.merchant-schedule-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    padding: 24px;
+    background: rgba(24, 35, 26, 0.45);
+    display: grid;
+    place-items: center;
+}
+
+.merchant-schedule-modal[hidden] {
+    display: none;
+}
+
+.merchant-schedule-modal-panel {
+    width: min(880px, 100%);
+    max-height: min(820px, calc(100vh - 48px));
+    overflow: auto;
+    position: relative;
+    padding: 22px;
+    border-radius: 8px;
+    background: #fffdf7;
+    box-shadow: 0 22px 55px rgba(24, 35, 26, 0.22);
+}
+
+.merchant-qr-modal-panel {
+    width: min(980px, 100%);
+}
+
+.merchant-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(79, 104, 71, 0.06);
+    color: var(--sage-ink);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.merchant-detail-grid,
+.merchant-qr-modal-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.merchant-detail-grid p,
+.merchant-qr-modal-summary p {
+    margin: 0;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(79, 104, 71, 0.04);
+    display: grid;
+    gap: 4px;
+}
+
+.merchant-detail-grid span,
+.merchant-qr-modal-summary span {
+    color: var(--sage-readable);
+    font-size: 0.74rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.merchant-detail-grid strong,
+.merchant-qr-modal-summary strong {
+    overflow-wrap: anywhere;
+}
+
+.merchant-qr-display-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.merchant-qr-card {
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(79, 104, 71, 0.04);
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.merchant-qr-card h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.merchant-qr-card .qr-code {
+    width: min(240px, 100%);
+    height: auto;
+    border-radius: 8px;
+    background: #fff;
+    padding: 8px;
+}
+
+.merchant-qr-card .qr-link-wrap {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+    .merchant-calendar-weekdays,
+    .merchant-month-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .merchant-calendar-weekdays {
+        display: none;
+    }
+
+    .merchant-year-grid,
+    .merchant-detail-grid,
+    .merchant-qr-modal-summary,
+    .merchant-qr-display-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-selected-booking {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 620px) {
+    .merchant-month-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-calendar-modebar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .merchant-calendar-controls,
+    .merchant-history-filters {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .merchant-calendar-controls > *,
+    .merchant-history-filters > * {
+        width: 100%;
+    }
 }
 
 .admin-analytics-page .merchant-analytics-shell {

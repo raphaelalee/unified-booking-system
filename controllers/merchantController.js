@@ -2258,7 +2258,7 @@ function checkout(req, res) {
     const deliveryUnit = req.body.deliveryUnit || '';
     const deliveryPostal = req.body.deliveryPostal || '';
     const deliveryPhone = req.body.deliveryPhone || '';
-    const useCashback = req.body.redeemCashback === 'on';
+    const useCashback = req.body.redeemCashback === 'on' || req.session.applyCashback === true;
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
     const pickupMerchants = selectedItems
@@ -2290,6 +2290,8 @@ function checkout(req, res) {
             name: item.serviceName,
             type: item.type || 'Service',
             serviceId: item.serviceId,
+            merchantId: item.merchantId || null,
+            merchantName: item.merchantName || '',
             quantity: item.quantity,
             price: Number(item.price || 0),
             unitPrice: Number(item.price || 0),
@@ -2306,6 +2308,7 @@ function checkout(req, res) {
         deliveryPostal,
         deliveryPhone
     };
+    req.session.applyCashback = false;
 
     return Loyalty.getWalletView(req.session.user.id, (walletError, loyalty) => {
         if (walletError) {
@@ -2590,7 +2593,10 @@ async function applyCashbackRedemption(req, payment) {
 
 function persistPaidTransaction(payment, paymentMethod) {
     return new Promise((resolve, reject) => {
-        Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], (error, result) => {
+        Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], {
+            originalAmount: Number(payment.originalAmount || payment.amount || 0),
+            cashbackUsed: Number(payment.cashbackRedeemed || 0)
+        }, (error, result) => {
             if (error) {
                 reject(error);
                 return;
@@ -2737,25 +2743,35 @@ function savePaidReceipt(req, payment, paymentMethod) {
     };
     req.session.receipts[receiptId] = receipt;
 
-    PurchaseHistory.save(receipt, (error) => {
-        if (error) {
-            console.error(error);
-        }
+    return new Promise((resolve, reject) => {
+        PurchaseHistory.save(receipt, (error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            Loyalty.awardPointsForReceipt(receipt.userId, receipt.id, (awardError, awardResult = {}) => {
+                if (awardError) {
+                    reject(awardError);
+                    return;
+                }
+
+                if (awardResult.duplicate) {
+                    req.session.loyaltyError = 'Points already awarded for this receipt';
+                }
+
+                if (payment.kind === 'order' && req.session.pendingPayments) {
+                    delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
+                }
+
+                if (payment.kind === 'booking') {
+                    req.session.lastBookingId = null;
+                }
+
+                resolve({ receipt, awardResult });
+            });
+        });
     });
-
-    Loyalty.awardForReceipt(receipt, (error) => {
-        if (error) {
-            console.error(error);
-        }
-    });
-
-    if (payment.kind === 'order' && req.session.pendingPayments) {
-        delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
-    }
-
-    if (payment.kind === 'booking') {
-        req.session.lastBookingId = null;
-    }
 }
 
 async function completeTrustedPayment(req, payment, paymentMethod) {
@@ -2773,14 +2789,14 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
             Loyalty.redeemCashback(
                 paidPayment.userId,
                 paidPayment.cashbackRedeemed,
-                `redeem-${paidPayment.receiptId}`,
+                `cashback-${paidPayment.receiptId}`,
                 (error) => error ? reject(error) : resolve()
             );
         });
     }
 
     applyPaymentSideEffects(req, payment);
-    savePaidReceipt(req, paidPayment, paymentMethod);
+    await savePaidReceipt(req, paidPayment, paymentMethod);
     await notifyPaymentCompleted(req, paidPayment, transactionId);
 
     return paidPayment.receiptId;

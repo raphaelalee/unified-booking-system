@@ -405,8 +405,8 @@ app.post('/checkout', requireCustomer, merchantController.checkout);
 app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
-app.get('/receipt/:id', requireCustomer, receiptController.showReceipt);
-app.get('/receipt/:id/pdf', requireCustomer, receiptController.downloadReceiptPdf);
+app.get('/receipt/:id', requireLogin, receiptController.showReceipt);
+app.get('/receipt/:id/pdf', requireLogin, receiptController.downloadReceiptPdf);
 app.get('/pickup-verify/order/:id', receiptController.verifyPickup);
 app.post('/pickup-verify/order/:id/confirm', receiptController.confirmPickup);
 app.get('/receipt-checkin/:id', receiptController.checkIn);
@@ -416,7 +416,10 @@ app.get('/nets-qr/fail', requireCustomer, merchantController.showNetsFail);
 app.get('/sse/payment-status/:txnRetrievalRef', requireCustomer, merchantController.streamNetsPaymentStatus);
 
 app.get('/wallet', requireCustomer, loyaltyController.showWallet);
+app.get('/customer/wallet', requireCustomer, loyaltyController.showWallet);
 app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
+app.post('/customer/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
+app.post('/customer/checkout/apply-cashback', requireCustomer, loyaltyController.applyCashback);
 app.get('/cashback', requireCustomer, loyaltyController.showCashback);
 
 app.get('/giftcards', requireCustomer, (req, res) => {

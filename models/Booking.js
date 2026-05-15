@@ -39,7 +39,12 @@ function ensureBookingManagementSchema(callback) {
         }
 
         const fields = new Set(columns.map((column) => column.Field));
+        const statusColumn = columns.find((column) => column.Field === 'status');
         const alters = [];
+
+        if (statusColumn && !['paid', 'checked_in', 'no_show'].every((status) => String(statusColumn.Type || '').includes(status))) {
+            alters.push("MODIFY COLUMN status ENUM('pending','confirmed','paid','checked_in','completed','cancelled','no_show') DEFAULT 'pending'");
+        }
 
         if (!fields.has('cancellation_reason')) {
             alters.push('ADD COLUMN cancellation_reason VARCHAR(180) DEFAULT NULL');
@@ -51,6 +56,10 @@ function ensureBookingManagementSchema(callback) {
 
         if (!fields.has('cancelled_at')) {
             alters.push('ADD COLUMN cancelled_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('checked_in_at')) {
+            alters.push('ADD COLUMN checked_in_at DATETIME DEFAULT NULL');
         }
 
         if (alters.length === 0) {
@@ -321,30 +330,45 @@ function getAllInDatabase(callback) {
 }
 
 function getByMerchantUserId(userId, callback) {
-    const sql = `
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
         SELECT
             bookings.booking_id AS id,
+            bookings.transaction_id,
+            bookings.qr_code_token,
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            bookings.refund_status,
+            bookings.checked_in_at,
             users.name AS customer_name,
             users.email,
             users.phone AS customer_phone,
             users.age AS customer_age,
             users.birthday AS customer_birthday,
             users.gender AS customer_gender,
+            salons.salon_id AS merchant_id,
             salons.salon_name AS merchant_name,
+            services.service_id,
             services.service_name,
-            services.price AS service_price
+            services.price AS service_price,
+            COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         INNER JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
+        LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
         WHERE salons.merchant_id = ?
         ORDER BY bookings.booking_id DESC
     `;
 
-    db.query(sql, [userId], callback);
+        db.query(sql, [userId], callback);
+    });
 }
 
 function getUpcomingByUserId(userId, callback) {
@@ -371,12 +395,19 @@ function getUpcomingByUserId(userId, callback) {
 }
 
 function getCheckInDetails(bookingId, merchantUserId, callback) {
-    const sql = `
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
         SELECT
             bookings.booking_id AS id,
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            bookings.checked_in_at,
             users.name AS customer_name,
             users.email,
             users.phone AS customer_phone,
@@ -395,13 +426,14 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
         LIMIT 1
     `;
 
-    db.query(sql, [bookingId, merchantUserId], (error, results) => {
-        if (error) {
-            callback(error);
-            return;
-        }
+        db.query(sql, [bookingId, merchantUserId], (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
 
-        callback(null, results[0] || null);
+            callback(null, results[0] || null);
+        });
     });
 }
 
@@ -1398,13 +1430,22 @@ function getManageableByIdForCustomer(bookingId, userId, callback) {
 }
 
 function getReceiptById(bookingId, callback) {
-    const sql = `
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
         SELECT
             bookings.booking_id AS id,
             bookings.user_id,
+            bookings.transaction_id,
+            bookings.qr_code_token,
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
+            bookings.checked_in_at,
             users.name AS customer_name,
             users.email,
             salons.salon_id AS merchant_id,
@@ -1412,22 +1453,25 @@ function getReceiptById(bookingId, callback) {
             salons.merchant_id AS merchant_user_id,
             services.service_id,
             services.service_name,
-            services.price AS service_price
+            services.price AS service_price,
+            COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         INNER JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
+        LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
         WHERE bookings.booking_id = ?
         LIMIT 1
     `;
 
-    db.query(sql, [bookingId], (error, results) => {
-        if (error) {
-            callback(error);
-            return;
-        }
+        db.query(sql, [bookingId], (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
 
-        callback(null, results[0] || null);
+            callback(null, results[0] || null);
+        });
     });
 }
 
@@ -1647,23 +1691,41 @@ function markCheckedIn(bookingId, merchantUserId, callback) {
         UPDATE bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
-        SET bookings.status = 'checked_in'
+        SET
+            bookings.status = 'checked_in',
+            bookings.checked_in_at = COALESCE(bookings.checked_in_at, CURRENT_TIMESTAMP)
         WHERE bookings.booking_id = ?
             AND salons.merchant_id = ?
     `;
 
-    db.query(sql, [bookingId, merchantUserId], callback);
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(sql, [bookingId, merchantUserId], callback);
+    });
 }
 
 function markCheckedInByToken(bookingId, callback) {
     const sql = `
         UPDATE bookings
-        SET status = 'checked_in'
+        SET
+            status = 'checked_in',
+            checked_in_at = COALESCE(checked_in_at, CURRENT_TIMESTAMP)
         WHERE booking_id = ?
             AND status NOT IN ('cancelled', 'completed', 'no_show')
     `;
 
-    db.query(sql, [bookingId], callback);
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(sql, [bookingId], callback);
+    });
 }
 
 function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {

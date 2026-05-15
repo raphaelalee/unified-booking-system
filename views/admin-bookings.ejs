@@ -30,7 +30,7 @@
             <div class="admin-panel-heading"><div><p class="eyebrow">Records</p><h2>Platform bookings</h2></div></div>
             <div class="admin-responsive-table">
                 <table class="admin-booking-table">
-                    <thead><tr><th>Booking</th><th>Customer</th><th>Merchant</th><th>Service</th><th>Date</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Booking</th><th>Customer</th><th>Merchant</th><th>Service</th><th>Date</th><th>Status</th><th>Receipt</th></tr></thead>
                     <tbody>
                         <% platformBookings.forEach((booking) => { %>
                             <tr>
@@ -40,6 +40,7 @@
                                 <td><%= booking.service_name || 'Service' %></td>
                                 <td><%= formatDate(booking.booking_date) %> <%= booking.booking_time || '' %></td>
                                 <td><span class="admin-status-pill status-<%= normalizeStatus(booking.status) %>"><%= normalizeStatus(booking.status).replace(/_/g, ' ') %></span></td>
+                                <td><a class="button secondary compact" href="/receipt/<%= encodeURIComponent(booking.id) %>">Open Receipt</a></td>
                             </tr>
                         <% }) %>
                     </tbody>

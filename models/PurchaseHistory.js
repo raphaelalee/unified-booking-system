@@ -70,6 +70,14 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN pickup_at DATETIME DEFAULT NULL');
             }
 
+            if (!fields.has('original_amount')) {
+                alters.push('ADD COLUMN original_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
+            if (!fields.has('cashback_used')) {
+                alters.push('ADD COLUMN cashback_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -98,8 +106,8 @@ function save(receipt, callback) {
         const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
         const sql = `
             INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 item_names = VALUES(item_names),
                 items_json = VALUES(items_json),
@@ -110,7 +118,9 @@ function save(receipt, callback) {
                 pickup_merchant_id = VALUES(pickup_merchant_id),
                 pickup_merchant_name = VALUES(pickup_merchant_name),
                 pickup_status = VALUES(pickup_status),
-                pickup_at = VALUES(pickup_at)
+                pickup_at = VALUES(pickup_at),
+                original_amount = VALUES(original_amount),
+                cashback_used = VALUES(cashback_used)
         `;
 
         db.query(sql, [
@@ -127,7 +137,9 @@ function save(receipt, callback) {
             receipt.pickupMerchantId || null,
             receipt.pickupMerchantName || null,
             receipt.pickupStatus || (receipt.fulfilment === 'pickup' ? 'pending_pickup' : null),
-            receipt.pickupAt ? new Date(receipt.pickupAt) : null
+            receipt.pickupAt ? new Date(receipt.pickupAt) : null,
+            Number(receipt.originalAmount || receipt.totalAmount || 0),
+            Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0)
         ], callback);
     });
 }
@@ -166,6 +178,31 @@ function getByReceiptId(receiptId, userId, callback) {
         `;
 
         db.query(sql, [String(receiptId), userId], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows[0] || null);
+        });
+    });
+}
+
+function getByReceiptIdAny(receiptId, callback) {
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const sql = `
+            SELECT *
+            FROM purchase_history
+            WHERE receipt_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [String(receiptId)], (error, rows) => {
             if (error) {
                 callback(error);
                 return;
@@ -308,6 +345,8 @@ function mapReceipt(row) {
         merchantName: row.pickup_merchant_name || merchantNames.join(', ') || 'Vaniday merchant',
         items,
         totalAmount: Number(row.total_amount || 0),
+        originalAmount: Number(row.original_amount || row.total_amount || 0),
+        cashbackRedeemed: Number(row.cashback_used || 0),
         paymentMethod: row.payment_method || 'paid',
         paymentStatus: row.payment_status || 'paid',
         deliveryStatus: row.delivery_status || 'processing',
@@ -340,6 +379,7 @@ function markPickupCollected(receiptId, callback) {
 
 module.exports = {
     getByReceiptId,
+    getByReceiptIdAny,
     getSupportOrderForCustomer,
     getSupportOrdersByUserId,
     getByUserId,

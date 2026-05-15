@@ -7,6 +7,7 @@ const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const {
+    getBookingCheckInUrl,
     getMerchantStorefrontSlug,
     getMerchantStorefrontUrl
 } = require('../utils/qrToken');
@@ -60,6 +61,22 @@ function buildStorefrontQrPayload(req, merchant, callback) {
                 url: qrUrl
             }
         });
+    });
+}
+
+function getRequestBaseUrl(req) {
+    return `${req.protocol}://${req.get('host')}`;
+}
+
+function toQrDataUrl(value) {
+    if (!value) {
+        return Promise.resolve('');
+    }
+
+    return QRCode.toDataURL(value, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 240
     });
 }
 
@@ -551,9 +568,17 @@ function buildAppointmentReport(bookings = []) {
 
         return {
             ...booking,
+            id: booking.id,
+            serviceId: booking.service_id || booking.serviceId || '',
+            merchantId: booking.merchant_id || booking.merchantId || '',
+            qrCodeToken: booking.qr_code_token || booking.qrCodeToken || '',
+            transactionId: booking.transaction_id || booking.transactionId || '',
+            checkedInAt: booking.checked_in_at || booking.checkedInAt || '',
             bookingDate,
             bookingTime: booking.booking_time || booking.bookingTime || '',
             status,
+            paymentStatus: booking.payment_status || booking.paymentStatus || (status === 'paid' || booking.transaction_id || booking.transactionId ? 'paid' : 'pending'),
+            refundStatus: booking.refund_status || booking.refundStatus || '',
             serviceName: booking.service_name || booking.serviceName || 'Service',
             customerName: booking.customer_name || booking.customerName || 'Customer',
             customerEmail: booking.email || booking.customer_email || '',
@@ -588,6 +613,7 @@ function buildAppointmentReport(bookings = []) {
 
     return {
         allBookings: normalizedBookings,
+        todayKey,
         todayBookings: normalizedBookings.filter((booking) => booking.bookingDate === todayKey),
         upcomingBookings: normalizedBookings
             .filter((booking) => booking.bookingDate >= todayKey && booking.status !== 'cancelled')
@@ -605,6 +631,81 @@ function buildAppointmentReport(bookings = []) {
         weekDays,
         monthView: buildDashboardMonthDays(calendarStartDate, normalizedBookings)
     };
+}
+
+function getQrStatusForBooking(booking, todayKey = getLocalDateKey(new Date())) {
+    if (!booking?.id) {
+        return 'QR Not Generated';
+    }
+
+    if (['checked_in', 'completed'].includes(booking.status)) {
+        return 'Checked-in';
+    }
+
+    if (booking.bookingDate < todayKey && !['cancelled'].includes(booking.status)) {
+        return 'Expired';
+    }
+
+    if (['pending', 'confirmed', 'paid'].includes(booking.status)) {
+        return 'Awaiting Customer Check-in';
+    }
+
+    if (['cancelled', 'no_show'].includes(booking.status)) {
+        return 'Expired';
+    }
+
+    return 'QR Generated';
+}
+
+function enrichAppointmentReportQr(req, appointmentReport, callback) {
+    const todayKey = getLocalDateKey(new Date());
+    const baseUrl = getRequestBaseUrl(req);
+    const bookings = appointmentReport.allBookings || [];
+
+    Promise.all(bookings.map(async (booking) => {
+        const checkinUrl = booking.id ? getBookingCheckInUrl(req, booking.id) : '';
+        const bookingQrUrl = booking.qrCodeToken && booking.merchantId
+            ? `${baseUrl}/booking/${encodeURIComponent(booking.merchantId)}/${encodeURIComponent(booking.qrCodeToken)}${booking.serviceId ? `?serviceId=${encodeURIComponent(booking.serviceId)}` : ''}`
+            : '';
+        const [bookingQrDataUrl, checkinQrDataUrl] = await Promise.all([
+            toQrDataUrl(bookingQrUrl),
+            toQrDataUrl(checkinUrl)
+        ]);
+
+        return {
+            ...booking,
+            bookingQrUrl: bookingQrUrl || checkinUrl,
+            bookingQrDataUrl,
+            checkinUrl,
+            checkinQrDataUrl,
+            qrStatus: getQrStatusForBooking(booking, todayKey),
+            receiptUrl: `/receipt/${booking.id}`
+        };
+    }))
+        .then((enrichedBookings) => {
+            const byId = new Map(enrichedBookings.map((booking) => [String(booking.id), booking]));
+            const replaceBookings = (items = []) => items.map((booking) => byId.get(String(booking.id)) || booking);
+
+            callback(null, {
+                ...appointmentReport,
+                allBookings: enrichedBookings,
+                todayBookings: replaceBookings(appointmentReport.todayBookings),
+                upcomingBookings: replaceBookings(appointmentReport.upcomingBookings),
+                pendingAppointments: replaceBookings(appointmentReport.pendingAppointments),
+                weekDays: (appointmentReport.weekDays || []).map((day) => ({
+                    ...day,
+                    appointments: replaceBookings(day.appointments)
+                })),
+                monthView: {
+                    ...appointmentReport.monthView,
+                    days: (appointmentReport.monthView?.days || []).map((day) => ({
+                        ...day,
+                        appointments: replaceBookings(day.appointments)
+                    }))
+                }
+            });
+        })
+        .catch(callback);
 }
 
 function buildRescheduleRecommendations(bookings = [], requests = []) {
@@ -1056,19 +1157,19 @@ function updateBookingStatus(req, res) {
 
     if (!bookingId || !status) {
         req.session.merchantError = 'Choose a valid booking action.';
-        return res.redirect('/merchant/bookings');
+        return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
     }
 
     return Booking.updateStatusForMerchant(bookingId, req.session.user.id, status, (error, result) => {
         if (error) {
             console.error(error);
             req.session.merchantError = 'Booking status could not be updated.';
-            return res.redirect('/merchant/bookings');
+            return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
         }
 
         if (!result?.affectedRows) {
             req.session.merchantError = 'That booking was not found for your merchant account.';
-            return res.redirect('/merchant/bookings');
+            return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
         }
 
         const statusCopy = status.replace(/_/g, ' ');
@@ -1103,7 +1204,7 @@ function updateBookingStatus(req, res) {
         });
 
         req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.`;
-        return res.redirect('/merchant/bookings');
+        return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
     });
 }
 
@@ -1243,11 +1344,26 @@ function showSchedule(req, res) {
                 console.error(bookingError);
             }
 
-            return res.render('merchant-schedule', {
-                title: 'Appointment Calendar',
-                merchant,
-                appointmentReport: buildAppointmentReport(bookingError ? [] : bookings || []),
-                databaseError: Boolean(bookingError)
+            const appointmentReport = buildAppointmentReport(bookingError ? [] : bookings || []);
+
+            return enrichAppointmentReportQr(req, appointmentReport, (qrError, enrichedAppointmentReport) => {
+                if (qrError) {
+                    console.error(qrError);
+                }
+
+                const success = req.session.merchantSuccess;
+                const error = req.session.merchantError;
+                req.session.merchantSuccess = null;
+                req.session.merchantError = null;
+
+                return res.render('merchant-schedule', {
+                    title: 'Appointment Calendar',
+                    merchant,
+                    appointmentReport: qrError ? appointmentReport : enrichedAppointmentReport,
+                    databaseError: Boolean(bookingError || qrError),
+                    success,
+                    error
+                });
             });
         });
     });
