@@ -466,6 +466,88 @@ function renderBookingPage(req, res, merchant, options = {}) {
     });
 }
 
+function getBookingAvailability(req, res) {
+    const merchantId = Number(req.params.merchantId);
+    const serviceId = Number(req.query.serviceId);
+    const bookingDate = String(req.query.bookingDate || '').trim();
+
+    if (!merchantId || !serviceId || !bookingDate) {
+        return res.status(400).json({
+            success: false,
+            message: 'Merchant, service, and booking date are required.',
+            slots: []
+        });
+    }
+
+    const selectedDate = new Date(`${bookingDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(selectedDate.getTime()) || selectedDate < today) {
+        return res.status(400).json({
+            success: false,
+            message: 'Please choose today or a future booking date.',
+            slots: []
+        });
+    }
+
+    const holidayName = getPublicHolidayName(bookingDate);
+
+    if (holidayName) {
+        return res.json({
+            success: true,
+            closed: true,
+            message: `Closed on ${holidayName}. Please choose another date.`,
+            slots: []
+        });
+    }
+
+    const respondWithFallbackSlots = () => {
+        const merchant = Merchant.findById(merchantId);
+        const service = getSelectedService(merchant, serviceId) || getServiceByOptionId(merchant, serviceId);
+        const selection = getBookableSelection(service, serviceId);
+        const bookableItem = selection.selectedOption || service;
+        const fallbackSlots = Array.isArray(bookableItem?.slots) ? bookableItem.slots.map(normalizeBookingTime).filter(Boolean) : [];
+        const availableSlots = fallbackSlots.filter((slot) => {
+            return !Booking.hasExistingBooking(merchantId, service?.id, bookingDate, slot);
+        });
+
+        return res.json({
+            success: true,
+            slots: availableSlots,
+            message: availableSlots.length ? '' : 'No available slots for this date.',
+            meta: { source: 'fallback' }
+        });
+    };
+
+    return Booking.getAvailableSlots(merchantId, serviceId, bookingDate, (error, slots = [], meta = {}) => {
+        if (error) {
+            console.error(error);
+
+            if (Merchant.findById(merchantId)) {
+                return respondWithFallbackSlots();
+            }
+
+            return res.status(500).json({
+                success: false,
+                message: 'Booking availability could not be loaded.',
+                slots: []
+            });
+        }
+
+        if (!slots.length && Merchant.findById(merchantId)) {
+            return respondWithFallbackSlots();
+        }
+
+        return res.json({
+            success: true,
+            slots,
+            message: slots.length ? '' : 'No available slots for this date.',
+            meta
+        });
+    });
+}
+
 function rejectInvalidQrToken(req, res, merchant) {
     if (!req.params.qrToken || Merchant.hasValidQrToken(merchant, req.params.qrToken)) {
         return false;
@@ -575,11 +657,13 @@ function validateBooking(merchant, form) {
         errors.push(`Bookings are unavailable on ${holidayName}. Please choose another date.`);
     }
 
-    if (!form.bookingTime || !service || !serviceSelection.bookableItem.slots.includes(form.bookingTime)) {
+    const normalizedBookingTime = normalizeBookingTime(form.bookingTime);
+
+    if (!normalizedBookingTime || !service) {
         errors.push('Please select an available time slot for the selected service.');
     }
 
-    if (service && Booking.hasExistingBooking(merchant.id, service.id, form.bookingDate, form.bookingTime)) {
+    if (service && Booking.hasExistingBooking(merchant.id, service.id, form.bookingDate, normalizedBookingTime)) {
         errors.push('This slot is already booked. Please choose another time.');
     }
 
@@ -606,7 +690,8 @@ function validateBooking(merchant, form) {
         purchaseType,
         customerName,
         email,
-        phone
+        phone,
+        bookingTime: normalizedBookingTime
     };
 }
 
@@ -665,6 +750,16 @@ function extractMinutesFromTime(value) {
     }
 
     return (hours * 60) + minutes;
+}
+
+function normalizeBookingTime(value) {
+    const minutes = extractMinutesFromTime(value);
+
+    if (minutes === null || minutes < 0 || minutes >= 24 * 60) {
+        return '';
+    }
+
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 function validatePromotionForBooking(req, selectedPromotion, validation, callback) {
@@ -1609,6 +1704,8 @@ function saveQrBooking(req, res) {
             });
         }
 
+        req.body.bookingTime = validation.bookingTime;
+
         return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
         if (promotionValidationError) {
             console.error(promotionValidationError);
@@ -1637,13 +1734,17 @@ function saveQrBooking(req, res) {
             email: validation.email,
             phone: validation.phone,
             bookingDate: req.body.bookingDate,
-            bookingTime: req.body.bookingTime,
+            bookingTime: validation.bookingTime,
             qrCodeToken: req.params.qrToken
         };
 
-        return Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (lookupError, exists) => {
-            if (lookupError) {
-                console.error(lookupError);
+        return Booking.autoConfirmBooking({
+            ...bookingData,
+            bookingTime: validation.bookingTime,
+            durationMins: validation.bookableItem.durationMins || validation.service.durationMins
+        }, (bookingError, confirmation) => {
+            if (bookingError) {
+                console.error(bookingError);
                 return renderBookingPage(req, res, merchant, {
                     status: 500,
                     errors: ['Booking availability could not be checked. Please try again.'],
@@ -1651,23 +1752,13 @@ function saveQrBooking(req, res) {
                 });
             }
 
-            if (exists) {
+            if (!confirmation?.confirmed) {
                 return renderBookingPage(req, res, merchant, {
                     status: 400,
-                    errors: ['This slot is already booked. Please choose another time.'],
+                    errors: [confirmation?.message || 'This slot is already booked. Please choose another time.'],
                     form: req.body
                 });
             }
-
-            return Booking.createInDatabase(bookingData, (error, result) => {
-                if (error) {
-                    console.error(error);
-                    return renderBookingPage(req, res, merchant, {
-                        status: 500,
-                        errors: ['Booking could not be saved. Please try again.'],
-                        form: req.body
-                    });
-                }
 
                 const finishSuccess = () => res.render('booking-success', {
                     title: 'Booking Confirmed',
@@ -1679,19 +1770,19 @@ function saveQrBooking(req, res) {
                         price: validation.bookableItem.price
                     },
                     bookingDate: req.body.bookingDate,
-                    bookingTime: req.body.bookingTime,
+                    bookingTime: validation.bookingTime,
                     whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                         merchant,
                         service: { name: validation.serviceName },
                         bookingDate: req.body.bookingDate,
-                        bookingTime: req.body.bookingTime,
+                        bookingTime: validation.bookingTime,
                         customerName: validation.customerName,
                         phone: validation.phone,
                         bookingUrl: getBookingUrl(req, merchant, validation.service)
                     }))
                 });
 
-                const bookingId = getInsertedBookingId(result);
+                const bookingId = getInsertedBookingId(confirmation.result);
                 const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
                 notifyBookingCreated(req, merchant, validation, bookingId);
@@ -1702,7 +1793,7 @@ function saveQrBooking(req, res) {
                     merchantName: merchant.name,
                     serviceName: validation.serviceName,
                     bookingDate: req.body.bookingDate,
-                    bookingTime: req.body.bookingTime,
+                    bookingTime: validation.bookingTime,
                     checkInUrl
                 });
 
@@ -1722,7 +1813,6 @@ function saveQrBooking(req, res) {
                 }
 
                 return finishSuccess();
-            });
         });
     });
     });
@@ -1774,6 +1864,8 @@ function saveSecureScanBooking(req, res) {
             });
         }
 
+        req.body.bookingTime = validation.bookingTime;
+
         return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
             if (promotionValidationError) {
                 console.error(promotionValidationError);
@@ -1804,11 +1896,14 @@ function saveSecureScanBooking(req, res) {
                 email: validation.email,
                 phone: validation.phone,
                 bookingDate: req.body.bookingDate,
-                bookingTime: req.body.bookingTime,
+                bookingTime: validation.bookingTime,
                 qrCodeToken: req.query.token
             };
 
-            return Booking.hasExistingBookingInDatabase(merchant.id, validation.service.id, req.body.bookingDate, req.body.bookingTime, (bookingError, exists) => {
+            return Booking.autoConfirmBooking({
+                ...bookingData,
+                durationMins: validation.bookableItem.durationMins || validation.service.durationMins
+            }, (bookingError, confirmation) => {
                 if (bookingError) {
                     console.error(bookingError);
                     return renderBookingPage(req, res, merchant, {
@@ -1819,25 +1914,14 @@ function saveSecureScanBooking(req, res) {
                     });
                 }
 
-                if (exists) {
+                if (!confirmation?.confirmed) {
                     return renderBookingPage(req, res, merchant, {
                         status: 400,
-                        errors: ['This slot is already booked. Please choose another time.'],
+                        errors: [confirmation?.message || 'This slot is already booked. Please choose another time.'],
                         form: req.body,
                         secureQr: true
                     });
                 }
-
-                return Booking.createInDatabase(bookingData, (error, result) => {
-                    if (error) {
-                        console.error(error);
-                        return renderBookingPage(req, res, merchant, {
-                            status: 500,
-                            errors: ['Booking could not be saved. Please try again.'],
-                            form: req.body,
-                            secureQr: true
-                        });
-                    }
 
                     const finishSuccess = () => res.render('booking-success', {
                         title: 'Booking Confirmed',
@@ -1849,20 +1933,20 @@ function saveSecureScanBooking(req, res) {
                             price: validation.bookableItem.price
                         },
                         bookingDate: req.body.bookingDate,
-                        bookingTime: req.body.bookingTime,
+                        bookingTime: validation.bookingTime,
                         anotherBookingPath: getSecureBookingPath(merchant),
                         whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                             merchant,
                             service: { name: validation.serviceName },
                             bookingDate: req.body.bookingDate,
-                            bookingTime: req.body.bookingTime,
+                            bookingTime: validation.bookingTime,
                             customerName: validation.customerName,
                             phone: validation.phone,
                             bookingUrl: getSecureBookingUrl(req, merchant, validation.service)
                         }))
                     });
 
-                    const bookingId = getInsertedBookingId(result);
+                    const bookingId = getInsertedBookingId(confirmation.result);
                     const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
                     notifyBookingCreated(req, merchant, validation, bookingId);
@@ -1873,7 +1957,7 @@ function saveSecureScanBooking(req, res) {
                         merchantName: merchant.name,
                         serviceName: validation.serviceName,
                         bookingDate: req.body.bookingDate,
-                        bookingTime: req.body.bookingTime,
+                        bookingTime: validation.bookingTime,
                         checkInUrl
                     });
 
@@ -1893,7 +1977,6 @@ function saveSecureScanBooking(req, res) {
                     }
 
                     return finishSuccess();
-                });
             });
         });
     });
@@ -2004,11 +2087,12 @@ function createBooking(req, res) {
         email: validation.email,
         phone: validation.phone,
         bookingDate: req.body.bookingDate,
-        bookingTime: req.body.bookingTime
+        bookingTime: validation.bookingTime,
+        status: 'Confirmed'
     });
 
     notifyBookingCreated(req, merchant, validation, booking.id || null);
-    req.session.success = `Booking request received for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${req.body.bookingTime}.`;
+    req.session.success = `Booking confirmed for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${validation.bookingTime}.`;
     return res.redirect('/');
 }
 
@@ -2640,7 +2724,16 @@ function savePaidReceipt(req, payment, paymentMethod) {
         paymentStatus: 'paid',
         paidAt: new Date().toISOString(),
         bookingDate: payment.bookingDate,
-        bookingTime: payment.bookingTime
+        bookingTime: payment.bookingTime,
+        fulfilment: payment.fulfilment || '',
+        pickupMerchantId: payment.pickupMerchantId || '',
+        pickupMerchantName: payment.pickupMerchantName || (payment.fulfilment === 'pickup' ? payment.merchantName : ''),
+        pickupStatus: payment.fulfilment === 'pickup' ? (payment.pickupStatus || 'pending_pickup') : '',
+        pickupAt: payment.pickupAt || null,
+        deliveryAddress: payment.deliveryAddress || '',
+        deliveryUnit: payment.deliveryUnit || '',
+        deliveryPostal: payment.deliveryPostal || '',
+        deliveryPhone: payment.deliveryPhone || ''
     };
     req.session.receipts[receiptId] = receipt;
 
@@ -2825,6 +2918,7 @@ module.exports = {
     showBookingPage,
     showPublicMerchantBooking,
     showSecureScanBooking,
+    getBookingAvailability,
     saveQrBooking,
     saveStorefrontBooking,
     saveSecureScanBooking,

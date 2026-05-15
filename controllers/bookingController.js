@@ -290,7 +290,7 @@ function normalizeReviewRating(value) {
 function createBooking(req, res) {
     const serviceId = req.body.serviceId || req.params.serviceId;
     const bookingDate = req.body.bookingDate;
-    const bookingTime = req.body.bookingTime || null;
+    const bookingTime = normalizeBookingTime(req.body.bookingTime);
 
     if (!serviceId || serviceId === 'select') {
         req.session.profileError = 'Please select a service before confirming your booking.';
@@ -299,6 +299,11 @@ function createBooking(req, res) {
 
     if (!isValidBookingDate(bookingDate)) {
         req.session.profileError = 'Please choose today or a future booking date.';
+        return res.redirect(req.get('Referrer') || '/services');
+    }
+
+    if (!bookingTime) {
+        req.session.profileError = 'Please choose a valid booking time.';
         return res.redirect(req.get('Referrer') || '/services');
     }
 
@@ -338,13 +343,14 @@ function createBooking(req, res) {
             ? Number(service.packagePrice || service.price)
             : Number(service.price || 0);
 
-        return Booking.createCustomerBooking({
+        return Booking.autoConfirmBooking({
             userId: req.session.user.id,
             serviceId: service.id,
             merchantId: service.salonId,
             bookingDate,
-            bookingTime
-        }, async (bookingError, result) => {
+            bookingTime,
+            durationMins: service.durationMins
+        }, async (bookingError, confirmation) => {
             if (bookingError) {
                 console.error(bookingError);
                 return res.status(500).render('error', {
@@ -353,8 +359,13 @@ function createBooking(req, res) {
                 });
             }
 
+            if (!confirmation?.confirmed) {
+                req.session.profileError = confirmation?.message || 'That booking slot is unavailable. Please choose another time.';
+                return res.redirect(req.get('Referrer') || '/services');
+            }
+
             try {
-                const bookingId = result.insertId;
+                const bookingId = confirmation.result.insertId;
                 notifyBookingCreated(bookingId);
                 const checkinUrl = getBookingCheckInUrl(req, bookingId);
                 const checkinToken = signBookingCheckInToken(bookingId);
@@ -863,12 +874,28 @@ function rescheduleBooking(req, res) {
                 });
             }
 
-            return Booking.getAllowedSlotsForBooking(bookingId, userId, (slotError, allowedSlots = []) => {
+            return Booking.getAvailableSlots(
+                booking.salon_id,
+                booking.service_id,
+                bookingDate,
+                { excludeBookingId: bookingId, durationMins: booking.duration_mins },
+                (slotError, allowedSlots = []) => {
                 if (slotError) {
                     console.error(slotError);
                     return respondProfileAction(req, res, {
                         success: false,
                         message: 'That booking slot could not be checked.'
+                    });
+                }
+
+                if (!allowedSlots.includes(bookingTime)) {
+                    const suffix = allowedSlots.length
+                        ? ` Suggested alternatives: ${allowedSlots.slice(0, 3).join(', ')}.`
+                        : ' No available slots for this date.';
+                    return respondProfileAction(req, res, {
+                        success: false,
+                        message: `The selected time is unavailable.${suffix}`,
+                        alternatives: allowedSlots.slice(0, 6)
                     });
                 }
 

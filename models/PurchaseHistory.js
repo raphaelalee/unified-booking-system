@@ -50,6 +50,26 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN refunded_at DATETIME DEFAULT NULL');
             }
 
+            if (!fields.has('fulfilment')) {
+                alters.push("ADD COLUMN fulfilment VARCHAR(30) DEFAULT NULL");
+            }
+
+            if (!fields.has('pickup_merchant_id')) {
+                alters.push('ADD COLUMN pickup_merchant_id VARCHAR(64) DEFAULT NULL');
+            }
+
+            if (!fields.has('pickup_merchant_name')) {
+                alters.push('ADD COLUMN pickup_merchant_name VARCHAR(120) DEFAULT NULL');
+            }
+
+            if (!fields.has('pickup_status')) {
+                alters.push("ADD COLUMN pickup_status VARCHAR(40) DEFAULT NULL");
+            }
+
+            if (!fields.has('pickup_at')) {
+                alters.push('ADD COLUMN pickup_at DATETIME DEFAULT NULL');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -78,14 +98,19 @@ function save(receipt, callback) {
         const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
         const sql = `
             INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 item_names = VALUES(item_names),
                 items_json = VALUES(items_json),
                 total_amount = VALUES(total_amount),
                 payment_method = VALUES(payment_method),
-                payment_status = VALUES(payment_status)
+                payment_status = VALUES(payment_status),
+                fulfilment = VALUES(fulfilment),
+                pickup_merchant_id = VALUES(pickup_merchant_id),
+                pickup_merchant_name = VALUES(pickup_merchant_name),
+                pickup_status = VALUES(pickup_status),
+                pickup_at = VALUES(pickup_at)
         `;
 
         db.query(sql, [
@@ -97,7 +122,12 @@ function save(receipt, callback) {
             Number(receipt.totalAmount || 0),
             receipt.paymentMethod || 'paid',
             receipt.paymentStatus || 'paid',
-            receipt.paidAt ? new Date(receipt.paidAt) : new Date()
+            receipt.paidAt ? new Date(receipt.paidAt) : new Date(),
+            receipt.fulfilment || null,
+            receipt.pickupMerchantId || null,
+            receipt.pickupMerchantName || null,
+            receipt.pickupStatus || (receipt.fulfilment === 'pickup' ? 'pending_pickup' : null),
+            receipt.pickupAt ? new Date(receipt.pickupAt) : null
         ], callback);
     });
 }
@@ -266,21 +296,46 @@ function mapReceipt(row) {
         return null;
     }
 
+    const items = parseItems(row.items_json);
+    const merchantNames = Array.from(new Set(items.map((item) => item.merchantName || item.detail).filter(Boolean)));
+
     return {
         id: row.receipt_id,
         displayId: row.receipt_id.replace(/^order-/, ''),
         type: row.purchase_type === 'booking' ? 'booking' : 'order',
         userId: row.user_id,
         userName: '',
-        merchantName: 'Vaniday',
-        items: parseItems(row.items_json),
+        merchantName: row.pickup_merchant_name || merchantNames.join(', ') || 'Vaniday merchant',
+        items,
         totalAmount: Number(row.total_amount || 0),
         paymentMethod: row.payment_method || 'paid',
         paymentStatus: row.payment_status || 'paid',
         deliveryStatus: row.delivery_status || 'processing',
         refundStatus: row.refund_status || 'none',
+        fulfilment: row.fulfilment || '',
+        pickupMerchantId: row.pickup_merchant_id || '',
+        pickupMerchantName: row.pickup_merchant_name || '',
+        pickupStatus: row.pickup_status || (row.fulfilment === 'pickup' ? 'pending_pickup' : ''),
+        pickupAt: row.pickup_at || null,
         paidAt: row.created_at
     };
+}
+
+function markPickupCollected(receiptId, callback) {
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query(
+            `UPDATE purchase_history
+             SET pickup_status = 'picked_up', pickup_at = COALESCE(pickup_at, CURRENT_TIMESTAMP), delivery_status = 'delivered'
+             WHERE receipt_id = ? AND purchase_type = 'product'`,
+            [receiptId],
+            callback
+        );
+    });
 }
 
 module.exports = {
@@ -288,6 +343,7 @@ module.exports = {
     getSupportOrderForCustomer,
     getSupportOrdersByUserId,
     getByUserId,
+    markPickupCollected,
     mapReceipt,
     recordRefund,
     updateDeliveryStatus,

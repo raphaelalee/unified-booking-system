@@ -127,7 +127,7 @@
             </div>
         <% } %>
 
-        <form action="<%= bookingPath %>" method="POST" class="booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>">
+        <form action="<%= bookingPath %>" method="POST" class="booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>" data-availability-url="/booking/<%= merchant.id %>/available-slots">
             <div class="form-row">
                 <label>
                     Full name

@@ -1,0 +1,93 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title receipt-title">
+    <p class="eyebrow">Pickup Verification</p>
+    <h1>Pickup Verification</h1>
+    <% if (invalid) { %>
+        <p>Invalid or expired pickup QR.</p>
+    <% } else if (alreadyCollected) { %>
+        <p>This item has already been collected.</p>
+    <% } else { %>
+        <p>Review the order details before confirming product collection.</p>
+    <% } %>
+</section>
+
+<section class="section compact receipt-section">
+    <% if (message) { %>
+        <div class="notice <%= /confirmed/i.test(message) ? 'success' : 'error' %>"><%= message %></div>
+    <% } %>
+
+    <% if (!invalid && order) { %>
+        <div class="receipt-layout">
+            <article class="receipt-card">
+                <div class="receipt-meta-grid">
+                    <p><span>Receipt ID</span><strong><%= order.receiptId %></strong></p>
+                    <p><span>Order ID</span><strong><%= order.id %></strong></p>
+                    <p><span>Customer</span><strong><%= order.customerName %></strong></p>
+                    <p><span>Merchant</span><strong><%= order.merchantName %></strong></p>
+                    <p><span>Payment Status</span><strong><%= order.paymentStatusLabel %></strong></p>
+                    <p><span>Pickup Status</span><strong><%= order.pickupStatusLabel %></strong></p>
+                    <p><span>Order Date/time</span><strong><%= order.createdAtLabel %></strong></p>
+                    <% if (alreadyCollected && order.collectedAtLabel) { %>
+                        <p><span>Collected At</span><strong><%= order.collectedAtLabel %></strong></p>
+                    <% } %>
+                </div>
+
+                <div class="admin-table-wrap receipt-table-wrap">
+                    <table class="admin-table receipt-table">
+                        <thead>
+                            <tr>
+                                <th>Product name</th>
+                                <th>Merchant</th>
+                                <th>Quantity</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% order.items.forEach((item) => { %>
+                                <tr>
+                                    <td><strong><%= item.name %></strong></td>
+                                    <td><%= item.merchantName || order.merchantName %></td>
+                                    <td><%= item.quantity || 1 %></td>
+                                    <td>$<%= Number(item.lineTotal || 0).toFixed(2) %></td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="receipt-total">
+                    <span>Total quantity</span>
+                    <strong><%= order.quantityTotal %></strong>
+                </div>
+                <div class="receipt-total">
+                    <span>Total amount</span>
+                    <strong>$<%= Number(order.totalAmount || 0).toFixed(2) %></strong>
+                </div>
+            </article>
+
+            <aside class="receipt-qr-panel">
+                <p class="eyebrow"><%= alreadyCollected ? 'Already collected' : 'Collection action' %></p>
+                <% if (alreadyCollected) { %>
+                    <p class="muted">This item has already been collected.</p>
+                    <% if (order.collectedAtLabel) { %>
+                        <p><strong>Collected At:</strong> <%= order.collectedAtLabel %></p>
+                    <% } %>
+                <% } else if (canConfirm) { %>
+                    <form action="/pickup-verify/order/<%= encodeURIComponent(order.id) %>/confirm?token=<%= encodeURIComponent(token) %>" method="POST">
+                        <input type="hidden" name="token" value="<%= token %>">
+                        <button class="button primary full" type="submit">Confirm Item Collected</button>
+                    </form>
+                <% } else { %>
+                    <p class="muted"><%= permissionMessage %></p>
+                <% } %>
+            </aside>
+        </div>
+    <% } else { %>
+        <article class="receipt-card">
+            <p class="muted">Invalid or expired pickup QR.</p>
+        </article>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

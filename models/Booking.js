@@ -254,11 +254,26 @@ function normalizeTimeMinutes(value) {
     return (Number(match[1]) * 60) + Number(match[2]);
 }
 
+function formatMinutesAsTime(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
+
 function parseBlockedTimes(value) {
     return String(value || '')
         .split(',')
-        .map((item) => item.trim())
+        .map((item) => {
+            const minutes = normalizeTimeMinutes(item.trim());
+            return minutes === null ? '' : formatMinutesAsTime(minutes);
+        })
         .filter(Boolean);
+}
+
+function uniqueSortedSlots(slots = []) {
+    return Array.from(new Set(slots.filter(Boolean))).sort((left, right) => {
+        return normalizeTimeMinutes(left) - normalizeTimeMinutes(right);
+    });
 }
 
 function create(bookingData) {
@@ -452,6 +467,270 @@ function createCustomerBooking(bookingData, callback) {
     createInDatabase(bookingData, callback);
 }
 
+function getServiceAvailabilityContext(merchantId, serviceId, callback) {
+    const sql = `
+        SELECT
+            services.service_id,
+            services.salon_id,
+            services.duration_mins,
+            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS slot_time
+        FROM services
+        LEFT JOIN service_slots ON service_slots.service_id = services.service_id
+        WHERE services.service_id = ?
+            AND services.salon_id = ?
+        ORDER BY service_slots.timeslot ASC
+    `;
+
+    db.query(sql, [serviceId, merchantId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        if (!rows.length) {
+            callback(null, null);
+            return;
+        }
+
+        callback(null, {
+            serviceId: rows[0].service_id,
+            merchantId: rows[0].salon_id,
+            durationMins: Math.max(15, Number(rows[0].duration_mins || 60)),
+            configuredSlots: uniqueSortedSlots(rows.map((row) => row.slot_time).filter(Boolean))
+        });
+    });
+}
+
+function getAvailabilitySettings(merchantId, callback) {
+    getRescheduleSettings(merchantId, (error, settings = {}) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, {
+            businessStart: String(settings.businessStart || '09:00').slice(0, 5),
+            businessEnd: String(settings.businessEnd || '20:00').slice(0, 5),
+            blockedTimes: parseBlockedTimes(settings.blockedTimes || ''),
+            bufferMinutes: Math.max(0, Number(settings.bufferMinutes || 0))
+        });
+    });
+}
+
+function generateCandidateSlots(settings, durationMins) {
+    const start = normalizeTimeMinutes(settings.businessStart);
+    const end = normalizeTimeMinutes(settings.businessEnd);
+    const duration = Math.max(15, Number(durationMins || 60));
+    const totalDuration = duration + Math.max(0, Number(settings.bufferMinutes || 0));
+    const step = duration;
+
+    if (start === null || end === null || end <= start) {
+        return [];
+    }
+
+    const slots = [];
+
+    for (let cursor = start; cursor + totalDuration <= end; cursor += step) {
+        const slot = formatMinutesAsTime(cursor);
+        if (!settings.blockedTimes.includes(slot)) {
+            slots.push(slot);
+        }
+    }
+
+    return slots;
+}
+
+function hasBookingClash(merchantId, bookingDate, startTime, endTime, options, callback) {
+    const done = typeof options === 'function' ? options : callback;
+    const config = typeof options === 'function' ? {} : (options || {});
+    const startMinutes = normalizeTimeMinutes(startTime);
+    const endMinutes = normalizeTimeMinutes(endTime);
+    const excludeBookingId = Number(config.excludeBookingId || 0);
+
+    if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+        done(null, false, []);
+        return;
+    }
+
+    const sql = `
+        SELECT
+            bookings.booking_id AS id,
+            bookings.status,
+            TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+            services.duration_mins,
+            services.service_id,
+            users.name AS customer_name,
+            services.service_name
+        FROM bookings
+        INNER JOIN services ON services.service_id = bookings.service_id
+        INNER JOIN users ON users.user_id = bookings.user_id
+        WHERE bookings.merchant_id = ?
+            AND bookings.booking_id <> ?
+            AND bookings.booking_date = ?
+            AND bookings.status NOT IN ('cancelled', 'completed', 'no_show')
+    `;
+
+    db.query(sql, [merchantId, excludeBookingId || 0, bookingDate], (error, rows = []) => {
+        if (error) {
+            done(error);
+            return;
+        }
+
+        const overlaps = rows.filter((row) => {
+            const rowStart = normalizeTimeMinutes(row.booking_time);
+            const rowEnd = rowStart === null ? null : rowStart + Math.max(15, Number(row.duration_mins || 60));
+            return rowStart !== null && rowEnd !== null && startMinutes < rowEnd && endMinutes > rowStart;
+        });
+
+        done(null, overlaps.length > 0, overlaps);
+    });
+}
+
+function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback) {
+    const done = typeof options === 'function' ? options : callback;
+    const config = typeof options === 'function' ? {} : (options || {});
+
+    getServiceAvailabilityContext(merchantId, serviceId, (contextError, context) => {
+        if (contextError || !context) {
+            done(contextError, []);
+            return;
+        }
+
+        getAvailabilitySettings(merchantId, (settingsError, settings) => {
+            if (settingsError) {
+                done(settingsError, []);
+                return;
+            }
+
+            const duration = Math.max(15, Number(config.durationMins || context.durationMins || 60));
+            const candidateSlots = generateCandidateSlots(settings, duration);
+            const availableSlots = [];
+            let pending = candidateSlots.length;
+            let failed = false;
+
+            if (!pending) {
+                done(null, [], { durationMins: duration, businessStart: settings.businessStart, businessEnd: settings.businessEnd });
+                return;
+            }
+
+            candidateSlots.forEach((slot) => {
+                const start = normalizeTimeMinutes(slot);
+                const end = formatMinutesAsTime(start + duration + Number(settings.bufferMinutes || 0));
+
+                hasBookingClash(
+                    merchantId,
+                    bookingDate,
+                    slot,
+                    end,
+                    { excludeBookingId: config.excludeBookingId },
+                    (clashError, hasClash) => {
+                        if (failed) {
+                            return;
+                        }
+
+                        if (clashError) {
+                            failed = true;
+                            done(clashError, []);
+                            return;
+                        }
+
+                        if (!hasClash) {
+                            availableSlots.push(slot);
+                        }
+
+                        pending -= 1;
+                        if (!pending) {
+                            done(null, uniqueSortedSlots(availableSlots), {
+                                durationMins: duration,
+                                businessStart: settings.businessStart,
+                                businessEnd: settings.businessEnd
+                            });
+                        }
+                    }
+                );
+            });
+        });
+    });
+}
+
+function autoConfirmBooking(bookingData, callback) {
+    getServiceAvailabilityContext(bookingData.merchantId, bookingData.serviceId, (contextError, context) => {
+        if (contextError || !context) {
+            callback(contextError || new Error('Selected service could not be found.'), null);
+            return;
+        }
+
+        const duration = Math.max(15, Number(bookingData.durationMins || context.durationMins || 60));
+        const startMinutes = normalizeTimeMinutes(bookingData.bookingTime);
+
+        if (startMinutes === null) {
+            callback(null, {
+                confirmed: false,
+                reason: 'invalid_time',
+                message: 'Please choose a valid booking time.',
+                alternatives: []
+            });
+            return;
+        }
+
+        const endTime = formatMinutesAsTime(startMinutes + duration);
+
+        getAvailableSlots(bookingData.merchantId, bookingData.serviceId, bookingData.bookingDate, { durationMins: duration }, (slotError, slots = []) => {
+            if (slotError) {
+                callback(slotError);
+                return;
+            }
+
+            if (!slots.includes(String(bookingData.bookingTime).slice(0, 5))) {
+                callback(null, {
+                    confirmed: false,
+                    reason: 'unavailable',
+                    message: slots.length
+                        ? `The selected time is unavailable. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
+                        : 'No available slots for this date.',
+                    alternatives: slots.slice(0, 6)
+                });
+                return;
+            }
+
+            hasBookingClash(bookingData.merchantId, bookingData.bookingDate, bookingData.bookingTime, endTime, (clashError, hasClash) => {
+                if (clashError) {
+                    callback(clashError);
+                    return;
+                }
+
+                if (hasClash) {
+                    callback(null, {
+                        confirmed: false,
+                        reason: 'clash',
+                        message: slots.length
+                            ? `The selected time is unavailable. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
+                            : 'No available slots for this date.',
+                        alternatives: slots.slice(0, 6)
+                    });
+                    return;
+                }
+
+                createInDatabase({
+                    ...bookingData,
+                    status: 'confirmed'
+                }, (createError, result) => {
+                    if (createError) {
+                        callback(createError);
+                        return;
+                    }
+
+                    callback(null, {
+                        confirmed: true,
+                        result,
+                        alternatives: []
+                    });
+                });
+            });
+        });
+    });
+}
+
 function getByUserId(userId, callback) {
     return ensureBookingManagementSchema((schemaError) => {
         if (schemaError) {
@@ -486,7 +765,7 @@ function getByUserId(userId, callback) {
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         WHERE bookings.user_id = ?
-            AND (bookings.transaction_id IS NOT NULL OR bookings.status IN ('paid', 'checked_in', 'completed'))
+            AND (bookings.transaction_id IS NOT NULL OR bookings.status IN ('confirmed', 'paid', 'checked_in', 'completed'))
         ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
     `;
 
@@ -515,12 +794,12 @@ function getAvailabilityByBookingIds(userId, bookingIds, callback) {
     const slotSql = `
         SELECT
             managed.booking_id AS booking_id,
-            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS slot_time
+            managed.merchant_id,
+            services.duration_mins
         FROM bookings AS managed
-        INNER JOIN service_slots ON service_slots.service_id = managed.service_id
+        INNER JOIN services ON services.service_id = managed.service_id
         WHERE managed.user_id = ?
             AND managed.booking_id IN (${placeholders})
-        ORDER BY service_slots.timeslot ASC
     `;
     const takenSql = `
         SELECT
@@ -558,13 +837,6 @@ function getAvailabilityByBookingIds(userId, bookingIds, callback) {
                 return map;
             }, {});
 
-            slotRows.forEach((row) => {
-                const key = String(row.booking_id);
-                if (availability[key] && row.slot_time && !availability[key].slots.includes(row.slot_time)) {
-                    availability[key].slots.push(row.slot_time);
-                }
-            });
-
             takenRows.forEach((row) => {
                 const key = String(row.booking_id);
                 if (!availability[key] || !row.booking_date || !row.slot_time) {
@@ -577,7 +849,37 @@ function getAvailabilityByBookingIds(userId, bookingIds, callback) {
                 availability[key].taken.push(`${date}|${row.slot_time}`);
             });
 
-            callback(null, availability);
+            let pendingSettings = slotRows.length;
+            let failed = false;
+
+            if (!pendingSettings) {
+                callback(null, availability);
+                return;
+            }
+
+            slotRows.forEach((row) => {
+                getAvailabilitySettings(row.merchant_id, (settingsError, settings) => {
+                    if (failed) {
+                        return;
+                    }
+
+                    if (settingsError) {
+                        failed = true;
+                        callback(settingsError);
+                        return;
+                    }
+
+                    const key = String(row.booking_id);
+                    if (availability[key]) {
+                        availability[key].slots = generateCandidateSlots(settings, row.duration_mins);
+                    }
+
+                    pendingSettings -= 1;
+                    if (!pendingSettings) {
+                        callback(null, availability);
+                    }
+                });
+            });
         });
     });
 }
@@ -688,12 +990,14 @@ function countReschedulesForBooking(bookingId, callback) {
 function getAllowedSlotsForBooking(bookingId, userId, callback) {
     const sql = `
         SELECT
-            TIME_FORMAT(service_slots.timeslot, '%H:%i') AS slot_time
+            bookings.merchant_id,
+            bookings.service_id,
+            services.duration_mins
         FROM bookings
-        INNER JOIN service_slots ON service_slots.service_id = bookings.service_id
+        INNER JOIN services ON services.service_id = bookings.service_id
         WHERE bookings.booking_id = ?
             AND bookings.user_id = ?
-        ORDER BY service_slots.timeslot ASC
+        LIMIT 1
     `;
 
     db.query(sql, [bookingId, userId], (error, rows = []) => {
@@ -702,7 +1006,21 @@ function getAllowedSlotsForBooking(bookingId, userId, callback) {
             return;
         }
 
-        callback(null, rows.map((row) => row.slot_time).filter(Boolean));
+        const booking = rows[0];
+
+        if (!booking) {
+            callback(null, []);
+            return;
+        }
+
+        getAvailabilitySettings(booking.merchant_id, (settingsError, settings) => {
+            if (settingsError) {
+                callback(settingsError);
+                return;
+            }
+
+            callback(null, generateCandidateSlots(settings, booking.duration_mins));
+        });
     });
 }
 
@@ -1383,10 +1701,12 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
 module.exports = {
     attachTransaction,
     create,
+    autoConfirmBooking,
     createCustomerBooking,
     createInDatabase,
     cancelForCustomer,
     getAvailabilityByBookingIds,
+    getAvailableSlots,
     countReschedulesForBooking,
     createRescheduleRequest,
     findSupportBookingForCustomer,
@@ -1407,6 +1727,7 @@ module.exports = {
     getWhatsAppReminderCandidates,
     hasExistingBooking,
     hasExistingBookingInDatabase,
+    hasBookingClash,
     markWhatsAppReminderSent,
     markCancelled,
     markCompleted,

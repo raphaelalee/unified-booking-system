@@ -1,13 +1,16 @@
 <%- include('partials/header', { title }) %>
 
 <section class="page-title receipt-title">
-    <p class="eyebrow"><%= receipt.type === 'booking' ? 'Booking receipt' : 'Order receipt' %></p>
+    <p class="eyebrow"><%= isBooking ? 'Booking receipt' : 'Product receipt' %></p>
     <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
-    <% if (receipt.type === 'booking') { %>
+    <% if (isBooking) { %>
         <p>
             <strong><%= receipt.userName %></strong> booked
             <strong><%= receipt.items[0]?.name || 'a service' %></strong>.
             Status: <strong><%= receipt.status %></strong>.
+            <% if (receipt.bookingDate || receipt.bookingTime) { %>
+                Appointment: <strong><%= receipt.bookingDate || '' %><%= receipt.bookingTime ? ` at ${receipt.bookingTime}` : '' %></strong>.
+            <% } %>
         </p>
     <% } else { %>
         <p>
@@ -16,6 +19,9 @@
             by <strong><%= receipt.paymentMethod %></strong>.
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
                 Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+            <% } %>
+            <% if (isProductPickup) { %>
+                Fulfilment: <strong><%= fulfilmentLabel %></strong>.
             <% } %>
         </p>
     <% } %>
@@ -34,8 +40,20 @@
             <div class="receipt-meta-grid">
                 <p><span>User</span><strong><%= receipt.userName %></strong></p>
                 <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
-                <p><span><%= receipt.type === 'booking' ? 'Status' : 'Payment method' %></span><strong><%= receipt.type === 'booking' ? receipt.status : receipt.paymentMethod %></strong></p>
+                <p><span><%= isBooking ? 'Status' : 'Payment method' %></span><strong><%= isBooking ? receipt.status : receipt.paymentMethod %></strong></p>
                 <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
+                <% if (isBooking) { %>
+                    <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
+                    <p><span>Appointment</span><strong><%= receipt.bookingDate || '-' %><%= receipt.bookingTime ? ` at ${receipt.bookingTime}` : '' %></strong></p>
+                <% } %>
+                <% if (isProductPickup) { %>
+                    <p><span>Fulfilment Method</span><strong><%= fulfilmentLabel %></strong></p>
+                    <p><span>Pickup Merchant</span><strong><%= pickupMerchantName %></strong></p>
+                    <p><span>Pickup Status</span><strong><%= pickupStatusLabel %></strong></p>
+                    <% if (receipt.pickupAt) { %>
+                        <p><span>Pickup Date/time</span><strong><%= new Date(receipt.pickupAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></strong></p>
+                    <% } %>
+                <% } %>
             </div>
 
             <div class="admin-table-wrap receipt-table-wrap">
@@ -81,19 +99,15 @@
         </article>
 
         <aside class="receipt-qr-panel">
-            <p class="eyebrow"><%= receipt.type === 'booking' ? 'Scan to Check In' : 'Order verification QR' %></p>
-            <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="Check-in QR code for receipt <%= receipt.id %>">
-            <p class="muted">
-                <%= receipt.type === 'booking'
-                    ? 'Use this dynamic QR when you arrive for appointment attendance verification.'
-                    : 'Scan this QR code at the merchant counter to verify the signed check-in token.' %>
-            </p>
-            <a class="qr-link" href="<%= checkinUrl %>"><%= checkinUrl %></a>
+            <p class="eyebrow"><%= qrLabel %></p>
+            <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
+            <p class="muted"><%= qrDescription %></p>
+            <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
             <div class="qr-debug-panel">
                 <p class="eyebrow">QR Debug</p>
-                <p class="muted"><strong>System:</strong> <%= receipt.type === 'booking' ? 'booking-check-in' : 'receipt-check-in' %></p>
+                <p class="muted"><strong>System:</strong> <%= qrSystem %></p>
                 <p class="muted"><strong>Token:</strong> <%= checkinToken %></p>
-                <p class="muted"><strong>Route target:</strong> <%= receipt.type === 'booking' ? `/checkin/${checkinToken}` : `/receipt-checkin/${receipt.id}?token=${checkinToken}` %></p>
+                <p class="muted"><strong>Route target:</strong> <%= qrRouteTarget %></p>
             </div>
         </aside>
     </div>

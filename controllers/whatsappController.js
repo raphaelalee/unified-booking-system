@@ -11,8 +11,8 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 const getAllServices = promisify(MerchantService.getAllServices);
 const findServiceById = promisify(MerchantService.findServiceById);
 const findCustomerByPhone = promisify(User.findCustomerByPhone);
-const hasExistingBooking = promisify(Booking.hasExistingBookingInDatabase);
-const createBooking = promisify(Booking.createCustomerBooking);
+const getAvailableSlots = promisify(Booking.getAvailableSlots);
+const autoConfirmBooking = promisify(Booking.autoConfirmBooking);
 
 function cleanupSessions() {
     const now = Date.now();
@@ -180,41 +180,44 @@ async function handleDateStep(phone, text, session) {
 
     session.step = 'time';
     session.bookingDate = bookingDate;
+    session.availableSlots = await getAvailableSlots(session.service.salonId, session.service.id, bookingDate);
+
+    if (!session.availableSlots.length) {
+        session.step = 'date';
+    }
 
     return sendReply(phone, [
         `Date selected: ${bookingDate}.`,
-        `Reply with one of these times: ${(session.service.slots || []).join(', ')}`
+        session.availableSlots.length
+            ? `Reply with one of these times: ${session.availableSlots.join(', ')}`
+            : 'No available slots for this date. Please reply with another date.'
     ].join('\n'));
 }
 
 async function handleTimeStep(phone, text, session) {
     const bookingTime = normalizeTime(text);
-    const slots = (session.service.slots || []).map(normalizeTime).filter(Boolean);
+    const slots = (session.availableSlots || []).map(normalizeTime).filter(Boolean);
 
     if (!bookingTime || !slots.includes(bookingTime)) {
-        return sendReply(phone, `Please choose an available time: ${(session.service.slots || []).join(', ')}`);
+        return sendReply(phone, slots.length
+            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}`
+            : 'No available slots for this date. Please reply with another date.');
     }
 
-    const exists = await hasExistingBooking(
-        session.service.salonId,
-        session.service.id,
-        session.bookingDate,
-        bookingTime
-    );
-
-    if (exists) {
-        return sendReply(phone, 'That slot is already booked. Please reply with another available time.');
-    }
-
-    const result = await createBooking({
+    const confirmation = await autoConfirmBooking({
         userId: session.user.user_id,
         merchantId: session.service.salonId,
         serviceId: session.service.id,
         bookingDate: session.bookingDate,
         bookingTime,
-        status: 'pending'
+        durationMins: session.service.durationMins
     });
-    const bookingId = result.insertId;
+
+    if (!confirmation?.confirmed) {
+        return sendReply(phone, confirmation?.message || 'That slot is unavailable. Please reply with another time.');
+    }
+
+    const bookingId = confirmation.result.insertId;
     const booking = {
         customerName: session.user.name,
         email: session.user.email,

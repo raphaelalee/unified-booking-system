@@ -150,6 +150,68 @@
         }
     }
 
+    function renderAvailableSlots(timeSelect, slots, previousValue) {
+        timeSelect.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = slots.length ? 'Select a time' : 'No available slots for this date';
+        timeSelect.appendChild(placeholder);
+
+        slots.forEach((slot) => {
+            const option = document.createElement('option');
+            option.value = slot;
+            option.textContent = slot;
+            timeSelect.appendChild(option);
+        });
+
+        if (slots.includes(previousValue)) {
+            timeSelect.value = previousValue;
+        }
+    }
+
+    function loadAvailableSlots(form) {
+        const serviceSelect = form.querySelector('.js-service-select');
+        const dateInput = form.querySelector('input[name="bookingDate"]');
+        const timeSelect = form.querySelector('.js-time-select');
+        const availabilityUrl = form.dataset.availabilityUrl;
+
+        if (!serviceSelect || !dateInput || !timeSelect || !availabilityUrl) {
+            return;
+        }
+
+        const serviceId = serviceSelect.value;
+        const bookingDate = dateInput.value;
+
+        if (!serviceId || !bookingDate) {
+            syncTimeSlots(form);
+            return;
+        }
+
+        const previousValue = timeSelect.value;
+        const params = new URLSearchParams({ serviceId, bookingDate });
+
+        timeSelect.disabled = true;
+        timeSelect.innerHTML = '<option value="">Checking availability...</option>';
+
+        fetch(`${availabilityUrl}?${params.toString()}`, {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then((response) => response.ok ? response.json() : Promise.reject(new Error('Availability unavailable')))
+            .then((data) => {
+                renderAvailableSlots(timeSelect, Array.isArray(data.slots) ? data.slots : [], previousValue);
+            })
+            .catch(() => {
+                timeSelect.innerHTML = '<option value="">Availability could not be loaded</option>';
+            })
+            .finally(() => {
+                timeSelect.disabled = false;
+            });
+    }
+
     document.querySelectorAll('.booking-form').forEach((form) => {
         const serviceSelect = form.querySelector('.js-service-select');
         const optionSelect = form.querySelector('.js-service-option-select');
@@ -162,11 +224,14 @@
         syncTimeSlots(form);
         serviceSelect.addEventListener('change', () => {
             syncServiceOptions(form);
-            syncTimeSlots(form);
+            loadAvailableSlots(form);
         });
 
         if (optionSelect) {
-            optionSelect.addEventListener('change', () => syncTimeSlots(form));
+            optionSelect.addEventListener('change', () => loadAvailableSlots(form));
         }
+
+        form.querySelector('input[name="bookingDate"]')?.addEventListener('change', () => loadAvailableSlots(form));
+        loadAvailableSlots(form);
     });
 }());

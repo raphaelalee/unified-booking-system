@@ -67,6 +67,14 @@ function ensureFulfilmentSchema(callback) {
             alters.push('ADD COLUMN refunded_at DATETIME DEFAULT NULL');
         }
 
+        if (!fields.has('pickup_status')) {
+            alters.push("ADD COLUMN pickup_status VARCHAR(40) NOT NULL DEFAULT 'pending_pickup'");
+        }
+
+        if (!fields.has('collected_at')) {
+            alters.push('ADD COLUMN collected_at DATETIME DEFAULT NULL');
+        }
+
         if (alters.length === 0) {
             fulfilmentSchemaReady = true;
             callback(null);
@@ -87,6 +95,20 @@ function normalizeDeliveryStatus(status) {
     const value = String(status || '').trim().toLowerCase();
     const allowed = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
     return allowed.includes(value) ? value : 'processing';
+}
+
+function normalizePickupStatus(status, deliveryStatus) {
+    const value = String(status || '').trim().toLowerCase();
+
+    if (['picked_up', 'collected'].includes(value) || String(deliveryStatus || '').toLowerCase() === 'delivered') {
+        return 'picked_up';
+    }
+
+    if (value === 'cancelled') {
+        return 'cancelled';
+    }
+
+    return 'pending_pickup';
 }
 
 function createPaidTransaction(userId, amount, paymentMethod, items, callback) {
@@ -193,12 +215,14 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 transactions.created_at,
                 users.name AS customer_name,
                 products.name AS product_name,
+                salons.salon_name AS merchant_name,
                 order_items.quantity,
                 order_items.price_at_purchase
             FROM transactions
             INNER JOIN users ON users.user_id = transactions.user_id
             INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
             INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
             WHERE transactions.transaction_id = ?
                 AND transactions.user_id = ?
             ORDER BY order_items.order_item_id ASC
@@ -227,9 +251,87 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 shippedAt: first.shipped_at,
                 deliveredAt: first.delivered_at,
                 createdAt: first.created_at,
+                merchantName: Array.from(new Set(rows.map((row) => row.merchant_name).filter(Boolean))).join(', ') || 'Vaniday merchant',
                 items: rows.map((row) => ({
                     name: row.product_name,
                     type: 'Product',
+                    quantity: Number(row.quantity || 1),
+                    unitPrice: Number(row.price_at_purchase || 0),
+                    lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0),
+                    merchantName: row.merchant_name || ''
+                }))
+            });
+        });
+    });
+}
+
+function getPickupVerificationById(transactionId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                transactions.transaction_id AS id,
+                transactions.user_id,
+                transactions.total_amount,
+                transactions.payment_status,
+                transactions.payment_method,
+                transactions.delivery_status,
+                transactions.pickup_status,
+                transactions.collected_at,
+                transactions.created_at,
+                users.name AS customer_name,
+                products.name AS product_name,
+                salons.salon_name AS merchant_name,
+                salons.merchant_id AS merchant_user_id,
+                order_items.quantity,
+                order_items.price_at_purchase
+            FROM transactions
+            INNER JOIN users ON users.user_id = transactions.user_id
+            INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
+            INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE transactions.transaction_id = ?
+            ORDER BY order_items.order_item_id ASC
+        `;
+
+        db.query(sql, [transactionId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            if (!rows.length) {
+                callback(null, null);
+                return;
+            }
+
+            const first = rows[0];
+            const merchantNames = Array.from(new Set(rows.map((row) => row.merchant_name).filter(Boolean)));
+            const merchantUserIds = Array.from(new Set(rows.map((row) => Number(row.merchant_user_id)).filter(Boolean)));
+
+            callback(null, {
+                id: first.id,
+                receiptId: `order-${first.id}`,
+                userId: first.user_id,
+                customerName: first.customer_name || 'Customer',
+                merchantName: merchantNames.join(', ') || 'Vaniday merchant',
+                merchantUserIds,
+                totalAmount: Number(first.total_amount || 0),
+                paymentStatus: first.payment_status || 'paid',
+                paymentMethod: first.payment_method || 'card',
+                deliveryStatus: first.delivery_status || 'processing',
+                pickupStatus: normalizePickupStatus(first.pickup_status, first.delivery_status),
+                collectedAt: first.collected_at,
+                createdAt: first.created_at,
+                items: rows.map((row) => ({
+                    name: row.product_name,
+                    type: 'Product',
+                    merchantName: row.merchant_name || '',
+                    merchantUserId: row.merchant_user_id || null,
                     quantity: Number(row.quantity || 1),
                     unitPrice: Number(row.price_at_purchase || 0),
                     lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0)
@@ -599,6 +701,30 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
     });
 }
 
+function markPickupCollected(transactionId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE transactions
+            SET
+                pickup_status = 'picked_up',
+                delivery_status = 'delivered',
+                collected_at = COALESCE(collected_at, CURRENT_TIMESTAMP),
+                delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+            WHERE transaction_id = ?
+                AND payment_status = 'paid'
+                AND COALESCE(pickup_status, 'pending_pickup') NOT IN ('picked_up', 'collected')
+                AND COALESCE(delivery_status, 'processing') <> 'delivered'
+        `;
+
+        db.query(sql, [transactionId], callback);
+    });
+}
+
 function recordRefund(transactionId, amount, callback) {
     ensureFulfilmentSchema((schemaError) => {
         if (schemaError) {
@@ -627,7 +753,9 @@ module.exports = {
     getCustomerOrders,
     getOrderForCustomer,
     getOrderReceiptById,
+    getPickupVerificationById,
     getPaidSpendByUserId,
+    markPickupCollected,
     recordRefund,
     updateDeliveryStatus
 };

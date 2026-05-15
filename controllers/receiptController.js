@@ -19,14 +19,110 @@ function getTokenSecret() {
 }
 
 function signCheckinToken(receipt) {
+    const isPickup = receipt.type !== 'booking';
+
     return jwt.sign(
         {
             receiptId: String(receipt.id),
-            receiptType: receipt.type
+            receiptType: receipt.type,
+            ...(isPickup ? {
+                orderId: getOrderId(receipt),
+                purpose: 'pickup'
+            } : {})
         },
         getTokenSecret(),
         { expiresIn: '30d' }
     );
+}
+
+function getOrderId(receipt) {
+    const match = String(receipt?.id || '').match(/^order-(\d+)$/);
+    return match ? match[1] : String(receipt?.displayId || receipt?.id || '').replace(/^order-/, '');
+}
+
+function isBookingReceipt(receipt) {
+    if (!receipt) {
+        return false;
+    }
+
+    return receipt.type === 'booking'
+        || Boolean(receipt.bookingDate || receipt.bookingTime);
+}
+
+function getPickupStatusLabel(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    const labels = {
+        pending_pickup: 'Pending Pickup',
+        processing: 'Pending Pickup',
+        packed: 'Pending Pickup',
+        ready: 'Pending Pickup',
+        picked_up: 'Picked Up',
+        delivered: 'Picked Up',
+        cancelled: 'Cancelled'
+    };
+
+    return labels[normalized] || 'Pending Pickup';
+}
+
+function isCollectedStatus(value) {
+    return ['picked_up', 'collected', 'delivered'].includes(String(value || '').trim().toLowerCase());
+}
+
+function formatReceiptDateTime(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return date.toLocaleString('en-SG', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+    });
+}
+
+function getFulfilmentLabel(value) {
+    return String(value || '').toLowerCase() === 'delivery' ? 'Delivery' : 'Merchant Pickup';
+}
+
+function formatStatusLabel(value) {
+    return String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getPickupMerchantName(receipt) {
+    if (receipt.pickupMerchantName) {
+        return receipt.pickupMerchantName;
+    }
+
+    if (receipt.merchantName && receipt.merchantName !== 'Delivery') {
+        return receipt.merchantName;
+    }
+
+    const merchantNames = (receipt.items || [])
+        .map((item) => item.merchantName || item.detail)
+        .filter(Boolean);
+
+    return Array.from(new Set(merchantNames)).join(', ') || 'Vaniday merchant';
+}
+
+function getReceiptMode(receipt) {
+    const isBooking = isBookingReceipt(receipt);
+    const isProductPickup = !isBooking && (String(receipt.fulfilment || 'pickup').toLowerCase() === 'pickup');
+
+    return {
+        receiptType: isBooking ? 'booking' : 'product',
+        isBooking,
+        isProductPickup,
+        fulfilmentLabel: isBooking ? '' : getFulfilmentLabel(receipt.fulfilment || 'pickup'),
+        pickupMerchantName: isBooking ? '' : getPickupMerchantName(receipt),
+        pickupStatusLabel: isBooking ? '' : getPickupStatusLabel(receipt.pickupStatus || receipt.deliveryStatus)
+    };
 }
 
 function verifyCheckinToken(id, token) {
@@ -95,14 +191,36 @@ function mapOrderReceipt(order) {
         type: 'order',
         userId: order.userId,
         userName: order.userName,
-        merchantName: 'Vaniday',
+        merchantName: order.merchantName || 'Vaniday merchant',
         items: order.items,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         deliveryStatus: order.deliveryStatus,
+        fulfilment: 'pickup',
+        pickupMerchantName: order.merchantName || 'Vaniday merchant',
+        pickupStatus: getPickupStatusLabel(order.deliveryStatus),
         paidAt: order.createdAt || new Date().toISOString()
     };
+}
+
+function verifyPickupToken(orderId, token) {
+    try {
+        const payload = jwt.verify(token, getTokenSecret());
+        const receiptId = `order-${orderId}`;
+
+        if (payload.purpose !== 'pickup') {
+            return null;
+        }
+
+        if (String(payload.orderId) !== String(orderId) || String(payload.receiptId) !== receiptId) {
+            return null;
+        }
+
+        return payload;
+    } catch (error) {
+        return null;
+    }
 }
 
 function loadReceipt(req, id) {
@@ -172,11 +290,12 @@ async function buildReceiptViewModel(req, id) {
         return null;
     }
 
-    const token = receipt.type === 'booking' ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
-    const checkinUrl = receipt.type === 'booking'
+    const receiptMode = getReceiptMode(receipt);
+    const token = receiptMode.isBooking ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
+    const verificationUrl = receiptMode.isBooking
         ? getBookingCheckInUrl(req, receipt.id)
-        : `${getPublicBaseUrl(req)}/receipt-checkin/${encodeURIComponent(receipt.id)}?token=${encodeURIComponent(token)}`;
-    const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
+        : `${getPublicBaseUrl(req)}/pickup-verify/order/${encodeURIComponent(getOrderId(receipt))}?token=${encodeURIComponent(token)}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
         errorCorrectionLevel: 'M',
         margin: 2,
         width: 260
@@ -185,9 +304,19 @@ async function buildReceiptViewModel(req, id) {
     return {
         title: `Receipt ${receipt.id}`,
         receipt,
+        ...receiptMode,
         supportRequestPath: `/help-center?receiptId=${encodeURIComponent(receipt.id)}`,
-        checkinUrl,
+        checkinUrl: verificationUrl,
+        verificationUrl,
         checkinToken: token,
+        qrLabel: receiptMode.isBooking ? 'Appointment Check-In QR' : 'Pickup Verification QR',
+        qrDescription: receiptMode.isBooking
+            ? 'Scan this QR code at the merchant counter to check in for your appointment.'
+            : 'Show this QR code to the merchant when collecting your item.',
+        qrSystem: receiptMode.isBooking ? 'booking-check-in' : 'pickup-verification',
+        qrRouteTarget: receiptMode.isBooking
+            ? `/checkin/${token}`
+            : `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`,
         qrCodeDataUrl,
         paidAtLabel: new Date(receipt.paidAt).toLocaleString('en-SG', {
             dateStyle: 'medium',
@@ -303,7 +432,7 @@ function buildFallbackPdf(data) {
             const paleSage = '#f3f6f1';
             const muted = '#667266';
             const ink = '#263126';
-            const qrBuffer = await QRCode.toBuffer(data.checkinUrl, {
+            const qrBuffer = await QRCode.toBuffer(data.verificationUrl || data.checkinUrl, {
                 errorCorrectionLevel: 'M',
                 margin: 2,
                 width: 220
@@ -330,7 +459,7 @@ function buildFallbackPdf(data) {
                 ['Customer', receipt.userName],
                 ['Payment', receipt.paymentMethod],
                 ['Date/time', data.paidAtLabel],
-                ['Status', receipt.paymentStatus || receipt.status || 'paid']
+                ['Status', data.isProductPickup ? data.pickupStatusLabel : (receipt.paymentStatus || receipt.status || 'paid')]
             ];
 
             metaRows.forEach(([label, value], index) => {
@@ -381,6 +510,16 @@ function buildFallbackPdf(data) {
             });
 
             const totalY = Math.max(y + 18, 470);
+            if (data.isProductPickup) {
+                doc.fillColor(ink).font('Times-Bold').fontSize(16).text('Pickup details', left, totalY - 24);
+                doc.fillColor(muted).font('Helvetica').fontSize(10).text(
+                    `Fulfilment Method: ${data.fulfilmentLabel}\nPickup Merchant: ${data.pickupMerchantName}\nPickup Status: ${data.pickupStatusLabel}`,
+                    left,
+                    totalY,
+                    { width: 260, lineGap: 4 }
+                );
+            }
+
             doc.roundedRect(left + contentWidth - 210, totalY, 210, 58, 8).fill(sage);
             doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text('TOTAL AMOUNT', left + contentWidth - 190, totalY + 13);
             doc.fillColor(brandGreen).font('Helvetica-Bold').fontSize(22).text(
@@ -392,15 +531,15 @@ function buildFallbackPdf(data) {
 
             const qrTop = totalY + 92;
             doc.roundedRect(left, qrTop, contentWidth, 188, 10).fill(paleSage);
-            doc.fillColor(ink).font('Times-Bold').fontSize(20).text('Check-in QR', left + 24, qrTop + 24);
+            doc.fillColor(ink).font('Times-Bold').fontSize(20).text(data.qrLabel, left + 24, qrTop + 24);
             doc.fillColor(muted).font('Helvetica').fontSize(10).text(
-                'Present this QR code at the merchant counter for receipt verification.',
+                data.qrDescription,
                 left + 24,
                 qrTop + 52,
                 { width: 270 }
             );
             doc.fillColor(muted).font('Helvetica').fontSize(8).text(
-                `Check-in link: ${data.checkinUrl}`,
+                `Verification link: ${data.verificationUrl || data.checkinUrl}`,
                 left + 24,
                 qrTop + 92,
                 { width: 270, lineGap: 2 }
@@ -432,6 +571,14 @@ function checkIn(req, res) {
         });
     }
 
+    if (payload.receiptType === 'order') {
+        return res.render('checkin-success', {
+            title: 'Pickup Verified',
+            receiptId: req.params.id,
+            receiptType: 'product pickup'
+        });
+    }
+
     return res.render('checkin-success', {
         title: 'Check-In Successful',
         receiptId: req.params.id,
@@ -439,8 +586,148 @@ function checkIn(req, res) {
     });
 }
 
+function verifyPickup(req, res) {
+    const receiptId = `order-${req.params.id}`;
+    const payload = verifyPickupToken(req.params.id, req.query.token);
+
+    if (!payload) {
+        return res.status(403).render('pickup-verification', {
+            title: 'Pickup Verification',
+            invalid: true,
+            message: 'Invalid or expired pickup QR.',
+            order: null,
+            token: req.query.token || '',
+            canConfirm: false,
+            alreadyCollected: false,
+            permissionMessage: '',
+            currentUser: req.session.user || null,
+            cartCount: res.locals.cartCount || 0
+        });
+    }
+
+    return Transaction.getPickupVerificationById(req.params.id, (error, order) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Pickup Verification Error',
+                message: 'Pickup details could not be loaded.'
+            });
+        }
+
+        if (!order) {
+            return res.status(404).render('error', {
+                title: 'Order Not Found',
+                message: 'This pickup order could not be found.'
+            });
+        }
+
+        const currentUser = req.session.user || null;
+        const alreadyCollected = isCollectedStatus(order.pickupStatus);
+        const canConfirm = !alreadyCollected
+            && String(order.paymentStatus || '').toLowerCase() === 'paid';
+        const message = req.session.pickupVerificationMessage || '';
+        req.session.pickupVerificationMessage = null;
+
+        return res.render('pickup-verification', {
+            title: 'Pickup Verification',
+            invalid: false,
+            message,
+            order: {
+                ...order,
+                receiptId,
+                pickupStatusLabel: getPickupStatusLabel(order.pickupStatus),
+                paymentStatusLabel: formatStatusLabel(order.paymentStatus || 'paid'),
+                createdAtLabel: formatReceiptDateTime(order.createdAt),
+                collectedAtLabel: formatReceiptDateTime(order.collectedAt),
+                quantityTotal: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+            },
+            token: req.query.token || '',
+            canConfirm,
+            alreadyCollected,
+            permissionMessage: !alreadyCollected && !canConfirm ? 'This order is not paid, so pickup cannot be confirmed.' : '',
+            currentUser,
+            cartCount: res.locals.cartCount || 0
+        });
+    });
+}
+
+function confirmPickup(req, res) {
+    const receiptId = `order-${req.params.id}`;
+    const token = req.body.token || req.query.token || '';
+    const payload = verifyPickupToken(req.params.id, token);
+    const redirectPath = `/pickup-verify/order/${encodeURIComponent(req.params.id)}?token=${encodeURIComponent(token)}`;
+
+    if (!payload) {
+        return res.status(403).render('pickup-verification', {
+            title: 'Pickup Verification',
+            invalid: true,
+            message: 'Invalid or expired pickup QR.',
+            order: null,
+            token,
+            canConfirm: false,
+            alreadyCollected: false,
+            permissionMessage: '',
+            currentUser: req.session.user || null,
+            cartCount: res.locals.cartCount || 0
+        });
+    }
+
+    return Transaction.getPickupVerificationById(req.params.id, (lookupError, order) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Pickup Verification Error',
+                message: 'Pickup details could not be loaded.'
+            });
+        }
+
+        if (!order) {
+            return res.status(404).render('error', {
+                title: 'Order Not Found',
+                message: 'This pickup order could not be found.'
+            });
+        }
+
+        if (String(order.paymentStatus || '').toLowerCase() !== 'paid') {
+            req.session.pickupVerificationMessage = 'This order is not paid, so pickup cannot be confirmed.';
+            return res.redirect(redirectPath);
+        }
+
+        if (isCollectedStatus(order.pickupStatus)) {
+            req.session.pickupVerificationMessage = 'This item has already been collected.';
+            return res.redirect(redirectPath);
+        }
+
+        return Transaction.markPickupCollected(req.params.id, (updateError, result) => {
+            if (updateError) {
+                console.error(updateError);
+                return res.status(500).render('error', {
+                    title: 'Pickup Confirmation Error',
+                    message: 'Pickup could not be confirmed.'
+                });
+            }
+
+            if (!result?.affectedRows) {
+                req.session.pickupVerificationMessage = 'This item has already been collected.';
+                return res.redirect(redirectPath);
+            }
+
+            PurchaseHistory.markPickupCollected(receiptId, (historyError) => {
+                if (historyError) {
+                    console.error(historyError);
+                }
+
+                req.session.pickupVerificationMessage = 'Pickup confirmed successfully.';
+                return res.redirect(redirectPath);
+            });
+        });
+    });
+}
+
 module.exports = {
     showReceipt,
     downloadReceiptPdf,
-    checkIn
+    checkIn,
+    verifyPickup,
+    confirmPickup
 };
