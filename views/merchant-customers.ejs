@@ -16,6 +16,10 @@
             ageValues: [0],
             genderLabels: ['Not set'],
             genderValues: [0],
+            contactMethodLabels: ['Not set'],
+            contactMethodValues: [0],
+            postalDistrictLabels: ['Not set'],
+            postalDistrictValues: [0],
             serviceLabels: ['No service'],
             serviceValues: [0],
             hourLabels: ['No bookings'],
@@ -27,6 +31,10 @@
         ageValues: customerInsights.chartPayload?.ageValues || [0],
         genderLabels: customerInsights.chartPayload?.genderLabels || ['Not set'],
         genderValues: customerInsights.chartPayload?.genderValues || [0],
+        contactMethodLabels: customerInsights.chartPayload?.contactMethodLabels || ['Not set'],
+        contactMethodValues: customerInsights.chartPayload?.contactMethodValues || [0],
+        postalDistrictLabels: customerInsights.chartPayload?.postalDistrictLabels || ['Not set'],
+        postalDistrictValues: customerInsights.chartPayload?.postalDistrictValues || [0],
         serviceLabels: customerInsights.chartPayload?.serviceLabels || ['No service'],
         serviceValues: customerInsights.chartPayload?.serviceValues || [0],
         hourLabels: customerInsights.chartPayload?.hourLabels || ['No bookings'],
@@ -61,6 +69,24 @@
                     </div>
                 </div>
                 <div class="merchant-chart-box small"><canvas id="merchantCustomerAgeChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Contact</p>
+                        <h2>Preferred contact method</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerContactChart"></canvas></div>
+            </article>
+            <article class="merchant-chart-card span-6">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Location</p>
+                        <h2>Postal prefixes</h2>
+                    </div>
+                </div>
+                <div class="merchant-chart-box small"><canvas id="merchantCustomerPostalChart"></canvas></div>
             </article>
             <article class="merchant-chart-card span-6">
                 <div class="merchant-card-heading">
@@ -103,6 +129,7 @@
                                 <strong><%= customer.customerName %></strong>
                                 <span><%= customer.visits %> visit<%= customer.visits === 1 ? '' : 's' %> | $<%= formatCurrency(customer.spend) %></span>
                                 <small><%= customer.customerAge || 'Age not set' %> | <%= customer.customerGender || 'Gender not set' %> | Last: <%= customer.lastBookingDate || 'Not set' %></small>
+                                <small><%= customer.customerPreferredContactMethod || 'Contact preference not set' %> | Postal: <%= customer.customerPostalCode || 'Not set' %></small>
                             </article>
                         <% }) %>
                     </div>
@@ -164,6 +191,24 @@
                 datasets: [{ data: payload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }]
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: chartOptions.plugins }
+        });
+
+        makeChart('merchantCustomerContactChart', {
+            type: 'doughnut',
+            data: {
+                labels: payload.contactMethodLabels,
+                datasets: [{ data: payload.contactMethodValues, backgroundColor: [palette.blue, palette.orange, palette.green] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: chartOptions.plugins }
+        });
+
+        makeChart('merchantCustomerPostalChart', {
+            type: 'bar',
+            data: {
+                labels: payload.postalDistrictLabels,
+                datasets: [{ label: 'Customers', data: payload.postalDistrictValues, backgroundColor: 'rgba(212, 160, 23, 0.28)', borderColor: palette.yellow, borderWidth: 1 }]
+            },
+            options: chartOptions
         });
 
         makeChart('merchantCustomerServiceChart', {

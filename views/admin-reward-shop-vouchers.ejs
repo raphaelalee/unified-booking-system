@@ -30,6 +30,7 @@
         </div>
     <% } %>
     <form class="account-panel account-form service-admin-form" action="/admin/reward-shop/daily-rewards" method="POST">
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <div class="account-panel-header">
             <div>
                 <p class="eyebrow">Daily Points System</p>
@@ -89,6 +90,7 @@
                         <% if (voucher.voucherId) { %>
                             <a class="button secondary full" href="/admin/reward-shop/<%= voucher.id %>/edit">Edit</a>
                             <form action="/admin/reward-shop/<%= voucher.id %>/delete" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <button class="button secondary full danger-button" type="submit">Delete</button>
                             </form>
                         <% } else { %>

@@ -12,6 +12,12 @@ ensureSalonCommissionSchema((error) => {
     }
 });
 
+ensureMerchantProfileSchema((error) => {
+    if (error) {
+        console.error('Merchant profile schema could not be prepared:', error.message || error);
+    }
+});
+
 ensureServiceInventorySchema((error) => {
     if (error) {
         console.error('Service inventory schema could not be prepared:', error.message || error);
@@ -99,6 +105,30 @@ function ensureSalonCommissionSchema(callback) {
             'ALTER TABLE salons ADD COLUMN commission_rate DECIMAL(5,2) NOT NULL DEFAULT 15.00',
             callback
         );
+    });
+}
+
+function ensureMerchantProfileSchema(callback) {
+    db.query('SHOW COLUMNS FROM salons', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('business_category')) alters.push("ADD COLUMN business_category VARCHAR(80) DEFAULT NULL AFTER salon_name");
+        if (!fields.has('uen')) alters.push('ADD COLUMN uen VARCHAR(20) DEFAULT NULL AFTER business_category');
+        if (!fields.has('years_in_business')) alters.push('ADD COLUMN years_in_business INT DEFAULT NULL AFTER uen');
+        if (!fields.has('staff_count')) alters.push('ADD COLUMN staff_count INT DEFAULT NULL AFTER years_in_business');
+
+        if (!alters.length) {
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE salons ${alters.join(', ')}`, callback);
     });
 }
 
@@ -249,6 +279,13 @@ function mapMerchantRows(rows) {
         name: first.salon_name,
         location: first.address || 'No address set',
         description: first.salon_description || '',
+        ownerName: first.owner_name || '',
+        ownerEmail: first.owner_email || '',
+        ownerPhone: first.owner_phone || '',
+        businessCategory: first.business_category || '',
+        uen: first.uen || '',
+        yearsInBusiness: first.years_in_business === null ? '' : Number(first.years_in_business),
+        staffCount: first.staff_count === null ? '' : Number(first.staff_count),
         commissionRate: Number(first.commission_rate || 15),
         category: 'Merchant',
         services: Array.from(servicesById.values())
@@ -263,7 +300,14 @@ function getMerchantByUserId(userId, callback) {
             salons.salon_name,
             salons.address,
             salons.description AS salon_description,
+            salons.business_category,
+            salons.uen,
+            salons.years_in_business,
+            salons.staff_count,
             salons.commission_rate,
+            users.name AS owner_name,
+            users.email AS owner_email,
+            users.phone AS owner_phone,
             services.service_id,
             services.category_id,
             services.service_name,
@@ -276,6 +320,7 @@ function getMerchantByUserId(userId, callback) {
             categories.category_name,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM salons
+        INNER JOIN users ON users.user_id = salons.merchant_id
         LEFT JOIN services ON services.salon_id = salons.salon_id
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
@@ -318,6 +363,13 @@ function getMerchantBySalonId(salonId, callback) {
             salons.salon_name,
             salons.address,
             salons.description AS salon_description,
+            salons.business_category,
+            salons.uen,
+            salons.years_in_business,
+            salons.staff_count,
+            users.name AS owner_name,
+            users.email AS owner_email,
+            users.phone AS owner_phone,
             services.service_id,
             services.category_id,
             services.service_name,
@@ -330,6 +382,7 @@ function getMerchantBySalonId(salonId, callback) {
             categories.category_name,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM salons
+        INNER JOIN users ON users.user_id = salons.merchant_id
         LEFT JOIN services ON services.salon_id = salons.salon_id
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
@@ -376,7 +429,7 @@ function getCategories(callback) {
 
 function getSalons(callback) {
     const sql = `
-        SELECT salons.salon_id, salons.salon_name, salons.address, users.email AS owner_email
+        SELECT salons.salon_id, salons.salon_name, salons.address, salons.business_category, users.email AS owner_email
         FROM salons
         INNER JOIN users ON users.user_id = salons.merchant_id
         ORDER BY salons.salon_name
@@ -896,19 +949,30 @@ function deleteServiceAsAdmin(serviceId, callback) {
 }
 
 function getAdminOverview(callback) {
-    ensureSalonCommissionSchema((schemaError) => {
-        if (schemaError) {
-            callback(schemaError);
+    ensureMerchantProfileSchema((profileSchemaError) => {
+        if (profileSchemaError) {
+            callback(profileSchemaError);
             return;
         }
+
+        ensureSalonCommissionSchema((schemaError) => {
+            if (schemaError) {
+                callback(schemaError);
+                return;
+            }
 
         const sql = `
             SELECT
                 users.user_id AS merchant_user_id,
                 users.name AS owner_name,
                 users.email AS owner_email,
+                users.phone AS owner_phone,
                 salons.salon_id,
                 salons.salon_name,
+                salons.business_category,
+                salons.uen,
+                salons.years_in_business,
+                salons.staff_count,
                 salons.address,
                 salons.description,
                 salons.commission_rate,
@@ -916,11 +980,12 @@ function getAdminOverview(callback) {
             FROM salons
             INNER JOIN users ON users.user_id = salons.merchant_id
             LEFT JOIN services ON services.salon_id = salons.salon_id
-            GROUP BY users.user_id, users.name, users.email, salons.salon_id, salons.salon_name, salons.address, salons.description, salons.commission_rate
+            GROUP BY users.user_id, users.name, users.email, users.phone, salons.salon_id, salons.salon_name, salons.business_category, salons.uen, salons.years_in_business, salons.staff_count, salons.address, salons.description, salons.commission_rate
             ORDER BY salons.salon_id
         `;
 
-        db.query(sql, callback);
+            db.query(sql, callback);
+        });
     });
 }
 
@@ -939,12 +1004,13 @@ function createMerchant(merchantData, callback) {
             }
 
             const userSql = `
-                INSERT INTO users (name, email, password, role, glints_balance)
-                VALUES (?, ?, ?, 'merchant', 0)
+                INSERT INTO users (name, email, phone, password, role, glints_balance)
+                VALUES (?, ?, ?, ?, 'merchant', 0)
             `;
             const userValues = [
                 merchantData.ownerName,
                 merchantData.email,
+                merchantData.ownerPhone || null,
                 merchantData.passwordHash
             ];
 
@@ -957,12 +1023,16 @@ function createMerchant(merchantData, callback) {
                 }
 
                 const salonSql = `
-                    INSERT INTO salons (merchant_id, salon_name, address, description, image_url, commission_rate)
-                    VALUES (?, ?, ?, ?, ?, 15.00)
+                    INSERT INTO salons (merchant_id, salon_name, business_category, uen, years_in_business, staff_count, address, description, image_url, commission_rate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 15.00)
                 `;
                 const salonValues = [
                     userResult.insertId,
                     merchantData.salonName,
+                    merchantData.businessCategory || null,
+                    merchantData.uen || null,
+                    merchantData.yearsInBusiness || null,
+                    merchantData.staffCount || null,
                     merchantData.address,
                     merchantData.description,
                     merchantData.imageUrl || null
@@ -1017,6 +1087,78 @@ function updateCommissionRate(salonId, commissionRate, callback) {
     });
 }
 
+function updateMerchantProfile(userId, merchantData, callback) {
+    return ensureMerchantProfileSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                connection.query(
+                    'UPDATE users SET name = ?, phone = ? WHERE user_id = ? AND role = ?',
+                    [merchantData.ownerName, merchantData.ownerPhone || null, userId, 'merchant'],
+                    (userError) => {
+                        if (userError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(userError);
+                            });
+                        }
+
+                        const salonSql = `
+                            UPDATE salons
+                            SET salon_name = ?,
+                                business_category = ?,
+                                uen = ?,
+                                years_in_business = ?,
+                                staff_count = ?,
+                                address = ?,
+                                description = ?
+                            WHERE merchant_id = ?
+                        `;
+
+                        connection.query(salonSql, [
+                            merchantData.salonName,
+                            merchantData.businessCategory || null,
+                            merchantData.uen || null,
+                            merchantData.yearsInBusiness || null,
+                            merchantData.staffCount || null,
+                            merchantData.address,
+                            merchantData.description || null,
+                            userId
+                        ], (salonError, result) => {
+                            if (salonError || result.affectedRows === 0) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(salonError || new Error('Merchant salon profile was not found.'));
+                                });
+                            }
+
+                            connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError, result);
+                            });
+                        });
+                    }
+                );
+            });
+        });
+    });
+}
+
 module.exports = {
     getMerchantByUserId,
     getMerchantBySalonId,
@@ -1033,5 +1175,6 @@ module.exports = {
     deleteServiceAsAdmin,
     getAdminOverview,
     createMerchant,
-    updateCommissionRate
+    updateCommissionRate,
+    updateMerchantProfile
 };

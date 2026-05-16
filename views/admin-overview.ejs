@@ -5,9 +5,17 @@
     const safeMerchants = Array.isArray(merchants) ? merchants : [];
     const safeSupportSummary = supportSummary || { openCount: 0, pendingRefundCount: 0 };
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
-    const pendingMerchants = safeMerchants.filter((merchant) => Number(merchant.service_count || 0) === 0 || !merchant.address || !merchant.description);
+    const pendingMerchants = safeMerchants.filter((merchant) => {
+        return Number(merchant.service_count || 0) === 0
+            || !merchant.address
+            || !merchant.description
+            || !merchant.business_category
+            || !merchant.uen
+            || !merchant.owner_phone;
+    });
     const pendingBookings = platformBookings.filter((booking) => String(booking.status || '').toLowerCase() === 'pending');
     const checkedInCount = platformBookings.filter((booking) => ['checked_in', 'completed'].includes(String(booking.status || '').toLowerCase())).length;
+    const categoryEntries = Object.entries(merchantReport.merchantCategories || {}).sort((left, right) => right[1] - left[1]);
     const recentActivity = [
         ...platformBookings.slice(0, 4).map((booking) => ({
             title: `Booking #${booking.id} ${booking.status || 'pending'}`,
@@ -60,6 +68,21 @@
                     <a href="/admin/bookings"><span>Pending bookings</span><strong><%= pendingBookings.length %></strong></a>
                     <a href="/admin/platform-health"><span>Validation issues</span><strong><%= validationReport.issues.length %></strong></a>
                 </div>
+            </article>
+            <article class="admin-panel span-4">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Merchant Information</p><h2>Business profile summary</h2></div></div>
+                <div class="admin-health-list">
+                    <a href="/admin/merchants"><span>Complete business profiles</span><strong><%= Math.max(0, merchantReport.totalMerchants - merchantReport.merchantsMissingBusinessProfile.length) %></strong></a>
+                    <a href="/admin/merchants"><span>Need profile completion</span><strong><%= merchantReport.merchantsMissingBusinessProfile.length %></strong></a>
+                    <a href="/admin/merchants"><span>Average staff count</span><strong><%= Number(merchantReport.averageStaffCount || 0).toFixed(1) %></strong></a>
+                </div>
+                <% if (categoryEntries.length) { %>
+                    <div class="admin-log-list">
+                        <% categoryEntries.slice(0, 4).forEach(([category, count]) => { %>
+                            <article><strong><%= category %></strong><span><%= count %> merchant<%= count === 1 ? '' : 's' %></span></article>
+                        <% }) %>
+                    </div>
+                <% } %>
             </article>
         </section>
     </div>

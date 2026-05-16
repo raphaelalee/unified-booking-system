@@ -260,6 +260,7 @@ app.get('/merchant/customers', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/analytics', requireRole('merchant'), merchantDashboardController.showAnalytics);
 app.get('/merchant/support', requireRole('merchant'), merchantDashboardController.showSupport);
 app.get('/merchant/profile', requireRole('merchant'), merchantDashboardController.showProfile);
+app.post('/merchant/profile', requireRole('merchant'), merchantDashboardController.updateProfile);
 app.get('/merchant/schedule', requireRole('merchant'), merchantDashboardController.showSchedule);
 app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
 app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);

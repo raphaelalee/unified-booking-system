@@ -60,6 +60,8 @@ function buildValidationReport({ merchants, bookings, bookingError, userError })
     const merchantsWithoutServices = merchants.filter((merchant) => Number(merchant.service_count || 0) === 0);
     const merchantsMissingAddress = merchants.filter((merchant) => !merchant.address);
     const merchantsMissingDescription = merchants.filter((merchant) => !merchant.description);
+    const merchantsMissingRegistration = merchants.filter((merchant) => !merchant.uen);
+    const merchantsMissingOwnerPhone = merchants.filter((merchant) => !merchant.owner_phone);
 
     if (bookingError) {
         issues.push('Booking database reporting could not be loaded, so fallback booking data is displayed.');
@@ -81,6 +83,14 @@ function buildValidationReport({ merchants, bookings, bookingError, userError })
         issues.push(`${merchantsMissingDescription.length} merchant profile${merchantsMissingDescription.length === 1 ? '' : 's'} ${merchantsMissingDescription.length === 1 ? 'needs' : 'need'} a description.`);
     }
 
+    if (merchantsMissingRegistration.length > 0) {
+        issues.push(`${merchantsMissingRegistration.length} merchant profile${merchantsMissingRegistration.length === 1 ? '' : 's'} ${merchantsMissingRegistration.length === 1 ? 'is' : 'are'} missing a UEN or registration number.`);
+    }
+
+    if (merchantsMissingOwnerPhone.length > 0) {
+        issues.push(`${merchantsMissingOwnerPhone.length} merchant owner contact${merchantsMissingOwnerPhone.length === 1 ? '' : 's'} ${merchantsMissingOwnerPhone.length === 1 ? 'is' : 'are'} missing a phone number.`);
+    }
+
     if (bookings.some((booking) => !booking.status)) {
         issues.push('Some bookings are missing a status value.');
     }
@@ -99,6 +109,19 @@ function buildAdminReports(merchants, bookings, userSummary, bookingError, userE
     const customerCount = Number(userSummary.roleCounts.customer || 0);
     const merchantUserCount = Number(userSummary.roleCounts.merchant || merchants.length || 0);
     const merchantsWithoutServices = merchants.filter((merchant) => Number(merchant.service_count || 0) === 0);
+    const merchantsMissingBusinessProfile = merchants.filter((merchant) => {
+        return !merchant.business_category
+            || !merchant.uen
+            || !merchant.owner_phone
+            || !merchant.address
+            || !merchant.description;
+    });
+    const merchantCategories = merchants.reduce((counts, merchant) => {
+        const key = merchant.business_category || 'Not set';
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+    }, {});
+    const merchantsWithStaffCount = merchants.filter((merchant) => Number.isFinite(Number(merchant.staff_count)) && Number(merchant.staff_count) > 0);
     const topMerchant = merchants.reduce((top, merchant) => {
         return Number(merchant.service_count || 0) > Number(top?.service_count || 0) ? merchant : top;
     }, null);
@@ -126,7 +149,12 @@ function buildAdminReports(merchants, bookings, userSummary, bookingError, userE
             totalMerchants: merchants.length,
             totalServices: serviceCount,
             merchantsWithoutServices,
-            topMerchant
+            topMerchant,
+            merchantsMissingBusinessProfile,
+            averageStaffCount: merchantsWithStaffCount.length
+                ? merchantsWithStaffCount.reduce((sum, merchant) => sum + Number(merchant.staff_count || 0), 0) / merchantsWithStaffCount.length
+                : 0,
+            merchantCategories
         },
         validationReport: buildValidationReport({ merchants, bookings, bookingError, userError })
     };
@@ -136,8 +164,13 @@ function getMerchantForm(body = {}) {
     return {
         ownerName: String(body.ownerName || '').trim(),
         email: String(body.email || '').trim().toLowerCase(),
+        ownerPhone: String(body.ownerPhone || '').trim(),
         password: String(body.password || ''),
         salonName: String(body.salonName || '').trim(),
+        businessCategory: String(body.businessCategory || '').trim(),
+        uen: String(body.uen || '').trim().toUpperCase(),
+        yearsInBusiness: String(body.yearsInBusiness || '').trim(),
+        staffCount: String(body.staffCount || '').trim(),
         address: String(body.address || '').trim(),
         description: String(body.description || '').trim(),
         imageUrl: String(body.imageUrl || '').trim()
@@ -165,12 +198,32 @@ function validateMerchantForm(form) {
         errors.push('Please enter a valid merchant email.');
     }
 
+    if (!/^[689]\d{7}$/.test(form.ownerPhone)) {
+        errors.push('Please enter a valid 8-digit Singapore owner handphone number.');
+    }
+
     if (form.password.length < 8 || !/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
         errors.push('Password must be at least 8 characters and include at least one letter and one number.');
     }
 
     if (form.salonName.length < 2) {
         errors.push('Salon name must be at least 2 characters.');
+    }
+
+    if (form.businessCategory.length < 2) {
+        errors.push('Please enter the business category.');
+    }
+
+    if (!/^[A-Z0-9-]{8,20}$/.test(form.uen)) {
+        errors.push('Please enter a valid UEN or registration number.');
+    }
+
+    if (!Number.isInteger(Number(form.yearsInBusiness)) || Number(form.yearsInBusiness) < 0 || Number(form.yearsInBusiness) > 100) {
+        errors.push('Years in business must be a whole number from 0 to 100.');
+    }
+
+    if (!Number.isInteger(Number(form.staffCount)) || Number(form.staffCount) < 1 || Number(form.staffCount) > 5000) {
+        errors.push('Staff count must be a whole number from 1 to 5000.');
     }
 
     if (form.address.length < 2) {

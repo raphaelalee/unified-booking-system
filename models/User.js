@@ -46,6 +46,14 @@ function ensureCustomerDetailsSchema(callback) {
             alters.push("ADD COLUMN gender ENUM('female','male','non_binary','prefer_not_to_say','other') DEFAULT NULL AFTER birthday");
         }
 
+        if (!fields.has('postal_code')) {
+            alters.push('ADD COLUMN postal_code VARCHAR(6) DEFAULT NULL AFTER gender');
+        }
+
+        if (!fields.has('preferred_contact_method')) {
+            alters.push("ADD COLUMN preferred_contact_method ENUM('email','phone','whatsapp') DEFAULT NULL AFTER postal_code");
+        }
+
         if (alters.length === 0) {
             customerDetailsSchemaReady = true;
             flushCustomerDetailsSchema(null);
@@ -70,8 +78,8 @@ function create(user, callback) {
         }
 
         const sql = `
-            INSERT INTO users (name, email, phone, age, birthday, gender, password, role)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, password, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(sql, [
@@ -81,6 +89,8 @@ function create(user, callback) {
             user.age || null,
             user.birthday || null,
             user.gender || null,
+            user.postalCode || null,
+            user.preferredContactMethod || null,
             user.password,
             user.role || 'customer'
         ], callback);
@@ -113,7 +123,7 @@ function findByEmail(email, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
             FROM users
             WHERE email = ?
             LIMIT 1
@@ -138,7 +148,7 @@ function findById(userId, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
             FROM users
             WHERE user_id = ?
             LIMIT 1
@@ -167,7 +177,7 @@ function findCustomerByPhone(phone, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
             FROM users
             WHERE role = 'customer'
                 AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
@@ -212,7 +222,7 @@ function updateProfile(userId, profile, callback) {
 
         const sql = `
             UPDATE users
-            SET name = ?, email = ?, phone = ?, age = ?, birthday = ?, gender = ?
+            SET name = ?, email = ?, phone = ?, age = ?, birthday = ?, gender = ?, postal_code = ?, preferred_contact_method = ?
             WHERE user_id = ?
         `;
 
@@ -223,6 +233,8 @@ function updateProfile(userId, profile, callback) {
             profile.age || null,
             profile.birthday || null,
             profile.gender || null,
+            profile.postalCode || null,
+            profile.preferredContactMethod || null,
             userId
         ], callback);
     });
@@ -303,7 +315,7 @@ function getDashboardSummary(callback) {
         }
 
         const customerSql = `
-            SELECT user_id, name, email, phone, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, glints_balance, created_at
             FROM users
             WHERE role = 'customer'
             ORDER BY created_at DESC
@@ -327,6 +339,12 @@ function getDashboardSummary(callback) {
         });
     });
 }
+
+ensureCustomerDetailsSchema((error) => {
+    if (error) {
+        console.error('Customer details schema could not be prepared:', error.message || error);
+    }
+});
 
 module.exports = {
     create,

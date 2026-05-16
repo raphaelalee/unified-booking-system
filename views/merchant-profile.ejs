@@ -8,6 +8,12 @@
 
 <section class="section compact merchant-analytics-page">
     <div class="merchant-analytics-shell">
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
         <header class="merchant-dashboard-hero">
             <div>
                 <p class="eyebrow">Profile</p>
@@ -25,8 +31,18 @@
                 <div class="merchant-card-heading"><div><p class="eyebrow">Business Info</p><h2>Merchant details</h2></div></div>
                 <div class="merchant-checkin-metrics">
                     <p><span>Business name</span><strong><%= merchant.name %></strong></p>
+                    <p><span>Category</span><strong><%= merchant.businessCategory || 'Not set' %></strong></p>
+                    <p><span>UEN</span><strong><%= merchant.uen || 'Not set' %></strong></p>
                     <p><span>Location</span><strong><%= merchant.location || merchant.address || 'Not set' %></strong></p>
                     <p><span>Services</span><strong><%= services.length %></strong></p>
+                </div>
+            </article>
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Owner Info</p><h2>Contact details</h2></div></div>
+                <div class="merchant-checkin-metrics">
+                    <p><span>Owner</span><strong><%= merchant.ownerName || 'Not set' %></strong></p>
+                    <p><span>Email</span><strong><%= merchant.ownerEmail || 'Not set' %></strong></p>
+                    <p><span>Phone</span><strong><%= merchant.ownerPhone || 'Not set' %></strong></p>
                 </div>
             </article>
             <article class="merchant-alert-card">
@@ -74,6 +90,54 @@
                     <% } %>
                 <% } %>
             </article>
+        </section>
+
+        <section class="merchant-alert-card">
+            <div class="merchant-card-heading"><div><p class="eyebrow">Maintain Profile</p><h2>Business reporting details</h2></div></div>
+            <form class="account-form" action="/merchant/profile" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <div class="form-grid">
+                    <label>
+                        Owner name
+                        <input type="text" name="ownerName" value="<%= merchant.ownerName || '' %>" required>
+                    </label>
+                    <label>
+                        Owner handphone
+                        <input type="tel" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" maxlength="8" required>
+                    </label>
+                    <label>
+                        Business name
+                        <input type="text" name="salonName" value="<%= merchant.name || '' %>" required>
+                    </label>
+                    <label>
+                        Business category
+                        <input type="text" name="businessCategory" value="<%= merchant.businessCategory || '' %>" required>
+                    </label>
+                    <label>
+                        UEN / registration number
+                        <input type="text" name="uen" value="<%= merchant.uen || '' %>" required>
+                    </label>
+                    <label>
+                        Years in business
+                        <input type="number" name="yearsInBusiness" value="<%= merchant.yearsInBusiness || '' %>" min="0" max="100" required>
+                    </label>
+                    <label>
+                        Staff count
+                        <input type="number" name="staffCount" value="<%= merchant.staffCount || '' %>" min="1" max="5000" required>
+                    </label>
+                    <label>
+                        Address
+                        <input type="text" name="address" value="<%= merchant.location === 'No address set' ? '' : merchant.location %>" required>
+                    </label>
+                    <label class="span-full">
+                        Description
+                        <textarea name="description" rows="4"><%= merchant.description || '' %></textarea>
+                    </label>
+                </div>
+                <div class="account-form-actions">
+                    <button class="button primary" type="submit">Save business profile</button>
+                </div>
+            </form>
         </section>
     </div>
 </section>

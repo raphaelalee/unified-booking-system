@@ -47,6 +47,8 @@ function buildSessionUser(user) {
         age: user.age || '',
         birthday: formatDateInputValue(user.birthday),
         gender: user.gender || '',
+        postalCode: user.postal_code || user.postalCode || '',
+        preferredContactMethod: user.preferred_contact_method || user.preferredContactMethod || '',
         referralCode: user.referral_code || '',
         role: user.role,
         glintsBalance: user.glints_balance || 0
@@ -333,7 +335,9 @@ function getCustomerDetailsForm(body = {}) {
     return {
         age: String(body.age || '').trim(),
         birthday: String(body.birthday || '').trim(),
-        gender: String(body.gender || '').trim()
+        gender: String(body.gender || '').trim(),
+        postalCode: String(body.postalCode || '').trim(),
+        preferredContactMethod: String(body.preferredContactMethod || '').trim()
     };
 }
 
@@ -363,6 +367,18 @@ function validateCustomerDetails(form, { required = false } = {}) {
         }
     }
 
+    if (required || form.postalCode) {
+        if (!/^\d{6}$/.test(form.postalCode)) {
+            errors.push('Please enter a valid 6-digit postal code.');
+        }
+    }
+
+    if (required || form.preferredContactMethod) {
+        if (!['email', 'phone', 'whatsapp'].includes(form.preferredContactMethod)) {
+            errors.push('Please select a valid preferred contact method.');
+        }
+    }
+
     return errors;
 }
 
@@ -370,7 +386,9 @@ function buildCustomerDetailsPayload(form) {
     return {
         age: form.age ? Number(form.age) : null,
         birthday: form.birthday || null,
-        gender: form.gender || null
+        gender: form.gender || null,
+        postalCode: form.postalCode || null,
+        preferredContactMethod: form.preferredContactMethod || null
     };
 }
 
@@ -414,7 +432,9 @@ function setAuthenticatedSession(req, user, message, callback) {
             phone: user.phone || '',
             age: user.age || '',
             birthday: formatDateInputValue(user.birthday),
-            gender: user.gender || ''
+            gender: user.gender || '',
+            postalCode: user.postal_code || user.postalCode || '',
+            preferredContactMethod: user.preferred_contact_method || user.preferredContactMethod || ''
         };
         req.session.profileSuccess = message || 'You are logged in.';
         callback(null);
@@ -838,6 +858,8 @@ function showProfile(req, res) {
             age: accountUser?.age ?? sessionProfile.age ?? req.session.user.age ?? '',
             birthday: formatDateInputValue(accountUser?.birthday ?? sessionProfile.birthday ?? req.session.user.birthday),
             gender: accountUser?.gender || sessionProfile.gender || req.session.user.gender || '',
+            postalCode: accountUser?.postal_code || sessionProfile.postalCode || req.session.user.postalCode || '',
+            preferredContactMethod: accountUser?.preferred_contact_method || sessionProfile.preferredContactMethod || req.session.user.preferredContactMethod || '',
             glintsBalance: Number(accountUser?.glints_balance ?? req.session.user.glintsBalance ?? 0)
         };
 

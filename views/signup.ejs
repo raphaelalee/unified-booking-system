@@ -9,6 +9,7 @@
 <section class="section compact">
     <div class="login-layout">
         <form class="login-form" action="/signup" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div>
                 <p class="eyebrow">Customer Account</p>
                 <h2>Sign up</h2>
@@ -52,6 +53,21 @@
                     <option value="non_binary" <%= form.gender === 'non_binary' ? 'selected' : '' %>>Non-binary</option>
                     <option value="prefer_not_to_say" <%= form.gender === 'prefer_not_to_say' ? 'selected' : '' %>>Prefer not to say</option>
                     <option value="other" <%= form.gender === 'other' ? 'selected' : '' %>>Other</option>
+                </select>
+            </label>
+
+            <label>
+                Postal code
+                <input type="text" name="postalCode" value="<%= form.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" required>
+            </label>
+
+            <label>
+                Preferred contact method
+                <select name="preferredContactMethod" required>
+                    <option value="">Select contact method</option>
+                    <option value="email" <%= form.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
+                    <option value="phone" <%= form.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
+                    <option value="whatsapp" <%= form.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
                 </select>
             </label>
 

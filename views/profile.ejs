@@ -39,6 +39,12 @@
     const profileImageFallback = '/images/vaniday-service-placeholder.svg';
     const profileGenderOptions = typeof genderOptions !== 'undefined' && Array.isArray(genderOptions) ? genderOptions : [];
     const profileGenderLabel = (profileGenderOptions.find((option) => option.value === profile.gender) || {}).label || 'Not set';
+    const profileContactMethodLabels = {
+        email: 'Email',
+        phone: 'Phone call',
+        whatsapp: 'WhatsApp'
+    };
+    const profileContactMethodLabel = profileContactMethodLabels[profile.preferredContactMethod] || 'Not set';
     const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
     const bookingDataFor = (booking) => {
@@ -88,6 +94,10 @@
                 Age: <strong><%= profile.age || 'Not set' %></strong>
                 &middot; Birthday: <strong><%= profile.birthday || 'Not set' %></strong>
                 &middot; Gender: <strong><%= profileGenderLabel %></strong>
+            </p>
+            <p>
+                Postal code: <strong><%= profile.postalCode || 'Not set' %></strong>
+                &middot; Preferred contact: <strong><%= profileContactMethodLabel %></strong>
             </p>
             <% if (isCustomer) { %>
                 <p>VaniGlints: <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</strong></p>
@@ -147,6 +157,14 @@
                 <div>
                     <dt>Gender</dt>
                     <dd><%= profileGenderLabel %></dd>
+                </div>
+                <div>
+                    <dt>Postal code</dt>
+                    <dd><%= profile.postalCode || 'Not set' %></dd>
+                </div>
+                <div>
+                    <dt>Preferred contact</dt>
+                    <dd><%= profileContactMethodLabel %></dd>
                 </div>
                 <% if (isCustomer) { %>
                     <div>
@@ -232,6 +250,21 @@
                             <% profileGenderOptions.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= profile.gender === option.value ? 'selected' : '' %>><%= option.label %></option>
                             <% }) %>
+                        </select>
+                    </label>
+
+                    <label>
+                        Postal code
+                        <input type="text" name="postalCode" value="<%= profile.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}">
+                    </label>
+
+                    <label>
+                        Preferred contact method
+                        <select name="preferredContactMethod">
+                            <option value="">Select contact method</option>
+                            <option value="email" <%= profile.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
+                            <option value="phone" <%= profile.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
+                            <option value="whatsapp" <%= profile.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
                         </select>
                     </label>
                 </div>

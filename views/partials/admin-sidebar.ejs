@@ -6,19 +6,15 @@
             label: 'Users',
             active: isActive(['/admin/merchants']),
             items: [
-                { label: 'Customers', href: '/admin/overview' },
-                { label: 'Merchants', href: '/admin/merchants' },
-                { label: 'Suspended Accounts', href: '/admin/platform-health' }
+                { label: 'Merchant Directory', href: '/admin/merchants' },
+                { label: 'Platform Health', href: '/admin/platform-health' }
             ]
         },
         {
             label: 'Bookings',
             active: isActive(['/admin/bookings']),
             items: [
-                { label: 'Active Bookings', href: '/admin/bookings' },
-                { label: 'Pending Approvals', href: '/admin/bookings' },
-                { label: 'Refund Disputes', href: '/admin/platform-health' },
-                { label: 'Escalated Issues', href: '/admin/platform-health' }
+                { label: 'Booking Operations', href: '/admin/bookings' }
             ]
         },
         {
@@ -26,7 +22,6 @@
             active: isActive(['/admin/services', '/admin/promotions', '/admin/reward-shop', '/admin/rewards-game']),
             items: [
                 { label: 'Services', href: '/admin/services' },
-                { label: 'Categories', href: '/admin/services' },
                 { label: 'Promotions', href: '/admin/promotions' },
                 { label: 'Reward Shop', href: '/admin/reward-shop' },
                 { label: 'Game Rewards', href: '/admin/rewards-game' }
@@ -36,8 +31,7 @@
             label: 'Analytics',
             active: isActive(['/admin/analytics', '/admin/platform-health']),
             items: [
-                { label: 'Revenue Analytics', href: '/admin/analytics' },
-                { label: 'QR Analytics', href: '/admin/analytics' },
+                { label: 'Platform Analytics', href: '/admin/analytics' },
                 { label: 'Platform Health', href: '/admin/platform-health' }
             ]
         },
@@ -45,9 +39,7 @@
             label: 'Moderation',
             active: isActive(['/admin/reviews']),
             items: [
-                { label: 'Reviews', href: '/admin/reviews' },
-                { label: 'Merchant Reports', href: '/admin/reviews' },
-                { label: 'Abuse Monitoring', href: '/admin/platform-health' }
+                { label: 'Review Moderation', href: '/admin/reviews' }
             ]
         },
         {
@@ -55,8 +47,7 @@
             active: isActive(['/admin/audit-trail', '/admin/loyalty']),
             items: [
                 { label: 'Audit Trail', href: '/admin/audit-trail' },
-                { label: 'AI Automation Logs', href: '/admin/audit-trail' },
-                { label: 'Settings', href: '/admin/loyalty' }
+                { label: 'Loyalty Settings', href: '/admin/loyalty' }
             ]
         }
     ];

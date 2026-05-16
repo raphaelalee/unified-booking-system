@@ -40,6 +40,10 @@
             ageValues: [0],
             genderLabels: ['Not set'],
             genderValues: [0],
+            contactMethodLabels: ['Not set'],
+            contactMethodValues: [0],
+            postalDistrictLabels: ['Not set'],
+            postalDistrictValues: [0],
             serviceLabels: ['No service'],
             serviceValues: [0],
             hourLabels: ['No bookings'],
@@ -224,6 +228,7 @@
                                         <strong><%= booking.customerName %></strong>
                                         <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
                                         <small>Age: <%= booking.customerAge || 'Not set' %> | Birthday: <%= booking.customerBirthday || 'Not set' %> | Gender: <%= booking.customerGender || 'Not set' %></small>
+                                        <small><%= booking.customerPreferredContactMethod || 'Contact preference not set' %> | Postal: <%= booking.customerPostalCode || 'Not set' %></small>
                                         <small><%= booking.customerPhone || booking.customerEmail || 'Contact not set' %></small>
                                     </div>
                                     <em><%= ['checked_in', 'completed'].includes(booking.status) ? 'QR checked' : 'QR pending' %></em>

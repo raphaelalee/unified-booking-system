@@ -50,6 +50,7 @@
 
     <div class="game-admin-layout">
         <form class="account-panel account-form" action="/admin/rewards-game/settings" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div class="account-panel-header">
                 <div>
                     <p class="eyebrow">Game Rules</p>
@@ -131,7 +132,8 @@
                     </div>
                     <div class="service-card-actions">
                         <a class="button secondary full" href="/admin/rewards-game/prizes/<%= prize.id %>/edit">Edit</a>
-                        <form action="/admin/rewards-game/prizes/<%= prize.id %>/delete" method="POST">
+                            <form action="/admin/rewards-game/prizes/<%= prize.id %>/delete" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <button class="button secondary full danger-button" type="submit">Delete</button>
                         </form>
                     </div>

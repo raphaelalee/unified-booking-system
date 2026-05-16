@@ -11,6 +11,7 @@
 
 <section class="section compact">
     <form class="login-form service-admin-form" action="/admin/merchants" method="POST">
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <% if (errors.length > 0) { %>
             <div class="notice error">
                 <% errors.forEach((error) => { %>
@@ -30,13 +31,38 @@
         </label>
 
         <label>
+            Owner handphone number
+            <input type="tel" name="ownerPhone" value="<%= form.ownerPhone %>" placeholder="81234567" maxlength="8" required>
+        </label>
+
+        <label>
             Temporary password
-            <input type="password" name="password" value="<%= form.password %>" placeholder="At least 4 characters" required>
+            <input type="password" name="password" value="<%= form.password %>" placeholder="At least 8 characters with a number" required>
         </label>
 
         <label>
             Salon name
             <input type="text" name="salonName" value="<%= form.salonName %>" placeholder="FreshGlow Spa" required>
+        </label>
+
+        <label>
+            Business category
+            <input type="text" name="businessCategory" value="<%= form.businessCategory %>" placeholder="Spa, salon, barber, nails" required>
+        </label>
+
+        <label>
+            UEN / registration number
+            <input type="text" name="uen" value="<%= form.uen %>" placeholder="202612345A" required>
+        </label>
+
+        <label>
+            Years in business
+            <input type="number" name="yearsInBusiness" value="<%= form.yearsInBusiness %>" min="0" max="100" required>
+        </label>
+
+        <label>
+            Staff count
+            <input type="number" name="staffCount" value="<%= form.staffCount %>" min="1" max="5000" required>
         </label>
 
         <label>

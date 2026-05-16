@@ -507,6 +507,16 @@ function formatCustomerGender(value) {
     return labels[String(value || '').trim()] || '';
 }
 
+function formatPreferredContactMethod(value) {
+    const labels = {
+        email: 'Email',
+        phone: 'Phone call',
+        whatsapp: 'WhatsApp'
+    };
+
+    return labels[String(value || '').trim()] || '';
+}
+
 function buildDashboardWeekDays(startDate) {
     const weekDays = [];
 
@@ -586,6 +596,8 @@ function buildAppointmentReport(bookings = []) {
             customerAge: booking.customer_age || booking.customerAge || '',
             customerBirthday: formatCustomerBirthday(booking.customer_birthday || booking.customerBirthday),
             customerGender: formatCustomerGender(booking.customer_gender || booking.customerGender),
+            customerPostalCode: booking.customer_postal_code || booking.customerPostalCode || '',
+            customerPreferredContactMethod: formatPreferredContactMethod(booking.customer_preferred_contact_method || booking.customerPreferredContactMethod),
             amount: Number(booking.service_price || booking.price || 0)
         };
     });
@@ -778,6 +790,8 @@ function buildCustomerInsightReport(bookings = []) {
     const serviceCounts = {};
     const ageBandCounts = {};
     const genderCounts = {};
+    const contactMethodCounts = {};
+    const postalDistrictCounts = {};
     const hourCounts = {};
 
     bookings.forEach((booking) => {
@@ -785,11 +799,16 @@ function buildCustomerInsightReport(bookings = []) {
         const serviceName = booking.serviceName || booking.service_name || 'Service';
         const gender = booking.customerGender || formatCustomerGender(booking.customer_gender) || 'Not set';
         const ageBand = getAgeBand(booking.customerAge || booking.customer_age);
+        const contactMethod = booking.customerPreferredContactMethod || formatPreferredContactMethod(booking.customer_preferred_contact_method) || 'Not set';
+        const postalCode = String(booking.customerPostalCode || booking.customer_postal_code || '').trim();
+        const postalDistrict = postalCode ? `Prefix ${postalCode.slice(0, 2)}` : 'Not set';
         const hour = String(booking.bookingTime || booking.booking_time || '').slice(0, 2);
 
         addCount(serviceCounts, serviceName);
         addCount(ageBandCounts, ageBand);
         addCount(genderCounts, gender);
+        addCount(contactMethodCounts, contactMethod);
+        addCount(postalDistrictCounts, postalDistrict);
         if (hour) {
             addCount(hourCounts, `${hour}:00`);
         }
@@ -800,6 +819,8 @@ function buildCustomerInsightReport(bookings = []) {
             customerPhone: booking.customerPhone || booking.customer_phone || '',
             customerAge: booking.customerAge || booking.customer_age || '',
             customerGender: gender,
+            customerPostalCode: postalCode,
+            customerPreferredContactMethod: contactMethod,
             visits: 0,
             spend: 0,
             lastBookingDate: ''
@@ -847,6 +868,10 @@ function buildCustomerInsightReport(bookings = []) {
             ageValues: topEntriesFromCounts(ageBandCounts, 'Not set').map((entry) => entry[1]),
             genderLabels: topEntriesFromCounts(genderCounts, 'Not set').map((entry) => entry[0]),
             genderValues: topEntriesFromCounts(genderCounts, 'Not set').map((entry) => entry[1]),
+            contactMethodLabels: topEntriesFromCounts(contactMethodCounts, 'Not set').map((entry) => entry[0]),
+            contactMethodValues: topEntriesFromCounts(contactMethodCounts, 'Not set').map((entry) => entry[1]),
+            postalDistrictLabels: topEntriesFromCounts(postalDistrictCounts, 'Not set').map((entry) => entry[0]),
+            postalDistrictValues: topEntriesFromCounts(postalDistrictCounts, 'Not set').map((entry) => entry[1]),
             serviceLabels: topEntriesFromCounts(serviceCounts, 'No service').map((entry) => entry[0]),
             serviceValues: topEntriesFromCounts(serviceCounts, 'No service').map((entry) => entry[1]),
             hourLabels: topEntriesFromCounts(hourCounts, 'No bookings').map((entry) => entry[0]),
@@ -948,6 +973,15 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
 
                             if (!merchant.location && !merchant.address) {
                                 validationIssues.push('Merchant location is not configured yet.');
+                            }
+                            if (!merchant.businessCategory) {
+                                validationIssues.push('Business category is not configured yet.');
+                            }
+                            if (!merchant.uen) {
+                                validationIssues.push('UEN or registration number is not configured yet.');
+                            }
+                            if (!merchant.ownerPhone) {
+                                validationIssues.push('Owner handphone number is not configured yet.');
                             }
                             if (serviceCount === 0) {
                                 validationIssues.push('No services are active. Add a service to start booking customers.');
@@ -1116,6 +1150,66 @@ const showCustomers = renderPortalView('merchant-customers', 'Merchant Customers
 const showAnalytics = renderPortalView('merchant-analytics', 'Merchant Analytics');
 const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
+
+function getMerchantProfileForm(body = {}) {
+    return {
+        ownerName: String(body.ownerName || '').trim(),
+        ownerPhone: String(body.ownerPhone || '').trim(),
+        salonName: String(body.salonName || '').trim(),
+        businessCategory: String(body.businessCategory || '').trim(),
+        uen: String(body.uen || '').trim().toUpperCase(),
+        yearsInBusiness: String(body.yearsInBusiness || '').trim(),
+        staffCount: String(body.staffCount || '').trim(),
+        address: String(body.address || '').trim(),
+        description: String(body.description || '').trim()
+    };
+}
+
+function validateMerchantProfileForm(form) {
+    const errors = [];
+
+    if (form.ownerName.length < 2) errors.push('Owner name must be at least 2 characters.');
+    if (!/^[689]\d{7}$/.test(form.ownerPhone)) errors.push('Please enter a valid 8-digit Singapore owner handphone number.');
+    if (form.salonName.length < 2) errors.push('Business name must be at least 2 characters.');
+    if (form.businessCategory.length < 2) errors.push('Please enter a business category.');
+    if (!/^[A-Z0-9-]{8,20}$/.test(form.uen)) errors.push('Please enter a valid UEN or registration number.');
+    if (!Number.isInteger(Number(form.yearsInBusiness)) || Number(form.yearsInBusiness) < 0 || Number(form.yearsInBusiness) > 100) {
+        errors.push('Years in business must be a whole number from 0 to 100.');
+    }
+    if (!Number.isInteger(Number(form.staffCount)) || Number(form.staffCount) < 1 || Number(form.staffCount) > 5000) {
+        errors.push('Staff count must be a whole number from 1 to 5000.');
+    }
+    if (form.address.length < 2) errors.push('Please enter the business address.');
+
+    return errors;
+}
+
+function updateProfile(req, res) {
+    const form = getMerchantProfileForm(req.body);
+    const errors = validateMerchantProfileForm(form);
+
+    if (errors.length > 0) {
+        req.session.merchantError = errors.join(' ');
+        return res.redirect('/merchant/profile');
+    }
+
+    return MerchantService.updateMerchantProfile(req.session.user.id, {
+        ...form,
+        yearsInBusiness: Number(form.yearsInBusiness),
+        staffCount: Number(form.staffCount)
+    }, (error) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Merchant profile could not be updated. Please try again.';
+            return res.redirect('/merchant/profile');
+        }
+
+        req.session.user.name = form.ownerName;
+        req.session.user.phone = form.ownerPhone;
+        req.session.merchantSuccess = 'Merchant profile updated successfully.';
+        return res.redirect('/merchant/profile');
+    });
+}
 
 function generateQr(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
@@ -2227,6 +2321,7 @@ module.exports = {
     showAnalytics,
     showSupport,
     showProfile,
+    updateProfile,
     showServices,
     generateQr,
     updateBookingStatus,
