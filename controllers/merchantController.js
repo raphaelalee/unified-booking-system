@@ -10,6 +10,7 @@ const PurchaseHistory = require('../models/PurchaseHistory');
 const Loyalty = require('../models/Loyalty');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
+const UserVoucher = require('../models/UserVoucher');
 const User = require('../models/User');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
@@ -2453,6 +2454,7 @@ async function showPayment(req, res) {
         }
 
         const loyalty = await getLoyaltyView(req.session.user.id);
+        const availableVouchers = await getActiveBookingVouchers(req.session.user.id);
 
         return res.render('payment', {
             title: 'Payment',
@@ -2471,6 +2473,8 @@ async function showPayment(req, res) {
             deliveryUnit: '',
             deliveryPostal: '',
             deliveryPhone: '',
+            selectedVoucherId: '',
+            availableVouchers,
             loyalty,
             error: null
         });
@@ -2493,6 +2497,7 @@ function getPaymentPayload(body = {}) {
         cartCheckout: body.cartCheckout === 'true',
         checkoutId: body.checkoutId || '',
         bookingId: body.bookingId || '',
+        selectedVoucherId: body.selectedVoucherId || '',
         selectedItemIds: String(body.selectedItemIds || ''),
         useCashback: body.redeemCashback === 'on' || body.useCashback === 'true'
     };
@@ -2566,6 +2571,8 @@ function renderPaymentForm(res, payment, error = null) {
         deliveryUnit: '',
         deliveryPostal: '',
         deliveryPhone: '',
+        selectedVoucherId: payment.selectedVoucherId || '',
+        availableVouchers: payment.availableVouchers || [],
         loyalty: null,
         ...payment,
         error
@@ -2584,6 +2591,67 @@ function getLoyaltyView(userId) {
             resolve(loyalty);
         });
     });
+}
+
+function getActiveBookingVouchers(userId) {
+    return new Promise((resolve) => {
+        UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
+            if (error) {
+                console.error(error);
+                resolve([]);
+                return;
+            }
+
+            resolve(vouchers.filter((voucher) => voucher.bookingOnly));
+        });
+    });
+}
+
+async function applyVoucherRedemption(req, payment) {
+    const selectedVoucherId = Number(req.body.selectedVoucherId || payment.selectedVoucherId || 0);
+
+    if (!selectedVoucherId) {
+        return payment;
+    }
+
+    const voucher = await new Promise((resolve, reject) => {
+        UserVoucher.findByIdForUser(selectedVoucherId, req.session.user.id, (error, row) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(row);
+        });
+    });
+
+    await new Promise((resolve, reject) => {
+        UserVoucher.validateForBooking(voucher, payment, (error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve();
+        });
+    });
+
+    const voucherDiscount = Math.min(Number(voucher.remainingValue || 0), Number(payment.amount || 0));
+
+    if (voucherDiscount <= 0) {
+        return payment;
+    }
+
+    return {
+        ...payment,
+        selectedVoucherId,
+        voucherId: voucher.id,
+        voucherCode: voucher.code,
+        voucherTitle: voucher.title,
+        originalAmount: Number(payment.originalAmount || payment.amount || 0),
+        voucherDiscount,
+        amount: Math.max(0, Math.round((Number(payment.amount || 0) - voucherDiscount) * 100) / 100)
+    };
 }
 
 async function applyCashbackRedemption(req, payment) {
@@ -2742,6 +2810,9 @@ function savePaidReceipt(req, payment, paymentMethod) {
         items: payment.items || [],
         totalAmount: Number(payment.amount || 0),
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
+        voucherDiscount: Number(payment.voucherDiscount || 0),
+        voucherCode: payment.voucherCode || '',
+        voucherTitle: payment.voucherTitle || '',
         cashbackRedeemed: Number(payment.cashbackRedeemed || 0),
         paymentMethod,
         paymentStatus: 'paid',
@@ -2812,6 +2883,12 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
         });
     }
 
+    if (Number(paidPayment.voucherId || 0) > 0) {
+        await new Promise((resolve, reject) => {
+            UserVoucher.markRedeemed(paidPayment.voucherId, (error) => error ? reject(error) : resolve());
+        });
+    }
+
     applyPaymentSideEffects(req, payment);
     await savePaidReceipt(req, paidPayment, paymentMethod);
     await notifyPaymentCompleted(req, paidPayment, transactionId);
@@ -2825,9 +2902,18 @@ async function confirmPayment(req, res) {
 
     try {
         trustedPayment = await buildTrustedPayment(req, payment);
+        if (trustedPayment.kind === 'booking') {
+            trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
+            trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
+        }
+        trustedPayment = await applyVoucherRedemption(req, trustedPayment);
         trustedPayment = await applyCashbackRedemption(req, trustedPayment);
     } catch (error) {
-        return renderPaymentForm(res, payment, error.message);
+        const fallbackPayment = trustedPayment || {
+            ...payment,
+            availableVouchers: payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : []
+        };
+        return renderPaymentForm(res, fallbackPayment, error.message);
     }
 
     if (!Number.isFinite(trustedPayment.amount) || trustedPayment.amount < 0) {

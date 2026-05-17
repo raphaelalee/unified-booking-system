@@ -9,10 +9,16 @@
 <section class="section compact payment-page">
     <div class="payment-layout">
         <%
-            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
-                ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0))
+            const paymentVoucherList = Array.isArray(availableVouchers) ? availableVouchers : [];
+            const paymentSelectedVoucherId = String(selectedVoucherId || '');
+            const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentSelectedVoucherId) || null;
+            const paymentVoucherEstimate = paymentSelectedVoucher
+                ? Math.min(Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0), Number(amount || 0))
                 : 0;
-            const paymentAmountDue = Math.max(Number(amount || 0) - paymentCashbackEstimate, 0);
+            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
+                ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate, 0))
+                : 0;
+            const paymentAmountDue = Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentCashbackEstimate, 0);
             const fulfilmentLabel = fulfilment === 'delivery'
                 ? 'Delivery'
                 : fulfilment === 'pickup'
@@ -52,6 +58,25 @@
                     <p class="payment-fulfilment-pill"><%= fulfilmentLabel %></p>
                 <% } %>
             </div>
+
+            <% if (paymentVoucherList.length > 0) { %>
+                <div class="loyalty-redemption-card payment-cashback-card">
+                    <label>
+                        <span>
+                            <strong>Use booking voucher</strong>
+                            <small>Referral and reward-shop vouchers appear here for eligible bookings.</small>
+                        </span>
+                        <select name="selectedVoucherId">
+                            <option value="">No voucher</option>
+                            <% paymentVoucherList.forEach((voucher) => { %>
+                                <option value="<%= voucher.id %>" <%= String(voucher.id) === paymentSelectedVoucherId ? 'selected' : '' %>>
+                                    <%= voucher.title %> (<%= voucher.code %>) - $<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </label>
+                </div>
+            <% } %>
 
             <% if (typeof cartCheckout !== 'undefined' && cartCheckout && typeof useCashback !== 'undefined' && useCashback) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
@@ -184,6 +209,9 @@
             <% } %>
             <div class="cart-totals">
                 <p><span>Subtotal</span><strong>$<%= Number(amount).toFixed(2) %></strong></p>
+                <% if (paymentVoucherEstimate > 0) { %>
+                    <p><span>Voucher</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
+                <% } %>
                 <% if (paymentCashbackEstimate > 0) { %>
                     <p><span>Cashback</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                 <% } %>

@@ -119,6 +119,13 @@ function getAll(callback) {
 }
 
 function findById(voucherId, callback) {
+    const defaultVoucher = DEFAULT_REWARD_VOUCHERS.find((voucher) => String(voucher.id) === String(voucherId));
+
+    if (defaultVoucher) {
+        callback(null, defaultVoucher);
+        return;
+    }
+
     const sql = `
         SELECT voucher_id, glints_cost, voucher_value, title, detail, status, sort_order, created_at, updated_at
         FROM reward_shop_vouchers

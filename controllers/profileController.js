@@ -1,6 +1,7 @@
 const db = require('../db');
 const Booking = require('../models/Booking');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const Review = require('../models/Review');
 
 function queryRows(sql, values = []) {
     return new Promise((resolve, reject) => {
@@ -37,6 +38,48 @@ function formatHistoryDate(value) {
     });
 }
 
+function normalizeReviewRating(value) {
+    const rating = Number(value);
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        return null;
+    }
+
+    return rating;
+}
+
+function isCompletedProductOrder(entry = {}) {
+    const deliveryStatus = String(entry.deliveryStatus || '').toLowerCase();
+    const pickupStatus = String(entry.pickupStatus || '').toLowerCase();
+
+    return deliveryStatus === 'delivered' || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
+}
+
+function setProfileError(req, message) {
+    req.session.profileError = message;
+}
+
+function setProfileSuccess(req, message) {
+    req.session.profileSuccess = message;
+}
+
+function parseProductHistoryItems(value) {
+    return String(value || '')
+        .split('||')
+        .map((chunk) => chunk.trim())
+        .filter(Boolean)
+        .map((chunk) => {
+            const [productId, name, quantity, merchantId] = chunk.split('::');
+            return {
+                productId: Number(productId || 0),
+                serviceId: Number(productId || 0),
+                name: name || 'Product',
+                quantity: Number(quantity || 1),
+                merchantId: Number(merchantId || 0)
+            };
+        });
+}
+
 function normalizeFilter(filter) {
     if (filter === 'bookings' || filter === 'products') {
         return filter;
@@ -59,6 +102,7 @@ function getSessionHistory(req) {
                 id: receipt.displayId || receipt.id,
                 receiptId: receipt.id,
                 type: isBooking ? 'booking' : 'product',
+                items: Array.isArray(receipt.items) ? receipt.items : [],
                 itemNames: (receipt.items || [])
                     .map((item) => {
                         const quantity = Number(item.quantity || 1);
@@ -68,6 +112,9 @@ function getSessionHistory(req) {
                 totalAmount: Number(receipt.totalAmount || 0),
                 paymentMethod: receipt.paymentMethod || 'paid',
                 paymentStatus: receipt.paymentStatus || 'paid',
+                fulfilment: receipt.fulfilment || '',
+                deliveryStatus: receipt.deliveryStatus || 'processing',
+                pickupStatus: receipt.pickupStatus || '',
                 createdAt,
                 createdAtLabel: formatHistoryDate(createdAt),
                 source: 'session'
@@ -181,9 +228,12 @@ async function getProductHistory(userId) {
             transactions.transaction_id AS id,
             'product' AS type,
             GROUP_CONCAT(CONCAT(products.name, ' x', order_items.quantity) ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
+            GROUP_CONCAT(CONCAT(order_items.product_id, '::', products.name, '::', order_items.quantity, '::', COALESCE(products.salon_id, '')) ORDER BY order_items.order_item_id SEPARATOR '||') AS item_payload,
             transactions.total_amount,
             transactions.payment_method,
             transactions.payment_status,
+            transactions.delivery_status,
+            transactions.pickup_status,
             transactions.created_at
         FROM transactions
         INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
@@ -194,6 +244,8 @@ async function getProductHistory(userId) {
             transactions.total_amount,
             transactions.payment_method,
             transactions.payment_status,
+            transactions.delivery_status,
+            transactions.pickup_status,
             transactions.created_at
         ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
     `;
@@ -205,9 +257,12 @@ async function getProductHistory(userId) {
         receiptId: `order-${row.id}`,
         type: 'product',
         itemNames: row.item_names || 'Product order',
+        items: parseProductHistoryItems(row.item_payload),
         totalAmount: Number(row.total_amount || 0),
         paymentMethod: row.payment_method || 'card',
         paymentStatus: row.payment_status || 'paid',
+        deliveryStatus: row.delivery_status || 'processing',
+        pickupStatus: row.pickup_status || '',
         createdAt: row.created_at,
         createdAtLabel: formatHistoryDate(row.created_at)
     }));
@@ -226,9 +281,13 @@ function getPersistentHistory(userId) {
                 receiptId: row.receipt_id,
                 type: row.purchase_type === 'booking' ? 'booking' : 'product',
                 itemNames: row.item_names,
+                items: PurchaseHistory.mapReceipt(row)?.items || [],
                 totalAmount: Number(row.total_amount || 0),
                 paymentMethod: row.payment_method || 'paid',
                 paymentStatus: row.payment_status || 'paid',
+                fulfilment: row.fulfilment || '',
+                deliveryStatus: row.delivery_status || 'processing',
+                pickupStatus: row.pickup_status || '',
                 createdAt: row.created_at,
                 createdAtLabel: formatHistoryDate(row.created_at),
                 source: 'persistent'
@@ -275,23 +334,63 @@ async function showHistory(req, res) {
             products,
             [...persistentHistory, ...sessionHistory].filter((row) => row.type === 'product')
         );
-        const allHistory = [...mergedBookings, ...mergedProducts].sort((left, right) => {
+        const productReceiptIds = mergedProducts.map((row) => row.receiptId).filter(Boolean);
+        const productReviews = await new Promise((resolve, reject) => {
+            Review.getByReceiptIds(productReceiptIds, (reviewError, rows = []) => {
+                if (reviewError) {
+                    reject(reviewError);
+                    return;
+                }
+
+                resolve(rows);
+            });
+        });
+        const productReviewMap = productReviews.reduce((map, review) => {
+            map[`${review.receiptId}:${review.productId}`] = review;
+            return map;
+        }, {});
+        const enrichedProducts = mergedProducts.map((entry) => {
+            const items = Array.isArray(entry.items) ? entry.items : [];
+            const reviewable = isCompletedProductOrder(entry);
+
+            return {
+                ...entry,
+                reviewable,
+                items: items.map((item) => {
+                    const productId = Number(item.serviceId || item.productId || 0);
+                    const reviewKey = `${entry.receiptId}:${productId}`;
+                    return {
+                        ...item,
+                        productId,
+                        review: productReviewMap[reviewKey] || null
+                    };
+                })
+            };
+        });
+        const allHistory = [...mergedBookings, ...enrichedProducts].sort((left, right) => {
             return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
         });
         const history = filter === 'bookings'
             ? mergedBookings
             : filter === 'products'
-                ? mergedProducts
+                ? enrichedProducts
                 : allHistory;
+
+        const success = req.session.profileSuccess || null;
+        const error = req.session.profileError || null;
+        req.session.profileSuccess = null;
+        req.session.profileError = null;
 
         return res.render('history', {
             title: 'Purchase History',
             history,
             activeFilter: filter,
+            success,
+            error,
             counts: {
                 all: allHistory.length,
                 bookings: mergedBookings.length,
-                products: mergedProducts.length
+                products: enrichedProducts.length
             }
         });
     } catch (error) {
@@ -303,6 +402,91 @@ async function showHistory(req, res) {
     }
 }
 
+function submitProductReview(req, res) {
+    const receiptId = String(req.params.receiptId || '').trim();
+    const productId = Number(req.params.productId);
+    const userId = req.session.user?.id;
+    const rating = normalizeReviewRating(req.body.rating);
+    const comment = String(req.body.comment || '').trim().slice(0, 800);
+
+    if (!receiptId || !userId || !Number.isInteger(productId) || productId <= 0) {
+        setProfileError(req, 'The selected product purchase could not be found.');
+        return res.redirect('/profile/history?type=products');
+    }
+
+    if (!rating) {
+        setProfileError(req, 'Please choose a rating from 1 to 5 stars.');
+        return res.redirect('/profile/history?type=products');
+    }
+
+    const imageUpload = req.files?.reviewImage?.[0] || null;
+    const videoUpload = req.files?.reviewVideo?.[0] || null;
+    const imagePath = imageUpload ? `/uploads/reviews/${imageUpload.filename}` : '';
+    const videoPath = videoUpload ? `/uploads/reviews/${videoUpload.filename}` : '';
+
+    return PurchaseHistory.getByReceiptId(receiptId, userId, (receiptError, row) => {
+        if (receiptError) {
+            console.error(receiptError);
+            setProfileError(req, 'That purchase could not be loaded.');
+            return res.redirect('/profile/history?type=products');
+        }
+
+        const receipt = PurchaseHistory.mapReceipt(row);
+
+        if (!receipt || receipt.type !== 'order') {
+            setProfileError(req, 'That purchase could not be found on your account.');
+            return res.redirect('/profile/history?type=products');
+        }
+
+        if (!isCompletedProductOrder(receipt)) {
+            setProfileError(req, 'Product reviews can only be submitted after delivery or pickup is completed.');
+            return res.redirect('/profile/history?type=products');
+        }
+
+        const item = (receipt.items || []).find((entry) => Number(entry.serviceId || entry.productId) === productId);
+
+        if (!item) {
+            setProfileError(req, 'That product was not found in this order.');
+            return res.redirect('/profile/history?type=products');
+        }
+
+        return Review.findByReceiptAndProduct(receiptId, productId, (reviewLookupError, existingReview) => {
+            if (reviewLookupError) {
+                console.error(reviewLookupError);
+                setProfileError(req, 'Your review could not be checked.');
+                return res.redirect('/profile/history?type=products');
+            }
+
+            if (existingReview) {
+                setProfileError(req, 'You have already submitted a review for this product in this order.');
+                return res.redirect('/profile/history?type=products');
+            }
+
+            return Review.create({
+                reviewType: 'product',
+                receiptId,
+                userId,
+                merchantId: Number(item.merchantId || receipt.pickupMerchantId || 0),
+                productId,
+                rating,
+                comment,
+                imagePath,
+                videoPath
+            }, (createError) => {
+                if (createError) {
+                    console.error(createError);
+                    setProfileError(req, 'Your product review could not be saved.');
+                    return res.redirect('/profile/history?type=products');
+                }
+
+                setProfileSuccess(req, `Review submitted successfully for ${item.name || 'this product'}.`);
+                return res.redirect('/profile/history?type=products');
+            });
+        });
+    });
+}
+
 module.exports = {
-    showHistory
+    showHistory,
+    submitProductReview
 };

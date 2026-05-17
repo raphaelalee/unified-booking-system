@@ -61,7 +61,7 @@
             <% } %>
         </div>
 
-        <form class="support-reply-form" action="/help-center/requests/<%= request.id %>/replies" method="POST" enctype="multipart/form-data" data-support-reply-form>
+        <form class="support-reply-form" action="/help-center/requests/<%= request.id %>/replies?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data" data-support-reply-form>
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <input type="hidden" name="responseType" value="json">
             <label>

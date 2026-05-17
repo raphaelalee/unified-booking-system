@@ -7,6 +7,7 @@ const Merchant = require('../models/Merchant');
 const Review = require('../models/Review');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
+const UserVoucher = require('../models/UserVoucher');
 const SupportRequest = require('../models/SupportRequest');
 const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
@@ -113,6 +114,56 @@ function buildCustomerReferral(member, referralCode, stats = {}) {
     };
 }
 
+function buildReferralVoucherStatus(accountUser, vouchers = []) {
+    const usedReferralCode = Boolean(accountUser?.referred_by_code);
+    const referralVoucher = vouchers.find((voucher) => String(voucher.sourceType || '').toLowerCase() === 'referral');
+
+    if (referralVoucher && referralVoucher.status === 'active' && Number(referralVoucher.remainingValue || 0) > 0) {
+        return {
+            tone: 'success',
+            message: `Referral voucher active: ${referralVoucher.title} (${referralVoucher.code}) is ready in your rewards vouchers.`
+        };
+    }
+
+    if (referralVoucher) {
+        return {
+            tone: 'muted',
+            message: `Referral voucher issued earlier: ${referralVoucher.title} (${referralVoucher.code}) has already been used or is no longer active.`
+        };
+    }
+
+    if (usedReferralCode) {
+        return {
+            tone: 'warning',
+            message: 'This account used a referral code, but there is no referral voucher in your wallet. If this was an older signup before the voucher flow was added, it was not backfilled automatically.'
+        };
+    }
+
+    return {
+        tone: 'muted',
+        message: 'This account was not created with someone else’s referral code.'
+    };
+}
+
+function ensureReferralVoucherForExistingAccount(accountUser, vouchers = [], callback) {
+    const usedReferralCode = String(accountUser?.referred_by_code || '').trim();
+    const existingReferralVoucher = vouchers.find((voucher) => String(voucher.sourceType || '').toLowerCase() === 'referral');
+
+    if (!usedReferralCode || existingReferralVoucher) {
+        callback(null, vouchers);
+        return;
+    }
+
+    UserVoucher.issueReferralVoucher(accountUser.user_id, usedReferralCode, (error) => {
+        if (error) {
+            callback(error, vouchers);
+            return;
+        }
+
+        UserVoucher.getByUserId(accountUser.user_id, callback);
+    });
+}
+
 function mapWalletHistoryRow(row) {
     return {
         id: row.receipt_id.replace(/^order-/, ''),
@@ -139,7 +190,9 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let cancelledBookings = [];
     let walletHistory = [];
     let reviewableBookings = [];
+    let reviewedBookings = [];
     let bookingAvailability = {};
+    let userVouchers = [];
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -162,12 +215,15 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                 member,
                 loyalty,
                 walletHistory,
+                userVouchers,
                 referral: buildCustomerReferral(member, referralCode, referralStats),
+                referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
                 upcomingBookings,
                 pastBookings,
                 cancelledBookings,
                 bookingAvailability,
-                reviewableBookings
+                reviewableBookings,
+                reviewedBookings
             };
 
             if (accountUser.referral_code) {
@@ -198,108 +254,123 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
             return;
         }
 
-        const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
-        walletHistory = rows.map(mapWalletHistoryRow);
-        let index = 0;
-
-        function awardNext() {
-            if (index >= receipts.length) {
-                loadWallet();
-                return;
+        UserVoucher.getByUserId(accountUser.user_id, (voucherError, vouchers = []) => {
+            if (voucherError) {
+                console.error(voucherError);
             }
-
-            const receipt = receipts[index];
-            index += 1;
-            Loyalty.awardForReceipt(receipt, (awardError) => {
-                if (awardError) {
-                    console.error(awardError);
+            
+            ensureReferralVoucherForExistingAccount(accountUser, vouchers, (backfillError, hydratedVouchers = vouchers) => {
+                if (backfillError) {
+                    console.error(backfillError);
                 }
 
-                awardNext();
-            });
-        }
+                userVouchers = hydratedVouchers;
 
-        Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
-            if (bookingError) {
-                console.error(bookingError);
-                awardNext();
-                return;
-            }
+                const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
+                walletHistory = rows.map(mapWalletHistoryRow);
+                let index = 0;
 
-            const supportByBookingId = {};
-            const supportIssueTypes = new Set([
-                'booking_refund',
-                'refund_dispute',
-                'merchant_rejection',
-                'payment_issue',
-                'technical_issue'
-            ]);
-
-            const continueWithSupport = (supportRequests = []) => {
-                supportRequests.forEach((request) => {
-                    if (request.targetType !== 'booking' || !supportIssueTypes.has(request.requestType)) {
+                function awardNext() {
+                    if (index >= receipts.length) {
+                        loadWallet();
                         return;
                     }
 
-                    supportByBookingId[String(request.targetId)] = request;
-                });
-
-                upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
-                cancelledBookings = bookings
-                    .filter((booking) => String(booking.status || '').toLowerCase() === 'cancelled')
-                    .map((booking) => ({
-                        ...booking,
-                        supportEscalation: supportByBookingId[String(booking.id)] || null
-                    }));
-                pastBookings = bookings.filter((booking) => (
-                    booking.booking_group === 'past'
-                    && String(booking.status || '').toLowerCase() !== 'cancelled'
-                ));
-                const bookingIds = pastBookings.map((booking) => booking.id);
-
-                Review.getByBookingIds(bookingIds, (reviewError, reviews = []) => {
-                    if (reviewError) {
-                        console.error(reviewError);
-                    } else {
-                        const reviewMap = reviews.reduce((map, review) => {
-                            map[String(review.bookingId)] = review;
-                            return map;
-                        }, {});
-
-                        pastBookings = pastBookings.map((booking) => ({
-                            ...booking,
-                            review: reviewMap[String(booking.id)] || null
-                        }));
-                    }
-
-                    reviewableBookings = pastBookings.filter((booking) => (
-                        ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
-                    ));
-                    pastBookings = pastBookings.filter((booking) => !(
-                        ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
-                    ));
-
-                    const upcomingIds = upcomingBookings.map((booking) => booking.id);
-                    Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
-                        if (availabilityError) {
-                            console.error(availabilityError);
-                        } else {
-                            bookingAvailability = availabilityMap;
+                    const receipt = receipts[index];
+                    index += 1;
+                    Loyalty.awardForReceipt(receipt, (awardError) => {
+                        if (awardError) {
+                            console.error(awardError);
                         }
 
                         awardNext();
                     });
-                });
-            };
-
-            SupportRequest.getForCustomer(accountUser.user_id, (supportError, supportRequests = []) => {
-                if (supportError) {
-                    console.error(supportError);
-                    continueWithSupport([]);
-                    return;
                 }
 
-                continueWithSupport(supportRequests);
+                Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
+                    if (bookingError) {
+                        console.error(bookingError);
+                        awardNext();
+                        return;
+                    }
+
+                    const supportByBookingId = {};
+                    const supportIssueTypes = new Set([
+                        'booking_refund',
+                        'refund_dispute',
+                        'merchant_rejection',
+                        'payment_issue',
+                        'technical_issue'
+                    ]);
+
+                    const continueWithSupport = (supportRequests = []) => {
+                        supportRequests.forEach((request) => {
+                            if (request.targetType !== 'booking' || !supportIssueTypes.has(request.requestType)) {
+                                return;
+                            }
+
+                            supportByBookingId[String(request.targetId)] = request;
+                        });
+
+                        upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
+                        cancelledBookings = bookings
+                            .filter((booking) => String(booking.status || '').toLowerCase() === 'cancelled')
+                            .map((booking) => ({
+                                ...booking,
+                                supportEscalation: supportByBookingId[String(booking.id)] || null
+                            }));
+                        pastBookings = bookings.filter((booking) => (
+                            booking.booking_group === 'past'
+                            && String(booking.status || '').toLowerCase() !== 'cancelled'
+                        ));
+                        const bookingIds = pastBookings.map((booking) => booking.id);
+
+                        Review.getByBookingIds(bookingIds, (reviewError, reviews = []) => {
+                            if (reviewError) {
+                                console.error(reviewError);
+                            } else {
+                                const reviewMap = reviews.reduce((map, review) => {
+                                    map[String(review.bookingId)] = review;
+                                    return map;
+                                }, {});
+
+                                pastBookings = pastBookings.map((booking) => ({
+                                    ...booking,
+                                    review: reviewMap[String(booking.id)] || null
+                                }));
+                            }
+
+                            reviewedBookings = pastBookings.filter((booking) => booking.review);
+                            reviewableBookings = pastBookings.filter((booking) => (
+                                ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                            ));
+                            pastBookings = pastBookings.filter((booking) => !booking.review && !(
+                                ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                            ));
+
+                            const upcomingIds = upcomingBookings.map((booking) => booking.id);
+                            Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
+                                if (availabilityError) {
+                                    console.error(availabilityError);
+                                } else {
+                                    bookingAvailability = availabilityMap;
+                                }
+
+                                awardNext();
+                            });
+                        });
+                    };
+
+                    SupportRequest.getForCustomer(accountUser.user_id, (supportError, supportRequests = []) => {
+                        if (supportError) {
+                            console.error(supportError);
+                            continueWithSupport([]);
+                            return;
+                        }
+
+                        continueWithSupport(supportRequests);
+                    });
+                });
             });
         });
     });
@@ -314,12 +385,15 @@ function getEmptyCustomerExtras() {
         member: buildMember(0),
         loyalty: null,
         walletHistory: [],
+        userVouchers: [],
         referral: null,
+        referralVoucherStatus: null,
         upcomingBookings: [],
         pastBookings: [],
         cancelledBookings: [],
         bookingAvailability: {},
-        reviewableBookings: []
+        reviewableBookings: [],
+        reviewedBookings: []
     };
 }
 
@@ -829,9 +903,16 @@ function signupUser(req, res) {
                         return User.setReferredByCode(result.insertId, enteredReferralCode, (trackReferralError) => {
                             if (trackReferralError) {
                                 console.error(trackReferralError);
+                                return finishSignup();
                             }
 
-                            return finishSignup();
+                            return UserVoucher.issueReferralVoucher(result.insertId, enteredReferralCode, (voucherError) => {
+                                if (voucherError) {
+                                    console.error(voucherError);
+                                }
+
+                                return finishSignup();
+                            });
                         });
                     });
                 });
@@ -890,12 +971,15 @@ function showProfile(req, res) {
                 member: customerExtras.member,
                 loyalty: customerExtras.loyalty,
                 walletHistory: customerExtras.walletHistory,
+                userVouchers: customerExtras.userVouchers,
                 referral: customerExtras.referral,
+                referralVoucherStatus: customerExtras.referralVoucherStatus,
                 upcomingBookings: customerExtras.upcomingBookings,
                 pastBookings: customerExtras.pastBookings,
                 cancelledBookings: customerExtras.cancelledBookings,
                 bookingAvailability: customerExtras.bookingAvailability,
                 reviewableBookings: customerExtras.reviewableBookings,
+                reviewedBookings: customerExtras.reviewedBookings,
                 isCustomer,
                 genderOptions,
                 dashboardPath: getDashboardPath(req.session.user.role),
@@ -952,24 +1036,31 @@ function showRewardShop(req, res) {
                     console.error(voucherError);
                 }
 
-                const offers = (voucherError ? RewardVoucher.DEFAULT_REWARD_VOUCHERS : voucherOffers).map((offer) => ({
-                    ...offer,
-                    canRedeem: glintsBalance >= offer.glintsCost,
-                    remaining: Math.max(offer.glintsCost - glintsBalance, 0)
-                }));
-                const success = req.session.rewardShopSuccess || null;
-                const error = req.session.rewardShopError || null;
-                req.session.rewardShopSuccess = null;
-                req.session.rewardShopError = null;
+                return UserVoucher.getActiveForUser(req.session.user.id, (ownedVoucherError, ownedVouchers = []) => {
+                    if (ownedVoucherError) {
+                        console.error(ownedVoucherError);
+                    }
 
-                return res.render('reward-shop', {
-                    title: 'Reward Shop',
-                    glintsBalance,
-                    offers,
-                    success,
-                    error,
-                    rewardWallet,
-                    dailyRewards: getDailyRewardTrack(rewardWallet)
+                    const offers = (voucherError ? RewardVoucher.DEFAULT_REWARD_VOUCHERS : voucherOffers).map((offer) => ({
+                        ...offer,
+                        canRedeem: glintsBalance >= offer.glintsCost,
+                        remaining: Math.max(offer.glintsCost - glintsBalance, 0)
+                    }));
+                    const success = req.session.rewardShopSuccess || null;
+                    const error = req.session.rewardShopError || null;
+                    req.session.rewardShopSuccess = null;
+                    req.session.rewardShopError = null;
+
+                    return res.render('reward-shop', {
+                        title: 'Reward Shop',
+                        glintsBalance,
+                        offers,
+                        ownedVoucherCount: ownedVouchers.length,
+                        success,
+                        error,
+                        rewardWallet,
+                        dailyRewards: getDailyRewardTrack(rewardWallet)
+                    });
                 });
             });
         });
@@ -1006,6 +1097,47 @@ function claimRewardShopDaily(req, res) {
             dedupeKey: `customer-daily-reward-${req.session.user.id}-${new Date().toISOString().slice(0, 10)}`
         }, logNotificationError);
         return res.redirect('/reward-shop');
+    });
+}
+
+function redeemRewardShopVoucher(req, res) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    return RewardVoucher.findById(req.params.voucherId, (lookupError, offer) => {
+        if (lookupError) {
+            console.error(lookupError);
+            req.session.rewardShopError = 'That voucher could not be loaded.';
+            return res.redirect('/reward-shop');
+        }
+
+        if (!offer || String(offer.status || 'active') !== 'active') {
+            req.session.rewardShopError = 'That voucher is no longer available.';
+            return res.redirect('/reward-shop');
+        }
+
+        return UserVoucher.redeemRewardShopVoucher(req.session.user.id, offer, (redeemError, voucher) => {
+            if (redeemError) {
+                console.error(redeemError);
+                req.session.rewardShopError = redeemError.message || 'Voucher could not be redeemed.';
+                return res.redirect('/reward-shop');
+            }
+
+            req.session.user.glintsBalance = Math.max(0, Number(req.session.user.glintsBalance || 0) - Number(offer.glintsCost || 0));
+            req.session.rewardShopSuccess = `${voucher.title} redeemed successfully. It is now stored under Rewards on your profile.`;
+            Notification.create({
+                recipientUserId: req.session.user.id,
+                recipientRole: 'customer',
+                actorUserId: null,
+                type: 'reward_update',
+                title: 'Voucher redeemed',
+                message: `${voucher.title} was added to your profile vouchers.`,
+                linkUrl: '/profile#membership',
+                dedupeKey: `reward-voucher-redeemed-${req.session.user.id}-${voucher.id}`
+            }, logNotificationError);
+            return res.redirect('/reward-shop');
+        });
     });
 }
 
@@ -1152,6 +1284,7 @@ module.exports = {
     showProfile,
     showRewardShop,
     claimRewardShopDaily,
+    redeemRewardShopVoucher,
     updateProfile,
     updatePassword,
     logoutUser

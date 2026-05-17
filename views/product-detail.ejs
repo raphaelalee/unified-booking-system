@@ -11,6 +11,10 @@
     };
     const productImageClass = productImages[product.id] || 'product-skin';
     const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+    const productReviews = Array.isArray(reviews) ? reviews : [];
+    const averageRating = Number.isFinite(reviewSummary?.averageRating) ? reviewSummary.averageRating : null;
+    const reviewCount = Number(reviewSummary?.reviewCount || 0);
+    const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
 %>
 
 <section class="page-title">
@@ -49,6 +53,53 @@
             </div>
         </article>
     </div>
+</section>
+
+<section class="section compact">
+    <article class="account-panel product-detail-card">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Product reviews</p>
+                <h2>What buyers said</h2>
+            </div>
+            <div>
+                <strong><%= averageRating ? averageRating.toFixed(1) : 'New' %></strong>
+                <span class="muted"><%= reviewCount > 0 ? `${reviewCount} review${reviewCount === 1 ? '' : 's'}` : 'No reviews yet' %></span>
+            </div>
+        </div>
+
+        <% if (!productReviews.length) { %>
+            <p class="muted">Reviews appear here after customers receive or pick up this product and submit feedback from purchase history.</p>
+        <% } else { %>
+            <% productReviews.forEach((review) => { %>
+                <article style="padding: 1rem 0; border-top: 1px solid rgba(15, 23, 42, 0.08);">
+                    <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: baseline;">
+                        <strong><%= review.customerName || 'Customer' %></strong>
+                        <span><%- renderStars(review.rating) %></span>
+                    </div>
+                    <% if (review.comment) { %>
+                        <p><%= review.comment %></p>
+                    <% } else { %>
+                        <p class="muted">Customer left a rating without extra comments.</p>
+                    <% } %>
+                    <% if (review.imagePath || review.videoPath) { %>
+                        <div class="merchant-review-media">
+                            <% if (review.imagePath) { %>
+                                <a href="<%= review.imagePath %>" target="_blank" rel="noopener">
+                                    <img src="<%= review.imagePath %>" alt="Review photo for <%= product.name %>">
+                                </a>
+                            <% } %>
+                            <% if (review.videoPath) { %>
+                                <video controls preload="metadata">
+                                    <source src="<%= review.videoPath %>">
+                                </video>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </article>
+            <% }) %>
+        <% } %>
+    </article>
 </section>
 
 <%- include('partials/footer') %>

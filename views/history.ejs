@@ -7,6 +7,14 @@
 </section>
 
 <section class="section compact">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
+
     <div class="history-filter-tabs">
         <a class="button <%= activeFilter === 'all' ? 'primary' : 'secondary' %>" href="/profile/history">All (<%= counts.all %>)</a>
         <a class="button <%= activeFilter === 'bookings' ? 'primary' : 'secondary' %>" href="/profile/history?type=bookings">Bookings (<%= counts.bookings %>)</a>
@@ -37,10 +45,66 @@
                         <tr>
                             <td><%= entry.id %></td>
                             <td><span class="sync-pill"><%= entry.type %></span></td>
-                            <td><%= entry.itemNames %></td>
+                            <td>
+                                <% if (entry.type === 'product' && Array.isArray(entry.items) && entry.items.length) { %>
+                                    <% entry.items.forEach((item) => { %>
+                                        <div style="margin-bottom: 1rem;">
+                                            <div>
+                                                <strong><%= item.name %></strong>
+                                                <% if (Number(item.quantity || 1) > 1) { %>
+                                                    x<%= Number(item.quantity || 1) %>
+                                                <% } %>
+                                            </div>
+                                            <% if (item.review) { %>
+                                                <div class="muted">Reviewed: <%= item.review.rating %>/5</div>
+                                            <% } else if (entry.reviewable && item.productId) { %>
+                                                <details style="margin-top: .5rem;">
+                                                    <summary class="button secondary">Review this product</summary>
+                                                    <form action="/profile/orders/<%= encodeURIComponent(entry.receiptId) %>/products/<%= item.productId %>/review?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data" style="margin-top: .75rem;">
+                                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                        <label>
+                                                            Rating
+                                                            <select name="rating" required>
+                                                                <option value="">Select</option>
+                                                                <option value="5">5 stars</option>
+                                                                <option value="4">4 stars</option>
+                                                                <option value="3">3 stars</option>
+                                                                <option value="2">2 stars</option>
+                                                                <option value="1">1 star</option>
+                                                            </select>
+                                                        </label>
+                                                        <label>
+                                                            Comment
+                                                            <textarea name="comment" rows="3" maxlength="800" placeholder="Share what you liked about this product."></textarea>
+                                                        </label>
+                                                        <label>
+                                                            Photo
+                                                            <input type="file" name="reviewImage" accept="image/*">
+                                                        </label>
+                                                        <label>
+                                                            Video
+                                                            <input type="file" name="reviewVideo" accept="video/*">
+                                                        </label>
+                                                        <button class="button primary" type="submit">Submit review</button>
+                                                    </form>
+                                                </details>
+                                            <% } else { %>
+                                                <div class="muted">Review available after delivery or pickup is completed.</div>
+                                            <% } %>
+                                        </div>
+                                    <% }) %>
+                                <% } else { %>
+                                    <%= entry.itemNames %>
+                                <% } %>
+                            </td>
                             <td>$<%= Number(entry.totalAmount || 0).toFixed(2) %></td>
                             <td><%= entry.paymentMethod %></td>
-                            <td><%= entry.paymentStatus %></td>
+                            <td>
+                                <div><%= entry.paymentStatus %></div>
+                                <% if (entry.type === 'product' && entry.deliveryStatus) { %>
+                                    <div class="muted">Fulfilment: <%= entry.deliveryStatus %></div>
+                                <% } %>
+                            </td>
                             <td><%= entry.createdAtLabel %></td>
                             <td>
                                 <a class="button secondary" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">Receipt</a>

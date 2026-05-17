@@ -33,6 +33,7 @@ const {
     verifyCsrfToken
 } = require('./middleware');
 const Product = require('./models/Product');
+const Review = require('./models/Review');
 const Notification = require('./models/Notification');
 const { getCartItemCount } = require('./utils/cart');
 
@@ -154,6 +155,19 @@ function handleReviewMediaUpload(req, res, next) {
     });
 }
 
+function handleHistoryReviewMediaUpload(req, res, next) {
+    uploadReviewMedia(req, res, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        console.error(error);
+        req.session.profileError = error.message || 'Review media could not be uploaded.';
+        res.redirect('/profile/history?type=products');
+    });
+}
+
 function handleSupportScreenshotUpload(req, res, next) {
     uploadSupportScreenshot(req, res, (error) => {
         if (!error) {
@@ -202,6 +216,7 @@ app.post('/help-center/orders/:transactionId/delivery-status', requireRole('merc
 app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
 app.post('/reward-shop/claim', requireCustomer, userController.claimRewardShopDaily);
+app.post('/reward-shop/vouchers/:voucherId/redeem', requireCustomer, userController.redeemRewardShopVoucher);
 app.get('/membership', requireCustomer, (req, res) => {
     res.redirect('/profile#membership');
 });
@@ -211,6 +226,7 @@ app.post('/profile/bookings/:bookingId/cancel', requireCustomer, bookingControll
 app.get('/profile/bookings/:bookingId/reschedule-suggestions', requireCustomer, bookingController.getRescheduleSuggestions);
 app.post('/profile/bookings/:bookingId/reschedule', requireCustomer, bookingController.rescheduleBooking);
 app.post('/profile/bookings/:bookingId/review', requireCustomer, handleReviewMediaUpload, bookingController.submitReview);
+app.post('/profile/orders/:receiptId/products/:productId/review', requireCustomer, handleHistoryReviewMediaUpload, profileController.submitProductReview);
 app.get('/rewards-game', requireCustomer, gameController.showCustomerGame);
 app.post('/rewards-game/play', requireCustomer, gameController.playCustomerGame);
 app.get('/rewards-game/flappy', requireCustomer, gameController.showFlappyGame);
@@ -396,9 +412,23 @@ app.get('/products/:productId', allowGuestOrCustomer, (req, res) => {
             });
         }
 
-        return res.render('product-detail', {
-            title: product.name,
-            product
+        return Review.getSummaryByProductId(product.id, (summaryError, reviewSummary) => {
+            if (summaryError) {
+                console.error(summaryError);
+            }
+
+            return Review.listByProductId(product.id, 8, (reviewsError, reviews = []) => {
+                if (reviewsError) {
+                    console.error(reviewsError);
+                }
+
+                return res.render('product-detail', {
+                    title: product.name,
+                    product,
+                    reviews: reviewsError ? [] : reviews,
+                    reviewSummary: reviewSummary || { averageRating: null, reviewCount: 0 }
+                });
+            });
         });
     });
 });

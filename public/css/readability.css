@@ -985,11 +985,20 @@ body:not(.flappy-page) {
     border-bottom: 1px solid rgba(38, 59, 43, 0.1);
 }
 
+.profile-review-hub-switcher button,
 .profile-review-hub-switcher span,
 .profile-review-hub-switcher a {
     font-weight: 800;
     font-size: 1rem;
     text-decoration: none;
+}
+
+.profile-review-hub-switcher button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--readable-text);
+    cursor: pointer;
 }
 
 .profile-review-hub-switcher .is-active {
@@ -1010,6 +1019,10 @@ body:not(.flappy-page) {
 
 .profile-review-hub-switcher a {
     color: var(--readable-text);
+}
+
+.profile-booking-card-no-thumb {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .profile-review-queue {

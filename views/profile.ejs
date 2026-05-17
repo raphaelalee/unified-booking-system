@@ -16,7 +16,9 @@
     const profileReviewableBookings = typeof reviewableBookings !== 'undefined' && Array.isArray(reviewableBookings)
         ? reviewableBookings
         : [];
-    const profileReviewedBookings = profilePastBookings.filter((booking) => booking.review);
+    const profileReviewedBookings = typeof reviewedBookings !== 'undefined' && Array.isArray(reviewedBookings)
+        ? reviewedBookings
+        : [];
     const profileReviewRewardMax = 70;
     const profileReviewPotential = profileReviewableBookings.length * profileReviewRewardMax;
     const profileReviewEarnedPoints = loyalty && Array.isArray(loyalty.transactions)
@@ -369,7 +371,7 @@
                     </div>
 
                     <% if (!profilePastBookings.length) { %>
-                        <p class="muted">No completed bookings yet.</p>
+                        <p class="muted">No past bookings waiting outside the review flow.</p>
                     <% } else { %>
                         <div class="profile-booking-grid compact">
                             <% profilePastBookings.forEach((booking) => { %>
@@ -383,32 +385,11 @@
                                             </div>
                                             <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
                                         </div>
-                                        <% if (booking.review) { %>
-                                            <div class="profile-booking-review-block">
-                                                <strong>Your review</strong>
-                                                <span><%- renderStars(booking.review.rating) %></span>
-                                                <% if (booking.review.comment) { %>
-                                                    <p><%= booking.review.comment %></p>
-                                                <% } %>
-                                                <% if (booking.review.imagePath || booking.review.videoPath) { %>
-                                                    <div class="profile-review-media">
-                                                        <% if (booking.review.imagePath) { %>
-                                                            <a href="<%= booking.review.imagePath %>" target="_blank" rel="noopener">
-                                                                <img src="<%= booking.review.imagePath %>" alt="Review photo for <%= booking.service_name %>">
-                                                            </a>
-                                                        <% } %>
-                                                        <% if (booking.review.videoPath) { %>
-                                                            <video controls preload="metadata">
-                                                                <source src="<%= booking.review.videoPath %>">
-                                                            </video>
-                                                        <% } %>
-                                                    </div>
-                                                <% } %>
-                                            </div>
-                                        <% } %>
                                         <div class="profile-booking-actions">
                                             <a class="button secondary" href="/booking/<%= booking.merchant_id %>?serviceId=<%= booking.service_id %>">Rebook</a>
-                                            <a class="button secondary" href="#to-rate" data-profile-tab-link="to-rate">Leave Review</a>
+                                            <% if (canReviewBooking(booking) && !booking.review) { %>
+                                                <a class="button secondary" href="#to-rate" data-profile-tab-link="to-rate">Leave Review</a>
+                                            <% } %>
                                             <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
                                         </div>
                                     </div>
@@ -496,96 +477,157 @@
                             <span><%= profileReviewableBookings.length %> service<%= profileReviewableBookings.length === 1 ? '' : 's' %> waiting for review</span>
                         </div>
 
-                        <div class="profile-review-hub-switcher">
-                            <span class="is-active">To Rate</span>
-                            <a href="#bookings" data-profile-tab-link="bookings">My Reviews</a>
+                        <div class="profile-review-hub-switcher" role="tablist" aria-label="Review sections">
+                            <button class="is-active" type="button" data-review-tab-control="to-rate" aria-selected="true">To Rate</button>
+                            <button type="button" data-review-tab-control="my-reviews" aria-selected="false">My Reviews</button>
                         </div>
                     </div>
 
-                    <% if (!profileReviewableBookings.length) { %>
-                        <p class="muted">No completed services waiting for review.</p>
-                    <% } else { %>
-                        <div class="profile-review-queue">
-                            <% profileReviewableBookings.forEach((booking) => { %>
-                                <article class="profile-review-queue-card">
-                                    <div class="profile-review-queue-card-head">
-                                        <strong><%= booking.merchant_name %></strong>
-                                        <span>Completed service ready to review</span>
-                                    </div>
-                                    <div class="profile-review-queue-card-body">
-                                        <div class="profile-review-service-thumb" aria-hidden="true">
-                                            <span><%= String(booking.service_name || 'S').charAt(0).toUpperCase() %></span>
+                    <div data-review-tab-panel="to-rate">
+                        <% if (!profileReviewableBookings.length) { %>
+                            <p class="muted">No completed services waiting for review.</p>
+                        <% } else { %>
+                            <div class="profile-review-queue">
+                                <% profileReviewableBookings.forEach((booking) => { %>
+                                    <article class="profile-review-queue-card">
+                                        <div class="profile-review-queue-card-head">
+                                            <strong><%= booking.merchant_name %></strong>
+                                            <span>Completed service ready to review</span>
                                         </div>
-                                        <div class="profile-review-service-copy">
-                                            <strong><%= booking.service_name %></strong>
-                                            <span>
-                                                <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
-                                                <% if (booking.booking_time) { %>
-                                                    at <%= booking.booking_time %>
-                                                <% } %>
-                                            </span>
-                                            <span class="profile-booking-status-row">
-                                                <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
-                                            </span>
+                                        <div class="profile-review-queue-card-body">
+                                            <div class="profile-review-service-thumb" aria-hidden="true">
+                                                <span><%= String(booking.service_name || 'S').charAt(0).toUpperCase() %></span>
+                                            </div>
+                                            <div class="profile-review-service-copy">
+                                                <strong><%= booking.service_name %></strong>
+                                                <span>
+                                                    <%= new Date(booking.booking_date).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %>
+                                                    <% if (booking.booking_time) { %>
+                                                        at <%= booking.booking_time %>
+                                                    <% } %>
+                                                </span>
+                                                <span class="profile-booking-status-row">
+                                                    <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
+                                                </span>
+                                            </div>
+                                            <div class="profile-review-service-action">
+                                                <span class="profile-review-bonus-pill">Bonus +<%= profileReviewRewardMax %> pts</span>
+                                                <a class="button primary" href="/receipt/<%= booking.id %>">View service</a>
+                                            </div>
                                         </div>
-                                        <div class="profile-review-service-action">
-                                            <span class="profile-review-bonus-pill">Bonus +<%= profileReviewRewardMax %> pts</span>
-                                            <a class="button primary" href="/receipt/<%= booking.id %>">View service</a>
+                                        <div class="profile-review-queue-card-foot">
+                                            <span>Rate to earn +10 pts</span>
+                                            <span class="profile-review-star-outline" aria-hidden="true">&#9734;&#9734;&#9734;&#9734;&#9734;</span>
                                         </div>
-                                    </div>
-                                    <div class="profile-review-queue-card-foot">
-                                        <span>Rate to earn +10 pts</span>
-                                        <span class="profile-review-star-outline" aria-hidden="true">&#9734;&#9734;&#9734;&#9734;&#9734;</span>
-                                    </div>
-                                    <div>
-                                        <% if (canReviewBooking(booking)) { %>
-                                            <details class="profile-booking-review-form">
-                                                <summary class="button secondary">Review now</summary>
-                                                <form action="/profile/bookings/<%= booking.id %>/review" method="POST" enctype="multipart/form-data">
-                                                    <div class="profile-review-reward-strip">
-                                                        <p><span>Rate service</span><strong>+10 pts</strong></p>
-                                                        <p><span>Add image or video</span><strong>+50 pts</strong></p>
-                                                        <p><span>Write 50+ characters</span><strong>+10 pts</strong></p>
-                                                    </div>
-                                                    <label>
-                                                        Rating
-                                                        <span class="profile-star-rating" role="radiogroup" aria-label="Star rating">
-                                                            <input type="radio" id="review-rating-<%= booking.id %>-5" name="rating" value="5" required>
-                                                            <label for="review-rating-<%= booking.id %>-5" title="5 stars">&#9733;</label>
-                                                            <input type="radio" id="review-rating-<%= booking.id %>-4" name="rating" value="4">
-                                                            <label for="review-rating-<%= booking.id %>-4" title="4 stars">&#9733;</label>
-                                                            <input type="radio" id="review-rating-<%= booking.id %>-3" name="rating" value="3">
-                                                            <label for="review-rating-<%= booking.id %>-3" title="3 stars">&#9733;</label>
-                                                            <input type="radio" id="review-rating-<%= booking.id %>-2" name="rating" value="2">
-                                                            <label for="review-rating-<%= booking.id %>-2" title="2 stars">&#9733;</label>
-                                                            <input type="radio" id="review-rating-<%= booking.id %>-1" name="rating" value="1">
-                                                            <label for="review-rating-<%= booking.id %>-1" title="1 star">&#9733;</label>
-                                                        </span>
-                                                    </label>
-                                                    <label>
-                                                        Comment
-                                                        <textarea name="comment" rows="3" maxlength="800" placeholder="Share your experience with this service."></textarea>
-                                                    </label>
-                                                    <label>
-                                                        Photo
-                                                        <input type="file" name="reviewImage" accept="image/*">
-                                                    </label>
-                                                    <label>
-                                                        Video
-                                                        <input type="file" name="reviewVideo" accept="video/*">
-                                                    </label>
-                                                    <button class="button primary" type="submit">Submit review</button>
-                                                </form>
-                                            </details>
-                                        <% } %>
-                                    </div>
-                                </article>
-                            <% }) %>
+                                        <div>
+                                            <% if (canReviewBooking(booking)) { %>
+                                                <details class="profile-booking-review-form">
+                                                    <summary class="button secondary">Review now</summary>
+                                                    <form action="/profile/bookings/<%= booking.id %>/review?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
+                                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                        <div class="profile-review-reward-strip">
+                                                            <p><span>Rate service</span><strong>+10 pts</strong></p>
+                                                            <p><span>Add image or video</span><strong>+50 pts</strong></p>
+                                                            <p><span>Write 50+ characters</span><strong>+10 pts</strong></p>
+                                                        </div>
+                                                        <label>
+                                                            Rating
+                                                            <span class="profile-star-rating" role="radiogroup" aria-label="Star rating">
+                                                                <input type="radio" id="review-rating-<%= booking.id %>-5" name="rating" value="5" required>
+                                                                <label for="review-rating-<%= booking.id %>-5" title="5 stars">&#9733;</label>
+                                                                <input type="radio" id="review-rating-<%= booking.id %>-4" name="rating" value="4">
+                                                                <label for="review-rating-<%= booking.id %>-4" title="4 stars">&#9733;</label>
+                                                                <input type="radio" id="review-rating-<%= booking.id %>-3" name="rating" value="3">
+                                                                <label for="review-rating-<%= booking.id %>-3" title="3 stars">&#9733;</label>
+                                                                <input type="radio" id="review-rating-<%= booking.id %>-2" name="rating" value="2">
+                                                                <label for="review-rating-<%= booking.id %>-2" title="2 stars">&#9733;</label>
+                                                                <input type="radio" id="review-rating-<%= booking.id %>-1" name="rating" value="1">
+                                                                <label for="review-rating-<%= booking.id %>-1" title="1 star">&#9733;</label>
+                                                            </span>
+                                                        </label>
+                                                        <label>
+                                                            Comment
+                                                            <textarea name="comment" rows="3" maxlength="800" placeholder="Share your experience with this service."></textarea>
+                                                        </label>
+                                                        <label>
+                                                            Photo
+                                                            <input type="file" name="reviewImage" accept="image/*">
+                                                        </label>
+                                                        <label>
+                                                            Video
+                                                            <input type="file" name="reviewVideo" accept="video/*">
+                                                        </label>
+                                                        <button class="button primary" type="submit">Submit review</button>
+                                                    </form>
+                                                </details>
+                                            <% } %>
+                                        </div>
+                                    </article>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <div id="my-reviews" data-review-tab-panel="my-reviews" hidden>
+                        <div class="account-panel-header" style="margin-top: 2rem;">
+                            <div>
+                                <p class="eyebrow">Reviewed</p>
+                                <h2>My Reviews</h2>
+                            </div>
                         </div>
-                    <% } %>
+
+                        <% if (!profileReviewedBookings.length) { %>
+                            <p class="muted">You have not submitted any reviews yet.</p>
+                        <% } else { %>
+                            <div class="profile-booking-grid compact">
+                                <% profileReviewedBookings.forEach((booking) => { %>
+                                    <article class="profile-booking-card profile-booking-card-no-thumb">
+                                        <div class="profile-booking-card-main">
+                                            <div class="profile-booking-card-head">
+                                                <div>
+                                                    <strong><%= booking.service_name %></strong>
+                                                    <span><%= booking.merchant_name %> &middot; <%= formatBookingDate(booking.booking_date) %><%= booking.booking_time ? ` at ${booking.booking_time}` : '' %></span>
+                                                </div>
+                                                <span class="status-badge status-<%= booking.status %>"><%= formatBookingStatus(booking.status) %></span>
+                                            </div>
+                                            <div class="profile-booking-review-block">
+                                                <strong>Your review</strong>
+                                                <span><%- renderStars(booking.review.rating) %></span>
+                                                <% if (booking.review.comment) { %>
+                                                    <p><%= booking.review.comment %></p>
+                                                <% } %>
+                                                <% if (booking.review.imagePath || booking.review.videoPath) { %>
+                                                    <div class="profile-review-media">
+                                                        <% if (booking.review.imagePath) { %>
+                                                            <a href="<%= booking.review.imagePath %>" target="_blank" rel="noopener">
+                                                                <img src="<%= booking.review.imagePath %>" alt="Review photo for <%= booking.service_name %>">
+                                                            </a>
+                                                        <% } %>
+                                                        <% if (booking.review.videoPath) { %>
+                                                            <video controls preload="metadata">
+                                                                <source src="<%= booking.review.videoPath %>">
+                                                            </video>
+                                                        <% } %>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+                                            <div class="profile-booking-actions">
+                                                <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
+                                            </div>
+                                        </div>
+                                    </article>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </div>
                 </section>
 
                 <section id="membership" class="account-panel account-membership-panel profile-tab-panel" data-profile-panel="membership">
+                    <%
+                        const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
+                        const activeProfileVouchers = profileVouchers.filter((voucher) => voucher.status === 'active' && Number(voucher.remainingValue || 0) > 0);
+                        const usedProfileVouchers = profileVouchers.filter((voucher) => voucher.status !== 'active' || Number(voucher.remainingValue || 0) <= 0);
+                    %>
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Membership</p>
@@ -634,6 +676,60 @@
                                 : "Maximum tier reached" %>
                         </p>
                     </div>
+
+                    <div class="account-panel-header" style="margin-top: 2rem;">
+                        <div>
+                            <p class="eyebrow">Vouchers</p>
+                            <h2>My rewards vouchers</h2>
+                        </div>
+                        <a class="button secondary" href="/reward-shop">Open reward shop</a>
+                    </div>
+
+                    <% if (!profileVouchers.length) { %>
+                        <p class="muted">No vouchers yet. Redeem one from the reward shop or use a referral code at sign up.</p>
+                    <% } else { %>
+                        <% if (activeProfileVouchers.length) { %>
+                            <div class="wallet-overview-grid">
+                                <% activeProfileVouchers.forEach((voucher) => { %>
+                                    <article class="wallet-balance-card">
+                                        <span><%= voucher.sourceType === 'referral' ? 'Referral voucher' : 'Reward shop voucher' %></span>
+                                        <strong>$<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %></strong>
+                                        <small><%= voucher.title %> - <%= voucher.code %></small>
+                                        <small><%= voucher.firstBookingOnly ? 'First paid booking only' : 'Use on eligible booking payment' %></small>
+                                    </article>
+                                <% }) %>
+                            </div>
+                        <% } else { %>
+                            <p class="muted">No active vouchers available right now.</p>
+                        <% } %>
+
+                        <% if (usedProfileVouchers.length) { %>
+                            <div class="wallet-activity-panel" style="margin-top: 1.5rem;">
+                                <div class="wallet-section-heading">
+                                    <div>
+                                        <p class="eyebrow">History</p>
+                                        <h3>Used or inactive vouchers</h3>
+                                    </div>
+                                    <span><%= usedProfileVouchers.length %> item<%= usedProfileVouchers.length === 1 ? '' : 's' %></span>
+                                </div>
+                                <div class="wallet-activity-list">
+                                    <% usedProfileVouchers.forEach((voucher) => { %>
+                                        <article class="wallet-activity-row">
+                                            <div>
+                                                <span class="wallet-activity-date"><%= voucher.redeemedAt ? new Date(voucher.redeemedAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : new Date(voucher.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                <strong><%= voucher.title %></strong>
+                                                <small><%= voucher.code %></small>
+                                            </div>
+                                            <div class="wallet-activity-values">
+                                                <span>$<%= Number(voucher.voucherValue || 0).toFixed(2) %></span>
+                                                <span><%= voucher.status %></span>
+                                            </div>
+                                        </article>
+                                    <% }) %>
+                                </div>
+                            </div>
+                        <% } %>
+                    <% } %>
                 </section>
 
                 <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
@@ -792,6 +888,12 @@
                             <input type="text" value="<%= referral.link %>" readonly aria-label="Referral link">
                         </div>
 
+                        <% if (typeof referralVoucherStatus !== 'undefined' && referralVoucherStatus && referralVoucherStatus.message) { %>
+                            <p class="muted" style="margin: 1rem 0 0;">
+                                <strong>Referral voucher status:</strong> <%= referralVoucherStatus.message %>
+                            </p>
+                        <% } %>
+
                         <div class="referral-metrics">
                             <div>
                                 <strong>$<%= referral.discount %></strong>
@@ -923,12 +1025,15 @@
     (() => {
         const tabs = Array.from(document.querySelectorAll('[data-profile-tab]'));
         const panels = Array.from(document.querySelectorAll('[data-profile-panel]'));
+        const reviewTabControls = Array.from(document.querySelectorAll('[data-review-tab-control]'));
+        const reviewTabPanels = Array.from(document.querySelectorAll('[data-review-tab-panel]'));
 
         if (!tabs.length || !panels.length) {
             return;
         }
 
         const defaultPanel = tabs[0].dataset.profileTab;
+        const defaultReviewPanel = reviewTabControls[0]?.dataset.reviewTabControl || 'to-rate';
         const showPanel = (panelName) => {
             const targetPanel = panels.some((panel) => panel.dataset.profilePanel === panelName)
                 ? panelName
@@ -945,12 +1050,35 @@
             });
         };
 
+        const showReviewPanel = (panelName) => {
+            if (!reviewTabControls.length || !reviewTabPanels.length) {
+                return;
+            }
+
+            const targetPanel = reviewTabPanels.some((panel) => panel.dataset.reviewTabPanel === panelName)
+                ? panelName
+                : defaultReviewPanel;
+
+            reviewTabPanels.forEach((panel) => {
+                panel.hidden = panel.dataset.reviewTabPanel !== targetPanel;
+            });
+
+            reviewTabControls.forEach((control) => {
+                const isActive = control.dataset.reviewTabControl === targetPanel;
+                control.classList.toggle('is-active', isActive);
+                control.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+        };
+
         tabs.forEach((tab) => {
             tab.addEventListener('click', (event) => {
                 event.preventDefault();
                 const panelName = tab.dataset.profileTab;
                 history.replaceState(null, '', `#${panelName}`);
                 showPanel(panelName);
+                if (panelName === 'to-rate') {
+                    showReviewPanel('to-rate');
+                }
             });
         });
 
@@ -960,10 +1088,30 @@
                 const panelName = link.dataset.profileTabLink;
                 history.replaceState(null, '', `#${panelName}`);
                 showPanel(panelName);
+                if (panelName === 'to-rate') {
+                    showReviewPanel('to-rate');
+                }
             });
         });
 
-        showPanel(window.location.hash.replace('#', '') || defaultPanel);
+        reviewTabControls.forEach((control) => {
+            control.addEventListener('click', () => {
+                const panelName = control.dataset.reviewTabControl;
+                history.replaceState(null, '', panelName === 'my-reviews' ? '#my-reviews' : '#to-rate');
+                showPanel('to-rate');
+                showReviewPanel(panelName);
+            });
+        });
+
+        const hash = window.location.hash.replace('#', '');
+        if (hash === 'my-reviews') {
+            showPanel('to-rate');
+            showReviewPanel('my-reviews');
+            return;
+        }
+
+        showPanel(hash || defaultPanel);
+        showReviewPanel(hash === 'to-rate' ? 'to-rate' : defaultReviewPanel);
     })();
 
     (() => {

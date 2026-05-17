@@ -51,7 +51,7 @@ function verifyCsrfToken(req, res, next) {
         return next();
     }
 
-    const submittedToken = req.body?._csrf || req.get('x-csrf-token');
+    const submittedToken = req.body?._csrf || req.query?._csrf || req.get('x-csrf-token');
 
     if (submittedToken && req.session.csrfToken && submittedToken === req.session.csrfToken) {
         return next();

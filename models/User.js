@@ -123,7 +123,7 @@ function findByEmail(email, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
             FROM users
             WHERE email = ?
             LIMIT 1
@@ -148,7 +148,7 @@ function findById(userId, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
             FROM users
             WHERE user_id = ?
             LIMIT 1
@@ -177,7 +177,7 @@ function findCustomerByPhone(phone, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
             FROM users
             WHERE role = 'customer'
                 AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
