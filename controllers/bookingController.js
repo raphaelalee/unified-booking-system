@@ -9,6 +9,11 @@ const Review = require('../models/Review');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayName } = require('../utils/publicHolidays');
 const {
+    sendBookingCancellationSms,
+    sendBookingConfirmationSms,
+    sendBookingRescheduleSms
+} = require('../utils/smsNotifications');
+const {
     getBookingCheckInUrl,
     signBookingCheckInToken,
     verifyBookingCheckInToken
@@ -397,6 +402,23 @@ function createBooking(req, res) {
                     console.error('Booking confirmation email failed:', emailError.message);
                 }
 
+                sendBookingConfirmationSms({
+                    bookingId,
+                    customerName,
+                    phone: req.session.user.phone || req.body.phone,
+                    merchantName: service.salonName || 'Vaniday merchant',
+                    serviceName: bookedServiceName,
+                    bookingDate,
+                    bookingTime,
+                    checkInUrl: checkinUrl
+                }).then((smsResult) => {
+                    if (smsResult?.skipped) {
+                        console.log('SMS booking confirmation skipped: SMS is not configured or booking phone is missing.');
+                    }
+                }).catch((smsError) => {
+                    console.error('SMS booking confirmation failed:', smsError.message);
+                });
+
                 return res.render('booking-email-sent', {
                     title: 'Booking Confirmed',
                     booking: {
@@ -575,6 +597,22 @@ function cancelBooking(req, res) {
                     dedupeKey: `booking-cancelled-admin-${bookingId}`
                 });
             }
+
+            sendBookingCancellationSms({
+                customerName: req.session.user.name || booking.customer_name || 'Customer',
+                phone: req.session.user.phone || booking.phone,
+                merchantName: booking.merchant_name || 'Vaniday merchant',
+                serviceName: booking.service_name,
+                bookingDate: String(booking.booking_date).slice(0, 10),
+                bookingTime: booking.booking_time,
+                reason
+            }).then((smsResult) => {
+                if (smsResult?.skipped) {
+                    console.log('SMS cancellation notification skipped: SMS is not configured or customer phone is missing.');
+                }
+            }).catch((smsError) => {
+                console.error('SMS cancellation notification failed:', smsError.message);
+            });
 
             return respondProfileAction(req, res, {
                 success: true,
@@ -836,6 +874,21 @@ function rescheduleBooking(req, res) {
                     message: `Your ${booking.service_name} booking was moved to ${bookingDate} at ${bookingTime}.`,
                     linkUrl: '/profile#bookings',
                     dedupeKey: `reschedule-customer-auto-${bookingId}-${bookingDate}-${bookingTime}`
+                });
+
+                sendBookingRescheduleSms({
+                    customerName: req.session.user.name || booking.customer_name || 'Customer',
+                    phone: req.session.user.phone || booking.phone,
+                    merchantName: booking.merchant_name || 'Vaniday merchant',
+                    serviceName: booking.service_name,
+                    bookingDate,
+                    bookingTime
+                }).then((smsResult) => {
+                    if (smsResult?.skipped) {
+                        console.log('SMS reschedule notification skipped: SMS is not configured or customer phone is missing.');
+                    }
+                }).catch((smsError) => {
+                    console.error('SMS reschedule notification failed:', smsError.message);
                 });
 
                 return respondProfileAction(req, res, {

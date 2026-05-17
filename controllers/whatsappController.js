@@ -303,6 +303,8 @@ async function handleIncomingMessage(message) {
         return;
     }
 
+    console.log(`WhatsApp inbound message from ${phone}: ${text}`);
+
     if (/^(hi|hello|book|booking|start)$/i.test(text)) {
         resetSession(phone);
         await handleStart(phone);

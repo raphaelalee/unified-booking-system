@@ -19,6 +19,7 @@ const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
+const { startSmsReminderScheduler } = require('./services/smsAutomation');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
     allowGuestOrCustomer,
@@ -453,4 +454,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     startWhatsAppReminderScheduler();
+    startSmsReminderScheduler();
 });

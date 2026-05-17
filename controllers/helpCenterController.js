@@ -8,6 +8,10 @@ const {
     sendCancellationForBooking,
     sendRescheduleForBooking
 } = require('../services/whatsappAutomation');
+const {
+    sendSmsCancellationForBooking,
+    sendSmsRescheduleForBooking
+} = require('../services/smsAutomation');
 
 const ACTIVE_REQUEST_LIMIT = 5;
 const SHIPPED_STATUSES = ['shipped', 'delivered'];
@@ -224,6 +228,9 @@ async function applyApprovedBookingChange(request) {
 
     await sendRescheduleForBooking(request.targetId).catch((error) => {
         console.error('WhatsApp reschedule notification failed:', error.message);
+    });
+    await sendSmsRescheduleForBooking(request.targetId).catch((error) => {
+        console.error('SMS reschedule notification failed:', error.message);
     });
 }
 
@@ -866,6 +873,9 @@ async function adminResolve(req, res) {
                 await markBookingCancelled(request.targetId);
                 await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
                     console.error('WhatsApp cancellation notification failed:', error.message);
+                });
+                await sendSmsCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+                    console.error('SMS cancellation notification failed:', error.message);
                 });
             }
         }

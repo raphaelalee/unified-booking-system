@@ -14,6 +14,7 @@ const User = require('../models/User');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
+const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const {
     getBookingCheckInUrl,
@@ -103,9 +104,25 @@ function notifyBookingByEmail(booking) {
         });
 }
 
+function notifyBookingBySms(booking) {
+    sendBookingConfirmationSms(booking)
+        .then((result) => {
+            if (result?.skipped) {
+                console.log('SMS booking confirmation skipped: SMS is not configured or booking phone is missing.');
+                return;
+            }
+
+            console.log(`SMS booking confirmation sent to ${booking.phone}.`);
+        })
+        .catch((error) => {
+            console.error('SMS booking confirmation failed:', error.message);
+        });
+}
+
 function notifyBooking(booking) {
     notifyBookingByWhatsApp(booking);
     notifyBookingByEmail(booking);
+    notifyBookingBySms(booking);
 }
 
 function logNotificationError(error) {
