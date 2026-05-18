@@ -13,6 +13,21 @@
     <% if (error) { %>
         <div class="notice error"><%= error %></div>
     <% } %>
+    <% if (birthdayPromotion && birthdayPromotion.hasBirthday) { %>
+        <div class="notice <%= birthdayPromotion.isBirthdayMonth ? 'success' : '' %>">
+            <% if (birthdayPromotion.isBirthdayMonth) { %>
+                <p>
+                    Birthday month perks are active for <strong><%= birthdayPromotion.monthName %></strong>.
+                    Eligible booking payments earn <strong>2X points</strong>.
+                    <% if (birthdayPromotion.voucher) { %>
+                        Your birthday voucher is ready until <strong><%= birthdayPromotion.monthEndLabel %></strong>.
+                    <% } %>
+                </p>
+            <% } else { %>
+                <p>Your birthday rewards will appear automatically during your birthday month.</p>
+            <% } %>
+        </div>
+    <% } %>
 
     <div class="loyalty-grid">
         <article class="account-panel loyalty-balance-card">

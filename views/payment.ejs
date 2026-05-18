@@ -13,7 +13,11 @@
             const paymentSelectedVoucherId = String(selectedVoucherId || '');
             const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentSelectedVoucherId) || null;
             const paymentVoucherEstimate = paymentSelectedVoucher
-                ? Math.min(Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0), Number(amount || 0))
+                ? (
+                    paymentSelectedVoucher.discountType === 'percentage'
+                        ? (Number(amount || 0) * (Number(paymentSelectedVoucher.discountPercent || 0) / 100))
+                        : Math.min(Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0), Number(amount || 0))
+                )
                 : 0;
             const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
                 ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate, 0))
@@ -59,6 +63,16 @@
                 <% } %>
             </div>
 
+            <% if (birthdayPromotion && birthdayPromotion.isBirthdayMonth) { %>
+                <div class="notice success">
+                    <p>
+                        Birthday month perks are active for <strong><%= birthdayPromotion.monthName %></strong>.
+                        This eligible booking payment earns <strong>2X loyalty points</strong>.
+                        Your birthday voucher stays valid until <strong><%= birthdayPromotion.monthEndLabel %></strong>.
+                    </p>
+                </div>
+            <% } %>
+
             <% if (paymentVoucherList.length > 0) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
                     <label>
@@ -70,7 +84,10 @@
                             <option value="">No voucher</option>
                             <% paymentVoucherList.forEach((voucher) => { %>
                                 <option value="<%= voucher.id %>" <%= String(voucher.id) === paymentSelectedVoucherId ? 'selected' : '' %>>
-                                    <%= voucher.title %> (<%= voucher.code %>) - $<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>
+                                    <%= voucher.title %> (<%= voucher.code %>) -
+                                    <%= voucher.discountType === 'percentage'
+                                        ? `${Number(voucher.discountPercent || 0)}% OFF`
+                                        : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
                                 </option>
                             <% }) %>
                         </select>

@@ -1,4 +1,6 @@
 const db = require('../db');
+const User = require('./User');
+const { isBirthdayMonthForDate } = require('../utils/birthdayPromotions');
 
 const DEFAULT_RULES = {
     pointsPerDollar: 10,
@@ -284,6 +286,30 @@ function roundMoney(value) {
     return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function getReceiptBirthdayMultiplier(receipt, callback) {
+    if (!receipt?.userId || String(receipt.type || '').toLowerCase() !== 'booking') {
+        callback(null, {
+            multiplier: 1,
+            birthdayApplied: false
+        });
+        return;
+    }
+
+    User.findById(receipt.userId, (error, user) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        // Birthday rewards follow the payment month because points are granted when the receipt is paid.
+        const birthdayApplied = isBirthdayMonthForDate(user?.birthday, receipt.paidAt || new Date());
+        callback(null, {
+            multiplier: birthdayApplied ? 2 : 1,
+            birthdayApplied
+        });
+    });
+}
+
 function awardForReceipt(receipt, callback) {
     const totalAmount = Number(receipt.totalAmount || 0);
     const paymentStatus = String(receipt.paymentStatus || '').toLowerCase();
@@ -304,103 +330,120 @@ function awardForReceipt(receipt, callback) {
             return;
         }
 
-        const points = Math.floor(totalAmount * rules.pointsPerDollar);
-        const description = `Earned from receipt ${receipt.displayId || receipt.id}`;
-        const sourceReceiptId = String(receipt.id);
-
-        db.getConnection((connectionError, connection) => {
-            if (connectionError) {
-                callback(connectionError);
+        return getReceiptBirthdayMultiplier(receipt, (birthdayError, birthdayReward) => {
+            if (birthdayError) {
+                callback(birthdayError);
                 return;
             }
 
-            connection.beginTransaction((transactionError) => {
-                if (transactionError) {
-                    connection.release();
-                    callback(transactionError);
+            const basePoints = Math.floor(totalAmount * rules.pointsPerDollar);
+            const multiplier = Number(birthdayReward?.multiplier || 1);
+            const points = basePoints * multiplier;
+            const birthdayApplied = Boolean(birthdayReward?.birthdayApplied);
+            const bonusPoints = Math.max(0, points - basePoints);
+            const description = birthdayApplied
+                ? `Earned from receipt ${receipt.displayId || receipt.id} with birthday month 2X points`
+                : `Earned from receipt ${receipt.displayId || receipt.id}`;
+            const sourceReceiptId = String(receipt.id);
+
+            db.getConnection((connectionError, connection) => {
+                if (connectionError) {
+                    callback(connectionError);
                     return;
                 }
 
-                connection.query(
-                    `SELECT loyalty_transaction_id
-                     FROM loyalty_transactions
-                     WHERE source_receipt_id = ?
-                        AND transaction_type IN ('EARNED', 'earn')
-                     LIMIT 1`,
-                    [sourceReceiptId],
-                    (duplicateError, duplicateRows = []) => {
-                        if (duplicateError) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                callback(duplicateError);
-                            });
-                        }
-
-                        if (duplicateRows.length) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                callback(null, { awarded: false, duplicate: true });
-                            });
-                        }
-
-                const insertSql = `
-                    INSERT IGNORE INTO loyalty_transactions
-                        (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
-                    VALUES (?, ?, 'EARNED', ?, 0, ?)
-                `;
-
-                connection.query(insertSql, [
-                    receipt.userId,
-                    sourceReceiptId,
-                    points,
-                    description
-                ], (insertError, result) => {
-                    if (insertError) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            callback(insertError);
-                        });
+                connection.beginTransaction((transactionError) => {
+                    if (transactionError) {
+                        connection.release();
+                        callback(transactionError);
+                        return;
                     }
 
-                    if (!result.affectedRows) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            callback(null, { awarded: false, duplicate: true });
-                        });
-                    }
+                    connection.query(
+                        `SELECT loyalty_transaction_id
+                         FROM loyalty_transactions
+                         WHERE source_receipt_id = ?
+                            AND transaction_type IN ('EARNED', 'earn')
+                         LIMIT 1`,
+                        [sourceReceiptId],
+                        (duplicateError, duplicateRows = []) => {
+                            if (duplicateError) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(duplicateError);
+                                });
+                            }
 
-                    const updateSql = `
-                        INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
-                        VALUES (?, ?, 0, ?)
-                        ON DUPLICATE KEY UPDATE
-                            points_balance = points_balance + VALUES(points_balance),
-                            lifetime_points = lifetime_points + VALUES(lifetime_points)
-                    `;
+                            if (duplicateRows.length) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(null, { awarded: false, duplicate: true });
+                                });
+                            }
 
-                    connection.query(updateSql, [
-                        receipt.userId,
-                        points,
-                        points
-                    ], (updateError) => {
-                        if (updateError) {
-                            return connection.rollback(() => {
-                                connection.release();
-                                callback(updateError);
-                            });
-                        }
+                            const insertSql = `
+                                INSERT IGNORE INTO loyalty_transactions
+                                    (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
+                                VALUES (?, ?, 'EARNED', ?, 0, ?)
+                            `;
 
-                        return connection.commit((commitError) => {
-                            connection.release();
-                            callback(commitError, {
-                                awarded: !commitError,
+                            connection.query(insertSql, [
+                                receipt.userId,
+                                sourceReceiptId,
                                 points,
-                                cashback: 0
+                                description
+                            ], (insertError, result) => {
+                                if (insertError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        callback(insertError);
+                                    });
+                                }
+
+                                if (!result.affectedRows) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        callback(null, { awarded: false, duplicate: true });
+                                    });
+                                }
+
+                                const updateSql = `
+                                    INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
+                                    VALUES (?, ?, 0, ?)
+                                    ON DUPLICATE KEY UPDATE
+                                        points_balance = points_balance + VALUES(points_balance),
+                                        lifetime_points = lifetime_points + VALUES(lifetime_points)
+                                `;
+
+                                connection.query(updateSql, [
+                                    receipt.userId,
+                                    points,
+                                    points
+                                ], (updateError) => {
+                                    if (updateError) {
+                                        return connection.rollback(() => {
+                                            connection.release();
+                                            callback(updateError);
+                                        });
+                                    }
+
+                                    return connection.commit((commitError) => {
+                                        connection.release();
+                                        callback(commitError, {
+                                            awarded: !commitError,
+                                            points,
+                                            cashback: 0,
+                                            basePoints,
+                                            bonusPoints,
+                                            multiplier,
+                                            birthdayApplied
+                                        });
+                                    });
+                                });
                             });
-                        });
-                    });
+                        }
+                    );
                 });
-                    }
-                );
             });
         });
     });
@@ -424,6 +467,7 @@ function loadReceiptForAward(userId, receiptId, callback) {
             SELECT
                 receipt_id AS id,
                 user_id,
+                purchase_type,
                 total_amount,
                 payment_status,
                 created_at
@@ -443,6 +487,7 @@ function loadReceiptForAward(userId, receiptId, callback) {
                 callback(null, {
                     id: rows[0].id,
                     userId: rows[0].user_id,
+                    type: rows[0].purchase_type === 'booking' ? 'booking' : 'order',
                     totalAmount: Number(rows[0].total_amount || 0),
                     paymentStatus: rows[0].payment_status || 'paid',
                     paidAt: rows[0].created_at
@@ -487,6 +532,7 @@ function loadReceiptForAward(userId, receiptId, callback) {
                 callback(null, {
                     id: booking.id,
                     userId: booking.user_id,
+                    type: 'booking',
                     totalAmount: Number(booking.total_amount || 0),
                     paymentStatus: booking.payment_status || 'pending'
                 });

@@ -1,5 +1,8 @@
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const User = require('../models/User');
+const UserVoucher = require('../models/UserVoucher');
+const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 function getRulesForm(body = {}) {
     return {
@@ -73,42 +76,84 @@ function awardReceiptSeries(userId, receipts, callback) {
     next();
 }
 
+function buildBirthdayPromotion(user, vouchers = []) {
+    const context = getBirthdayPromotionContext(user?.birthday);
+    const voucher = vouchers.find((entry) => {
+        return String(entry.sourceType || '').toLowerCase() === 'birthday'
+            && String(entry.sourceReference || '') === `birthday-${context.rewardYear}`;
+    }) || null;
+
+    return {
+        hasBirthday: context.hasBirthday,
+        isBirthdayMonth: context.isBirthdayMonth,
+        monthName: context.monthName,
+        monthEndLabel: context.monthEndLabel,
+        voucher,
+        pointsMultiplier: context.isBirthdayMonth ? 2 : 1
+    };
+}
+
 function renderWallet(req, res, viewName, title) {
     const userId = req.session.user.id;
 
-    return PurchaseHistory.getByUserId(userId, (historyError, rows = []) => {
-        if (historyError) {
-            console.error(historyError);
+    return User.findById(userId, (userError, accountUser) => {
+        if (userError) {
+            console.error(userError);
         }
 
-        const receipts = (historyError ? [] : rows)
-            .filter((row) => String(row.payment_status || '').toLowerCase() === 'paid')
-            .map(mapWalletReceipt);
+        const continueWithWallet = () => PurchaseHistory.getByUserId(userId, (historyError, rows = []) => {
+            if (historyError) {
+                console.error(historyError);
+            }
 
-        return awardReceiptSeries(userId, receipts, () => Loyalty.getWalletView(userId, (error, viewModel) => {
-        if (error) {
-            console.error(error);
-            return res.status(500).render('error', {
-                title: 'Rewards Error',
-                message: 'Your rewards wallet could not be loaded.'
-            });
-        }
+            const receipts = (historyError ? [] : rows)
+                .filter((row) => String(row.payment_status || '').toLowerCase() === 'paid')
+                .map(mapWalletReceipt);
 
-        const success = req.session.loyaltySuccess;
-        const redeemError = req.session.loyaltyError;
-        req.session.loyaltySuccess = null;
-        req.session.loyaltyError = null;
+            return awardReceiptSeries(userId, receipts, () => Loyalty.getWalletView(userId, (error, viewModel) => {
+                if (error) {
+                    console.error(error);
+                    return res.status(500).render('error', {
+                        title: 'Rewards Error',
+                        message: 'Your rewards wallet could not be loaded.'
+                    });
+                }
 
-        return res.render(viewName, {
-            title,
-            wallet: viewModel.wallet,
-            rules: viewModel.rules,
-            transactions: viewModel.transactions,
-            receipts,
-            success,
-            error: redeemError
+                return UserVoucher.getByUserId(userId, (voucherError, vouchers = []) => {
+                    if (voucherError) {
+                        console.error(voucherError);
+                    }
+
+                    const success = req.session.loyaltySuccess;
+                    const redeemError = req.session.loyaltyError;
+                    req.session.loyaltySuccess = null;
+                    req.session.loyaltyError = null;
+
+                    return res.render(viewName, {
+                        title,
+                        wallet: viewModel.wallet,
+                        rules: viewModel.rules,
+                        transactions: viewModel.transactions,
+                        receipts,
+                        birthdayPromotion: buildBirthdayPromotion(accountUser, vouchers),
+                        success,
+                        error: redeemError
+                    });
+                });
+            }));
         });
-        }));
+
+        if (!accountUser) {
+            return continueWithWallet();
+        }
+
+        return UserVoucher.ensureBirthdayVoucherForUser(accountUser, (birthdayVoucherError) => {
+            if (birthdayVoucherError) {
+                console.error(birthdayVoucherError);
+            }
+
+            return continueWithWallet();
+        });
     });
 }
 

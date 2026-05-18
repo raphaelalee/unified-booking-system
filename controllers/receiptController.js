@@ -145,6 +145,17 @@ function getSessionReceipt(req, id) {
     return receipt;
 }
 
+function getLastPaymentHighlight(req, receiptId) {
+    const highlight = req.session.lastPayment;
+
+    if (!highlight || String(highlight.receiptId || '') !== String(receiptId)) {
+        return null;
+    }
+
+    req.session.lastPayment = null;
+    return highlight;
+}
+
 function mapBookingReceipt(row, req) {
     if (!row) {
         return null;
@@ -416,6 +427,7 @@ async function buildReceiptViewModel(req, id) {
     return {
         title: `Receipt ${receipt.id}`,
         receipt,
+        lastPaymentHighlight: getLastPaymentHighlight(req, receipt.id),
         ...receiptMode,
         supportRequestPath: `/help-center?receiptId=${encodeURIComponent(receipt.id)}`,
         viewerRole: req.session.user?.role || '',

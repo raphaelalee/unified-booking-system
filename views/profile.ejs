@@ -46,6 +46,9 @@
         phone: 'Phone call',
         whatsapp: 'WhatsApp'
     };
+    const profileBirthdayPromotion = typeof birthdayPromotion !== 'undefined' && birthdayPromotion
+        ? birthdayPromotion
+        : { hasBirthday: false, isBirthdayMonth: false, monthName: '', monthEndLabel: '', voucher: null, pointsMultiplier: 1 };
     const profileContactMethodLabel = profileContactMethodLabels[profile.preferredContactMethod] || 'Not set';
     const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
@@ -625,8 +628,19 @@
                 <section id="membership" class="account-panel account-membership-panel profile-tab-panel" data-profile-panel="membership">
                     <%
                         const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
-                        const activeProfileVouchers = profileVouchers.filter((voucher) => voucher.status === 'active' && Number(voucher.remainingValue || 0) > 0);
-                        const usedProfileVouchers = profileVouchers.filter((voucher) => voucher.status !== 'active' || Number(voucher.remainingValue || 0) <= 0);
+                        const voucherIsActive = (voucher) => {
+                            if (voucher.status !== 'active') {
+                                return false;
+                            }
+
+                            if (voucher.discountType === 'percentage') {
+                                return Number(voucher.discountPercent || 0) > 0;
+                            }
+
+                            return Number(voucher.remainingValue || 0) > 0;
+                        };
+                        const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
+                        const usedProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -677,6 +691,21 @@
                         </p>
                     </div>
 
+                    <% if (profileBirthdayPromotion.hasBirthday) { %>
+                        <div class="notice <%= profileBirthdayPromotion.isBirthdayMonth ? 'success' : '' %>" style="margin-top: 1rem;">
+                            <% if (profileBirthdayPromotion.isBirthdayMonth) { %>
+                                <p>
+                                    Birthday month perks are live for <strong><%= profileBirthdayPromotion.monthName %></strong>.
+                                    Use your <strong>20% OFF Birthday Month Voucher</strong> before
+                                    <strong><%= profileBirthdayPromotion.monthEndLabel %></strong>,
+                                    and eligible booking payments earn <strong>2X loyalty points</strong>.
+                                </p>
+                            <% } else { %>
+                                <p>Your birthday rewards unlock automatically during your birthday month.</p>
+                            <% } %>
+                        </div>
+                    <% } %>
+
                     <div class="account-panel-header" style="margin-top: 2rem;">
                         <div>
                             <p class="eyebrow">Vouchers</p>
@@ -692,10 +721,16 @@
                             <div class="wallet-overview-grid">
                                 <% activeProfileVouchers.forEach((voucher) => { %>
                                     <article class="wallet-balance-card">
-                                        <span><%= voucher.sourceType === 'referral' ? 'Referral voucher' : 'Reward shop voucher' %></span>
-                                        <strong>$<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %></strong>
+                                        <span><%= voucher.sourceType === 'referral' ? 'Referral voucher' : voucher.sourceType === 'birthday' ? 'Birthday voucher' : 'Reward shop voucher' %></span>
+                                        <strong><%= voucher.discountType === 'percentage' ? `${Number(voucher.discountPercent || 0)}% OFF` : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %></strong>
                                         <small><%= voucher.title %> - <%= voucher.code %></small>
-                                        <small><%= voucher.firstBookingOnly ? 'First paid booking only' : 'Use on eligible booking payment' %></small>
+                                        <small>
+                                            <%= voucher.sourceType === 'birthday'
+                                                ? `Use once on an eligible booking payment before ${voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : profileBirthdayPromotion.monthEndLabel}.`
+                                                : voucher.firstBookingOnly
+                                                    ? 'First paid booking only'
+                                                    : 'Use on eligible booking payment' %>
+                                        </small>
                                     </article>
                                 <% }) %>
                             </div>

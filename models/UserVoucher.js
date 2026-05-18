@@ -1,5 +1,9 @@
 const crypto = require('crypto');
 const db = require('../db');
+const {
+    buildBirthdayVoucherData,
+    getBirthdayPromotionContext
+} = require('../utils/birthdayPromotions');
 
 let schemaReady = false;
 let schemaPending = false;
@@ -26,7 +30,7 @@ function ensureSchema(callback) {
 
     schemaPending = true;
 
-    const sql = `
+    const createSql = `
         CREATE TABLE IF NOT EXISTS user_vouchers (
             user_voucher_id INT NOT NULL AUTO_INCREMENT,
             user_id INT NOT NULL,
@@ -36,10 +40,13 @@ function ensureSchema(callback) {
             detail TEXT NULL,
             voucher_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             remaining_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            discount_type VARCHAR(20) NOT NULL DEFAULT 'fixed',
+            discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,
             status VARCHAR(20) NOT NULL DEFAULT 'active',
             booking_only TINYINT(1) NOT NULL DEFAULT 1,
             first_booking_only TINYINT(1) NOT NULL DEFAULT 0,
             code VARCHAR(40) NOT NULL,
+            expires_at DATETIME DEFAULT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             redeemed_at DATETIME DEFAULT NULL,
             PRIMARY KEY (user_voucher_id),
@@ -48,14 +55,47 @@ function ensureSchema(callback) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `;
 
-    db.query(sql, (error) => {
-        if (error) {
-            flushQueue(error);
+    db.query(createSql, (createError) => {
+        if (createError) {
+            flushQueue(createError);
             return;
         }
 
-        schemaReady = true;
-        flushQueue(null);
+        db.query('SHOW COLUMNS FROM user_vouchers', (columnError, columns = []) => {
+            if (columnError) {
+                flushQueue(columnError);
+                return;
+            }
+
+            const fields = new Set(columns.map((column) => column.Field));
+            const alters = [];
+
+            if (!fields.has('discount_type')) {
+                alters.push("ADD COLUMN discount_type VARCHAR(20) NOT NULL DEFAULT 'fixed' AFTER remaining_value");
+            }
+
+            if (!fields.has('discount_percent')) {
+                alters.push("ADD COLUMN discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER discount_type");
+            }
+
+            if (!fields.has('expires_at')) {
+                alters.push('ADD COLUMN expires_at DATETIME DEFAULT NULL AFTER code');
+            }
+
+            if (alters.length === 0) {
+                schemaReady = true;
+                flushQueue(null);
+                return;
+            }
+
+            db.query(`ALTER TABLE user_vouchers ${alters.join(', ')}`, (alterError) => {
+                if (!alterError) {
+                    schemaReady = true;
+                }
+
+                flushQueue(alterError);
+            });
+        });
     });
 }
 
@@ -69,10 +109,13 @@ function mapRow(row = {}) {
         detail: row.detail || '',
         voucherValue: Number(row.voucher_value || 0),
         remainingValue: Number(row.remaining_value || 0),
+        discountType: row.discount_type || 'fixed',
+        discountPercent: Number(row.discount_percent || 0),
         status: row.status || 'active',
         bookingOnly: Boolean(row.booking_only),
         firstBookingOnly: Boolean(row.first_booking_only),
         code: row.code || '',
+        expiresAt: row.expires_at,
         createdAt: row.created_at,
         redeemedAt: row.redeemed_at
     };
@@ -93,8 +136,8 @@ function issueVoucher(data, callback) {
         db.query(
             `
                 INSERT INTO user_vouchers
-                    (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, status, booking_only, first_booking_only, code)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+                    (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, discount_type, discount_percent, status, booking_only, first_booking_only, code, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
             `,
             [
                 data.userId,
@@ -104,9 +147,12 @@ function issueVoucher(data, callback) {
                 data.detail || null,
                 Number(data.voucherValue || 0),
                 Number(data.remainingValue || data.voucherValue || 0),
+                data.discountType || 'fixed',
+                Number(data.discountPercent || 0),
                 data.bookingOnly === false ? 0 : 1,
                 data.firstBookingOnly ? 1 : 0,
-                code
+                code,
+                data.expiresAt || null
             ],
             callback
         );
@@ -124,6 +170,109 @@ function issueReferralVoucher(userId, referralCode, callback) {
         bookingOnly: true,
         firstBookingOnly: true
     }, callback);
+}
+
+function expireExpiredVouchers(userId, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const params = [];
+        let whereClause = "status = 'active' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP";
+
+        if (userId) {
+            whereClause += ' AND user_id = ?';
+            params.push(userId);
+        }
+
+        db.query(
+            `UPDATE user_vouchers SET status = 'expired' WHERE ${whereClause}`,
+            params,
+            callback
+        );
+    });
+}
+
+function findExistingBirthdayVoucher(userId, sourceReference, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `
+                SELECT *
+                FROM user_vouchers
+                WHERE user_id = ?
+                    AND source_type = 'birthday'
+                    AND source_reference = ?
+                ORDER BY user_voucher_id DESC
+                LIMIT 1
+            `,
+            [userId, sourceReference],
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, rows[0] ? mapRow(rows[0]) : null);
+            }
+        );
+    });
+}
+
+function ensureBirthdayVoucherForUser(user, callback) {
+    const birthdayVoucher = buildBirthdayVoucherData(user?.user_id || user?.id, user?.birthday);
+
+    if (!birthdayVoucher) {
+        callback(null, {
+            issued: false,
+            voucher: null,
+            context: getBirthdayPromotionContext(user?.birthday)
+        });
+        return;
+    }
+
+    return findExistingBirthdayVoucher(birthdayVoucher.userId, birthdayVoucher.sourceReference, (lookupError, existingVoucher) => {
+        if (lookupError) {
+            callback(lookupError);
+            return;
+        }
+
+        if (existingVoucher) {
+            callback(null, {
+                issued: false,
+                voucher: existingVoucher,
+                context: getBirthdayPromotionContext(user?.birthday)
+            });
+            return;
+        }
+
+        // Birthday vouchers are issued lazily when the customer opens profile, wallet, or payment.
+        return issueVoucher(birthdayVoucher, (issueError, result) => {
+            if (issueError) {
+                callback(issueError);
+                return;
+            }
+
+            findByIdForUser(result.insertId, birthdayVoucher.userId, (reloadError, issuedVoucher) => {
+                if (reloadError) {
+                    callback(reloadError);
+                    return;
+                }
+
+                callback(null, {
+                    issued: true,
+                    voucher: issuedVoucher,
+                    context: getBirthdayPromotionContext(user?.birthday)
+                });
+            });
+        });
+    });
 }
 
 function redeemRewardShopVoucher(userId, offer, callback) {
@@ -182,8 +331,8 @@ function redeemRewardShopVoucher(userId, offer, callback) {
                                 connection.query(
                                     `
                                         INSERT INTO user_vouchers
-                                            (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, status, booking_only, first_booking_only, code)
-                                        VALUES (?, 'reward_shop', ?, ?, ?, ?, ?, 'active', 1, 0, ?)
+                                            (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, discount_type, discount_percent, status, booking_only, first_booking_only, code, expires_at)
+                                        VALUES (?, 'reward_shop', ?, ?, ?, ?, ?, 'fixed', 0, 'active', 1, 0, ?, NULL)
                                     `,
                                     [
                                         userId,
@@ -230,32 +379,39 @@ function redeemRewardShopVoucher(userId, offer, callback) {
 }
 
 function getByUserId(userId, callback) {
-    ensureSchema((schemaError) => {
-        if (schemaError) {
-            callback(schemaError);
+    expireExpiredVouchers(userId, (expireError) => {
+        if (expireError) {
+            callback(expireError);
             return;
         }
 
-        db.query(
-            `
-                SELECT *
-                FROM user_vouchers
-                WHERE user_id = ?
-                ORDER BY
-                    CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-                    created_at DESC,
-                    user_voucher_id DESC
-            `,
-            [userId],
-            (error, rows = []) => {
-                if (error) {
-                    callback(error);
-                    return;
-                }
-
-                callback(null, rows.map(mapRow));
+        ensureSchema((schemaError) => {
+            if (schemaError) {
+                callback(schemaError);
+                return;
             }
-        );
+
+            db.query(
+                `
+                    SELECT *
+                    FROM user_vouchers
+                    WHERE user_id = ?
+                    ORDER BY
+                        CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+                        created_at DESC,
+                        user_voucher_id DESC
+                `,
+                [userId],
+                (error, rows = []) => {
+                    if (error) {
+                        callback(error);
+                        return;
+                    }
+
+                    callback(null, rows.map(mapRow));
+                }
+            );
+        });
     });
 }
 
@@ -266,7 +422,17 @@ function getActiveForUser(userId, callback) {
             return;
         }
 
-        callback(null, vouchers.filter((voucher) => voucher.status === 'active' && voucher.remainingValue > 0));
+        callback(null, vouchers.filter((voucher) => {
+            if (voucher.status !== 'active') {
+                return false;
+            }
+
+            if (voucher.discountType === 'percentage') {
+                return Number(voucher.discountPercent || 0) > 0;
+            }
+
+            return Number(voucher.remainingValue || 0) > 0;
+        }));
     });
 }
 
@@ -319,9 +485,23 @@ function validateForBooking(voucher, payment, callback) {
         return;
     }
 
-    if (voucher.status !== 'active' || voucher.remainingValue <= 0) {
+    const isPercentageVoucher = voucher.discountType === 'percentage';
+    const hasValue = isPercentageVoucher
+        ? Number(voucher.discountPercent || 0) > 0
+        : Number(voucher.remainingValue || 0) > 0;
+
+    if (voucher.status !== 'active' || !hasValue) {
         callback(new Error('This voucher is no longer active.'));
         return;
+    }
+
+    if (voucher.expiresAt) {
+        const expiry = new Date(voucher.expiresAt);
+
+        if (!Number.isNaN(expiry.getTime()) && expiry < new Date()) {
+            callback(new Error('This voucher has expired.'));
+            return;
+        }
     }
 
     if (!payment.bookingId || payment.kind !== 'booking') {
@@ -377,6 +557,8 @@ function markRedeemed(userVoucherId, callback) {
 }
 
 module.exports = {
+    ensureBirthdayVoucherForUser,
+    expireExpiredVouchers,
     issueVoucher,
     issueReferralVoucher,
     redeemRewardShopVoucher,

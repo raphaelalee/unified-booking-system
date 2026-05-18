@@ -27,9 +27,41 @@ const {
     verifyBookingCheckInToken,
     verifyMerchantToken
 } = require('../utils/qrToken');
+const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 function getTodayInputValue() {
     return new Date().toISOString().slice(0, 10);
+}
+
+function buildBirthdayPromotion(user, vouchers = []) {
+    const context = getBirthdayPromotionContext(user?.birthday);
+    const voucher = vouchers.find((entry) => {
+        return String(entry.sourceType || '').toLowerCase() === 'birthday'
+            && String(entry.sourceReference || '') === `birthday-${context.rewardYear}`;
+    }) || null;
+
+    return {
+        hasBirthday: context.hasBirthday,
+        isBirthdayMonth: context.isBirthdayMonth,
+        monthName: context.monthName,
+        monthEndLabel: context.monthEndLabel,
+        voucher,
+        pointsMultiplier: context.isBirthdayMonth ? 2 : 1
+    };
+}
+
+function calculateVoucherDiscount(voucher, amount) {
+    const grossAmount = Number(amount || 0);
+
+    if (!voucher || grossAmount <= 0) {
+        return 0;
+    }
+
+    if (voucher.discountType === 'percentage') {
+        return Math.round((grossAmount * (Number(voucher.discountPercent || 0) / 100)) * 100) / 100;
+    }
+
+    return Math.min(Number(voucher.remainingValue || 0), grossAmount);
 }
 
 function appendQueryParams(path, params = {}) {
@@ -2455,6 +2487,7 @@ async function showPayment(req, res) {
 
         const loyalty = await getLoyaltyView(req.session.user.id);
         const availableVouchers = await getActiveBookingVouchers(req.session.user.id);
+        const birthdayPromotion = buildBirthdayPromotion(req.session.user, availableVouchers);
 
         return res.render('payment', {
             title: 'Payment',
@@ -2475,6 +2508,7 @@ async function showPayment(req, res) {
             deliveryPhone: '',
             selectedVoucherId: '',
             availableVouchers,
+            birthdayPromotion,
             loyalty,
             error: null
         });
@@ -2573,6 +2607,7 @@ function renderPaymentForm(res, payment, error = null) {
         deliveryPhone: '',
         selectedVoucherId: payment.selectedVoucherId || '',
         availableVouchers: payment.availableVouchers || [],
+        birthdayPromotion: payment.birthdayPromotion || null,
         loyalty: null,
         ...payment,
         error
@@ -2595,14 +2630,34 @@ function getLoyaltyView(userId) {
 
 function getActiveBookingVouchers(userId) {
     return new Promise((resolve) => {
-        UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
-            if (error) {
-                console.error(error);
-                resolve([]);
+        User.findById(userId, (userError, user) => {
+            if (userError) {
+                console.error(userError);
+            }
+
+            const loadVouchers = () => UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
+                if (error) {
+                    console.error(error);
+                    resolve([]);
+                    return;
+                }
+
+                resolve(vouchers.filter((voucher) => voucher.bookingOnly));
+            });
+
+            if (!user) {
+                loadVouchers();
                 return;
             }
 
-            resolve(vouchers.filter((voucher) => voucher.bookingOnly));
+            // Birthday vouchers are prepared on demand so existing users do not need a batch job.
+            UserVoucher.ensureBirthdayVoucherForUser(user, (birthdayVoucherError) => {
+                if (birthdayVoucherError) {
+                    console.error(birthdayVoucherError);
+                }
+
+                loadVouchers();
+            });
         });
     });
 }
@@ -2636,7 +2691,7 @@ async function applyVoucherRedemption(req, payment) {
         });
     });
 
-    const voucherDiscount = Math.min(Number(voucher.remainingValue || 0), Number(payment.amount || 0));
+    const voucherDiscount = calculateVoucherDiscount(voucher, payment.amount);
 
     if (voucherDiscount <= 0) {
         return payment;
@@ -2648,6 +2703,8 @@ async function applyVoucherRedemption(req, payment) {
         voucherId: voucher.id,
         voucherCode: voucher.code,
         voucherTitle: voucher.title,
+        voucherDiscountType: voucher.discountType || 'fixed',
+        voucherDiscountPercent: Number(voucher.discountPercent || 0),
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
         voucherDiscount,
         amount: Math.max(0, Math.round((Number(payment.amount || 0) - voucherDiscount) * 100) / 100)
@@ -2813,6 +2870,8 @@ function savePaidReceipt(req, payment, paymentMethod) {
         voucherDiscount: Number(payment.voucherDiscount || 0),
         voucherCode: payment.voucherCode || '',
         voucherTitle: payment.voucherTitle || '',
+        voucherDiscountType: payment.voucherDiscountType || 'fixed',
+        voucherDiscountPercent: Number(payment.voucherDiscountPercent || 0),
         cashbackRedeemed: Number(payment.cashbackRedeemed || 0),
         paymentMethod,
         paymentStatus: 'paid',
@@ -2855,6 +2914,11 @@ function savePaidReceipt(req, payment, paymentMethod) {
                 if (payment.kind === 'booking') {
                     req.session.lastBookingId = null;
                 }
+
+                req.session.lastPayment = {
+                    receiptId,
+                    loyaltyAward: awardResult
+                };
 
                 resolve({ receipt, awardResult });
             });
@@ -2904,14 +2968,19 @@ async function confirmPayment(req, res) {
         trustedPayment = await buildTrustedPayment(req, payment);
         if (trustedPayment.kind === 'booking') {
             trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
+            trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
             trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
+            trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
         }
         trustedPayment = await applyVoucherRedemption(req, trustedPayment);
         trustedPayment = await applyCashbackRedemption(req, trustedPayment);
     } catch (error) {
+        const fallbackVouchers = payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : [];
         const fallbackPayment = trustedPayment || {
             ...payment,
-            availableVouchers: payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : []
+            availableVouchers: fallbackVouchers,
+            birthdayPromotion: payment.bookingId ? buildBirthdayPromotion(req.session.user, fallbackVouchers) : null,
+            loyalty: payment.bookingId ? await getLoyaltyView(req.session.user.id) : null
         };
         return renderPaymentForm(res, fallbackPayment, error.message);
     }

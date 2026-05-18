@@ -45,6 +45,21 @@
 <section class="section compact receipt-section">
     <div class="receipt-layout">
         <article class="receipt-card">
+            <% if (lastPaymentHighlight && lastPaymentHighlight.loyaltyAward && lastPaymentHighlight.loyaltyAward.awarded) { %>
+                <div class="notice <%= lastPaymentHighlight.loyaltyAward.birthdayApplied ? 'success' : '' %>">
+                    <p>
+                        You earned <strong><%= Number(lastPaymentHighlight.loyaltyAward.points || 0) %> loyalty points</strong>
+                        from this payment.
+                        <% if (lastPaymentHighlight.loyaltyAward.birthdayApplied) { %>
+                            Birthday month bonus applied:
+                            <strong><%= Number(lastPaymentHighlight.loyaltyAward.basePoints || 0) %> base points</strong>
+                            plus <strong><%= Number(lastPaymentHighlight.loyaltyAward.bonusPoints || 0) %> bonus points</strong>
+                            for <strong>2X rewards</strong>.
+                        <% } %>
+                    </p>
+                </div>
+            <% } %>
+
             <div class="receipt-meta-grid">
                 <p><span>User</span><strong><%= receipt.userName %></strong></p>
                 <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>

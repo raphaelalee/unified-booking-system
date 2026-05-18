@@ -15,6 +15,7 @@ const PurchaseHistory = require('../models/PurchaseHistory');
 const Notification = require('../models/Notification');
 const { getCartItemCount } = require('../utils/cart');
 const { rotateCsrfToken } = require('../middleware');
+const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 const membershipTiers = [
     { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
@@ -145,6 +146,23 @@ function buildReferralVoucherStatus(accountUser, vouchers = []) {
     };
 }
 
+function buildBirthdayPromotion(accountUser, vouchers = []) {
+    const context = getBirthdayPromotionContext(accountUser?.birthday);
+    const currentBirthdayVoucher = vouchers.find((voucher) => {
+        return String(voucher.sourceType || '').toLowerCase() === 'birthday'
+            && String(voucher.sourceReference || '') === `birthday-${context.rewardYear}`;
+    }) || null;
+
+    return {
+        hasBirthday: context.hasBirthday,
+        isBirthdayMonth: context.isBirthdayMonth,
+        monthName: context.monthName,
+        monthEndLabel: context.monthEndLabel,
+        voucher: currentBirthdayVoucher,
+        pointsMultiplier: context.isBirthdayMonth ? 2 : 1
+    };
+}
+
 function ensureReferralVoucherForExistingAccount(accountUser, vouchers = [], callback) {
     const usedReferralCode = String(accountUser?.referred_by_code || '').trim();
     const existingReferralVoucher = vouchers.find((voucher) => String(voucher.sourceType || '').toLowerCase() === 'referral');
@@ -191,8 +209,9 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let walletHistory = [];
     let reviewableBookings = [];
     let reviewedBookings = [];
-    let bookingAvailability = {};
-    let userVouchers = [];
+        let bookingAvailability = {};
+        let userVouchers = [];
+        let birthdayPromotion = buildBirthdayPromotion(accountUser, []);
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -218,6 +237,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                 userVouchers,
                 referral: buildCustomerReferral(member, referralCode, referralStats),
                 referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
+                birthdayPromotion,
                 upcomingBookings,
                 pastBookings,
                 cancelledBookings,
@@ -264,111 +284,130 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                     console.error(backfillError);
                 }
 
-                userVouchers = hydratedVouchers;
+                const continueWithBirthdayVouchers = (currentVouchers) => {
+                    userVouchers = currentVouchers;
+                    birthdayPromotion = buildBirthdayPromotion(accountUser, currentVouchers);
 
-                const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
-                walletHistory = rows.map(mapWalletHistoryRow);
-                let index = 0;
+                    const receipts = rows.map(PurchaseHistory.mapReceipt).filter(Boolean);
+                    walletHistory = rows.map(mapWalletHistoryRow);
+                    let index = 0;
 
-                function awardNext() {
-                    if (index >= receipts.length) {
-                        loadWallet();
-                        return;
-                    }
-
-                    const receipt = receipts[index];
-                    index += 1;
-                    Loyalty.awardForReceipt(receipt, (awardError) => {
-                        if (awardError) {
-                            console.error(awardError);
-                        }
-
-                        awardNext();
-                    });
-                }
-
-                Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
-                    if (bookingError) {
-                        console.error(bookingError);
-                        awardNext();
-                        return;
-                    }
-
-                    const supportByBookingId = {};
-                    const supportIssueTypes = new Set([
-                        'booking_refund',
-                        'refund_dispute',
-                        'merchant_rejection',
-                        'payment_issue',
-                        'technical_issue'
-                    ]);
-
-                    const continueWithSupport = (supportRequests = []) => {
-                        supportRequests.forEach((request) => {
-                            if (request.targetType !== 'booking' || !supportIssueTypes.has(request.requestType)) {
-                                return;
-                            }
-
-                            supportByBookingId[String(request.targetId)] = request;
-                        });
-
-                        upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
-                        cancelledBookings = bookings
-                            .filter((booking) => String(booking.status || '').toLowerCase() === 'cancelled')
-                            .map((booking) => ({
-                                ...booking,
-                                supportEscalation: supportByBookingId[String(booking.id)] || null
-                            }));
-                        pastBookings = bookings.filter((booking) => (
-                            booking.booking_group === 'past'
-                            && String(booking.status || '').toLowerCase() !== 'cancelled'
-                        ));
-                        const bookingIds = pastBookings.map((booking) => booking.id);
-
-                        Review.getByBookingIds(bookingIds, (reviewError, reviews = []) => {
-                            if (reviewError) {
-                                console.error(reviewError);
-                            } else {
-                                const reviewMap = reviews.reduce((map, review) => {
-                                    map[String(review.bookingId)] = review;
-                                    return map;
-                                }, {});
-
-                                pastBookings = pastBookings.map((booking) => ({
-                                    ...booking,
-                                    review: reviewMap[String(booking.id)] || null
-                                }));
-                            }
-
-                            reviewedBookings = pastBookings.filter((booking) => booking.review);
-                            reviewableBookings = pastBookings.filter((booking) => (
-                                ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
-                            ));
-                            pastBookings = pastBookings.filter((booking) => !booking.review && !(
-                                ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
-                            ));
-
-                            const upcomingIds = upcomingBookings.map((booking) => booking.id);
-                            Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
-                                if (availabilityError) {
-                                    console.error(availabilityError);
-                                } else {
-                                    bookingAvailability = availabilityMap;
-                                }
-
-                                awardNext();
-                            });
-                        });
-                    };
-
-                    SupportRequest.getForCustomer(accountUser.user_id, (supportError, supportRequests = []) => {
-                        if (supportError) {
-                            console.error(supportError);
-                            continueWithSupport([]);
+                    function awardNext() {
+                        if (index >= receipts.length) {
+                            loadWallet();
                             return;
                         }
 
-                        continueWithSupport(supportRequests);
+                        const receipt = receipts[index];
+                        index += 1;
+                        Loyalty.awardForReceipt(receipt, (awardError) => {
+                            if (awardError) {
+                                console.error(awardError);
+                            }
+
+                            awardNext();
+                        });
+                    }
+
+                    Booking.getByUserId(accountUser.user_id, (bookingError, bookings = []) => {
+                        if (bookingError) {
+                            console.error(bookingError);
+                            awardNext();
+                            return;
+                        }
+
+                        const supportByBookingId = {};
+                        const supportIssueTypes = new Set([
+                            'booking_refund',
+                            'refund_dispute',
+                            'merchant_rejection',
+                            'payment_issue',
+                            'technical_issue'
+                        ]);
+
+                        const continueWithSupport = (supportRequests = []) => {
+                            supportRequests.forEach((request) => {
+                                if (request.targetType !== 'booking' || !supportIssueTypes.has(request.requestType)) {
+                                    return;
+                                }
+
+                                supportByBookingId[String(request.targetId)] = request;
+                            });
+
+                            upcomingBookings = bookings.filter((booking) => booking.booking_group === 'upcoming');
+                            cancelledBookings = bookings
+                                .filter((booking) => String(booking.status || '').toLowerCase() === 'cancelled')
+                                .map((booking) => ({
+                                    ...booking,
+                                    supportEscalation: supportByBookingId[String(booking.id)] || null
+                                }));
+                            pastBookings = bookings.filter((booking) => (
+                                booking.booking_group === 'past'
+                                && String(booking.status || '').toLowerCase() !== 'cancelled'
+                            ));
+                            const bookingIds = pastBookings.map((booking) => booking.id);
+
+                            Review.getByBookingIds(bookingIds, (reviewError, reviews = []) => {
+                                if (reviewError) {
+                                    console.error(reviewError);
+                                } else {
+                                    const reviewMap = reviews.reduce((map, review) => {
+                                        map[String(review.bookingId)] = review;
+                                        return map;
+                                    }, {});
+
+                                    pastBookings = pastBookings.map((booking) => ({
+                                        ...booking,
+                                        review: reviewMap[String(booking.id)] || null
+                                    }));
+                                }
+
+                                reviewedBookings = pastBookings.filter((booking) => booking.review);
+                                reviewableBookings = pastBookings.filter((booking) => (
+                                    ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                                ));
+                                pastBookings = pastBookings.filter((booking) => !booking.review && !(
+                                    ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
+                                ));
+
+                                const upcomingIds = upcomingBookings.map((booking) => booking.id);
+                                Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
+                                    if (availabilityError) {
+                                        console.error(availabilityError);
+                                    } else {
+                                        bookingAvailability = availabilityMap;
+                                    }
+
+                                    awardNext();
+                                });
+                            });
+                        };
+
+                        SupportRequest.getForCustomer(accountUser.user_id, (supportError, supportRequests = []) => {
+                            if (supportError) {
+                                console.error(supportError);
+                                continueWithSupport([]);
+                                return;
+                            }
+
+                            continueWithSupport(supportRequests);
+                        });
+                    });
+                };
+
+                return UserVoucher.ensureBirthdayVoucherForUser(accountUser, (birthdayVoucherError) => {
+                    if (birthdayVoucherError) {
+                        console.error(birthdayVoucherError);
+                    }
+
+                    return UserVoucher.getByUserId(accountUser.user_id, (refreshedVoucherError, refreshedVouchers = hydratedVouchers) => {
+                        if (refreshedVoucherError) {
+                            console.error(refreshedVoucherError);
+                            continueWithBirthdayVouchers(hydratedVouchers);
+                            return;
+                        }
+
+                        continueWithBirthdayVouchers(refreshedVouchers);
                     });
                 });
             });
@@ -388,6 +427,14 @@ function getEmptyCustomerExtras() {
         userVouchers: [],
         referral: null,
         referralVoucherStatus: null,
+        birthdayPromotion: {
+            hasBirthday: false,
+            isBirthdayMonth: false,
+            monthName: '',
+            monthEndLabel: '',
+            voucher: null,
+            pointsMultiplier: 1
+        },
         upcomingBookings: [],
         pastBookings: [],
         cancelledBookings: [],
@@ -974,6 +1021,7 @@ function showProfile(req, res) {
                 userVouchers: customerExtras.userVouchers,
                 referral: customerExtras.referral,
                 referralVoucherStatus: customerExtras.referralVoucherStatus,
+                birthdayPromotion: customerExtras.birthdayPromotion,
                 upcomingBookings: customerExtras.upcomingBookings,
                 pastBookings: customerExtras.pastBookings,
                 cancelledBookings: customerExtras.cancelledBookings,
