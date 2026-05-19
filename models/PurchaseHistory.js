@@ -78,6 +78,14 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN cashback_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
             }
 
+            if (!fields.has('points_redeemed')) {
+                alters.push('ADD COLUMN points_redeemed INT NOT NULL DEFAULT 0');
+            }
+
+            if (!fields.has('points_discount')) {
+                alters.push('ADD COLUMN points_discount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -106,8 +114,8 @@ function save(receipt, callback) {
         const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
         const sql = `
             INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 item_names = VALUES(item_names),
                 items_json = VALUES(items_json),
@@ -120,7 +128,9 @@ function save(receipt, callback) {
                 pickup_status = VALUES(pickup_status),
                 pickup_at = VALUES(pickup_at),
                 original_amount = VALUES(original_amount),
-                cashback_used = VALUES(cashback_used)
+                cashback_used = VALUES(cashback_used),
+                points_redeemed = VALUES(points_redeemed),
+                points_discount = VALUES(points_discount)
         `;
 
         db.query(sql, [
@@ -139,7 +149,9 @@ function save(receipt, callback) {
             receipt.pickupStatus || (receipt.fulfilment === 'pickup' ? 'pending_pickup' : null),
             receipt.pickupAt ? new Date(receipt.pickupAt) : null,
             Number(receipt.originalAmount || receipt.totalAmount || 0),
-            Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0)
+            Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0),
+            Number(receipt.pointsRedeemed || 0),
+            Number(receipt.pointsDiscount || 0)
         ], callback);
     });
 }
@@ -347,6 +359,8 @@ function mapReceipt(row) {
         totalAmount: Number(row.total_amount || 0),
         originalAmount: Number(row.original_amount || row.total_amount || 0),
         cashbackRedeemed: Number(row.cashback_used || 0),
+        pointsRedeemed: Number(row.points_redeemed || 0),
+        pointsDiscount: Number(row.points_discount || 0),
         paymentMethod: row.payment_method || 'paid',
         paymentStatus: row.payment_status || 'paid',
         deliveryStatus: row.delivery_status || 'processing',

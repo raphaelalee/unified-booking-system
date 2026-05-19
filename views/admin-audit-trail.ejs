@@ -1,13 +1,6 @@
 <%- include('partials/header', { title }) %>
 
-<%
-    const auditLogs = [
-        { admin: currentUser?.name || 'Admin', action: 'Viewed platform dashboard', entity: 'Admin overview', time: 'Now' },
-        { admin: currentUser?.name || 'Admin', action: 'Reviewed booking records', entity: `${(bookings || []).length} bookings`, time: 'Today' },
-        { admin: currentUser?.name || 'Admin', action: 'Checked merchant health', entity: `${(merchants || []).length} merchants`, time: 'Today' },
-        { admin: currentUser?.name || 'Admin', action: 'Loaded automation logs', entity: 'AI automation', time: 'Today' }
-    ];
-%>
+<% const safeAuditLogs = Array.isArray(auditLogs) ? auditLogs : []; %>
 
 <section class="admin-dashboard-v2">
     <%- include('partials/admin-sidebar') %>
@@ -20,8 +13,19 @@
             <article class="admin-panel span-7">
                 <div class="admin-panel-heading"><div><p class="eyebrow">Audit Trail</p><h2>Recent admin activity</h2></div></div>
                 <div class="admin-log-list">
-                    <% auditLogs.forEach((log) => { %>
-                        <article><strong><%= log.admin %></strong><span><%= log.action %></span><small><%= log.entity %> - <%= log.time %></small></article>
+                    <% if (!safeAuditLogs.length) { %>
+                        <article><strong>System</strong><span>No audit entries yet</span><small>Rule changes and reward redemptions will appear here.</small></article>
+                    <% } %>
+                    <% safeAuditLogs.forEach((log) => { %>
+                        <article>
+                            <strong><%= log.actorName %></strong>
+                            <span><%= String(log.action || '').replace(/_/g, ' ') %></span>
+                            <small>
+                                <%= log.entityType %><%= log.entityId ? ` #${log.entityId}` : '' %>
+                                -
+                                <%= new Date(log.createdAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %>
+                            </small>
+                        </article>
                     <% }) %>
                 </div>
             </article>

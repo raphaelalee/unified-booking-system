@@ -11,6 +11,7 @@
     const rescheduleTools = typeof rescheduleAutomation !== 'undefined' && rescheduleAutomation ? rescheduleAutomation : {};
     const rescheduleSettings = rescheduleTools.settings || {
         autoApproveEnabled: 1,
+        autoApproveBookings: 1,
         minimumNoticeHours: 24,
         maxReschedulesAllowed: 2,
         blockedTimes: '',
@@ -59,6 +60,7 @@
     const totalBookings = Number(stats.bookingCount || 0);
     const checkedInBookings = (appointments.allBookings || []).filter((booking) => ['checked_in', 'completed'].includes(booking.status)).length;
     const pendingCheckIns = Math.max(0, totalBookings - checkedInBookings);
+    const rewardRedemptions = appointments.rewardRedemptions || {};
     const trendBase = Math.max(totalBookings, 1);
     const makeSparkline = (seed) => [18, 28, 22, 36, 30, 44, 38].map((value, index) => Math.min(100, value + (seed * 3) + index));
     const kpiCards = [
@@ -67,7 +69,7 @@
         { label: 'Pending Appointments', value: pendingAppointments.length, icon: 'PA', trend: pendingAppointments.length > 0 ? -3 : 0, detail: 'need confirmation', accent: pendingAppointments.length > 0 ? 'yellow' : 'green', sparkline: makeSparkline(pendingAppointments.length) },
         { label: 'Repeat Customers', value: appointments.repeatCustomers || 0, icon: 'RC', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: 'booked more than once', accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
         { label: 'QR Walk-ins', value: appointments.qrWalkIns || 0, icon: 'QR', trend: checkedInBookings > 0 ? 7 : 0, detail: 'checked in today', accent: 'blue', sparkline: makeSparkline(checkedInBookings) },
-        { label: 'Promo Redemptions', value: appointments.loyaltyRedemptions || 0, icon: 'PR', trend: appointments.loyaltyRedemptions > 0 ? 5 : 0, detail: 'real promotion uses', accent: 'green', sparkline: makeSparkline(appointments.loyaltyRedemptions || 0) }
+        { label: 'Reward Bookings', value: rewardRedemptions.rewardBookingCount || 0, icon: 'RB', trend: rewardRedemptions.rewardBookingCount > 0 ? 5 : 0, detail: 'used points', accent: 'green', sparkline: makeSparkline(rewardRedemptions.rewardBookingCount || 0) }
     ];
     const statusLabels = {
         pending: 'pending',
@@ -196,7 +198,8 @@
                     <div class="merchant-card-heading"><div><p class="eyebrow">Analytics</p><h2>Performance</h2></div></div>
                     <div class="merchant-checkin-metrics">
                         <p><span>Revenue growth</span><strong><%= Number(stats.growthPercent || 0).toFixed(1) %>%</strong></p>
-                        <p><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong></p>
+                        <p><span>Reward bookings</span><strong><%= rewardRedemptions.rewardBookingCount || 0 %></strong></p>
+                        <p><span>Redeemed value</span><strong>$<%= formatCurrency(rewardRedemptions.totalRedeemedValue || 0) %></strong></p>
                         <p><span>Average order</span><strong>$<%= formatCurrency(stats.averageOrderValue) %></strong></p>
                     </div>
                     <a class="text-button" href="/merchant/analytics">Open analytics</a>

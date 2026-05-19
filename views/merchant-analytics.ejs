@@ -2,6 +2,7 @@
 
 <%
     const appointments = typeof appointmentReport !== 'undefined' && appointmentReport ? appointmentReport : {};
+    const rewardRedemptions = appointments.rewardRedemptions || {};
     const customerInsights = customerReport?.insights || {};
     const sales = salesReport || {};
     const merchantChartPayload = {
@@ -32,9 +33,16 @@
 
         <section class="merchant-kpi-grid">
             <article class="merchant-kpi-card accent-green"><span>Monthly revenue</span><strong>$<%= formatCurrency(appointments.monthlyRevenue) %></strong><small>service booking revenue</small></article>
-            <article class="merchant-kpi-card accent-orange"><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong><small>campaign usage</small></article>
+            <article class="merchant-kpi-card accent-orange"><span>Reward bookings</span><strong><%= rewardRedemptions.rewardBookingCount || 0 %></strong><small>bookings using points</small></article>
             <article class="merchant-kpi-card accent-blue"><span>Repeat customers</span><strong><%= appointments.repeatCustomers || 0 %></strong><small>retention signal</small></article>
             <article class="merchant-kpi-card accent-yellow"><span>Top service</span><strong><%= customerInsights.topServiceName || 'No service' %></strong><small>highest demand</small></article>
+        </section>
+
+        <section class="merchant-kpi-grid">
+            <article class="merchant-kpi-card accent-orange"><span>Redeemed value</span><strong>$<%= formatCurrency(rewardRedemptions.totalRedeemedValue) %></strong><small>reward discount given</small></article>
+            <article class="merchant-kpi-card accent-green"><span>Loyalty revenue</span><strong>$<%= formatCurrency(rewardRedemptions.loyaltyDrivenRevenue) %></strong><small>paid revenue after rewards</small></article>
+            <article class="merchant-kpi-card accent-blue"><span>Reward repeat customers</span><strong><%= rewardRedemptions.repeatRewardCustomers || 0 %></strong><small>reward users with repeat bookings</small></article>
+            <article class="merchant-kpi-card accent-yellow"><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong><small>campaign usage</small></article>
         </section>
 
         <section class="merchant-insight-grid">

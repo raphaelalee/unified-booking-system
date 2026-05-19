@@ -34,12 +34,7 @@
                 <p><span>Merchant</span><strong><%= booking.merchantName %></strong></p>
                 <p>
                     <span>Date/time</span>
-                    <strong>
-                        <%= booking.bookingDate %>
-                        <% if (booking.bookingTime) { %>
-                            at <%= booking.bookingTime %>
-                        <% } %>
-                    </strong>
+                    <strong><%= booking.appointmentLabel || booking.bookingDate %></strong>
                 </p>
             </div>
             <p class="muted">Use the QR code from your email when checking in at the merchant counter.</p>
@@ -50,12 +45,14 @@
             <img class="qr-code" src="<%= booking.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= booking.id %>">
             <p class="muted"><%= emailSkipped ? 'Use this dynamic QR when checking in.' : 'This is the same attendance QR included in your booking email.' %></p>
             <a class="qr-link" href="<%= booking.checkinUrl %>"><%= booking.checkinUrl %></a>
-            <div class="qr-debug-panel">
-                <p class="eyebrow">QR Debug</p>
-                <p class="muted"><strong>System:</strong> booking-check-in</p>
-                <p class="muted"><strong>Token:</strong> <%= booking.checkinToken %></p>
-                <p class="muted"><strong>Route target:</strong> /checkin/<%= booking.checkinToken %></p>
-            </div>
+            <% if (showQrDebug) { %>
+                <div class="qr-debug-panel">
+                    <p class="eyebrow">QR Debug</p>
+                    <p class="muted"><strong>System:</strong> booking-check-in</p>
+                    <p class="muted"><strong>Token:</strong> <%= booking.checkinToken %></p>
+                    <p class="muted"><strong>Route target:</strong> /checking/<%= booking.checkinToken %></p>
+                </div>
+            <% } %>
         </aside>
     </div>
 </section>

@@ -80,7 +80,7 @@
                         <a class="button secondary" href="<%= storefrontQrImage %>" download="vaniday-storefront-qr.png">Download QR</a>
                         <button class="button secondary" type="button" onclick="window.print()">Print QR</button>
                     </div>
-                    <% if (qrDebug) { %>
+                    <% if (showQrDebug && qrDebug) { %>
                         <div class="qr-debug-panel">
                             <p class="eyebrow">QR Debug</p>
                             <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>

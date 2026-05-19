@@ -6,7 +6,7 @@
 <section class="page-title">
     <p class="eyebrow">Admin</p>
     <h1>Loyalty settings.</h1>
-    <p>Control how customers earn points, cashback, and point-to-cashback redemptions.</p>
+    <p>Control how customers earn points, redeem points, and how far merchants can discount bookings.</p>
 </section>
 
 <section class="section compact">
@@ -22,14 +22,15 @@
         <div class="account-panel-header">
             <div>
                 <p class="eyebrow">Configurable rules</p>
-                <h2>Reward earning and redemption</h2>
+                <h2>Platform Loyalty Rules</h2>
+                <p class="muted">These rules apply across all merchants on the Vaniday platform.</p>
             </div>
         </div>
 
         <div class="form-grid">
             <label>
                 Points per $1 paid
-                <input type="number" name="pointsPerDollar" min="0" step="0.01" value="<%= rules.pointsPerDollar %>" required>
+                <input type="number" name="pointsPerDollar" min="1" step="1" value="<%= rules.pointsPerDollar %>" required>
             </label>
             <label>
                 Cashback percent
@@ -42,6 +43,14 @@
             <label>
                 Cash value per point
                 <input type="number" name="pointsToCashRate" min="0.0001" step="0.0001" value="<%= rules.pointsToCashRate %>" required>
+            </label>
+            <label>
+                Maximum discount per booking %
+                <input type="number" name="maxDiscountPercent" min="0" max="100" step="0.01" value="<%= rules.maxDiscountPercent %>" required>
+            </label>
+            <label>
+                Points expiry period
+                <input type="number" name="pointsExpiryDays" min="1" step="1" value="<%= rules.pointsExpiryDays %>" required>
             </label>
         </div>
 

@@ -11,6 +11,10 @@ const {
     getPublicBaseUrl,
     signBookingCheckInToken
 } = require('../utils/qrToken');
+const {
+    formatAppointmentDateTime,
+    formatDateTime
+} = require('../utils/dateTimeFormat');
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
@@ -67,23 +71,6 @@ function getPickupStatusLabel(value) {
 
 function isCollectedStatus(value) {
     return ['picked_up', 'collected', 'delivered'].includes(String(value || '').trim().toLowerCase());
-}
-
-function formatReceiptDateTime(value) {
-    if (!value) {
-        return '';
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return String(value);
-    }
-
-    return date.toLocaleString('en-SG', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-    });
 }
 
 function getFulfilmentLabel(value) {
@@ -161,6 +148,8 @@ function mapBookingReceipt(row, req) {
         return null;
     }
 
+    const appointmentLabel = formatAppointmentDateTime(row.booking_date, row.booking_time);
+
     return {
         id: row.id,
         type: 'booking',
@@ -175,13 +164,13 @@ function mapBookingReceipt(row, req) {
                 quantity: 1,
                 unitPrice: Number(row.service_price || 0),
                 lineTotal: Number(row.service_price || 0),
-                detail: `${row.booking_date} at ${row.booking_time}`
+                detail: appointmentLabel
             }
         ],
         totalAmount: Number(row.service_price || 0),
         paymentMethod: row.payment_status === 'paid' ? 'Paid booking' : 'No payment required',
         paymentStatus: row.payment_status || row.status,
-        paidAt: row.checked_in_at || new Date().toISOString(),
+        paidAt: row.paid_at || row.checked_in_at || null,
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
         status: row.status,
@@ -407,13 +396,27 @@ async function loadReceipt(req, id) {
 }
 
 async function buildReceiptViewModel(req, id) {
-    const receipt = await loadReceipt(req, id);
+    const loadedReceipt = await loadReceipt(req, id);
 
-    if (!receipt) {
+    if (!loadedReceipt) {
         return null;
     }
 
-    const receiptMode = getReceiptMode(receipt);
+    const receiptMode = getReceiptMode(loadedReceipt);
+    const appointmentLabel = receiptMode.isBooking
+        ? formatAppointmentDateTime(loadedReceipt.bookingDate, loadedReceipt.bookingTime)
+        : '';
+    const receipt = receiptMode.isBooking
+        ? {
+            ...loadedReceipt,
+            statusLabel: formatStatusLabel(loadedReceipt.status || 'confirmed'),
+            appointmentLabel,
+            items: (loadedReceipt.items || []).map((item) => ({
+                ...item,
+                detail: appointmentLabel || item.detail
+            }))
+        }
+        : loadedReceipt;
     const token = receiptMode.isBooking ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
     const verificationUrl = receiptMode.isBooking
         ? getBookingCheckInUrl(req, receipt.id)
@@ -440,10 +443,14 @@ async function buildReceiptViewModel(req, id) {
             : 'Show this QR code to the merchant when collecting your item.',
         qrSystem: receiptMode.isBooking ? 'booking-check-in' : 'pickup-verification',
         qrRouteTarget: receiptMode.isBooking
-            ? `/checkin/${token}`
+            ? `/checking/${token}`
             : `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`,
         qrCodeDataUrl,
-        paidAtLabel: formatReceiptDateTime(receipt.paidAt || receipt.checkedInAt || new Date())
+        showQrDebug: process.env.NODE_ENV === 'development',
+        appointmentLabel,
+        paidAtLabel: formatDateTime(receipt.paidAt || receipt.checkedInAt || new Date()),
+        checkedInAtLabel: formatDateTime(receipt.checkedInAt),
+        pickupAtLabel: formatDateTime(receipt.pickupAt)
     };
 }
 
@@ -581,7 +588,7 @@ function buildFallbackPdf(data) {
                 ['Customer', receipt.userName],
                 ['Payment', receipt.paymentMethod],
                 ['Date/time', data.paidAtLabel],
-                ['Status', data.isProductPickup ? data.pickupStatusLabel : (receipt.paymentStatus || receipt.status || 'paid')]
+                ['Status', data.isProductPickup ? data.pickupStatusLabel : (receipt.statusLabel || receipt.paymentStatus || receipt.status || 'paid')]
             ];
 
             metaRows.forEach(([label, value], index) => {
@@ -759,8 +766,8 @@ function verifyPickup(req, res) {
                 receiptId,
                 pickupStatusLabel: getPickupStatusLabel(order.pickupStatus),
                 paymentStatusLabel: formatStatusLabel(order.paymentStatus || 'paid'),
-                createdAtLabel: formatReceiptDateTime(order.createdAt),
-                collectedAtLabel: formatReceiptDateTime(order.collectedAt),
+                createdAtLabel: formatDateTime(order.createdAt),
+                collectedAtLabel: formatDateTime(order.collectedAt),
                 quantityTotal: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
             },
             token: req.query.token || '',

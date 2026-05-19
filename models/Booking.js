@@ -1,6 +1,9 @@
 const db = require('../db');
 
 const bookings = [];
+const BOOKING_REVIEW_STATUSES = ['pending'];
+const BOOKING_CONFIRMED_STATUSES = ['confirmed', 'paid', 'checked_in', 'completed'];
+const BOOKING_UNAVAILABLE_STATUSES = [...BOOKING_REVIEW_STATUSES, ...BOOKING_CONFIRMED_STATUSES];
 let bookingManagementSchemaReady = false;
 let bookingManagementSchemaPending = false;
 let bookingManagementSchemaQueue = [];
@@ -145,6 +148,7 @@ function ensureRescheduleAutomationSchema(callback) {
         CREATE TABLE IF NOT EXISTS merchant_reschedule_settings (
             salon_id INT NOT NULL,
             auto_approve_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            auto_approve_bookings TINYINT(1) NOT NULL DEFAULT 1,
             minimum_notice_hours INT NOT NULL DEFAULT 24,
             max_reschedules_allowed INT NOT NULL DEFAULT 2,
             blocked_times TEXT,
@@ -186,12 +190,42 @@ function ensureRescheduleAutomationSchema(callback) {
             return;
         }
 
-        db.query(requestsSql, (requestsError) => {
-            if (!requestsError) {
-                rescheduleAutomationSchemaReady = true;
+        db.query('SHOW COLUMNS FROM merchant_reschedule_settings', (columnsError, columns = []) => {
+            if (columnsError) {
+                flushRescheduleAutomationSchema(columnsError);
+                return;
             }
 
-            flushRescheduleAutomationSchema(requestsError);
+            const fields = new Set(columns.map((column) => column.Field));
+            const alters = [];
+
+            if (!fields.has('auto_approve_bookings')) {
+                alters.push('ADD COLUMN auto_approve_bookings TINYINT(1) NOT NULL DEFAULT 1 AFTER auto_approve_enabled');
+            }
+
+            const createRequests = () => {
+                db.query(requestsSql, (requestsError) => {
+                    if (!requestsError) {
+                        rescheduleAutomationSchemaReady = true;
+                    }
+
+                    flushRescheduleAutomationSchema(requestsError);
+                });
+            };
+
+            if (!alters.length) {
+                createRequests();
+                return;
+            }
+
+            db.query(`ALTER TABLE merchant_reschedule_settings ${alters.join(', ')}`, (alterError) => {
+                if (alterError) {
+                    flushRescheduleAutomationSchema(alterError);
+                    return;
+                }
+
+                createRequests();
+            });
         });
     });
 }
@@ -283,6 +317,24 @@ function uniqueSortedSlots(slots = []) {
     return Array.from(new Set(slots.filter(Boolean))).sort((left, right) => {
         return normalizeTimeMinutes(left) - normalizeTimeMinutes(right);
     });
+}
+
+function makeStatusInClause(statuses = BOOKING_UNAVAILABLE_STATUSES) {
+    const safeStatuses = (Array.isArray(statuses) ? statuses : [])
+        .map((status) => String(status || '').trim().toLowerCase())
+        .filter(Boolean);
+
+    return safeStatuses.length ? safeStatuses : BOOKING_UNAVAILABLE_STATUSES;
+}
+
+function isPeakHour(bookingTime) {
+    const minutes = normalizeTimeMinutes(bookingTime);
+
+    if (minutes === null) {
+        return false;
+    }
+
+    return (minutes >= 12 * 60 && minutes < 14 * 60) || minutes >= 17 * 60;
 }
 
 function create(bookingData) {
@@ -547,9 +599,11 @@ function getAvailabilitySettings(merchantId, callback) {
         }
 
         callback(null, {
+            autoApproveBookings: Number(settings.autoApproveBookings ?? settings.autoApproveEnabled ?? 1) === 1,
             businessStart: String(settings.businessStart || '09:00').slice(0, 5),
             businessEnd: String(settings.businessEnd || '20:00').slice(0, 5),
             blockedTimes: parseBlockedTimes(settings.blockedTimes || ''),
+            peakHourRestrictions: Number(settings.peakHourRestrictions ?? 1) === 1,
             bufferMinutes: Math.max(0, Number(settings.bufferMinutes || 0))
         });
     });
@@ -578,12 +632,28 @@ function generateCandidateSlots(settings, durationMins) {
     return slots;
 }
 
+function isSlotWithinBusinessHours(slot, settings, durationMins) {
+    const start = normalizeTimeMinutes(slot);
+    const businessStart = normalizeTimeMinutes(settings.businessStart);
+    const businessEnd = normalizeTimeMinutes(settings.businessEnd);
+    const duration = Math.max(15, Number(durationMins || 60));
+    const totalDuration = duration + Math.max(0, Number(settings.bufferMinutes || 0));
+
+    if (start === null || businessStart === null || businessEnd === null) {
+        return false;
+    }
+
+    return start >= businessStart && start + totalDuration <= businessEnd;
+}
+
 function hasBookingClash(merchantId, bookingDate, startTime, endTime, options, callback) {
     const done = typeof options === 'function' ? options : callback;
     const config = typeof options === 'function' ? {} : (options || {});
     const startMinutes = normalizeTimeMinutes(startTime);
     const endMinutes = normalizeTimeMinutes(endTime);
     const excludeBookingId = Number(config.excludeBookingId || 0);
+    const statuses = makeStatusInClause(config.statuses);
+    const placeholders = statuses.map(() => '?').join(', ');
 
     if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
         done(null, false, []);
@@ -605,10 +675,10 @@ function hasBookingClash(merchantId, bookingDate, startTime, endTime, options, c
         WHERE bookings.merchant_id = ?
             AND bookings.booking_id <> ?
             AND bookings.booking_date = ?
-            AND bookings.status NOT IN ('cancelled', 'completed', 'no_show')
+            AND bookings.status IN (${placeholders})
     `;
 
-    db.query(sql, [merchantId, excludeBookingId || 0, bookingDate], (error, rows = []) => {
+    db.query(sql, [merchantId, excludeBookingId || 0, bookingDate, ...statuses], (error, rows = []) => {
         if (error) {
             done(error);
             return;
@@ -641,13 +711,24 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
             }
 
             const duration = Math.max(15, Number(config.durationMins || context.durationMins || 60));
-            const candidateSlots = generateCandidateSlots(settings, duration);
+            const candidateSlots = context.configuredSlots.length
+                ? context.configuredSlots.filter((slot) => {
+                    return isSlotWithinBusinessHours(slot, settings, duration)
+                        && !settings.blockedTimes.includes(slot);
+                })
+                : generateCandidateSlots(settings, duration);
             const availableSlots = [];
             let pending = candidateSlots.length;
             let failed = false;
 
             if (!pending) {
-                done(null, [], { durationMins: duration, businessStart: settings.businessStart, businessEnd: settings.businessEnd });
+                done(null, [], {
+                    durationMins: duration,
+                    businessStart: settings.businessStart,
+                    businessEnd: settings.businessEnd,
+                    autoApproveBookings: settings.autoApproveBookings,
+                    peakHourRestrictions: settings.peakHourRestrictions
+                });
                 return;
             }
 
@@ -681,7 +762,9 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
                             done(null, uniqueSortedSlots(availableSlots), {
                                 durationMins: duration,
                                 businessStart: settings.businessStart,
-                                businessEnd: settings.businessEnd
+                                businessEnd: settings.businessEnd,
+                                autoApproveBookings: settings.autoApproveBookings,
+                                peakHourRestrictions: settings.peakHourRestrictions
                             });
                         }
                     }
@@ -700,9 +783,11 @@ function autoConfirmBooking(bookingData, callback) {
 
         const duration = Math.max(15, Number(bookingData.durationMins || context.durationMins || 60));
         const startMinutes = normalizeTimeMinutes(bookingData.bookingTime);
+        const bookingTime = startMinutes === null ? '' : formatMinutesAsTime(startMinutes);
 
         if (startMinutes === null) {
             callback(null, {
+                created: false,
                 confirmed: false,
                 reason: 'invalid_time',
                 message: 'Please choose a valid booking time.',
@@ -713,58 +798,117 @@ function autoConfirmBooking(bookingData, callback) {
 
         const endTime = formatMinutesAsTime(startMinutes + duration);
 
-        getAvailableSlots(bookingData.merchantId, bookingData.serviceId, bookingData.bookingDate, { durationMins: duration }, (slotError, slots = []) => {
-            if (slotError) {
-                callback(slotError);
+        getAvailabilitySettings(bookingData.merchantId, (settingsError, settings) => {
+            if (settingsError) {
+                callback(settingsError);
                 return;
             }
 
-            if (!slots.includes(String(bookingData.bookingTime).slice(0, 5))) {
+            const configuredSlots = context.configuredSlots || [];
+            const slotAllowedByService = configuredSlots.length
+                ? configuredSlots.includes(bookingTime)
+                    && isSlotWithinBusinessHours(bookingTime, { ...settings, blockedTimes: [] }, duration)
+                : generateCandidateSlots({ ...settings, blockedTimes: [] }, duration).includes(bookingTime);
+
+            if (!slotAllowedByService) {
                 callback(null, {
+                    created: false,
                     confirmed: false,
                     reason: 'unavailable',
-                    message: slots.length
-                        ? `The selected time is unavailable. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
-                        : 'No available slots for this date.',
-                    alternatives: slots.slice(0, 6)
+                    message: 'The selected time is unavailable for this service.',
+                    alternatives: []
                 });
                 return;
             }
 
-            hasBookingClash(bookingData.merchantId, bookingData.bookingDate, bookingData.bookingTime, endTime, (clashError, hasClash) => {
-                if (clashError) {
-                    callback(clashError);
-                    return;
-                }
-
-                if (hasClash) {
-                    callback(null, {
-                        confirmed: false,
-                        reason: 'clash',
-                        message: slots.length
-                            ? `The selected time is unavailable. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
-                            : 'No available slots for this date.',
-                        alternatives: slots.slice(0, 6)
-                    });
-                    return;
-                }
-
-                createInDatabase({
-                    ...bookingData,
-                    status: 'confirmed'
-                }, (createError, result) => {
-                    if (createError) {
-                        callback(createError);
+            hasBookingClash(
+                bookingData.merchantId,
+                bookingData.bookingDate,
+                bookingTime,
+                endTime,
+                { statuses: BOOKING_REVIEW_STATUSES },
+                (pendingClashError, hasPendingClash) => {
+                    if (pendingClashError) {
+                        callback(pendingClashError);
                         return;
                     }
 
-                    callback(null, {
-                        confirmed: true,
-                        result,
-                        alternatives: []
-                    });
-                });
-            });
+                    if (hasPendingClash) {
+                        getAvailableSlots(bookingData.merchantId, bookingData.serviceId, bookingData.bookingDate, { durationMins: duration }, (slotError, slots = []) => {
+                            if (slotError) {
+                                callback(slotError);
+                                return;
+                            }
+
+                            callback(null, {
+                                created: false,
+                                confirmed: false,
+                                reason: 'pending_review_exists',
+                                message: slots.length
+                                    ? `That slot is already waiting for merchant review. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
+                                    : 'That slot is already waiting for merchant review. Please choose another date.',
+                                alternatives: slots.slice(0, 6)
+                            });
+                        });
+                        return;
+                    }
+
+                    hasBookingClash(
+                        bookingData.merchantId,
+                        bookingData.bookingDate,
+                        bookingTime,
+                        endTime,
+                        { statuses: BOOKING_CONFIRMED_STATUSES },
+                        (clashError, hasClash) => {
+                            if (clashError) {
+                                callback(clashError);
+                                return;
+                            }
+
+                            const pendingReasons = [];
+
+                            if (hasClash) {
+                                pendingReasons.push('clash');
+                            }
+
+                            if (settings.blockedTimes.includes(bookingTime)) {
+                                pendingReasons.push('blocked');
+                            }
+
+                            if (settings.autoApproveBookings === false) {
+                                pendingReasons.push('auto_approval_disabled');
+                            }
+
+                            const nextStatus = pendingReasons.length ? 'pending' : 'confirmed';
+
+                            createInDatabase({
+                                ...bookingData,
+                                bookingTime,
+                                status: nextStatus
+                            }, (createError, result) => {
+                                if (createError) {
+                                    callback(createError);
+                                    return;
+                                }
+
+                                callback(null, {
+                                    created: true,
+                                    confirmed: nextStatus === 'confirmed',
+                                    pending: nextStatus === 'pending',
+                                    status: nextStatus,
+                                    reason: pendingReasons[0] || 'available',
+                                    pendingReasons,
+                                    message: nextStatus === 'confirmed'
+                                        ? 'Booking confirmed.'
+                                        : 'Booking sent to the merchant for review.',
+                                    result,
+                                    alternatives: []
+                                });
+                            });
+                        }
+                    );
+                }
+            );
         });
     });
 }
@@ -944,6 +1088,7 @@ function getRescheduleSettings(salonId, callback) {
                 `SELECT
                     salon_id AS salonId,
                     auto_approve_enabled AS autoApproveEnabled,
+                    auto_approve_bookings AS autoApproveBookings,
                     minimum_notice_hours AS minimumNoticeHours,
                     max_reschedules_allowed AS maxReschedulesAllowed,
                     blocked_times AS blockedTimes,
@@ -976,10 +1121,11 @@ function updateRescheduleSettings(salonId, settings, callback) {
 
         const sql = `
             INSERT INTO merchant_reschedule_settings
-                (salon_id, auto_approve_enabled, minimum_notice_hours, max_reschedules_allowed, blocked_times, peak_hour_restrictions, business_start, business_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (salon_id, auto_approve_enabled, auto_approve_bookings, minimum_notice_hours, max_reschedules_allowed, blocked_times, peak_hour_restrictions, business_start, business_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 auto_approve_enabled = VALUES(auto_approve_enabled),
+                auto_approve_bookings = VALUES(auto_approve_bookings),
                 minimum_notice_hours = VALUES(minimum_notice_hours),
                 max_reschedules_allowed = VALUES(max_reschedules_allowed),
                 blocked_times = VALUES(blocked_times),
@@ -991,6 +1137,7 @@ function updateRescheduleSettings(salonId, settings, callback) {
         db.query(sql, [
             salonId,
             settings.autoApproveEnabled ? 1 : 0,
+            settings.autoApproveBookings === undefined ? (settings.autoApproveEnabled ? 1 : 0) : (settings.autoApproveBookings ? 1 : 0),
             Math.max(0, Math.min(Number(settings.minimumNoticeHours || 24), 720)),
             Math.max(0, Math.min(Number(settings.maxReschedulesAllowed || 2), 20)),
             String(settings.blockedTimes || '').slice(0, 500),
@@ -1452,6 +1599,7 @@ function getReceiptById(bookingId, callback) {
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
             bookings.checked_in_at,
+            transactions.created_at AS paid_at,
             users.name AS customer_name,
             users.email,
             salons.salon_id AS merchant_id,
@@ -1721,7 +1869,8 @@ function markCheckedInByToken(bookingId, callback) {
             status = 'checked_in',
             checked_in_at = COALESCE(checked_in_at, CURRENT_TIMESTAMP)
         WHERE booking_id = ?
-            AND status NOT IN ('cancelled', 'completed', 'no_show')
+            AND status = 'confirmed'
+            AND checked_in_at IS NULL
     `;
 
     ensureBookingManagementSchema((schemaError) => {

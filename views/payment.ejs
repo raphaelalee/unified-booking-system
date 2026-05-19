@@ -9,8 +9,9 @@
 <section class="section compact payment-page">
     <div class="payment-layout">
         <%
-            const paymentVoucherList = Array.isArray(availableVouchers) ? availableVouchers : [];
-            const paymentSelectedVoucherId = String(selectedVoucherId || '');
+            const paymentVoucherList = typeof availableVouchers !== 'undefined' && Array.isArray(availableVouchers) ? availableVouchers : [];
+            const paymentSelectedVoucherId = String(typeof selectedVoucherId !== 'undefined' ? selectedVoucherId || '' : '');
+            const paymentBirthdayPromotion = typeof birthdayPromotion !== 'undefined' ? birthdayPromotion : null;
             const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentSelectedVoucherId) || null;
             const paymentVoucherEstimate = paymentSelectedVoucher
                 ? (
@@ -19,10 +20,22 @@
                         : Math.min(Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0), Number(amount || 0))
                 )
                 : 0;
-            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
-                ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate, 0))
+            const rewardRedemptionView = typeof rewardRedemption !== 'undefined' && rewardRedemption ? rewardRedemption : null;
+            const rewardRules = rewardRedemptionView && rewardRedemptionView.rules ? rewardRedemptionView.rules : null;
+            const rewardWallet = rewardRedemptionView && rewardRedemptionView.wallet ? rewardRedemptionView.wallet : null;
+            const requestedRewardPoints = Number(redeemPointsRequested || 0);
+            const rewardBaseAmount = Math.max(Number(amount || 0) - paymentVoucherEstimate, 0);
+            const paymentPointEstimate = rewardRedemptionView && rewardRedemptionView.enabled && requestedRewardPoints > 0
+                ? Math.min(
+                    requestedRewardPoints * Number(rewardRules.pointsToCashRate || 0),
+                    rewardBaseAmount * (Number(rewardRules.maxDiscountPercent || 0) / 100),
+                    rewardBaseAmount
+                )
                 : 0;
-            const paymentAmountDue = Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentCashbackEstimate, 0);
+            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
+                ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate, 0))
+                : 0;
+            const paymentAmountDue = Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate - paymentCashbackEstimate, 0);
             const fulfilmentLabel = fulfilment === 'delivery'
                 ? 'Delivery'
                 : fulfilment === 'pickup'
@@ -56,19 +69,19 @@
 
             <div class="payment-form-header">
                 <p class="eyebrow">Payment method</p>
-                <h2>$<%= paymentAmountDue.toFixed(2) %></h2>
+                <h2 id="payment-live-total">$<%= paymentAmountDue.toFixed(2) %></h2>
                 <p class="muted"><%= serviceName %> &middot; <%= merchantName %></p>
                 <% if (fulfilmentLabel) { %>
                     <p class="payment-fulfilment-pill"><%= fulfilmentLabel %></p>
                 <% } %>
             </div>
 
-            <% if (birthdayPromotion && birthdayPromotion.isBirthdayMonth) { %>
+            <% if (paymentBirthdayPromotion && paymentBirthdayPromotion.isBirthdayMonth) { %>
                 <div class="notice success">
                     <p>
-                        Birthday month perks are active for <strong><%= birthdayPromotion.monthName %></strong>.
+                        Birthday month perks are active for <strong><%= paymentBirthdayPromotion.monthName %></strong>.
                         This eligible booking payment earns <strong>2X loyalty points</strong>.
-                        Your birthday voucher stays valid until <strong><%= birthdayPromotion.monthEndLabel %></strong>.
+                        Your birthday voucher stays valid until <strong><%= paymentBirthdayPromotion.monthEndLabel %></strong>.
                     </p>
                 </div>
             <% } %>
@@ -92,6 +105,43 @@
                             <% }) %>
                         </select>
                     </label>
+                </div>
+            <% } %>
+
+            <% if (!(typeof cartCheckout !== 'undefined' && cartCheckout) && rewardRedemptionView) { %>
+                <div class="loyalty-redemption-card payment-cashback-card">
+                    <% if (rewardRedemptionView.enabled) { %>
+                        <label>
+                            <span>
+                                <strong>Redeem points</strong>
+                                <small>
+                                    Available <%= Number(rewardWallet.pointsBalance || 0) %> points.
+                                    Redeemable amount $<%= Number(rewardRedemptionView.maxDiscountAmount || 0).toFixed(2) %>.
+                                    Max usable <%= Number(rewardRedemptionView.maxPoints || 0) %> points.
+                                    Minimum <%= rewardRules.minPointsToRedeem %>.
+                                    Max reward discount <%= Number(rewardRules.maxDiscountPercent || 0) %>%.
+                                    The final discount is checked again securely when payment is recorded.
+                                </small>
+                            </span>
+                            <input
+                                id="payment-redeem-points"
+                                type="number"
+                                name="redeemPoints"
+                                min="0"
+                                step="1"
+                                max="<%= Number(rewardRedemptionView.maxPoints || rewardWallet.pointsBalance || 0) %>"
+                                value="<%= requestedRewardPoints || 0 %>"
+                                data-point-rate="<%= Number(rewardRules.pointsToCashRate || 0) %>"
+                                data-max-discount="<%= Number(rewardRedemptionView.maxDiscountAmount || 0) %>"
+                                data-base-amount="<%= rewardBaseAmount.toFixed(2) %>"
+                                data-cashback-estimate="<%= paymentCashbackEstimate.toFixed(2) %>">
+                        </label>
+                    <% } else { %>
+                        <span>
+                            <strong>Points redemption unavailable</strong>
+                            <small><%= rewardRedemptionView.reason || 'This merchant or service does not allow points redemption.' %></small>
+                        </span>
+                    <% } %>
                 </div>
             <% } %>
 
@@ -229,10 +279,11 @@
                 <% if (paymentVoucherEstimate > 0) { %>
                     <p><span>Voucher</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
                 <% } %>
+                <p id="payment-points-row" style="<%= paymentPointEstimate > 0 ? '' : 'display:none;' %>"><span>Points</span><strong id="payment-points-value">-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                 <% if (paymentCashbackEstimate > 0) { %>
                     <p><span>Cashback</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                 <% } %>
-                <p class="cart-total-line"><span>Total due</span><strong>$<%= paymentAmountDue.toFixed(2) %></strong></p>
+                <p class="cart-total-line"><span>Total due</span><strong id="payment-summary-total">$<%= paymentAmountDue.toFixed(2) %></strong></p>
             </div>
             <p class="muted">Prototype payment only. No real card charge is made.</p>
         </aside>
@@ -247,6 +298,34 @@ document.addEventListener('DOMContentLoaded', function () {
     const walletNote = document.getElementById('wallet-payment-note');
     const stripeNote = document.getElementById('stripe-payment-note');
     const submitButton = document.getElementById('payment-submit-button');
+    const redeemPointsInput = document.getElementById('payment-redeem-points');
+    const pointsRow = document.getElementById('payment-points-row');
+    const pointsValue = document.getElementById('payment-points-value');
+    const summaryTotal = document.getElementById('payment-summary-total');
+    const liveTotal = document.getElementById('payment-live-total');
+
+    function formatMoney(value) {
+        return '$' + Number(value || 0).toFixed(2);
+    }
+
+    function syncPointRedemption() {
+        if (!redeemPointsInput || !summaryTotal || !liveTotal) return;
+
+        const maxPoints = Number(redeemPointsInput.max || 0);
+        const points = Math.max(0, Math.min(Math.floor(Number(redeemPointsInput.value || 0)), maxPoints));
+        const rate = Number(redeemPointsInput.dataset.pointRate || 0);
+        const maxDiscount = Number(redeemPointsInput.dataset.maxDiscount || 0);
+        const baseAmount = Number(redeemPointsInput.dataset.baseAmount || 0);
+        const cashbackEstimate = Number(redeemPointsInput.dataset.cashbackEstimate || 0);
+        const pointsDiscount = Math.min(points * rate, maxDiscount, baseAmount);
+        const totalDue = Math.max(baseAmount - pointsDiscount - cashbackEstimate, 0);
+
+        redeemPointsInput.value = String(points);
+        if (pointsRow) pointsRow.style.display = pointsDiscount > 0 ? '' : 'none';
+        if (pointsValue) pointsValue.textContent = '-' + formatMoney(pointsDiscount);
+        summaryTotal.textContent = formatMoney(totalDue);
+        liveTotal.textContent = formatMoney(totalDue);
+    }
 
     function syncPaymentMethod() {
         const selected = methodInputs.find((input) => input.checked)?.value || 'apple_pay';
@@ -271,6 +350,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));
+    if (redeemPointsInput) {
+        redeemPointsInput.addEventListener('input', syncPointRedemption);
+        redeemPointsInput.addEventListener('change', syncPointRedemption);
+        syncPointRedemption();
+    }
     syncPaymentMethod();
 });
 </script>

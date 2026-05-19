@@ -18,6 +18,9 @@ const {
     signBookingCheckInToken,
     verifyBookingCheckInToken
 } = require('../utils/qrToken');
+const {
+    formatAppointmentDateTime
+} = require('../utils/dateTimeFormat');
 
 function isValidBookingDate(value) {
     if (!value) {
@@ -364,7 +367,7 @@ function createBooking(req, res) {
                 });
             }
 
-            if (!confirmation?.confirmed) {
+            if (!confirmation?.created) {
                 req.session.profileError = confirmation?.message || 'That booking slot is unavailable. Please choose another time.';
                 return res.redirect(req.get('Referrer') || '/services');
             }
@@ -372,6 +375,22 @@ function createBooking(req, res) {
             try {
                 const bookingId = confirmation.result.insertId;
                 notifyBookingCreated(bookingId);
+
+                if (!confirmation.confirmed) {
+                    return res.render('booking-success', {
+                        title: 'Booking Pending',
+                        merchant: { id: service.salonId, name: service.salonName || 'Vaniday merchant' },
+                        service: {
+                            ...service,
+                            name: bookedServiceName
+                        },
+                        bookingDate,
+                        bookingTime,
+                        bookingStatus: 'pending',
+                        anotherBookingPath: '/services'
+                    });
+                }
+
                 const checkinUrl = getBookingCheckInUrl(req, bookingId);
                 const checkinToken = signBookingCheckInToken(bookingId);
                 const qrCodeDataUrl = await QRCode.toDataURL(checkinUrl, {
@@ -431,10 +450,12 @@ function createBooking(req, res) {
                         purchaseType,
                         bookingDate,
                         bookingTime,
+                        appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
                         checkinUrl,
                         checkinToken,
                         qrCodeDataUrl
                     },
+                    showQrDebug: process.env.NODE_ENV === 'development',
                     emailSkipped
                 });
             } catch (confirmationError) {
@@ -662,15 +683,21 @@ function showCheckIn(req, res) {
             });
         }
 
+        const routeTarget = `/checking/${req.params.signedToken}`;
+
         return res.render('booking-checkin', {
             title: 'Scan to Check In',
             booking,
+            appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
+            checkinAction: routeTarget,
+            canConfirmCheckIn: String(booking.status || '').toLowerCase() === 'confirmed' && !booking.checked_in_at,
+            showQrDebug: process.env.NODE_ENV === 'development',
             checkinUrl: getBookingCheckInUrl(req, bookingId),
             qrDebug: {
                 system: 'booking-check-in',
                 label: 'Scan to Check In',
                 token: req.params.signedToken,
-                routeTarget: `/checkin/${req.params.signedToken}`,
+                routeTarget,
                 url: getBookingCheckInUrl(req, bookingId)
             }
         });
@@ -710,12 +737,53 @@ function confirmCheckIn(req, res) {
             });
         }
 
-        return Booking.markCheckedInByToken(bookingId, (updateError) => {
+        const bookingStatus = String(booking.status || '').toLowerCase();
+        const routeTarget = `/checking/${req.params.signedToken}`;
+        const renderCheckIn = (statusCode, payload) => res.status(statusCode).render('booking-checkin', {
+            title: payload.title || 'Scan to Check In',
+            booking,
+            appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
+            checkinAction: routeTarget,
+            checkinUrl: getBookingCheckInUrl(req, bookingId),
+            canConfirmCheckIn: false,
+            showQrDebug: process.env.NODE_ENV === 'development',
+            qrDebug: {
+                system: 'booking-check-in',
+                label: 'Scan to Check In',
+                token: req.params.signedToken,
+                routeTarget,
+                url: getBookingCheckInUrl(req, bookingId)
+            },
+            ...payload
+        });
+
+        if (bookingStatus === 'checked_in' || booking.checked_in_at) {
+            return renderCheckIn(409, {
+                title: 'Already Checked In',
+                message: 'This appointment has already been checked in.'
+            });
+        }
+
+        if (bookingStatus !== 'confirmed') {
+            return renderCheckIn(409, {
+                title: 'Check-In Not Available',
+                message: 'Only confirmed bookings can be checked in.'
+            });
+        }
+
+        return Booking.markCheckedInByToken(bookingId, (updateError, updateResult) => {
             if (updateError) {
                 console.error(updateError);
                 return res.status(500).render('error', {
                     title: 'Check-In Error',
                     message: 'The booking could not be checked in.'
+                });
+            }
+
+            if (!updateResult?.affectedRows) {
+                return renderCheckIn(409, {
+                    title: 'Check-In Not Available',
+                    message: 'This appointment could not be checked in. It may have already been completed.'
                 });
             }
 
@@ -739,13 +807,17 @@ function confirmCheckIn(req, res) {
             return res.render('booking-checkin', {
                 title: 'Checked In',
                 booking: { ...booking, status: 'checked_in' },
+                appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
                 success: 'You are checked in for this appointment.',
+                checkinAction: routeTarget,
                 checkinUrl: getBookingCheckInUrl(req, bookingId),
+                canConfirmCheckIn: false,
+                showQrDebug: process.env.NODE_ENV === 'development',
                 qrDebug: {
                     system: 'booking-check-in',
                     label: 'Scan to Check In',
                     token: req.params.signedToken,
-                    routeTarget: `/checkin/${req.params.signedToken}`,
+                    routeTarget,
                     url: getBookingCheckInUrl(req, bookingId)
                 }
             });

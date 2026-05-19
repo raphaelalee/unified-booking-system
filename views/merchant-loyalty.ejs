@@ -1,0 +1,136 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const services = Array.isArray(merchant.services) ? merchant.services : [];
+    const serviceRedemptions = merchantRules && merchantRules.serviceRedemptions ? merchantRules.serviceRedemptions : {};
+    const adminMaxDiscount = Number(adminRules.maxDiscountPercent || 0);
+    const merchantMaxDiscount = merchantRules.maxDiscountPercent === null || merchantRules.maxDiscountPercent === undefined
+        ? adminMaxDiscount
+        : Number(merchantRules.maxDiscountPercent || 0);
+%>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Rewards</p>
+                <h1>Rewards rules</h1>
+                <span>Control reward redemption for <%= merchant.name %> without affecting other merchants.</span>
+            </div>
+        </header>
+
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
+        <div class="account-panel account-form loyalty-rules-panel">
+            <div class="account-panel-header">
+                <div>
+                    <p class="eyebrow">Platform limits</p>
+                    <h2>Read-only platform limits</h2>
+                    <p class="muted">These Vaniday rules are set by admin. Merchant settings below can only be stricter.</p>
+                </div>
+            </div>
+            <div class="form-grid">
+                <label>
+                    Platform status
+                    <input type="text" value="<%= adminRules.isEnabled ? 'Enabled' : 'Paused' %>" readonly disabled>
+                </label>
+                <label>
+                    Earn rate
+                    <input type="text" value="<%= adminRules.pointsPerDollar %> pts / $1" readonly disabled>
+                </label>
+                <label>
+                    Conversion
+                    <input type="text" value="$<%= Number(adminRules.pointsToCashRate || 0).toFixed(4) %> / pt" readonly disabled>
+                </label>
+                <label>
+                    Minimum redeem
+                    <input type="text" value="<%= adminRules.minPointsToRedeem %> pts" readonly disabled>
+                </label>
+                <label>
+                    Platform max discount
+                    <input type="text" value="<%= adminMaxDiscount %>%" readonly disabled>
+                </label>
+                <label>
+                    Points expiry
+                    <input type="text" value="<%= adminRules.pointsExpiryDays %> days" readonly disabled>
+                </label>
+            </div>
+        </div>
+
+        <form class="account-panel account-form" action="/merchant/loyalty" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <div class="account-panel-header">
+                <div>
+                    <p class="eyebrow">Shop rules</p>
+                    <h2>Merchant controls</h2>
+                </div>
+            </div>
+
+            <label class="loyalty-toggle">
+                <input type="checkbox" name="isEnabled" <%= merchantRules.isEnabled ? 'checked' : '' %>>
+                <span>Enable reward redemption for this merchant</span>
+            </label>
+
+            <div class="form-grid">
+                <label>
+                    Maximum reward discount %
+                    <input type="number" name="maxDiscountPercent" min="0" max="<%= adminMaxDiscount %>" step="0.01" value="<%= merchantMaxDiscount %>" required>
+                    <small class="muted">Cannot exceed the platform limit of <%= adminMaxDiscount %>%.</small>
+                </label>
+                <label>
+                    Promotion label
+                    <input type="text" name="promotionLabel" maxlength="120" value="<%= merchantRules.promotionLabel || '' %>" placeholder="Weekend rewards">
+                </label>
+                <label>
+                    Merchant redemption multiplier
+                    <input type="number" name="promotionMultiplier" min="0" max="1" step="0.01" value="<%= Number(merchantRules.promotionMultiplier || 1) %>">
+                    <small class="muted">Use 1 for default platform value. Lower values reduce redemption value for this merchant.</small>
+                </label>
+            </div>
+
+            <div class="section-cta">
+                <div>
+                    <h2>Eligible services</h2>
+                    <p class="muted">Only selected services allow points redemption at booking checkout.</p>
+                </div>
+            </div>
+
+            <% if (!services.length) { %>
+                <div class="notice">Add services before configuring service-level reward redemption.</div>
+            <% } else { %>
+                <div class="service-catalog-grid unified-service-grid">
+                    <% services.forEach((service) => {
+                        const hasStoredSetting = Object.prototype.hasOwnProperty.call(serviceRedemptions, Number(service.id));
+                        const enabled = hasStoredSetting ? serviceRedemptions[Number(service.id)] : true;
+                    %>
+                        <label class="service-catalog-card unified-service-card">
+                            <div class="portal-card-header">
+                                <span class="tag"><%= service.category || 'Service' %></span>
+                                <span class="service-price slim">$<%= Number(service.price || 0).toFixed(2) %></span>
+                            </div>
+                            <div>
+                                <h3><%= service.name %></h3>
+                                <p class="muted"><%= service.duration || `${service.durationMins || 0} mins` %></p>
+                            </div>
+                            <span class="loyalty-toggle">
+                                <input type="checkbox" name="rewardServiceIds" value="<%= service.id %>" <%= enabled ? 'checked' : '' %>>
+                                <span>Allow reward redemption</span>
+                            </span>
+                        </label>
+                    <% }) %>
+                </div>
+            <% } %>
+
+            <div class="account-form-actions">
+                <button class="button primary" type="submit">Save reward rules</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

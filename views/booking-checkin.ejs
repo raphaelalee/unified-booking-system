@@ -6,11 +6,13 @@
         <h1><%= booking.merchant_name %></h1>
         <p>
             Verify your attendance for <strong><%= booking.service_name %></strong>
-            on <strong><%= String(booking.booking_date).slice(0, 10) %></strong>
-            at <strong><%= booking.booking_time %></strong>.
+            on <strong><%= appointmentLabel %></strong>.
         </p>
         <% if (typeof success !== 'undefined' && success) { %>
             <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (typeof message !== 'undefined' && message) { %>
+            <div class="notice"><p><%= message %></p></div>
         <% } %>
     </div>
 
@@ -20,23 +22,27 @@
         <p class="muted">Current status: <strong><%= booking.status %></strong></p>
         <% if (String(booking.status || '').toLowerCase() === 'checked_in') { %>
             <p class="muted">This appointment is already checked in.</p>
-        <% } else { %>
-            <form action="<%= qrDebug.routeTarget %>" method="POST">
+        <% } else if (canConfirmCheckIn) { %>
+            <form action="<%= checkinAction %>" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                 <button class="button primary full" type="submit">Confirm check-in</button>
             </form>
+        <% } else { %>
+            <p class="muted">Check-in is not available for this booking.</p>
         <% } %>
     </div>
 </section>
 
-<section class="section compact">
-    <article class="account-panel qr-debug-panel">
-        <p class="eyebrow">QR Debug</p>
-        <p><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
-        <p><strong>Generated QR URL:</strong> <span class="qr-link-wrap"><%= qrDebug.url %></span></p>
-        <p><strong>Token:</strong> <span class="qr-link-wrap"><%= qrDebug.token %></span></p>
-        <p><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
-    </article>
-</section>
+<% if (showQrDebug) { %>
+    <section class="section compact">
+        <article class="account-panel qr-debug-panel">
+            <p class="eyebrow">QR Debug</p>
+            <p><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>
+            <p><strong>Generated QR URL:</strong> <span class="qr-link-wrap"><%= qrDebug.url %></span></p>
+            <p><strong>Token:</strong> <span class="qr-link-wrap"><%= qrDebug.token %></span></p>
+            <p><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
+        </article>
+    </section>
+<% } %>
 
 <%- include('partials/footer') %>

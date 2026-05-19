@@ -8,6 +8,7 @@ const Product = require('../models/Product');
 const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Loyalty = require('../models/Loyalty');
+const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const UserVoucher = require('../models/UserVoucher');
@@ -204,19 +205,22 @@ function createMerchantNotification(merchant, notification) {
     });
 }
 
-function notifyBookingCreated(req, merchant, validation, bookingId = null) {
+function notifyBookingCreated(req, merchant, validation, bookingId = null, status = 'confirmed') {
     const serviceName = validation.serviceName || validation.service?.name || 'your service';
     const appointmentLabel = `${req.body.bookingDate} at ${req.body.bookingTime}`;
     const customerLink = bookingId ? `/receipt/${bookingId}` : '/profile#bookings';
     const bookingKey = bookingId || `${merchant.id}-${req.session.user.id}-${Date.now()}`;
+    const isPending = String(status || '').toLowerCase() === 'pending';
 
     createNotification({
         recipientUserId: req.session.user.id,
         recipientRole: 'customer',
         actorUserId: merchant.merchantUserId || null,
-        type: 'booking_confirmed',
-        title: 'Booking request confirmed',
-        message: `${serviceName} at ${merchant.name} is booked for ${appointmentLabel}.`,
+        type: isPending ? 'booking_pending' : 'booking_confirmed',
+        title: isPending ? 'Booking request pending' : 'Booking request confirmed',
+        message: isPending
+            ? `${serviceName} at ${merchant.name} for ${appointmentLabel} is waiting for merchant review.`
+            : `${serviceName} at ${merchant.name} is booked for ${appointmentLabel}.`,
         linkUrl: customerLink,
         dedupeKey: bookingId ? `booking-created-customer-${bookingId}` : null,
         metadata: { merchantId: merchant.id, bookingId, serviceName }
@@ -225,8 +229,10 @@ function notifyBookingCreated(req, merchant, validation, bookingId = null) {
     createMerchantNotification(merchant, {
         actorUserId: req.session.user.id,
         type: 'booking',
-        title: 'New booking received',
-        message: `${validation.customerName || 'A customer'} booked ${serviceName} for ${appointmentLabel}.`,
+        title: isPending ? 'Booking needs review' : 'New booking received',
+        message: isPending
+            ? `${validation.customerName || 'A customer'} requested ${serviceName} for ${appointmentLabel}.`
+            : `${validation.customerName || 'A customer'} booked ${serviceName} for ${appointmentLabel}.`,
         linkUrl: '/merchant/schedule',
         dedupeKey: bookingId ? `booking-created-merchant-${bookingId}` : null,
         metadata: { merchantId: merchant.id, bookingId, serviceName }
@@ -235,8 +241,10 @@ function notifyBookingCreated(req, merchant, validation, bookingId = null) {
     createRoleNotification('admin', {
         actorUserId: req.session.user.id,
         type: 'booking',
-        title: 'New customer booking',
-        message: `${validation.customerName || 'A customer'} booked ${serviceName} at ${merchant.name}.`,
+        title: isPending ? 'Customer booking needs review' : 'New customer booking',
+        message: isPending
+            ? `${validation.customerName || 'A customer'} requested ${serviceName} at ${merchant.name}.`
+            : `${validation.customerName || 'A customer'} booked ${serviceName} at ${merchant.name}.`,
         linkUrl: '/admin',
         dedupeKey: `booking-created-admin-${bookingKey}`,
         metadata: { merchantId: merchant.id, bookingId, serviceName }
@@ -1802,7 +1810,7 @@ function saveQrBooking(req, res) {
                 });
             }
 
-            if (!confirmation?.confirmed) {
+            if (!confirmation?.created) {
                 return renderBookingPage(req, res, merchant, {
                     status: 400,
                     errors: [confirmation?.message || 'This slot is already booked. Please choose another time.'],
@@ -1811,7 +1819,7 @@ function saveQrBooking(req, res) {
             }
 
                 const finishSuccess = () => res.render('booking-success', {
-                    title: 'Booking Confirmed',
+                    title: confirmation.confirmed ? 'Booking Confirmed' : 'Booking Pending',
                     merchant,
                     service: {
                         ...validation.service,
@@ -1821,6 +1829,7 @@ function saveQrBooking(req, res) {
                     },
                     bookingDate: req.body.bookingDate,
                     bookingTime: validation.bookingTime,
+                    bookingStatus: confirmation.status,
                     whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                         merchant,
                         service: { name: validation.serviceName },
@@ -1835,17 +1844,19 @@ function saveQrBooking(req, res) {
                 const bookingId = getInsertedBookingId(confirmation.result);
                 const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
-                notifyBookingCreated(req, merchant, validation, bookingId);
-                notifyBooking({
-                    customerName: validation.customerName,
-                    email: validation.email,
-                    phone: validation.phone,
-                    merchantName: merchant.name,
-                    serviceName: validation.serviceName,
-                    bookingDate: req.body.bookingDate,
-                    bookingTime: validation.bookingTime,
-                    checkInUrl
-                });
+                notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
+                if (confirmation.confirmed) {
+                    notifyBooking({
+                        customerName: validation.customerName,
+                        email: validation.email,
+                        phone: validation.phone,
+                        merchantName: merchant.name,
+                        serviceName: validation.serviceName,
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: validation.bookingTime,
+                        checkInUrl
+                    });
+                }
 
                 if (promotionRecord?.id) {
                     return Promotion.createRedemption({
@@ -1964,7 +1975,7 @@ function saveSecureScanBooking(req, res) {
                     });
                 }
 
-                if (!confirmation?.confirmed) {
+                if (!confirmation?.created) {
                     return renderBookingPage(req, res, merchant, {
                         status: 400,
                         errors: [confirmation?.message || 'This slot is already booked. Please choose another time.'],
@@ -1974,7 +1985,7 @@ function saveSecureScanBooking(req, res) {
                 }
 
                     const finishSuccess = () => res.render('booking-success', {
-                        title: 'Booking Confirmed',
+                        title: confirmation.confirmed ? 'Booking Confirmed' : 'Booking Pending',
                         merchant,
                         service: {
                             ...validation.service,
@@ -1984,6 +1995,7 @@ function saveSecureScanBooking(req, res) {
                         },
                         bookingDate: req.body.bookingDate,
                         bookingTime: validation.bookingTime,
+                        bookingStatus: confirmation.status,
                         anotherBookingPath: getSecureBookingPath(merchant),
                         whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                             merchant,
@@ -1999,17 +2011,19 @@ function saveSecureScanBooking(req, res) {
                     const bookingId = getInsertedBookingId(confirmation.result);
                     const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
 
-                    notifyBookingCreated(req, merchant, validation, bookingId);
-                    notifyBooking({
-                        customerName: validation.customerName,
-                        email: validation.email,
-                        phone: validation.phone,
-                        merchantName: merchant.name,
-                        serviceName: validation.serviceName,
-                        bookingDate: req.body.bookingDate,
-                        bookingTime: validation.bookingTime,
-                        checkInUrl
-                    });
+                    notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
+                    if (confirmation.confirmed) {
+                        notifyBooking({
+                            customerName: validation.customerName,
+                            email: validation.email,
+                            phone: validation.phone,
+                            merchantName: merchant.name,
+                            serviceName: validation.serviceName,
+                            bookingDate: req.body.bookingDate,
+                            bookingTime: validation.bookingTime,
+                            checkInUrl
+                        });
+                    }
 
                     if (promotionRecord?.id) {
                         return Promotion.createRedemption({
@@ -2382,7 +2396,13 @@ function checkout(req, res) {
             deliveryUnit,
             deliveryPostal,
             deliveryPhone,
-            loyalty: walletError ? null : loyalty
+            selectedVoucherId: '',
+            availableVouchers: [],
+            birthdayPromotion: null,
+            rewardRedemption: null,
+            redeemPointsRequested: 0,
+            loyalty: walletError ? null : loyalty,
+            error: null
         });
     });
 }
@@ -2488,6 +2508,12 @@ async function showPayment(req, res) {
         const loyalty = await getLoyaltyView(req.session.user.id);
         const availableVouchers = await getActiveBookingVouchers(req.session.user.id);
         const birthdayPromotion = buildBirthdayPromotion(req.session.user, availableVouchers);
+        const rewardRedemption = await getRewardRedemptionView(
+            req.session.user.id,
+            booking.merchant_id,
+            booking.service_id,
+            Number(booking.service_price || 0)
+        );
 
         return res.render('payment', {
             title: 'Payment',
@@ -2510,6 +2536,8 @@ async function showPayment(req, res) {
             availableVouchers,
             birthdayPromotion,
             loyalty,
+            rewardRedemption,
+            redeemPointsRequested: 0,
             error: null
         });
     } catch (error) {
@@ -2533,6 +2561,7 @@ function getPaymentPayload(body = {}) {
         bookingId: body.bookingId || '',
         selectedVoucherId: body.selectedVoucherId || '',
         selectedItemIds: String(body.selectedItemIds || ''),
+        redeemPoints: Math.max(0, Math.floor(Number(body.redeemPoints || 0))),
         useCashback: body.redeemCashback === 'on' || body.useCashback === 'true'
     };
 }
@@ -2562,8 +2591,10 @@ async function buildTrustedPayment(req, payment) {
             receiptId: String(booking.id),
             userId: booking.user_id,
             userName: booking.customer_name,
+            merchantId: booking.merchant_id,
             merchantName: booking.merchant_name,
             merchantUserId: booking.merchant_user_id,
+            serviceId: booking.service_id,
             serviceName: booking.service_name,
             amount: Number(booking.service_price || 0),
             items: [
@@ -2578,7 +2609,8 @@ async function buildTrustedPayment(req, payment) {
                 }
             ],
             bookingDate: booking.booking_date,
-            bookingTime: booking.booking_time
+            bookingTime: booking.booking_time,
+            redeemPointsRequested: Number(payment.redeemPoints || 0)
         };
     }
 
@@ -2624,6 +2656,44 @@ function getLoyaltyView(userId) {
             }
 
             resolve(loyalty);
+        });
+    });
+}
+
+function getRewardRedemptionView(userId, merchantId, serviceId, amount) {
+    return new Promise((resolve) => {
+        Loyalty.getEffectiveRedemptionRules({ merchantId, serviceId }, (rulesError, rules) => {
+            if (rulesError) {
+                console.error(rulesError);
+                resolve(null);
+                return;
+            }
+
+            Loyalty.getWalletView(userId, (walletError, loyalty) => {
+                if (walletError) {
+                    console.error(walletError);
+                    resolve({ rules, wallet: null, enabled: false, reason: 'Rewards wallet could not be loaded.' });
+                    return;
+                }
+
+                const maxDiscountAmount = Math.round(Number(amount || 0) * (Number(rules.maxDiscountPercent || 0) / 100) * 100) / 100;
+                const maxPointsByDiscount = rules.pointsToCashRate > 0
+                    ? Math.floor(maxDiscountAmount / rules.pointsToCashRate)
+                    : 0;
+                const walletPoints = Number(loyalty?.wallet?.pointsBalance || 0);
+
+                resolve({
+                    rules,
+                    wallet: loyalty.wallet,
+                    enabled: Boolean(rules.enabled && walletPoints >= Number(rules.minPointsToRedeem || 0) && maxDiscountAmount > 0 && maxPointsByDiscount > 0),
+                    reason: rules.reason || (walletPoints < Number(rules.minPointsToRedeem || 0) ? 'Not enough points for this redemption.' : ''),
+                    maxDiscountAmount,
+                    maxPoints: Math.min(walletPoints, maxPointsByDiscount),
+                    conversionLabel: rules.pointsToCashRate > 0
+                        ? `${Math.round(1 / rules.pointsToCashRate)} points = $1`
+                        : ''
+                });
+            });
         });
     });
 }
@@ -2711,6 +2781,45 @@ async function applyVoucherRedemption(req, payment) {
     };
 }
 
+async function applyPointRedemption(req, payment) {
+    const requestedPoints = Math.max(0, Math.floor(Number(req.body.redeemPoints || payment.redeemPointsRequested || 0)));
+
+    if (payment.kind !== 'booking' || requestedPoints <= 0) {
+        return payment;
+    }
+
+    const redemption = await new Promise((resolve, reject) => {
+        Loyalty.calculatePointRedemption({
+            userId: payment.userId,
+            merchantId: payment.merchantId,
+            serviceId: payment.serviceId,
+            amount: payment.amount,
+            requestedPoints
+        }, (error, result) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(result);
+        });
+    });
+
+    if (!redemption || Number(redemption.discount || 0) <= 0 || Number(redemption.points || 0) <= 0) {
+        return payment;
+    }
+
+    return {
+        ...payment,
+        originalAmount: Number(payment.originalAmount || payment.amount || 0),
+        redeemPointsRequested: requestedPoints,
+        pointsRedeemed: Number(redemption.points || 0),
+        pointsDiscount: Number(redemption.discount || 0),
+        rewardMaxDiscountPercent: Number(redemption.rules?.maxDiscountPercent || 0),
+        amount: Math.max(0, Math.round((Number(payment.amount || 0) - Number(redemption.discount || 0)) * 100) / 100)
+    };
+}
+
 async function applyCashbackRedemption(req, payment) {
     if (req.body.redeemCashback !== 'on' && payment.useCashback !== true) {
         return payment;
@@ -2727,7 +2836,7 @@ async function applyCashbackRedemption(req, payment) {
 
     return {
         ...payment,
-        originalAmount: Number(payment.amount || 0),
+        originalAmount: Number(payment.originalAmount || payment.amount || 0),
         cashbackRedeemed,
         amount: Math.max(0, Math.round((Number(payment.amount || 0) - cashbackRedeemed) * 100) / 100)
     };
@@ -2872,6 +2981,8 @@ function savePaidReceipt(req, payment, paymentMethod) {
         voucherTitle: payment.voucherTitle || '',
         voucherDiscountType: payment.voucherDiscountType || 'fixed',
         voucherDiscountPercent: Number(payment.voucherDiscountPercent || 0),
+        pointsRedeemed: Number(payment.pointsRedeemed || 0),
+        pointsDiscount: Number(payment.pointsDiscount || 0),
         cashbackRedeemed: Number(payment.cashbackRedeemed || 0),
         paymentMethod,
         paymentStatus: 'paid',
@@ -2897,7 +3008,7 @@ function savePaidReceipt(req, payment, paymentMethod) {
                 return;
             }
 
-            Loyalty.awardPointsForReceipt(receipt.userId, receipt.id, (awardError, awardResult = {}) => {
+            Loyalty.awardForReceipt(receipt, (awardError, awardResult = {}) => {
                 if (awardError) {
                     reject(awardError);
                     return;
@@ -2936,6 +3047,47 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
         paidPayment.displayId = transactionId;
     }
 
+    if (Number(paidPayment.pointsRedeemed || 0) > 0) {
+        await new Promise((resolve, reject) => {
+            Loyalty.redeemPointsForPayment(
+                paidPayment.userId,
+                paidPayment.pointsRedeemed,
+                paidPayment.pointsDiscount,
+                `points-${paidPayment.receiptId}`,
+                {
+                    bookingReference: paidPayment.displayId || paidPayment.receiptId,
+                    merchantName: paidPayment.merchantName
+                },
+                (error, result) => {
+                    if (error || result?.duplicate) {
+                        reject(error || new Error('Reward points were already redeemed for this receipt.'));
+                        return;
+                    }
+
+                    AuditLog.log({
+                        actorUserId: paidPayment.userId,
+                        actorRole: 'customer',
+                        action: 'reward_points_redeemed',
+                        entityType: 'booking',
+                        entityId: paidPayment.receiptId,
+                        details: {
+                            merchantId: paidPayment.merchantId,
+                            merchantName: paidPayment.merchantName,
+                            serviceId: paidPayment.serviceId,
+                            serviceName: paidPayment.serviceName,
+                            pointsRedeemed: paidPayment.pointsRedeemed,
+                            discount: paidPayment.pointsDiscount
+                        }
+                    }, (auditError) => {
+                        if (auditError) console.error(auditError);
+                    });
+
+                    resolve();
+                }
+            );
+        });
+    }
+
     if (Number(paidPayment.cashbackRedeemed || 0) > 0) {
         await new Promise((resolve, reject) => {
             Loyalty.redeemCashback(
@@ -2971,16 +3123,32 @@ async function confirmPayment(req, res) {
             trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
             trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
             trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
+            trustedPayment.rewardRedemption = await getRewardRedemptionView(
+                req.session.user.id,
+                trustedPayment.merchantId,
+                trustedPayment.serviceId,
+                trustedPayment.amount
+            );
         }
         trustedPayment = await applyVoucherRedemption(req, trustedPayment);
+        trustedPayment = await applyPointRedemption(req, trustedPayment);
         trustedPayment = await applyCashbackRedemption(req, trustedPayment);
     } catch (error) {
         const fallbackVouchers = payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : [];
-        const fallbackPayment = trustedPayment || {
+        const fallbackRewardRedemption = trustedPayment?.kind === 'booking'
+            ? await getRewardRedemptionView(req.session.user.id, trustedPayment.merchantId, trustedPayment.serviceId, trustedPayment.amount)
+            : null;
+        const fallbackPayment = trustedPayment ? {
+            ...trustedPayment,
+            rewardRedemption: trustedPayment.rewardRedemption || fallbackRewardRedemption,
+            redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
+        } : {
             ...payment,
             availableVouchers: fallbackVouchers,
             birthdayPromotion: payment.bookingId ? buildBirthdayPromotion(req.session.user, fallbackVouchers) : null,
-            loyalty: payment.bookingId ? await getLoyaltyView(req.session.user.id) : null
+            loyalty: payment.bookingId ? await getLoyaltyView(req.session.user.id) : null,
+            rewardRedemption: fallbackRewardRedemption,
+            redeemPointsRequested: payment.redeemPoints || 0
         };
         return renderPaymentForm(res, fallbackPayment, error.message);
     }
@@ -2991,11 +3159,11 @@ async function confirmPayment(req, res) {
 
     if (trustedPayment.amount === 0) {
         try {
-            const receiptId = await completeTrustedPayment(req, trustedPayment, 'Cashback');
+            const receiptId = await completeTrustedPayment(req, trustedPayment, trustedPayment.pointsRedeemed ? 'Rewards' : 'Cashback');
             return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
         } catch (error) {
             console.error(error);
-            return renderPaymentForm(res, payment, 'Cashback could not be redeemed. Please try again.');
+            return renderPaymentForm(res, payment, 'Rewards could not be redeemed. Please try again.');
         }
     }
 

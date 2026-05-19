@@ -9,6 +9,7 @@ const Loyalty = require('../models/Loyalty');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const SupportRequest = require('../models/SupportRequest');
+const AuditLog = require('../models/AuditLog');
 
 function getBookingAmount(booking) {
     return Number(booking.service_price || booking.price || 0);
@@ -619,6 +620,7 @@ function showDashboard(req, res, options = {}) {
                                         databaseError: Boolean(bookingError || userError || reviewSummaryError || reviewLeaderboardError || reviewListError || loyaltyError || supportError),
                                         success,
                                         error,
+                                        auditLogs: options.auditLogs || [],
                                         ...reports
                                     });
                                 });
@@ -640,7 +642,19 @@ const showBookings = renderAdminView('admin-bookings', 'Admin Bookings');
 const showMerchants = renderAdminView('admin-merchants', 'Admin Merchants');
 const showReviews = renderAdminView('admin-reviews', 'Admin Reviews');
 const showAnalytics = renderAdminView('admin-analytics', 'Admin Analytics');
-const showAuditTrail = renderAdminView('admin-audit-trail', 'Admin Audit Trail');
+function showAuditTrail(req, res) {
+    return AuditLog.listRecent(50, (auditError, auditLogs = []) => {
+        if (auditError) {
+            console.error(auditError);
+        }
+
+        return showDashboard(req, res, {
+            viewName: 'admin-audit-trail',
+            title: 'Admin Audit Trail',
+            auditLogs: auditError ? [] : auditLogs
+        });
+    });
+}
 const showPlatformHealth = renderAdminView('admin-platform-health', 'Platform Health');
 
 function showNewMerchant(req, res) {

@@ -10759,3 +10759,26 @@ textarea {
         min-height: 300px;
     }
 }
+.loyalty-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    line-height: 1.3;
+}
+
+.loyalty-toggle input[type="checkbox"] {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: #4d7046;
+}
+
+.account-form input:disabled,
+.account-form input[readonly]:disabled {
+    color: #536650;
+    background: #eef4ec;
+    border-color: #d8e3d5;
+    opacity: 1;
+    cursor: not-allowed;
+}

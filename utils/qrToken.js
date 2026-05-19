@@ -111,7 +111,7 @@ function getMerchantScanUrl(req, merchantId) {
 }
 
 function getBookingCheckInPath(bookingId) {
-    return `/checkin/${encodeURIComponent(signBookingCheckInToken(bookingId))}`;
+    return `/checking/${encodeURIComponent(signBookingCheckInToken(bookingId))}`;
 }
 
 function getBookingCheckInUrl(req, bookingId) {

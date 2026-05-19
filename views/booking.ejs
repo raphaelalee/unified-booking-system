@@ -214,7 +214,7 @@
                 <a class="button whatsapp-button full" href="<%= whatsappEnquiryUrl %>" target="_blank" rel="noopener">Continue on WhatsApp</a>
             </div>
         <% } %>
-        <% if (typeof qrDebug !== 'undefined' && qrDebug) { %>
+        <% if (showQrDebug && typeof qrDebug !== 'undefined' && qrDebug) { %>
             <div class="whatsapp-booking-panel qr-debug-panel">
                 <p class="eyebrow">QR Debug</p>
                 <p class="muted"><strong>System:</strong> <%= qrDebug.system %> / <%= qrDebug.label %></p>

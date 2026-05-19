@@ -10,14 +10,11 @@
     <p class="eyebrow"><%= isBooking ? 'Booking receipt' : 'Product receipt' %></p>
     <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
     <% if (isBooking) { %>
-        <p>
-            <strong><%= receipt.userName %></strong> booked
-            <strong><%= receipt.items[0]?.name || 'a service' %></strong>.
-            Status: <strong><%= receipt.status %></strong>.
-            <% if (receipt.bookingDate || receipt.bookingTime) { %>
-                Appointment: <strong><%= receipt.bookingDate || '' %><%= receipt.bookingTime ? ` at ${receipt.bookingTime}` : '' %></strong>.
-            <% } %>
-        </p>
+        <p><strong><%= receipt.userName %></strong> booked <strong><%= receipt.items[0]?.name || 'a service' %></strong></p>
+        <p>Status: <strong><%= receipt.statusLabel || receipt.status %></strong></p>
+        <% if (appointmentLabel) { %>
+            <p>Appointment: <strong><%= appointmentLabel %></strong></p>
+        <% } %>
     <% } else { %>
         <p>
             <strong><%= receipt.userName %></strong> paid
@@ -25,6 +22,9 @@
             by <strong><%= receipt.paymentMethod %></strong>.
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
                 Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+            <% } %>
+            <% if (Number(receipt.pointsDiscount || 0) > 0) { %>
+                Points redeemed: <strong><%= Number(receipt.pointsRedeemed || 0) %> pts</strong>.
             <% } %>
             <% if (isProductPickup) { %>
                 Fulfilment: <strong><%= fulfilmentLabel %></strong>.
@@ -61,23 +61,28 @@
             <% } %>
 
             <div class="receipt-meta-grid">
-                <p><span>User</span><strong><%= receipt.userName %></strong></p>
-                <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
-                <p><span><%= isBooking ? 'Status' : 'Payment method' %></span><strong><%= isBooking ? receipt.status : receipt.paymentMethod %></strong></p>
-                <p><span>Date/time</span><strong><%= paidAtLabel %></strong></p>
                 <% if (isBooking) { %>
+                    <p><span>User</span><strong><%= receipt.userName %></strong></p>
+                    <p><span>Status</span><strong><%= receipt.statusLabel || receipt.status %></strong></p>
                     <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
-                    <p><span>Appointment</span><strong><%= receipt.bookingDate || '-' %><%= receipt.bookingTime ? ` at ${receipt.bookingTime}` : '' %></strong></p>
+                    <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
+                    <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
+                    <p><span>Appointment</span><strong><%= appointmentLabel || '-' %></strong></p>
                     <% if (receipt.checkedInAt) { %>
-                        <p><span>Checked-in At</span><strong><%= new Date(receipt.checkedInAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></strong></p>
+                        <p><span>Checked-in At</span><strong><%= checkedInAtLabel || '-' %></strong></p>
                     <% } %>
+                <% } else { %>
+                    <p><span>User</span><strong><%= receipt.userName %></strong></p>
+                    <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
+                    <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
+                    <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
                 <% } %>
                 <% if (isProductPickup) { %>
                     <p><span>Fulfilment Method</span><strong><%= fulfilmentLabel %></strong></p>
                     <p><span>Pickup Merchant</span><strong><%= pickupMerchantName %></strong></p>
                     <p><span>Pickup Status</span><strong><%= pickupStatusLabel %></strong></p>
                     <% if (receipt.pickupAt) { %>
-                        <p><span>Pickup Date/time</span><strong><%= new Date(receipt.pickupAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></strong></p>
+                        <p><span>Pickup Date/Time</span><strong><%= pickupAtLabel || '-' %></strong></p>
                     <% } %>
                 <% } %>
             </div>
@@ -122,6 +127,12 @@
                     <strong>-$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>
                 </div>
             <% } %>
+            <% if (Number(receipt.pointsDiscount || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Points redeemed</span>
+                    <strong>-<%= Number(receipt.pointsRedeemed || 0) %> pts / $<%= Number(receipt.pointsDiscount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
         </article>
 
         <aside class="receipt-qr-panel">
@@ -129,12 +140,14 @@
             <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
             <p class="muted"><%= qrDescription %></p>
             <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
-            <div class="qr-debug-panel">
-                <p class="eyebrow">QR Debug</p>
-                <p class="muted"><strong>System:</strong> <%= qrSystem %></p>
-                <p class="muted"><strong>Token:</strong> <%= checkinToken %></p>
-                <p class="muted"><strong>Route target:</strong> <%= qrRouteTarget %></p>
-            </div>
+            <% if (showQrDebug) { %>
+                <div class="qr-debug-panel">
+                    <p class="eyebrow">QR Debug</p>
+                    <p class="muted"><strong>System:</strong> <%= qrSystem %></p>
+                    <p class="muted"><strong>Token:</strong> <%= checkinToken %></p>
+                    <p class="muted"><strong>Route target:</strong> <%= qrRouteTarget %></p>
+                </div>
+            <% } %>
         </aside>
     </div>
 </section>

@@ -1,4 +1,5 @@
 const Loyalty = require('../models/Loyalty');
+const AuditLog = require('../models/AuditLog');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const User = require('../models/User');
 const UserVoucher = require('../models/UserVoucher');
@@ -10,6 +11,8 @@ function getRulesForm(body = {}) {
         cashbackPercent: Number(body.cashbackPercent || 0),
         minPointsToRedeem: Number.parseInt(body.minPointsToRedeem, 10) || 0,
         pointsToCashRate: Number(body.pointsToCashRate || 0),
+        maxDiscountPercent: Number(body.maxDiscountPercent || 0),
+        pointsExpiryDays: Number.parseInt(body.pointsExpiryDays, 10) || 0,
         isEnabled: body.isEnabled === 'on' || body.isEnabled === true
     };
 }
@@ -17,8 +20,8 @@ function getRulesForm(body = {}) {
 function validateRules(rules) {
     const errors = [];
 
-    if (!Number.isFinite(rules.pointsPerDollar) || rules.pointsPerDollar < 0) {
-        errors.push('Points per dollar must be zero or more.');
+    if (!Number.isInteger(rules.pointsPerDollar) || rules.pointsPerDollar < 1) {
+        errors.push('Points per dollar must be a positive whole number.');
     }
 
     if (!Number.isFinite(rules.cashbackPercent) || rules.cashbackPercent < 0 || rules.cashbackPercent > 50) {
@@ -31,6 +34,14 @@ function validateRules(rules) {
 
     if (!Number.isFinite(rules.pointsToCashRate) || rules.pointsToCashRate <= 0) {
         errors.push('Points to cashback rate must be more than 0.');
+    }
+
+    if (!Number.isFinite(rules.maxDiscountPercent) || rules.maxDiscountPercent < 0 || rules.maxDiscountPercent > 100) {
+        errors.push('Maximum booking discount must be between 0 and 100%.');
+    }
+
+    if (!Number.isInteger(rules.pointsExpiryDays) || rules.pointsExpiryDays < 1) {
+        errors.push('Points expiry period must be at least 1 day.');
     }
 
     return errors;
@@ -180,6 +191,19 @@ function redeemPoints(req, res) {
             return res.redirect(redirectPath);
         }
 
+        AuditLog.log({
+            actorUserId: req.session.user?.id,
+            actorRole: req.session.user?.role || 'customer',
+            action: 'points_converted_to_cashback',
+            entityType: 'loyalty_wallet',
+            entityId: req.session.user?.id,
+            details: {
+                points: result?.points || Number(points || 0),
+                cashback: result?.cashback || 0
+            }
+        }, (auditError) => {
+            if (auditError) console.error(auditError);
+        });
         req.session.loyaltySuccess = 'Points redeemed successfully';
         return res.redirect(redirectPath);
     });
@@ -242,6 +266,16 @@ function updateAdminRules(req, res) {
             console.error(error);
             req.session.adminError = 'Loyalty settings could not be updated.';
         } else {
+            AuditLog.log({
+                actorUserId: req.session.user?.id,
+                actorRole: req.session.user?.role || 'admin',
+                action: 'admin_loyalty_rules_updated',
+                entityType: 'loyalty_rules',
+                entityId: 'platform',
+                details: rules
+            }, (auditError) => {
+                if (auditError) console.error(auditError);
+            });
             req.session.adminSuccess = 'Loyalty settings updated.';
         }
 

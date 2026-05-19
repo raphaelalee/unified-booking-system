@@ -7,12 +7,22 @@ const DEFAULT_RULES = {
     cashbackPercent: 5,
     minPointsToRedeem: 100,
     pointsToCashRate: 0.01,
+    maxDiscountPercent: 20,
+    pointsExpiryDays: 365,
     isEnabled: true
+};
+
+const DEFAULT_MERCHANT_RULES = {
+    isEnabled: true,
+    maxDiscountPercent: null,
+    promotionLabel: '',
+    promotionMultiplier: 1
 };
 
 const ACTIVITY_TYPES = {
     EARNED: 'EARNED',
     REDEEMED: 'REDEEMED',
+    POINTS_USED: 'POINTS_USED',
     CASHBACK_USED: 'CASHBACK_USED'
 };
 
@@ -39,6 +49,27 @@ function runSeries(tasks, callback) {
     next();
 }
 
+function ensureColumns(tableName, definitions, callback) {
+    db.query(`SHOW COLUMNS FROM ${tableName}`, (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = Object.entries(definitions)
+            .filter(([field]) => !fields.has(field))
+            .map(([, definition]) => `ADD COLUMN ${definition}`);
+
+        if (!alters.length) {
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE ${tableName} ${alters.join(', ')}`, callback);
+    });
+}
+
 function ensureTables(callback) {
     const walletSql = `
         CREATE TABLE IF NOT EXISTS loyalty_wallets (
@@ -59,6 +90,10 @@ function ensureTables(callback) {
             points_delta INT NOT NULL DEFAULT 0,
             cashback_delta DECIMAL(10,2) NOT NULL DEFAULT 0,
             description VARCHAR(255) NOT NULL,
+            expires_at DATETIME DEFAULT NULL,
+            booking_reference VARCHAR(80) DEFAULT NULL,
+            merchant_name VARCHAR(120) DEFAULT NULL,
+            reward_discount DECIMAL(10,2) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (loyalty_transaction_id),
             UNIQUE KEY uniq_loyalty_source_type (source_receipt_id, transaction_type),
@@ -72,22 +107,61 @@ function ensureTables(callback) {
             cashback_percent DECIMAL(5,2) NOT NULL DEFAULT 5,
             min_points_to_redeem INT NOT NULL DEFAULT 100,
             points_to_cash_rate DECIMAL(10,4) NOT NULL DEFAULT 0.01,
+            max_discount_percent DECIMAL(5,2) NOT NULL DEFAULT 20,
+            points_expiry_days INT NOT NULL DEFAULT 365,
             is_enabled TINYINT(1) NOT NULL DEFAULT 1,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (rule_id)
         )
     `;
+    const merchantRulesSql = `
+        CREATE TABLE IF NOT EXISTS merchant_loyalty_rules (
+            merchant_id INT NOT NULL,
+            is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            max_discount_percent DECIMAL(5,2) DEFAULT NULL,
+            promotion_label VARCHAR(120) DEFAULT NULL,
+            promotion_multiplier DECIMAL(5,2) NOT NULL DEFAULT 1,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (merchant_id)
+        )
+    `;
+    const merchantServicesSql = `
+        CREATE TABLE IF NOT EXISTS merchant_loyalty_services (
+            merchant_id INT NOT NULL,
+            service_id INT NOT NULL,
+            redemption_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (merchant_id, service_id),
+            KEY idx_merchant_loyalty_service (service_id)
+        )
+    `;
     const seedRulesSql = `
         INSERT INTO loyalty_rules
-            (rule_id, points_per_dollar, cashback_percent, min_points_to_redeem, points_to_cash_rate, is_enabled)
-        VALUES (1, 10, 5, 100, 0.01, 1)
+            (rule_id, points_per_dollar, cashback_percent, min_points_to_redeem, points_to_cash_rate, max_discount_percent, points_expiry_days, is_enabled)
+        VALUES (1, 10, 5, 100, 0.01, 20, 365, 1)
         ON DUPLICATE KEY UPDATE rule_id = rule_id
     `;
 
     runSeries([
         (next) => db.query(walletSql, next),
         (next) => db.query(transactionSql, next),
+        (next) => ensureColumns('loyalty_transactions', {
+            expires_at: 'expires_at DATETIME DEFAULT NULL AFTER description',
+            booking_reference: 'booking_reference VARCHAR(80) DEFAULT NULL AFTER expires_at',
+            merchant_name: 'merchant_name VARCHAR(120) DEFAULT NULL AFTER booking_reference',
+            reward_discount: 'reward_discount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER merchant_name'
+        }, next),
         (next) => db.query(rulesSql, next),
+        (next) => ensureColumns('loyalty_rules', {
+            max_discount_percent: 'max_discount_percent DECIMAL(5,2) NOT NULL DEFAULT 20 AFTER points_to_cash_rate',
+            points_expiry_days: 'points_expiry_days INT NOT NULL DEFAULT 365 AFTER max_discount_percent'
+        }, next),
+        (next) => db.query(merchantRulesSql, next),
+        (next) => ensureColumns('merchant_loyalty_rules', {
+            promotion_label: 'promotion_label VARCHAR(120) DEFAULT NULL AFTER max_discount_percent',
+            promotion_multiplier: 'promotion_multiplier DECIMAL(5,2) NOT NULL DEFAULT 1 AFTER promotion_label'
+        }, next),
+        (next) => db.query(merchantServicesSql, next),
         (next) => db.query(seedRulesSql, next)
     ], callback);
 }
@@ -98,7 +172,21 @@ function mapRules(row = {}) {
         cashbackPercent: Number(row.cashback_percent ?? DEFAULT_RULES.cashbackPercent),
         minPointsToRedeem: Number(row.min_points_to_redeem ?? DEFAULT_RULES.minPointsToRedeem),
         pointsToCashRate: Number(row.points_to_cash_rate ?? DEFAULT_RULES.pointsToCashRate),
+        maxDiscountPercent: Number(row.max_discount_percent ?? DEFAULT_RULES.maxDiscountPercent),
+        pointsExpiryDays: Number(row.points_expiry_days ?? DEFAULT_RULES.pointsExpiryDays),
         isEnabled: row.is_enabled === undefined ? DEFAULT_RULES.isEnabled : Boolean(Number(row.is_enabled))
+    };
+}
+
+function mapMerchantRules(row = {}) {
+    return {
+        merchantId: row.merchant_id ? Number(row.merchant_id) : null,
+        isEnabled: row.is_enabled === undefined ? DEFAULT_MERCHANT_RULES.isEnabled : Boolean(Number(row.is_enabled)),
+        maxDiscountPercent: row.max_discount_percent === null || row.max_discount_percent === undefined
+            ? DEFAULT_MERCHANT_RULES.maxDiscountPercent
+            : Number(row.max_discount_percent),
+        promotionLabel: row.promotion_label || DEFAULT_MERCHANT_RULES.promotionLabel,
+        promotionMultiplier: Number(row.promotion_multiplier || DEFAULT_MERCHANT_RULES.promotionMultiplier)
     };
 }
 
@@ -126,6 +214,10 @@ function mapTransaction(row = {}) {
         cashbackDelta: Number(row.cashback_delta || 0),
         cashbackChange: Number(row.cashback_delta || 0),
         description: row.description,
+        expiresAt: row.expires_at || null,
+        bookingReference: row.booking_reference || row.source_receipt_id || '',
+        merchantName: row.merchant_name || '',
+        rewardDiscount: Number(row.reward_discount || 0),
         createdAt: row.created_at
     };
 }
@@ -161,6 +253,8 @@ function updateRules(rules, callback) {
                 cashback_percent = ?,
                 min_points_to_redeem = ?,
                 points_to_cash_rate = ?,
+                max_discount_percent = ?,
+                points_expiry_days = ?,
                 is_enabled = ?
             WHERE rule_id = 1
         `;
@@ -170,6 +264,8 @@ function updateRules(rules, callback) {
             rules.cashbackPercent,
             rules.minPointsToRedeem,
             rules.pointsToCashRate,
+            rules.maxDiscountPercent,
+            rules.pointsExpiryDays,
             rules.isEnabled ? 1 : 0
         ], callback);
     });
@@ -260,7 +356,7 @@ function getPlatformSummary(callback) {
         const sql = `
             SELECT
                 COUNT(*) AS transaction_count,
-                SUM(CASE WHEN transaction_type IN ('REDEEMED', 'redeem_points') THEN 1 ELSE 0 END) AS redemption_count,
+                SUM(CASE WHEN transaction_type IN ('REDEEMED', 'POINTS_USED', 'redeem_points') THEN 1 ELSE 0 END) AS redemption_count,
                 COALESCE(SUM(points_delta), 0) AS points_delta_total,
                 COALESCE(SUM(cashback_delta), 0) AS cashback_delta_total
             FROM loyalty_transactions
@@ -282,8 +378,441 @@ function getPlatformSummary(callback) {
     });
 }
 
+function getMerchantRewardAnalytics(merchantId, callback) {
+    const salonId = Number(merchantId || 0);
+
+    if (!salonId) {
+        callback(null, {
+            rewardBookingCount: 0,
+            totalRedeemedValue: 0,
+            loyaltyDrivenRevenue: 0,
+            repeatRewardCustomers: 0
+        });
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                COUNT(DISTINCT bookings.booking_id) AS reward_booking_count,
+                COALESCE(SUM(loyalty_transactions.reward_discount), 0) AS total_redeemed_value,
+                COALESCE(SUM(transactions.total_amount), 0) AS loyalty_driven_revenue,
+                COUNT(DISTINCT CASE WHEN customer_counts.booking_count > 1 THEN bookings.user_id END) AS repeat_reward_customers
+            FROM loyalty_transactions
+            INNER JOIN bookings
+                ON loyalty_transactions.source_receipt_id = CONCAT('points-', bookings.booking_id)
+            LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
+            LEFT JOIN (
+                SELECT user_id, merchant_id, COUNT(*) AS booking_count
+                FROM bookings
+                WHERE status NOT IN ('cancelled', 'rejected')
+                GROUP BY user_id, merchant_id
+            ) AS customer_counts
+                ON customer_counts.user_id = bookings.user_id
+                AND customer_counts.merchant_id = bookings.merchant_id
+            WHERE bookings.merchant_id = ?
+                AND loyalty_transactions.transaction_type = 'POINTS_USED'
+        `;
+
+        db.query(sql, [salonId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, {
+                rewardBookingCount: Number(rows[0]?.reward_booking_count || 0),
+                totalRedeemedValue: Number(rows[0]?.total_redeemed_value || 0),
+                loyaltyDrivenRevenue: Number(rows[0]?.loyalty_driven_revenue || 0),
+                repeatRewardCustomers: Number(rows[0]?.repeat_reward_customers || 0)
+            });
+        });
+    });
+}
+
 function roundMoney(value) {
     return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function normalizePercent(value, fallback = 0) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+        return fallback;
+    }
+
+    return Math.max(0, Math.min(100, Math.round(numeric * 100) / 100));
+}
+
+function getMerchantRules(merchantId, callback) {
+    const salonId = Number(merchantId || 0);
+
+    if (!salonId) {
+        callback(new Error('Merchant is required.'));
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query('SELECT * FROM merchant_loyalty_rules WHERE merchant_id = ? LIMIT 1', [salonId], (rulesError, rulesRows = []) => {
+            if (rulesError) {
+                callback(rulesError);
+                return;
+            }
+
+            db.query(
+                'SELECT service_id, redemption_enabled FROM merchant_loyalty_services WHERE merchant_id = ?',
+                [salonId],
+                (servicesError, serviceRows = []) => {
+                    if (servicesError) {
+                        callback(servicesError);
+                        return;
+                    }
+
+                    const serviceRedemptions = {};
+                    serviceRows.forEach((row) => {
+                        serviceRedemptions[Number(row.service_id)] = Boolean(Number(row.redemption_enabled));
+                    });
+
+                    callback(null, {
+                        ...mapMerchantRules(rulesRows[0]),
+                        merchantId: salonId,
+                        serviceRedemptions
+                    });
+                }
+            );
+        });
+    });
+}
+
+function updateMerchantRules(merchantId, settings = {}, callback) {
+    const salonId = Number(merchantId || 0);
+    const serviceIds = Array.isArray(settings.serviceIds)
+        ? settings.serviceIds.map((id) => Number(id)).filter(Boolean)
+        : [];
+    const enabledServiceIds = new Set(
+        (Array.isArray(settings.enabledServiceIds) ? settings.enabledServiceIds : [])
+            .map((id) => Number(id))
+            .filter(Boolean)
+    );
+    const maxDiscountPercent = settings.maxDiscountPercent === null || settings.maxDiscountPercent === ''
+        ? null
+        : normalizePercent(settings.maxDiscountPercent, DEFAULT_RULES.maxDiscountPercent);
+
+    if (!salonId) {
+        callback(new Error('Merchant is required.'));
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const ruleSql = `
+                    INSERT INTO merchant_loyalty_rules
+                        (merchant_id, is_enabled, max_discount_percent, promotion_label, promotion_multiplier)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        is_enabled = VALUES(is_enabled),
+                        max_discount_percent = VALUES(max_discount_percent),
+                        promotion_label = VALUES(promotion_label),
+                        promotion_multiplier = VALUES(promotion_multiplier)
+                `;
+
+                connection.query(ruleSql, [
+                    salonId,
+                    settings.isEnabled ? 1 : 0,
+                    maxDiscountPercent,
+                    String(settings.promotionLabel || '').trim().slice(0, 120) || null,
+                    Math.max(0, Math.min(Number(settings.promotionMultiplier || 1), 1))
+                ], (ruleError) => {
+                    if (ruleError) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(ruleError);
+                        });
+                    }
+
+                    connection.query('DELETE FROM merchant_loyalty_services WHERE merchant_id = ?', [salonId], (deleteError) => {
+                        if (deleteError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(deleteError);
+                            });
+                        }
+
+                        if (!serviceIds.length) {
+                            return connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError);
+                            });
+                        }
+
+                        const rows = serviceIds.map((serviceId) => [
+                            salonId,
+                            serviceId,
+                            enabledServiceIds.has(serviceId) ? 1 : 0
+                        ]);
+
+                        connection.query(
+                            'INSERT INTO merchant_loyalty_services (merchant_id, service_id, redemption_enabled) VALUES ?',
+                            [rows],
+                            (serviceError) => {
+                                if (serviceError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        callback(serviceError);
+                                    });
+                                }
+
+                                return connection.commit((commitError) => {
+                                    connection.release();
+                                    callback(commitError);
+                                });
+                            }
+                        );
+                    });
+                });
+            });
+        });
+    });
+}
+
+function getEffectiveRedemptionRules(options = {}, callback) {
+    const merchantId = Number(options.merchantId || 0);
+    const serviceId = Number(options.serviceId || 0);
+
+    return getRules((rulesError, adminRules) => {
+        if (rulesError) {
+            callback(rulesError);
+            return;
+        }
+
+        if (!merchantId) {
+            callback(null, {
+                enabled: false,
+                reason: 'Merchant rewards are unavailable.',
+                adminRules,
+                merchantRules: mapMerchantRules(),
+                maxDiscountPercent: 0,
+                minPointsToRedeem: adminRules.minPointsToRedeem,
+                pointsToCashRate: adminRules.pointsToCashRate
+            });
+            return;
+        }
+
+        return getMerchantRules(merchantId, (merchantError, merchantRules) => {
+            if (merchantError) {
+                callback(merchantError);
+                return;
+            }
+
+            const serviceSetting = serviceId ? merchantRules.serviceRedemptions[serviceId] : undefined;
+            const serviceEnabled = serviceSetting === undefined ? true : Boolean(serviceSetting);
+            const merchantMax = merchantRules.maxDiscountPercent === null || merchantRules.maxDiscountPercent === undefined
+                ? adminRules.maxDiscountPercent
+                : merchantRules.maxDiscountPercent;
+            const maxDiscountPercent = Math.min(
+                normalizePercent(adminRules.maxDiscountPercent, DEFAULT_RULES.maxDiscountPercent),
+                normalizePercent(merchantMax, adminRules.maxDiscountPercent)
+            );
+            const enabled = Boolean(adminRules.isEnabled && merchantRules.isEnabled && serviceEnabled);
+            let reason = '';
+
+            if (!adminRules.isEnabled) {
+                reason = 'Rewards are disabled platform-wide.';
+            } else if (!merchantRules.isEnabled) {
+                reason = 'This merchant has disabled rewards.';
+            } else if (!serviceEnabled) {
+                reason = 'This service does not allow reward redemption.';
+            }
+
+            callback(null, {
+                enabled,
+                reason,
+                adminRules,
+                merchantRules,
+                serviceEnabled,
+                maxDiscountPercent,
+                minPointsToRedeem: adminRules.minPointsToRedeem,
+                pointsToCashRate: Math.round(adminRules.pointsToCashRate * Math.max(0, Math.min(Number(merchantRules.promotionMultiplier || 1), 1)) * 10000) / 10000,
+                pointsPerDollar: adminRules.pointsPerDollar,
+                pointsExpiryDays: adminRules.pointsExpiryDays
+            });
+        });
+    });
+}
+
+function calculatePointRedemption(options = {}, callback) {
+    const requestedPoints = Math.floor(Number(options.requestedPoints || 0));
+    const amount = roundMoney(options.amount || 0);
+
+    if (requestedPoints <= 0 || amount <= 0) {
+        callback(null, { points: 0, discount: 0, rules: null });
+        return;
+    }
+
+    return getEffectiveRedemptionRules(options, (rulesError, rules) => {
+        if (rulesError) {
+            callback(rulesError);
+            return;
+        }
+
+        if (!rules.enabled) {
+            callback(new Error(rules.reason || 'Rewards cannot be redeemed for this booking.'));
+            return;
+        }
+
+        if (requestedPoints < rules.minPointsToRedeem) {
+            callback(new Error(`Minimum redemption is ${rules.minPointsToRedeem} points.`));
+            return;
+        }
+
+        if (Number(rules.pointsToCashRate || 0) <= 0) {
+            callback(new Error('This merchant has set points redemption value to zero.'));
+            return;
+        }
+
+        return ensureWallet(options.userId, (walletError, wallet) => {
+            if (walletError) {
+                callback(walletError);
+                return;
+            }
+
+            const availablePoints = Math.max(0, Number(wallet.pointsBalance || 0));
+
+            if (requestedPoints > availablePoints) {
+                callback(new Error('Not enough points to redeem.'));
+                return;
+            }
+
+            const rawDiscount = roundMoney(requestedPoints * rules.pointsToCashRate);
+            const maxDiscount = roundMoney(amount * (rules.maxDiscountPercent / 100));
+            const discount = Math.min(rawDiscount, maxDiscount, amount);
+            const appliedPoints = Math.min(requestedPoints, Math.floor(discount / rules.pointsToCashRate));
+
+            if (discount <= 0 || appliedPoints <= 0) {
+                callback(null, { points: 0, discount: 0, rules, wallet });
+                return;
+            }
+
+            callback(null, {
+                points: appliedPoints,
+                requestedPoints,
+                discount,
+                maxDiscount,
+                rawDiscount,
+                rules,
+                wallet
+            });
+        });
+    });
+}
+
+function redeemPointsForPayment(userId, points, discount, sourceReceiptId, options = {}, callback) {
+    const done = typeof options === 'function' ? options : callback;
+    const metadata = typeof options === 'function' ? {} : options || {};
+    const requestedPoints = Math.floor(Number(points || 0));
+    const redeemDiscount = roundMoney(discount || 0);
+
+    if (!userId || requestedPoints <= 0 || redeemDiscount <= 0) {
+        done(null, { redeemed: false, points: 0, discount: 0 });
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            done(tableError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                done(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    done(transactionError);
+                    return;
+                }
+
+                const updateSql = `
+                    UPDATE loyalty_wallets
+                    SET points_balance = points_balance - ?
+                    WHERE user_id = ?
+                        AND points_balance >= ?
+                `;
+
+                connection.query(updateSql, [requestedPoints, userId, requestedPoints], (updateError, result) => {
+                    if (updateError || result.affectedRows === 0) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            done(updateError || new Error('Not enough points to redeem.'));
+                        });
+                    }
+
+                    const insertSql = `
+                        INSERT IGNORE INTO loyalty_transactions
+                            (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, booking_reference, merchant_name, reward_discount)
+                        VALUES (?, ?, 'POINTS_USED', ?, 0, ?, ?, ?, ?)
+                    `;
+
+                    connection.query(insertSql, [
+                        userId,
+                        String(sourceReceiptId),
+                        -requestedPoints,
+                        `Redeemed ${requestedPoints} points for $${redeemDiscount.toFixed(2)} booking discount`,
+                        metadata.bookingReference || String(sourceReceiptId).replace(/^points-/, ''),
+                        metadata.merchantName || '',
+                        redeemDiscount
+                    ], (insertError, insertResult) => {
+                        if (insertError || insertResult.affectedRows === 0) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                done(insertError || null, { redeemed: false, duplicate: true, points: 0, discount: 0 });
+                            });
+                        }
+
+                        return connection.commit((commitError) => {
+                            connection.release();
+                            done(commitError, {
+                                redeemed: !commitError,
+                                points: requestedPoints,
+                                discount: redeemDiscount
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
 }
 
 function getReceiptBirthdayMultiplier(receipt, callback) {
@@ -383,15 +912,18 @@ function awardForReceipt(receipt, callback) {
 
                             const insertSql = `
                                 INSERT IGNORE INTO loyalty_transactions
-                                    (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description)
-                                VALUES (?, ?, 'EARNED', ?, 0, ?)
+                                    (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, expires_at, booking_reference, merchant_name)
+                                VALUES (?, ?, 'EARNED', ?, 0, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY), ?, ?)
                             `;
 
                             connection.query(insertSql, [
                                 receipt.userId,
                                 sourceReceiptId,
                                 points,
-                                description
+                                description,
+                                Math.max(1, Number(rules.pointsExpiryDays || DEFAULT_RULES.pointsExpiryDays)),
+                                receipt.displayId || receipt.id || sourceReceiptId,
+                                receipt.merchantName || ''
                             ], (insertError, result) => {
                                 if (insertError) {
                                     return connection.rollback(() => {
@@ -820,10 +1352,16 @@ module.exports = {
     awardPointsForReceipt,
     awardReviewBonus,
     ensureWallet,
+    calculatePointRedemption,
+    getEffectiveRedemptionRules,
+    getMerchantRules,
+    getMerchantRewardAnalytics,
     getPlatformSummary,
     getRules,
     getWalletView,
     redeemCashback,
+    redeemPointsForPayment,
     redeemPointsForCashback,
+    updateMerchantRules,
     updateRules
 };

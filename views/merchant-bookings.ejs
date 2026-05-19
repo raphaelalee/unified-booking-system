@@ -10,6 +10,7 @@
     const rescheduleTools = typeof rescheduleAutomation !== 'undefined' && rescheduleAutomation ? rescheduleAutomation : {};
     const rescheduleSettings = rescheduleTools.settings || {
         autoApproveEnabled: 1,
+        autoApproveBookings: 1,
         minimumNoticeHours: 24,
         maxReschedulesAllowed: 2,
         blockedTimes: '',
@@ -106,10 +107,14 @@
 
             <article class="merchant-alert-card">
                 <div class="merchant-card-heading">
-                    <div><p class="eyebrow">Auto-approval Rules</p><h2>Reschedule settings</h2></div>
+                    <div><p class="eyebrow">Auto-approval Rules</p><h2>Booking and reschedule settings</h2></div>
                 </div>
                 <form class="merchant-quick-actions merchant-reschedule-settings" action="/merchant/reschedule-settings" method="POST">
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <label class="merchant-toggle-row merchant-settings-wide">
+                        <input type="checkbox" name="autoApproveBookings" value="1" <%= Number(rescheduleSettings.autoApproveBookings ?? 1) ? 'checked' : '' %>>
+                        <span><strong>Auto approve available bookings</strong><small>Confirm new bookings immediately when the selected slot is available.</small></span>
+                    </label>
                     <label class="merchant-toggle-row merchant-settings-wide">
                         <input type="checkbox" name="autoApproveEnabled" value="1" <%= Number(rescheduleSettings.autoApproveEnabled) ? 'checked' : '' %>>
                         <span><strong>Auto approve simple requests</strong><small>Approve low-risk reschedules when rules pass.</small></span>

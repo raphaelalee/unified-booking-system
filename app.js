@@ -78,6 +78,7 @@ app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);
     res.locals.currentUser = req.session.user || null;
     res.locals.currentPath = req.path;
+    res.locals.showQrDebug = process.env.NODE_ENV === 'development';
 
     if (!req.session.user) {
         res.locals.notificationUnreadCount = 0;
@@ -258,6 +259,8 @@ app.get('/scan/:merchantId', allowGuestOrCustomer, merchantController.showSecure
 app.post('/scan/:merchantId', requireCustomer, merchantController.saveSecureScanBooking);
 app.get('/book/:serviceId', requireCustomer, bookingController.showBookFallback);
 app.post('/book/:serviceId', requireCustomer, bookingController.createBooking);
+app.get('/checking/:signedToken', bookingController.showCheckIn);
+app.post('/checking/:signedToken', bookingController.confirmCheckIn);
 app.get('/checkin/:signedToken', bookingController.showCheckIn);
 app.post('/checkin/:signedToken', bookingController.confirmCheckIn);
 app.get('/booking/confirm/:bookingId', bookingController.confirmBooking);
@@ -278,6 +281,8 @@ app.get('/merchant/analytics', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/support', requireRole('merchant'), merchantDashboardController.showSupport);
 app.get('/merchant/profile', requireRole('merchant'), merchantDashboardController.showProfile);
 app.post('/merchant/profile', requireRole('merchant'), merchantDashboardController.updateProfile);
+app.get('/merchant/loyalty', requireRole('merchant'), merchantDashboardController.showLoyaltySettings);
+app.post('/merchant/loyalty', requireRole('merchant'), merchantDashboardController.updateLoyaltySettings);
 app.get('/merchant/schedule', requireRole('merchant'), merchantDashboardController.showSchedule);
 app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
 app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
@@ -433,6 +438,7 @@ app.get('/products/:productId', allowGuestOrCustomer, (req, res) => {
     });
 });
 
+app.get('/checkout', requireCustomer, (req, res) => res.redirect('/cart'));
 app.post('/checkout', requireCustomer, merchantController.checkout);
 app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);

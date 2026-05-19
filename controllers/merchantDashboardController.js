@@ -6,6 +6,8 @@ const Promotion = require('../models/Promotion');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
+const Loyalty = require('../models/Loyalty');
+const AuditLog = require('../models/AuditLog');
 const {
     getBookingCheckInUrl,
     getMerchantStorefrontSlug,
@@ -921,6 +923,11 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                         console.error(rescheduleSettingsError);
                                     }
 
+                                    return Loyalty.getMerchantRewardAnalytics(merchant.id, (rewardAnalyticsError, rewardAnalytics = {}) => {
+                                        if (rewardAnalyticsError) {
+                                            console.error(rewardAnalyticsError);
+                                        }
+
                             const safeBookings = bookingError ? [] : bookings || [];
                             const safePromotions = promotionError ? [] : promotions || [];
                             const safeProducts = productError ? [] : products || [];
@@ -963,6 +970,12 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             const appointmentReport = buildAppointmentReport(safeBookings);
                             const promotionRedemptions = safePromotions.reduce((total, promotion) => total + Number(promotion.redemptionCount || 0), 0);
                             appointmentReport.loyaltyRedemptions = promotionRedemptions;
+                            appointmentReport.rewardRedemptions = rewardAnalyticsError ? {
+                                rewardBookingCount: 0,
+                                totalRedeemedValue: 0,
+                                loyaltyDrivenRevenue: 0,
+                                repeatRewardCustomers: 0
+                            } : rewardAnalytics;
                             const customerInsightReport = buildCustomerInsightReport(appointmentReport.allBookings);
                             const previousRevenue = salesDays.slice(0, 3).reduce((sum, day) => sum + day.revenue, 0);
                             const currentRevenue = salesDays.slice(4).reduce((sum, day) => sum + day.revenue, 0);
@@ -1094,6 +1107,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
 
                                 return renderView(qrPayload);
                             });
+                                    });
                                 });
                             });
                         });
@@ -1150,6 +1164,132 @@ const showCustomers = renderPortalView('merchant-customers', 'Merchant Customers
 const showAnalytics = renderPortalView('merchant-analytics', 'Merchant Analytics');
 const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
+
+function showLoyaltySettings(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Loyalty.getRules((adminError, adminRules) => {
+            if (adminError) {
+                console.error(adminError);
+                return res.status(500).render('error', {
+                    title: 'Rewards Settings Error',
+                    message: 'Platform reward rules could not be loaded.'
+                });
+            }
+
+            return Loyalty.getMerchantRules(merchant.id, (rulesError, merchantRules) => {
+                if (rulesError) {
+                    console.error(rulesError);
+                    return res.status(500).render('error', {
+                        title: 'Rewards Settings Error',
+                        message: 'Merchant reward rules could not be loaded.'
+                    });
+                }
+
+                const success = req.session.merchantSuccess;
+                const error = req.session.merchantError;
+                req.session.merchantSuccess = null;
+                req.session.merchantError = null;
+
+                return res.render('merchant-loyalty', {
+                    title: 'Merchant Rewards',
+                    merchant,
+                    adminRules,
+                    merchantRules,
+                    success,
+                    error
+                });
+            });
+        });
+    });
+}
+
+function updateLoyaltySettings(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Loyalty.getRules((adminError, adminRules) => {
+            if (adminError) {
+                console.error(adminError);
+                req.session.merchantError = 'Platform reward rules could not be checked.';
+                return res.redirect('/merchant/loyalty');
+            }
+
+            const postedServiceIds = Array.isArray(req.body.rewardServiceIds)
+                ? req.body.rewardServiceIds
+                : req.body.rewardServiceIds
+                    ? [req.body.rewardServiceIds]
+                    : [];
+            const merchantServiceIds = (merchant.services || []).map((service) => Number(service.id));
+            const enabledServiceIds = postedServiceIds
+                .map((id) => Number(id))
+                .filter((id) => merchantServiceIds.includes(id));
+            const maxDiscountPercent = Number(req.body.maxDiscountPercent || 0);
+            const promotionMultiplier = Number(req.body.promotionMultiplier || 1);
+            const errors = [];
+
+            if (!Number.isFinite(maxDiscountPercent) || maxDiscountPercent < 0) {
+                errors.push('Merchant maximum discount must be zero or more.');
+            }
+
+            if (maxDiscountPercent > Number(adminRules.maxDiscountPercent || 0)) {
+                errors.push(`Merchant maximum discount cannot exceed the platform limit of ${Number(adminRules.maxDiscountPercent || 0)}%.`);
+            }
+
+            if (!Number.isFinite(promotionMultiplier) || promotionMultiplier < 0 || promotionMultiplier > 1) {
+                errors.push('Promotion multiplier must be between 0 and 1 so merchant rules stay within platform limits.');
+            }
+
+            if (errors.length) {
+                req.session.merchantError = errors.join(' ');
+                return res.redirect('/merchant/loyalty');
+            }
+
+            return Loyalty.updateMerchantRules(merchant.id, {
+                isEnabled: req.body.isEnabled === 'on',
+                maxDiscountPercent,
+                promotionLabel: req.body.promotionLabel || '',
+                promotionMultiplier,
+                serviceIds: merchantServiceIds,
+                enabledServiceIds
+            }, (updateError) => {
+                if (updateError) {
+                    console.error(updateError);
+                    req.session.merchantError = 'Merchant reward settings could not be saved.';
+                } else {
+                    AuditLog.log({
+                        actorUserId: req.session.user?.id,
+                        actorRole: req.session.user?.role || 'merchant',
+                        action: 'merchant_reward_rules_updated',
+                        entityType: 'merchant_loyalty_rules',
+                        entityId: merchant.id,
+                        details: {
+                            isEnabled: req.body.isEnabled === 'on',
+                            maxDiscountPercent,
+                            promotionLabel: req.body.promotionLabel || '',
+                            promotionMultiplier,
+                            enabledServiceIds
+                        }
+                    }, (auditError) => {
+                        if (auditError) console.error(auditError);
+                    });
+                    req.session.merchantSuccess = 'Merchant reward settings updated.';
+                }
+
+                return res.redirect('/merchant/loyalty');
+            });
+        });
+    });
+}
 
 function getMerchantProfileForm(body = {}) {
     return {
@@ -1360,6 +1500,7 @@ function updateRescheduleSettings(req, res) {
 
         const settings = {
             autoApproveEnabled: isTruthyFormValue(req.body.autoApproveEnabled),
+            autoApproveBookings: isTruthyFormValue(req.body.autoApproveBookings),
             minimumNoticeHours: Number(req.body.minimumNoticeHours || 24),
             maxReschedulesAllowed: Number(req.body.maxReschedulesAllowed || 2),
             blockedTimes: normalizeBlockedTimes(req.body.blockedTimes),
@@ -2321,6 +2462,8 @@ module.exports = {
     showAnalytics,
     showSupport,
     showProfile,
+    showLoyaltySettings,
+    updateLoyaltySettings,
     updateProfile,
     showServices,
     generateQr,
