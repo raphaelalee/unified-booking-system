@@ -2594,9 +2594,10 @@ body:not(.flappy-page) .page-container > .about-hero::after {
     background: rgba(238, 244, 233, 0.86) !important;
 }
 
+.reward-shop-page .reward-shop-coin,
 .reward-shop-page .reward-shop-balance-icon {
     background: var(--sage-strong) !important;
-    color: var(--paper) !important;
+    color: #fff !important;
 }
 
 .notice.success,

@@ -14,7 +14,16 @@
         <div class="notice error"><%= error %></div>
     <% } %>
     <% if (birthdayPromotion && birthdayPromotion.hasBirthday) { %>
-        <div class="notice <%= birthdayPromotion.isBirthdayMonth ? 'success' : '' %>">
+        <div class="notice birthday-celebration-card <%= birthdayPromotion.isBirthdayMonth ? 'success is-active' : '' %>">
+            <% if (birthdayPromotion.isBirthdayMonth) { %>
+                <div class="birthday-balloons" aria-hidden="true">
+                    <span class="birthday-balloon balloon-peach"></span>
+                    <span class="birthday-balloon balloon-rose"></span>
+                    <span class="birthday-balloon balloon-gold"></span>
+                    <span class="birthday-balloon balloon-sky"></span>
+                    <span class="birthday-balloon balloon-mint"></span>
+                </div>
+            <% } %>
             <% if (birthdayPromotion.isBirthdayMonth) { %>
                 <p>
                     Birthday month perks are active for <strong><%= birthdayPromotion.monthName %></strong>.

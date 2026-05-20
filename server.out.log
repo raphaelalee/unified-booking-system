@@ -1,4 +1,0 @@
-◇ injected env (23) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
-◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-Server is running on http://localhost:3000

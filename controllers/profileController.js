@@ -407,7 +407,7 @@ function submitProductReview(req, res) {
     const productId = Number(req.params.productId);
     const userId = req.session.user?.id;
     const rating = normalizeReviewRating(req.body.rating);
-    const comment = String(req.body.comment || '').trim().slice(0, 800);
+    const comment = String(req.body.comment || '').trim().slice(0, 2000);
 
     if (!receiptId || !userId || !Number.isInteger(productId) || productId <= 0) {
         setProfileError(req, 'The selected product purchase could not be found.');

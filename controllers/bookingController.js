@@ -1167,7 +1167,7 @@ function submitReview(req, res) {
     const bookingId = Number(req.params.bookingId);
     const userId = req.session.user?.id;
     const rating = normalizeReviewRating(req.body.rating);
-    const comment = String(req.body.comment || '').trim().slice(0, 800);
+    const comment = String(req.body.comment || '').trim().slice(0, 2000);
 
     if (!bookingId || !userId) {
         setProfileError(req, 'The selected booking could not be found.');
@@ -1251,7 +1251,7 @@ function submitReview(req, res) {
                     if (rewardError) {
                         console.error(rewardError);
                         setProfileSuccess(req, 'Review submitted successfully.');
-                        return res.redirect('/profile#bookings');
+                        return res.redirect('/profile#my-reviews');
                     }
 
                     const awardedPoints = Number(rewardResult?.points || 0);
@@ -1265,13 +1265,13 @@ function submitReview(req, res) {
                             type: 'reward_update',
                             title: 'Review reward earned',
                             message: `You earned ${awardedPoints} points for reviewing ${booking.service_name}.`,
-                            linkUrl: '/profile#bookings',
+                            linkUrl: '/profile#my-reviews',
                             dedupeKey: `review-reward-customer-${bookingId}`
                         });
                     }
 
                     setProfileSuccess(req, `Review submitted successfully.${rewardMessage}`);
-                    return res.redirect('/profile#bookings');
+                    return res.redirect('/profile#my-reviews');
                 });
             });
         });

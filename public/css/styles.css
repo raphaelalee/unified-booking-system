@@ -1068,6 +1068,18 @@ h3 {
     padding: 12px 14px;
 }
 
+.referral-link-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.referral-link-row .button {
+    min-width: 118px;
+    white-space: nowrap;
+}
+
 .referral-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2461,6 +2473,14 @@ textarea {
 
     .account-membership-strip {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .referral-link-row {
+        grid-template-columns: 1fr;
+    }
+
+    .referral-link-row .button {
+        width: 100%;
     }
 
     .portal-summary-panel {
@@ -10781,4 +10801,126 @@ textarea {
     border-color: #d8e3d5;
     opacity: 1;
     cursor: not-allowed;
+}
+
+.birthday-celebration-card {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.birthday-celebration-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.birthday-balloons {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.reward-shop-page .reward-shop-balance-icon {
+    color: #fff !important;
+}
+
+.birthday-balloon {
+    --balloon-color: #ef8f8b;
+    --balloon-size: 28px;
+    position: absolute;
+    bottom: -64px;
+    width: var(--balloon-size);
+    height: calc(var(--balloon-size) * 1.2);
+    border-radius: 50% 50% 46% 46%;
+    background:
+        radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.82) 0 16%, transparent 17%),
+        var(--balloon-color);
+    box-shadow: inset -6px -10px 14px rgba(0, 0, 0, 0.08);
+    opacity: 0;
+    animation: birthday-balloon-rise 10s linear infinite;
+}
+
+.birthday-balloon::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -8px;
+    width: 10px;
+    height: 10px;
+    background: var(--balloon-color);
+    clip-path: polygon(50% 100%, 0 0, 100% 0);
+    transform: translateX(-50%);
+}
+
+.birthday-balloon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 2px);
+    width: 1.5px;
+    height: 54px;
+    background: rgba(115, 126, 146, 0.45);
+    transform: translateX(-50%);
+}
+
+.balloon-peach {
+    --balloon-color: #f0a48a;
+    --balloon-size: 30px;
+    left: 6%;
+    animation-delay: 0s;
+}
+
+.balloon-rose {
+    --balloon-color: #e4879d;
+    left: 24%;
+    animation-delay: 1.7s;
+}
+
+.balloon-gold {
+    --balloon-color: #f0c86e;
+    --balloon-size: 34px;
+    left: 47%;
+    animation-delay: 3.2s;
+}
+
+.balloon-sky {
+    --balloon-color: #7db6d9;
+    left: 68%;
+    animation-delay: 0.9s;
+}
+
+.balloon-mint {
+    --balloon-color: #7dc7ae;
+    --balloon-size: 26px;
+    left: 86%;
+    animation-delay: 4.4s;
+}
+
+@keyframes birthday-balloon-rise {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.92);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 0.8;
+    }
+
+    50% {
+        transform: translate3d(12px, -150px, 0) scale(1);
+        opacity: 0.95;
+    }
+
+    100% {
+        transform: translate3d(-16px, -320px, 0) scale(1.04);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .birthday-balloon {
+        animation: none;
+        opacity: 0;
+    }
 }

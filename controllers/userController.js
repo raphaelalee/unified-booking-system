@@ -195,6 +195,71 @@ function mapWalletHistoryRow(row) {
     };
 }
 
+function isCompletedProductOrder(receipt = {}) {
+    const deliveryStatus = String(receipt.deliveryStatus || '').toLowerCase();
+    const pickupStatus = String(receipt.pickupStatus || '').toLowerCase();
+
+    return deliveryStatus === 'delivered' || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
+}
+
+function sortReviewEntries(entries = []) {
+    return [...entries].sort((left, right) => {
+        return new Date(right.reviewDate || right.createdAt || 0) - new Date(left.reviewDate || left.createdAt || 0);
+    });
+}
+
+function buildProductReviewEntries(receipts = [], reviews = []) {
+    const reviewMap = reviews.reduce((map, review) => {
+        map[`${review.receiptId}:${review.productId}`] = review;
+        return map;
+    }, {});
+
+    const reviewable = [];
+    const reviewed = [];
+
+    receipts.forEach((receipt) => {
+        if (!receipt || receipt.type !== 'order' || !isCompletedProductOrder(receipt)) {
+            return;
+        }
+
+        (Array.isArray(receipt.items) ? receipt.items : []).forEach((item) => {
+            const productId = Number(item.serviceId || item.productId || 0);
+
+            if (!Number.isInteger(productId) || productId <= 0) {
+                return;
+            }
+
+            const review = reviewMap[`${receipt.id}:${productId}`] || null;
+            const entry = {
+                reviewItemType: 'product',
+                id: `${receipt.id}:${productId}`,
+                receiptId: receipt.id,
+                productId,
+                product_name: item.name || 'Product',
+                merchant_name: item.merchantName || receipt.merchantName || 'Vaniday merchant',
+                booking_date: receipt.paidAt,
+                reviewDate: receipt.paidAt,
+                status: receipt.pickupStatus || receipt.deliveryStatus || receipt.paymentStatus || 'delivered',
+                fulfilment: receipt.fulfilment || '',
+                quantity: Number(item.quantity || 1),
+                review
+            };
+
+            if (review) {
+                reviewed.push(entry);
+                return;
+            }
+
+            reviewable.push(entry);
+        });
+    });
+
+    return {
+        reviewable,
+        reviewed
+    };
+}
+
 function buildCustomerProfileExtras(req, accountUser, callback) {
     const favouriteIds = req.session.favouriteMerchantIds || [];
     const favourites = favouriteIds
@@ -362,23 +427,54 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                                     }));
                                 }
 
-                                reviewedBookings = pastBookings.filter((booking) => booking.review);
-                                reviewableBookings = pastBookings.filter((booking) => (
+                                const serviceReviewedBookings = pastBookings
+                                    .filter((booking) => booking.review)
+                                    .map((booking) => ({
+                                        ...booking,
+                                        reviewItemType: 'service',
+                                        reviewDate: booking.booking_date
+                                    }));
+                                const serviceReviewableBookings = pastBookings
+                                    .filter((booking) => (
                                     ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
-                                ));
+                                    ))
+                                    .map((booking) => ({
+                                        ...booking,
+                                        reviewItemType: 'service',
+                                        reviewDate: booking.booking_date
+                                    }));
                                 pastBookings = pastBookings.filter((booking) => !booking.review && !(
                                     ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase()) && !booking.review
                                 ));
 
-                                const upcomingIds = upcomingBookings.map((booking) => booking.id);
-                                Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
-                                    if (availabilityError) {
-                                        console.error(availabilityError);
-                                    } else {
-                                        bookingAvailability = availabilityMap;
+                                const productReceipts = receipts.filter((receipt) => receipt && receipt.type === 'order');
+                                const productReceiptIds = productReceipts.map((receipt) => String(receipt.id || '').trim()).filter(Boolean);
+
+                                Review.getByReceiptIds(productReceiptIds, (productReviewError, productReviews = []) => {
+                                    if (productReviewError) {
+                                        console.error(productReviewError);
                                     }
 
-                                    awardNext();
+                                    const productEntries = buildProductReviewEntries(productReceipts, productReviews);
+                                    reviewedBookings = sortReviewEntries([
+                                        ...serviceReviewedBookings,
+                                        ...productEntries.reviewed
+                                    ]);
+                                    reviewableBookings = sortReviewEntries([
+                                        ...serviceReviewableBookings,
+                                        ...productEntries.reviewable
+                                    ]);
+
+                                    const upcomingIds = upcomingBookings.map((booking) => booking.id);
+                                    Booking.getAvailabilityByBookingIds(accountUser.user_id, upcomingIds, (availabilityError, availabilityMap = {}) => {
+                                        if (availabilityError) {
+                                            console.error(availabilityError);
+                                        } else {
+                                            bookingAvailability = availabilityMap;
+                                        }
+
+                                        awardNext();
+                                    });
                                 });
                             });
                         };

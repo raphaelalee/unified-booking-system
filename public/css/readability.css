@@ -830,11 +830,47 @@ body:not(.flappy-page) {
 
 .profile-review-media img,
 .profile-review-media video {
-    width: 120px;
-    height: 120px;
+    width: 180px;
+    height: 180px;
     object-fit: cover;
     border-radius: 8px;
     border: 1px solid rgba(38, 59, 43, 0.12);
+}
+
+#my-reviews .profile-booking-card-head strong {
+    font-size: 1.45rem !important;
+    line-height: 1.25;
+}
+
+#my-reviews .profile-booking-card-head span:not(.status-badge) {
+    font-size: 1.15rem !important;
+    line-height: 1.4;
+}
+
+#my-reviews .profile-booking-review-block {
+    gap: 12px;
+}
+
+#my-reviews .profile-booking-review-block strong {
+    font-size: 1.35rem !important;
+    line-height: 1.35;
+}
+
+#my-reviews .profile-booking-review-block span {
+    font-size: 1.7rem !important;
+    line-height: 1;
+}
+
+#my-reviews .profile-booking-review-block p {
+    font-size: 1.3rem !important;
+    line-height: 1.75;
+}
+
+#my-reviews .profile-review-media img,
+#my-reviews .profile-review-media video {
+    width: 320px !important;
+    height: 320px !important;
+    max-width: 100%;
 }
 
 .profile-booking-review-form summary {
@@ -1300,5 +1336,12 @@ textarea[data-product-how-to-use] {
 
     .profile-review-service-action {
         justify-items: start;
+    }
+
+    #my-reviews .profile-review-media img,
+    #my-reviews .profile-review-media video {
+        width: min(100%, 240px);
+        height: auto;
+        aspect-ratio: 1 / 1;
     }
 }
