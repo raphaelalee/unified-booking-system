@@ -104,7 +104,7 @@
                         <% if (service.packageEnabled) { %>
                             <p class="muted">Package available: <%= service.packageSessions %> sessions for $<%= Number(service.packagePrice).toFixed(2) %>.</p>
                         <% } %>
-                        <p>Available: <%= (bookableItem.slots || service.slots).join(', ') %></p>
+                        <p class="muted">Choose a date to see live availability.</p>
                     </div>
                     <span class="service-price">$<%= displayPrice %></span>
                 </article>
@@ -128,6 +128,11 @@
         <% } %>
 
         <form action="<%= bookingPath %>" method="POST" class="booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>" data-availability-url="/booking/<%= merchant.id %>/available-slots">
+            <input type="hidden" name="merchantId" value="<%= merchant.id %>">
+            <% if (typeof qrDebug !== 'undefined' && qrDebug && qrDebug.token) { %>
+                <input type="hidden" name="bookingSource" value="<%= qrDebug.system || 'qr' %>">
+                <input type="hidden" name="qrToken" value="<%= qrDebug.token %>">
+            <% } %>
             <div class="form-row">
                 <label>
                     Full name
@@ -175,35 +180,19 @@
             <div class="form-row">
                 <label>
                     Date
-                    <input type="date" name="bookingDate" value="<%= form.bookingDate || '' %>" min="<%= todayDate %>">
+                    <input type="date" name="bookingDate" value="<%= form.bookingDate || todayDate %>" min="<%= todayDate %>">
                     <span class="muted js-public-holiday-message" hidden></span>
                 </label>
 
                 <label>
                     Time slot
-                    <select name="bookingTime" class="js-time-select">
-                        <option value="">Select a time</option>
-                        <% bookingServices.forEach((service) => { %>
-                            <% const options = Array.isArray(service.options) && service.options.length > 0 ? service.options : [service]; %>
-                            <% options.forEach((option) => { %>
-                                <optgroup label="<%= service.name %><%= option.id !== service.id ? ' - ' + option.name : '' %>" data-service-id="<%= service.id %>" data-service-option-id="<%= option.id %>">
-                                    <% option.slots.forEach((slot) => { %>
-                                        <option
-                                            value="<%= slot %>"
-                                            data-service-id="<%= service.id %>"
-                                            data-service-option-id="<%= option.id %>"
-                                            <%= form.bookingTime === slot ? 'selected' : '' %>>
-                                            <%= slot %>
-                                        </option>
-                                    <% }) %>
-                                </optgroup>
-                            <% }) %>
-                        <% }) %>
+                    <select name="bookingTime" class="js-time-select" data-selected-time="<%= form.bookingTime || '' %>">
+                        <option value="">Checking availability...</option>
                     </select>
                 </label>
             </div>
 
-            <button class="button primary full" type="submit">Confirm booking</button>
+            <button class="button primary full js-confirm-booking" type="submit" disabled>Confirm booking</button>
         </form>
 
         <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>

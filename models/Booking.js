@@ -4,6 +4,8 @@ const bookings = [];
 const BOOKING_REVIEW_STATUSES = ['pending'];
 const BOOKING_CONFIRMED_STATUSES = ['confirmed', 'paid', 'checked_in', 'completed'];
 const BOOKING_UNAVAILABLE_STATUSES = [...BOOKING_REVIEW_STATUSES, ...BOOKING_CONFIRMED_STATUSES];
+const SINGAPORE_TIME_ZONE = 'Asia/Singapore';
+const SAME_DAY_MIN_LEAD_MINUTES = 30;
 let bookingManagementSchemaReady = false;
 let bookingManagementSchemaPending = false;
 let bookingManagementSchemaQueue = [];
@@ -280,10 +282,125 @@ function getDateKey(value) {
     }
 
     if (value instanceof Date) {
-        return value.toISOString().slice(0, 10);
+        if (Number.isNaN(value.getTime())) {
+            return '';
+        }
+
+        return [
+            value.getFullYear(),
+            String(value.getMonth() + 1).padStart(2, '0'),
+            String(value.getDate()).padStart(2, '0')
+        ].join('-');
     }
 
-    return String(value).slice(0, 10);
+    const rawValue = String(value).trim();
+    const match = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+}
+
+function getSingaporeNowParts(now = new Date()) {
+    const formatter = new Intl.DateTimeFormat('en-SG', {
+        timeZone: SINGAPORE_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    });
+    const parts = formatter.formatToParts(now).reduce((map, part) => {
+        map[part.type] = part.value;
+        return map;
+    }, {});
+    const hour = Number(parts.hour || 0);
+    const minute = Number(parts.minute || 0);
+
+    return {
+        dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+        minutes: (hour * 60) + minute
+    };
+}
+
+function getSingaporeTodayKey(now = new Date()) {
+    return getSingaporeNowParts(now).dateKey;
+}
+
+function addDaysToDateKey(dateKey, dayOffset) {
+    const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+        return '';
+    }
+
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + Number(dayOffset || 0)));
+    return date.toISOString().slice(0, 10);
+}
+
+function getBookingDateState(bookingDate, now = new Date()) {
+    const dateKey = getDateKey(bookingDate);
+    const singaporeNow = getSingaporeNowParts(now);
+
+    if (!dateKey) {
+        return {
+            valid: false,
+            dateKey: '',
+            timing: 'invalid',
+            singaporeNow
+        };
+    }
+
+    if (dateKey < singaporeNow.dateKey) {
+        return {
+            valid: true,
+            dateKey,
+            timing: 'past',
+            singaporeNow
+        };
+    }
+
+    if (dateKey === singaporeNow.dateKey) {
+        return {
+            valid: true,
+            dateKey,
+            timing: 'today',
+            singaporeNow
+        };
+    }
+
+    return {
+        valid: true,
+        dateKey,
+        timing: 'future',
+        singaporeNow
+    };
+}
+
+function filterSlotsForBookingDate(slots, bookingDate, now = new Date()) {
+    const dateState = getBookingDateState(bookingDate, now);
+
+    if (!dateState.valid || dateState.timing === 'past') {
+        return {
+            slots: [],
+            dateState
+        };
+    }
+
+    if (dateState.timing !== 'today') {
+        return {
+            slots,
+            dateState
+        };
+    }
+
+    return {
+        slots: slots.filter((slot) => {
+            const minutes = normalizeTimeMinutes(slot);
+            return minutes !== null && minutes > dateState.singaporeNow.minutes + SAME_DAY_MIN_LEAD_MINUTES;
+        }),
+        dateState
+    };
 }
 
 function normalizeTimeMinutes(value) {
@@ -372,6 +489,7 @@ function getAllInDatabase(callback) {
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
             services.service_name,
+            services.duration_mins,
             services.price AS service_price
         FROM bookings
         INNER JOIN users ON users.user_id = bookings.user_id
@@ -697,6 +815,22 @@ function hasBookingClash(merchantId, bookingDate, startTime, endTime, options, c
 function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback) {
     const done = typeof options === 'function' ? options : callback;
     const config = typeof options === 'function' ? {} : (options || {});
+    const emptyMeta = (dateState = getBookingDateState(bookingDate, config.now)) => ({
+        durationMins: 0,
+        businessStart: '',
+        businessEnd: '',
+        autoApproveBookings: true,
+        peakHourRestrictions: true,
+        dateState: dateState.timing,
+        currentSingaporeDate: dateState.singaporeNow.dateKey,
+        currentSingaporeTime: dateState.singaporeNow.time
+    });
+    const initialDateState = getBookingDateState(bookingDate, config.now);
+
+    if (!initialDateState.valid || initialDateState.timing === 'past') {
+        done(null, [], emptyMeta(initialDateState));
+        return;
+    }
 
     getServiceAvailabilityContext(merchantId, serviceId, (contextError, context) => {
         if (contextError || !context) {
@@ -717,8 +851,11 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
                         && !settings.blockedTimes.includes(slot);
                 })
                 : generateCandidateSlots(settings, duration);
+            const filtered = filterSlotsForBookingDate(candidateSlots, bookingDate, config.now);
+            const dateState = filtered.dateState;
+            const dateFilteredSlots = filtered.slots;
             const availableSlots = [];
-            let pending = candidateSlots.length;
+            let pending = dateFilteredSlots.length;
             let failed = false;
 
             if (!pending) {
@@ -727,12 +864,15 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
                     businessStart: settings.businessStart,
                     businessEnd: settings.businessEnd,
                     autoApproveBookings: settings.autoApproveBookings,
-                    peakHourRestrictions: settings.peakHourRestrictions
+                    peakHourRestrictions: settings.peakHourRestrictions,
+                    dateState: dateState.timing,
+                    currentSingaporeDate: dateState.singaporeNow.dateKey,
+                    currentSingaporeTime: dateState.singaporeNow.time
                 });
                 return;
             }
 
-            candidateSlots.forEach((slot) => {
+            dateFilteredSlots.forEach((slot) => {
                 const start = normalizeTimeMinutes(slot);
                 const end = formatMinutesAsTime(start + duration + Number(settings.bufferMinutes || 0));
 
@@ -764,7 +904,10 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
                                 businessStart: settings.businessStart,
                                 businessEnd: settings.businessEnd,
                                 autoApproveBookings: settings.autoApproveBookings,
-                                peakHourRestrictions: settings.peakHourRestrictions
+                                peakHourRestrictions: settings.peakHourRestrictions,
+                                dateState: dateState.timing,
+                                currentSingaporeDate: dateState.singaporeNow.dateKey,
+                                currentSingaporeTime: dateState.singaporeNow.time
                             });
                         }
                     }
@@ -796,120 +939,71 @@ function autoConfirmBooking(bookingData, callback) {
             return;
         }
 
-        const endTime = formatMinutesAsTime(startMinutes + duration);
-
-        getAvailabilitySettings(bookingData.merchantId, (settingsError, settings) => {
-            if (settingsError) {
-                callback(settingsError);
-                return;
-            }
-
-            const configuredSlots = context.configuredSlots || [];
-            const slotAllowedByService = configuredSlots.length
-                ? configuredSlots.includes(bookingTime)
-                    && isSlotWithinBusinessHours(bookingTime, { ...settings, blockedTimes: [] }, duration)
-                : generateCandidateSlots({ ...settings, blockedTimes: [] }, duration).includes(bookingTime);
-
-            if (!slotAllowedByService) {
-                callback(null, {
-                    created: false,
-                    confirmed: false,
-                    reason: 'unavailable',
-                    message: 'The selected time is unavailable for this service.',
-                    alternatives: []
-                });
-                return;
-            }
-
-            hasBookingClash(
-                bookingData.merchantId,
-                bookingData.bookingDate,
-                bookingTime,
-                endTime,
-                { statuses: BOOKING_REVIEW_STATUSES },
-                (pendingClashError, hasPendingClash) => {
-                    if (pendingClashError) {
-                        callback(pendingClashError);
-                        return;
-                    }
-
-                    if (hasPendingClash) {
-                        getAvailableSlots(bookingData.merchantId, bookingData.serviceId, bookingData.bookingDate, { durationMins: duration }, (slotError, slots = []) => {
-                            if (slotError) {
-                                callback(slotError);
-                                return;
-                            }
-
-                            callback(null, {
-                                created: false,
-                                confirmed: false,
-                                reason: 'pending_review_exists',
-                                message: slots.length
-                                    ? `That slot is already waiting for merchant review. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
-                                    : 'That slot is already waiting for merchant review. Please choose another date.',
-                                alternatives: slots.slice(0, 6)
-                            });
-                        });
-                        return;
-                    }
-
-                    hasBookingClash(
-                        bookingData.merchantId,
-                        bookingData.bookingDate,
-                        bookingTime,
-                        endTime,
-                        { statuses: BOOKING_CONFIRMED_STATUSES },
-                        (clashError, hasClash) => {
-                            if (clashError) {
-                                callback(clashError);
-                                return;
-                            }
-
-                            const pendingReasons = [];
-
-                            if (hasClash) {
-                                pendingReasons.push('clash');
-                            }
-
-                            if (settings.blockedTimes.includes(bookingTime)) {
-                                pendingReasons.push('blocked');
-                            }
-
-                            if (settings.autoApproveBookings === false) {
-                                pendingReasons.push('auto_approval_disabled');
-                            }
-
-                            const nextStatus = pendingReasons.length ? 'pending' : 'confirmed';
-
-                            createInDatabase({
-                                ...bookingData,
-                                bookingTime,
-                                status: nextStatus
-                            }, (createError, result) => {
-                                if (createError) {
-                                    callback(createError);
-                                    return;
-                                }
-
-                                callback(null, {
-                                    created: true,
-                                    confirmed: nextStatus === 'confirmed',
-                                    pending: nextStatus === 'pending',
-                                    status: nextStatus,
-                                    reason: pendingReasons[0] || 'available',
-                                    pendingReasons,
-                                    message: nextStatus === 'confirmed'
-                                        ? 'Booking confirmed.'
-                                        : 'Booking sent to the merchant for review.',
-                                    result,
-                                    alternatives: []
-                                });
-                            });
-                        }
-                    );
+        getAvailableSlots(
+            bookingData.merchantId,
+            bookingData.serviceId,
+            bookingData.bookingDate,
+            { durationMins: duration },
+            (availabilityError, slots = []) => {
+                if (availabilityError) {
+                    callback(availabilityError);
+                    return;
                 }
-            );
-        });
+
+                if (!slots.includes(bookingTime)) {
+                    callback(null, {
+                        created: false,
+                        confirmed: false,
+                        reason: 'unavailable',
+                        message: slots.length
+                            ? `The selected time is unavailable. Suggested alternatives: ${slots.slice(0, 3).join(', ')}.`
+                            : 'No available slots for this date. Please choose another date.',
+                        alternatives: slots.slice(0, 6)
+                    });
+                    return;
+                }
+
+                getAvailabilitySettings(bookingData.merchantId, (settingsError, settings) => {
+                    if (settingsError) {
+                        callback(settingsError);
+                        return;
+                    }
+
+                    const pendingReasons = [];
+
+                    if (settings.autoApproveBookings === false) {
+                        pendingReasons.push('auto_approval_disabled');
+                    }
+
+                    const nextStatus = pendingReasons.length ? 'pending' : 'confirmed';
+
+                    createInDatabase({
+                        ...bookingData,
+                        bookingTime,
+                        status: nextStatus
+                    }, (createError, result) => {
+                        if (createError) {
+                            callback(createError);
+                            return;
+                        }
+
+                        callback(null, {
+                            created: true,
+                            confirmed: nextStatus === 'confirmed',
+                            pending: nextStatus === 'pending',
+                            status: nextStatus,
+                            reason: pendingReasons[0] || 'available',
+                            pendingReasons,
+                            message: nextStatus === 'confirmed'
+                                ? 'Booking confirmed.'
+                                : 'Booking sent to the merchant for review.',
+                            result,
+                            alternatives: []
+                        });
+                    });
+                });
+            }
+        );
     });
 }
 
@@ -1419,68 +1513,53 @@ function getRescheduleSuggestionCandidates(bookingId, userId, callback) {
             return;
         }
 
-        getAllowedSlotsForBooking(bookingId, userId, (slotError, slots = []) => {
-            if (slotError) {
-                callback(slotError, booking, []);
-                return;
-            }
+        const todayKey = getSingaporeTodayKey();
+        const candidates = [];
+        let pending = 14;
+        let failed = false;
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const candidates = [];
-            let pending = 0;
-            let failed = false;
+        for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+            const dateKey = addDaysToDateKey(todayKey, dayOffset);
 
-            const done = () => {
-                pending -= 1;
-                if (!pending && !failed) {
-                    candidates.sort((left, right) => {
-                        if (left.crowdScore === right.crowdScore) {
-                            return `${left.dateKey} ${left.slot}`.localeCompare(`${right.dateKey} ${right.slot}`);
-                        }
+            getAvailableSlots(
+                booking.salon_id,
+                booking.service_id,
+                dateKey,
+                { excludeBookingId: booking.id, durationMins: booking.duration_mins },
+                (slotError, slots = []) => {
+                    if (failed) {
+                        return;
+                    }
 
-                        return left.crowdScore - right.crowdScore;
+                    if (slotError) {
+                        failed = true;
+                        callback(slotError, booking, []);
+                        return;
+                    }
+
+                    slots.forEach((slot) => {
+                        candidates.push({
+                            dateKey,
+                            slot,
+                            crowdScore: dayOffset,
+                            label: dayOffset === 0 ? 'Nearest available' : dayOffset <= 3 ? 'Same-week opening' : 'Least crowded'
+                        });
                     });
-                    callback(null, booking, candidates.slice(0, 6));
+
+                    pending -= 1;
+                    if (!pending) {
+                        candidates.sort((left, right) => {
+                            if (left.crowdScore === right.crowdScore) {
+                                return `${left.dateKey} ${left.slot}`.localeCompare(`${right.dateKey} ${right.slot}`);
+                            }
+
+                            return left.crowdScore - right.crowdScore;
+                        });
+                        callback(null, booking, candidates.slice(0, 6));
+                    }
                 }
-            };
-
-            for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
-                const date = new Date(today);
-                date.setDate(today.getDate() + dayOffset);
-                const dateKey = getDateKey(date);
-
-                slots.forEach((slot) => {
-                    pending += 1;
-                    findOverlappingBookings(booking.salon_id, booking.id, dateKey, slot, booking.duration_mins, (overlapError, overlaps = []) => {
-                        if (failed) {
-                            return;
-                        }
-
-                        if (overlapError) {
-                            failed = true;
-                            callback(overlapError, booking, []);
-                            return;
-                        }
-
-                        if (!overlaps.length) {
-                            candidates.push({
-                                dateKey,
-                                slot,
-                                crowdScore: overlaps.length,
-                                label: dayOffset === 0 ? 'Nearest available' : dayOffset <= 3 ? 'Same-week opening' : 'Least crowded'
-                            });
-                        }
-
-                        done();
-                    });
-                });
-            }
-
-            if (!pending) {
-                callback(null, booking, []);
-            }
-        });
+            );
+        }
     });
 }
 
@@ -1937,10 +2016,13 @@ module.exports = {
     getAll,
     getAllInDatabase,
     getByMerchantUserId,
+    getBookingDateState,
     getCheckInDetails,
     getNotificationDetailsById,
     getSupportBookingsByUserId,
+    getSingaporeTodayKey,
     getUpcomingByUserId,
+    filterSlotsForBookingDate,
     getWhatsAppReminderCandidates,
     hasExistingBooking,
     hasExistingBookingInDatabase,

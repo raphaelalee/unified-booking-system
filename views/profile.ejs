@@ -59,6 +59,8 @@
             id: booking.id,
             serviceName: booking.service_name,
             merchantName: booking.merchant_name,
+            merchantId: booking.merchant_id,
+            serviceId: booking.service_id,
             bookingDate: booking.booking_date instanceof Date ? booking.booking_date.toISOString().slice(0, 10) : String(booking.booking_date || '').slice(0, 10),
             bookingTime: booking.booking_time || '',
             duration: formatDuration(booking.duration_mins),
@@ -1257,7 +1259,6 @@
         const rescheduleModal = document.querySelector('[data-booking-modal="reschedule"]');
         const cancelModal = document.querySelector('[data-booking-modal="cancel"]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        const fallbackSlots = ['10:00', '11:30', '13:00', '14:30', '16:00', '17:30'];
         let activeCard = null;
         let activeBooking = null;
 
@@ -1274,23 +1275,11 @@
             return localDate.toISOString().slice(0, 10);
         };
 
-        const nextDates = (count = 7) => {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            return Array.from({ length: count }, (_, index) => {
-                const date = new Date(today);
-                date.setDate(today.getDate() + index);
-                return toDateKey(date);
-            });
-        };
-
         const formatDateLabel = (dateKey) => new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-SG', {
             weekday: 'short',
             month: 'short',
             day: 'numeric'
         });
-
-        const isTaken = (booking, dateKey, slot) => (booking.taken || []).includes(`${dateKey}|${slot}`);
 
         const closeModals = () => {
             [rescheduleModal, cancelModal].forEach((modal) => {
@@ -1311,42 +1300,51 @@
             modal.querySelector('button, input, select')?.focus();
         };
 
-        const renderSlots = (dateKey) => {
+        const renderSlotChoices = (dateKey, slots, preferredSlot = '') => {
             const slotWrap = rescheduleModal.querySelector('[data-reschedule-slots]');
-            const slots = activeBooking.slots?.length ? activeBooking.slots : fallbackSlots;
             slotWrap.innerHTML = '';
+
+            if (!slots.length) {
+                slotWrap.innerHTML = '<p class="muted">No available slots for this date.</p>';
+                return;
+            }
 
             slots.forEach((slot, index) => {
                 const id = `reschedule-${activeBooking.id}-${dateKey}-${slot.replace(':', '')}`;
                 const label = document.createElement('label');
                 label.className = 'profile-slot-choice';
                 label.innerHTML = `
-                    <input type="radio" name="bookingTime" id="${id}" value="${slot}" ${isTaken(activeBooking, dateKey, slot) ? 'disabled' : ''} ${index === 0 && !isTaken(activeBooking, dateKey, slot) ? 'checked' : ''}>
+                    <input type="radio" name="bookingTime" id="${id}" value="${slot}" ${slot === preferredSlot || (!preferredSlot && index === 0) ? 'checked' : ''}>
                     <span>${slot}</span>
                 `;
                 slotWrap.appendChild(label);
             });
         };
 
+        const renderSlots = (dateKey, preferredSlot = '') => {
+            const slotWrap = rescheduleModal.querySelector('[data-reschedule-slots]');
+            slotWrap.innerHTML = '<p class="muted">Checking availability...</p>';
+
+            fetch(`/profile/bookings/${activeBooking.id}/reschedule-suggestions?bookingDate=${encodeURIComponent(dateKey)}`, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then((response) => response.ok ? response.json() : Promise.reject(new Error('Availability unavailable')))
+                .then((data) => {
+                    const slots = Array.isArray(data.slots) ? data.slots : [];
+                    activeBooking.slots = slots;
+                    renderSlotChoices(dateKey, slots, preferredSlot);
+                })
+                .catch(() => {
+                    slotWrap.innerHTML = '<p class="muted">Availability could not be loaded.</p>';
+                });
+        };
+
         const renderSuggestions = () => {
             const suggestionWrap = rescheduleModal.querySelector('[data-reschedule-suggestions]');
-            const slots = activeBooking.slots?.length ? activeBooking.slots : fallbackSlots;
-            const suggestions = [];
-
-            nextDates(10).some((dateKey) => {
-                slots.forEach((slot) => {
-                    if (suggestions.length < 3 && !isTaken(activeBooking, dateKey, slot)) {
-                        suggestions.push({ dateKey, slot });
-                    }
-                });
-                return suggestions.length >= 3;
-            });
-
-            suggestionWrap.innerHTML = suggestions.map((item) => `
-                <button type="button" data-suggestion-date="${item.dateKey}" data-suggestion-time="${item.slot}">
-                    ${item.label ? `<span>${item.label}</span>` : ''}${formatDateLabel(item.dateKey)} <strong>${item.slot}</strong>
-                </button>
-            `).join('');
+            suggestionWrap.innerHTML = '<p class="muted">Checking suggestions...</p>';
 
             fetch(`/profile/bookings/${activeBooking.id}/reschedule-suggestions`, {
                 headers: {
@@ -1357,6 +1355,7 @@
                 .then((response) => response.ok ? response.json() : null)
                 .then((data) => {
                     if (!data?.success || !Array.isArray(data.suggestions) || !data.suggestions.length) {
+                        suggestionWrap.innerHTML = '';
                         return;
                     }
 
@@ -1366,7 +1365,9 @@
                         </button>
                     `).join('');
                 })
-                .catch(() => {});
+                .catch(() => {
+                    suggestionWrap.innerHTML = '';
+                });
         };
 
         const updateCancellationRefund = () => {
@@ -1429,11 +1430,7 @@
 
             const dateInput = rescheduleModal.querySelector('[data-reschedule-date]');
             dateInput.value = button.dataset.suggestionDate;
-            renderSlots(button.dataset.suggestionDate);
-            const radio = rescheduleModal.querySelector(`input[name="bookingTime"][value="${button.dataset.suggestionTime}"]`);
-            if (radio && !radio.disabled) {
-                radio.checked = true;
-            }
+            renderSlots(button.dataset.suggestionDate, button.dataset.suggestionTime);
         });
 
         document.querySelectorAll('[data-close-booking-modal]').forEach((button) => {

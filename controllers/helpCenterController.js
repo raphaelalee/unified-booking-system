@@ -41,7 +41,7 @@ const getAdminRequests = promisify(SupportRequest.getForAdmin);
 const getCustomerBookings = promisify(Booking.getSupportBookingsByUserId);
 const findBookingForCustomer = promisify(Booking.findSupportBookingForCustomer);
 const getBookingNotificationDetails = promisify(Booking.getNotificationDetailsById);
-const hasExistingBooking = promisify(Booking.hasExistingBookingInDatabase);
+const getAvailableSlots = promisify(Booking.getAvailableSlots);
 const markBookingCancelled = promisify(Booking.markCancelled);
 const updateBookingSchedule = promisify(Booking.updateSchedule);
 const getCustomerOrders = promisify(Transaction.getCustomerOrders);
@@ -208,15 +208,18 @@ async function applyApprovedBookingChange(request) {
     const isSameSlot = currentDate === nextSlot.bookingDate && currentTime === nextSlot.bookingTime;
 
     if (!isSameSlot) {
-        const slotTaken = await hasExistingBooking(
+        const availableSlots = await getAvailableSlots(
             booking.salon_id,
             booking.service_id,
             nextSlot.bookingDate,
-            nextSlot.bookingTime
+            {
+                excludeBookingId: request.targetId,
+                durationMins: booking.duration_mins
+            }
         );
 
-        if (slotTaken) {
-            throw new Error('The requested new slot is already booked. Please ask the customer to choose another time.');
+        if (!availableSlots.includes(nextSlot.bookingTime)) {
+            throw new Error('The requested new slot is unavailable. Please ask the customer to choose another time.');
         }
     }
 

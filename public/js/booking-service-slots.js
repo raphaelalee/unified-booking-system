@@ -1,23 +1,4 @@
 (function () {
-    function getOptionData(timeSelect) {
-        if (timeSelect.dataset.slotOptionsReady) {
-            return JSON.parse(timeSelect.dataset.slotOptions);
-        }
-
-        const options = Array.from(timeSelect.querySelectorAll('option[data-service-id]')).map((option) => ({
-            serviceId: option.dataset.serviceId,
-            serviceOptionId: option.dataset.serviceOptionId || '',
-            value: option.value,
-            label: option.textContent.trim(),
-            serviceName: option.closest('optgroup') ? option.closest('optgroup').label : ''
-        }));
-
-        timeSelect.dataset.slotOptionsReady = 'true';
-        timeSelect.dataset.slotOptions = JSON.stringify(options);
-
-        return options;
-    }
-
     function getServiceOptionData(optionSelect) {
         if (optionSelect.dataset.serviceOptionsReady) {
             return JSON.parse(optionSelect.dataset.serviceOptions);
@@ -80,82 +61,47 @@
             optionSelect.appendChild(group);
         });
 
-        if (visibleOptions.some((option) => option.value === previousValue)) {
-            optionSelect.value = previousValue;
-        } else {
-            optionSelect.value = '';
-        }
+        optionSelect.value = visibleOptions.some((option) => option.value === previousValue) ? previousValue : '';
     }
 
-    function syncTimeSlots(form) {
-        const serviceSelect = form.querySelector('.js-service-select');
-        const optionSelect = form.querySelector('.js-service-option-select');
-        const timeSelect = form.querySelector('.js-time-select');
+    function getConfirmButton(form) {
+        return form.querySelector('.js-confirm-booking') || form.querySelector('button[type="submit"]');
+    }
 
-        if (!serviceSelect || !timeSelect) {
+    function setTimeSelectState(form, message, disabled = true) {
+        const timeSelect = form.querySelector('.js-time-select');
+        const confirmButton = getConfirmButton(form);
+
+        if (!timeSelect) {
             return;
         }
 
-        const selectedServiceId = serviceSelect.value;
-        const selectedOptionId = optionSelect ? optionSelect.value : '';
-        const previousValue = timeSelect.value;
-        const slotOptions = getOptionData(timeSelect);
-        const visibleSlots = slotOptions.filter((option) => {
-            if (selectedOptionId) {
-                return option.serviceOptionId === selectedOptionId;
-            }
+        timeSelect.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = message;
+        timeSelect.appendChild(option);
+        timeSelect.value = '';
+        timeSelect.disabled = disabled;
 
-            return selectedServiceId ? option.serviceId === selectedServiceId : true;
-        });
-        const slotsByService = visibleSlots.reduce((groups, option) => {
-            const groupKey = `${option.serviceId}:${option.serviceOptionId}`;
-
-            if (!groups[groupKey]) {
-                groups[groupKey] = {
-                    serviceId: option.serviceId,
-                    serviceOptionId: option.serviceOptionId,
-                    serviceName: option.serviceName,
-                    options: []
-                };
-            }
-
-            groups[groupKey].options.push(option);
-            return groups;
-        }, {});
-
-        timeSelect.innerHTML = '<option value="">Select a time</option>';
-
-        Object.keys(slotsByService).forEach((groupKey) => {
-            const group = document.createElement('optgroup');
-            group.label = slotsByService[groupKey].serviceName;
-            group.dataset.serviceId = slotsByService[groupKey].serviceId;
-            group.dataset.serviceOptionId = slotsByService[groupKey].serviceOptionId;
-
-            slotsByService[groupKey].options.forEach((slot) => {
-                const option = document.createElement('option');
-                option.value = slot.value;
-                option.textContent = slot.label;
-                option.dataset.serviceId = slot.serviceId;
-                option.dataset.serviceOptionId = slot.serviceOptionId;
-                group.appendChild(option);
-            });
-
-            timeSelect.appendChild(group);
-        });
-
-        if (visibleSlots.some((option) => option.value === previousValue)) {
-            timeSelect.value = previousValue;
-        } else {
-            timeSelect.value = '';
+        if (confirmButton) {
+            confirmButton.disabled = true;
         }
     }
 
-    function renderAvailableSlots(timeSelect, slots, previousValue) {
+    function renderAvailableSlots(form, slots, previousValue) {
+        const timeSelect = form.querySelector('.js-time-select');
+        const confirmButton = getConfirmButton(form);
+
+        if (!timeSelect) {
+            return;
+        }
+
         timeSelect.innerHTML = '';
 
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = slots.length ? 'Select a time' : 'No available slots for this date';
+        placeholder.textContent = slots.length ? 'Select a time' : 'No available slots';
         timeSelect.appendChild(placeholder);
 
         slots.forEach((slot) => {
@@ -167,6 +113,14 @@
 
         if (slots.includes(previousValue)) {
             timeSelect.value = previousValue;
+        } else {
+            timeSelect.value = '';
+        }
+
+        timeSelect.disabled = slots.length === 0;
+
+        if (confirmButton) {
+            confirmButton.disabled = slots.length === 0;
         }
     }
 
@@ -180,19 +134,27 @@
             return;
         }
 
+        if (!dateInput.value && dateInput.min) {
+            dateInput.value = dateInput.min;
+        }
+
         const serviceId = serviceSelect.value;
         const bookingDate = dateInput.value;
 
-        if (!serviceId || !bookingDate) {
-            syncTimeSlots(form);
+        if (!serviceId) {
+            setTimeSelectState(form, 'Select a service first');
             return;
         }
 
-        const previousValue = timeSelect.value;
+        if (!bookingDate) {
+            setTimeSelectState(form, 'Select a date first');
+            return;
+        }
+
+        const previousValue = timeSelect.value || timeSelect.dataset.selectedTime || '';
         const params = new URLSearchParams({ serviceId, bookingDate });
 
-        timeSelect.disabled = true;
-        timeSelect.innerHTML = '<option value="">Checking availability...</option>';
+        setTimeSelectState(form, 'Checking availability...');
 
         fetch(`${availabilityUrl}?${params.toString()}`, {
             headers: {
@@ -200,28 +162,26 @@
                 'X-Requested-With': 'XMLHttpRequest'
             }
         })
-            .then((response) => response.ok ? response.json() : Promise.reject(new Error('Availability unavailable')))
+            .then((response) => response.ok ? response.json() : response.json().then((data) => Promise.reject(data)))
             .then((data) => {
-                renderAvailableSlots(timeSelect, Array.isArray(data.slots) ? data.slots : [], previousValue);
+                renderAvailableSlots(form, Array.isArray(data.slots) ? data.slots : [], previousValue);
             })
-            .catch(() => {
-                timeSelect.innerHTML = '<option value="">Availability could not be loaded</option>';
-            })
-            .finally(() => {
-                timeSelect.disabled = false;
+            .catch((error) => {
+                setTimeSelectState(form, error?.message || 'Availability could not be loaded');
             });
     }
 
     document.querySelectorAll('.booking-form').forEach((form) => {
         const serviceSelect = form.querySelector('.js-service-select');
         const optionSelect = form.querySelector('.js-service-option-select');
+        const dateInput = form.querySelector('input[name="bookingDate"]');
 
         if (!serviceSelect) {
             return;
         }
 
         syncServiceOptions(form);
-        syncTimeSlots(form);
+
         serviceSelect.addEventListener('change', () => {
             syncServiceOptions(form);
             loadAvailableSlots(form);
@@ -231,7 +191,8 @@
             optionSelect.addEventListener('change', () => loadAvailableSlots(form));
         }
 
-        form.querySelector('input[name="bookingDate"]')?.addEventListener('change', () => loadAvailableSlots(form));
+        dateInput?.addEventListener('change', () => loadAvailableSlots(form));
+        dateInput?.addEventListener('input', () => loadAvailableSlots(form));
         loadAvailableSlots(form);
     });
 }());

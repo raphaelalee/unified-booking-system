@@ -31,7 +31,7 @@ const {
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 function getTodayInputValue() {
-    return new Date().toISOString().slice(0, 10);
+    return Booking.getSingaporeTodayKey();
 }
 
 function buildBirthdayPromotion(user, vouchers = []) {
@@ -270,6 +270,32 @@ function getSecureBookingPath(merchant, service = null) {
     return `${path}${serviceQuery}`;
 }
 
+function getCurrentBookingPostPath(req, merchant, service = null, options = {}) {
+    const serviceQuery = service ? `?serviceId=${encodeURIComponent(service.id)}` : '';
+
+    if (options.secureQr && req.params.merchantSlug) {
+        return `/m/${encodeURIComponent(req.params.merchantSlug)}${serviceQuery}`;
+    }
+
+    if (options.secureQr && req.params.merchantId && req.query.token) {
+        return `/scan/${encodeURIComponent(req.params.merchantId)}?token=${encodeURIComponent(req.query.token)}`;
+    }
+
+    if (req.params.merchantId && req.params.qrToken) {
+        return `/booking/${encodeURIComponent(req.params.merchantId)}/${encodeURIComponent(req.params.qrToken)}${serviceQuery}`;
+    }
+
+    if (req.params.merchantId && merchant?.qrToken) {
+        return `/booking/${encodeURIComponent(req.params.merchantId)}/${encodeURIComponent(merchant.qrToken)}${serviceQuery}`;
+    }
+
+    if (options.secureQr) {
+        return getSecureBookingPath(merchant, service);
+    }
+
+    return getBookingPath(merchant, service);
+}
+
 function getBookingUrl(req, merchant, service = null) {
     return `${req.protocol}://${req.get('host')}${getBookingPath(merchant, service)}`;
 }
@@ -488,9 +514,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
     const scopedServices = getBookingServices(bookingMerchant, selectedService);
     const useSecureQr = options.secureQr || Boolean(req.params.token || req.query.token);
     const bookingPath = appendQueryParams(
-        useSecureQr
-            ? getSecureBookingPath(bookingMerchant, selectedService)
-            : getBookingPath(bookingMerchant, selectedService),
+        getCurrentBookingPostPath(req, bookingMerchant, selectedService, { ...options, secureQr: useSecureQr }),
         {
             serviceOptionId: selectedServiceOption ? selectedServiceOption.id : '',
             ...getPromotionQueryParams(selectedPromotion)
@@ -537,11 +561,9 @@ function getBookingAvailability(req, res) {
         });
     }
 
-    const selectedDate = new Date(`${bookingDate}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const dateState = Booking.getBookingDateState(bookingDate);
 
-    if (Number.isNaN(selectedDate.getTime()) || selectedDate < today) {
+    if (!dateState.valid || dateState.timing === 'past') {
         return res.status(400).json({
             success: false,
             message: 'Please choose today or a future booking date.',
@@ -566,7 +588,8 @@ function getBookingAvailability(req, res) {
         const selection = getBookableSelection(service, serviceId);
         const bookableItem = selection.selectedOption || service;
         const fallbackSlots = Array.isArray(bookableItem?.slots) ? bookableItem.slots.map(normalizeBookingTime).filter(Boolean) : [];
-        const availableSlots = fallbackSlots.filter((slot) => {
+        const dateFilteredSlots = Booking.filterSlotsForBookingDate(fallbackSlots, bookingDate).slots;
+        const availableSlots = dateFilteredSlots.filter((slot) => {
             return !Booking.hasExistingBooking(merchantId, service?.id, bookingDate, slot);
         });
 
@@ -591,10 +614,6 @@ function getBookingAvailability(req, res) {
                 message: 'Booking availability could not be loaded.',
                 slots: []
             });
-        }
-
-        if (!slots.length && Merchant.findById(merchantId)) {
-            return respondWithFallbackSlots();
         }
 
         return res.json({
@@ -677,9 +696,7 @@ function validateBooking(merchant, form) {
     const service = getSelectedService(merchant, form.serviceId);
     const serviceSelection = getBookableSelection(service, form.serviceOptionId);
     const purchaseType = form.purchaseType === 'package' && service?.packageEnabled ? 'package' : 'single';
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = form.bookingDate ? new Date(form.bookingDate) : null;
+    const dateState = Booking.getBookingDateState(form.bookingDate);
 
     if (customerName.length < 2) {
         errors.push('Please enter your full name.');
@@ -705,7 +722,7 @@ function validateBooking(merchant, form) {
         errors.push('Please select a valid service option.');
     }
 
-    if (!form.bookingDate || Number.isNaN(selectedDate.getTime()) || selectedDate < today) {
+    if (!dateState.valid || dateState.timing === 'past') {
         errors.push('Please choose today or a future booking date.');
     }
 
@@ -719,6 +736,17 @@ function validateBooking(merchant, form) {
 
     if (!normalizedBookingTime || !service) {
         errors.push('Please select an available time slot for the selected service.');
+    }
+
+    if (normalizedBookingTime && service) {
+        const configuredSlots = (serviceSelection.bookableItem?.slots || service.slots || [])
+            .map(normalizeBookingTime)
+            .filter(Boolean);
+        const currentlyBookableSlots = Booking.filterSlotsForBookingDate(configuredSlots, form.bookingDate).slots;
+
+        if (!currentlyBookableSlots.includes(normalizedBookingTime)) {
+            errors.push('This time slot is no longer available. Please choose another time.');
+        }
     }
 
     if (service && Booking.hasExistingBooking(merchant.id, service.id, form.bookingDate, normalizedBookingTime)) {
@@ -1638,7 +1666,9 @@ function showBookingPage(req, res) {
                 });
             }
 
-            return renderBookingPage(req, res, databaseMerchant);
+            return res.redirect(appendQueryParams(getMerchantStorefrontPath(databaseMerchant), {
+                serviceId: req.query.serviceId || ''
+            }));
         });
     }
 

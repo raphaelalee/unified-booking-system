@@ -36,11 +36,9 @@ function normalizeDate(value) {
         return '';
     }
 
-    const date = new Date(`${raw}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const state = Booking.getBookingDateState(raw);
 
-    return Number.isNaN(date.getTime()) || date < today ? '' : raw;
+    return state.valid && state.timing !== 'past' ? raw : '';
 }
 
 function normalizeTime(value) {

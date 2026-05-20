@@ -23,15 +23,8 @@ const {
 } = require('../utils/dateTimeFormat');
 
 function isValidBookingDate(value) {
-    if (!value) {
-        return false;
-    }
-
-    const selectedDate = new Date(`${value}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return !Number.isNaN(selectedDate.getTime()) && selectedDate >= today;
+    const state = Booking.getBookingDateState(value);
+    return state.valid && state.timing !== 'past';
 }
 
 function normalizeBookingTime(value) {
@@ -67,15 +60,29 @@ function getDayKey(value) {
 }
 
 function isPastBookingDate(value) {
-    const bookingKey = getDayKey(value);
+    const state = Booking.getBookingDateState(value);
+    return !state.valid || state.timing === 'past';
+}
 
-    if (!bookingKey) {
+function isPastBookingDateTime(dateValue, timeValue) {
+    const state = Booking.getBookingDateState(dateValue);
+
+    if (!state.valid || state.timing === 'past') {
         return true;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return bookingKey < today.toISOString().slice(0, 10);
+    if (state.timing !== 'today') {
+        return false;
+    }
+
+    const bookingTime = normalizeBookingTime(timeValue);
+
+    if (!bookingTime) {
+        return false;
+    }
+
+    const minutes = (Number(bookingTime.slice(0, 2)) * 60) + Number(bookingTime.slice(3, 5));
+    return minutes <= state.singaporeNow.minutes;
 }
 
 function setProfileError(req, message) {
@@ -566,7 +573,7 @@ function cancelBooking(req, res) {
             });
         }
 
-        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
+        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDateTime(booking.booking_date, booking.booking_time)) {
             return respondProfileAction(req, res, {
                 success: false,
                 message: 'Past or completed bookings cannot be cancelled.'
@@ -884,7 +891,7 @@ function rescheduleBooking(req, res) {
             });
         }
 
-        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDate(booking.booking_date)) {
+        if (['completed', 'checked_in'].includes(booking.status) || isPastBookingDateTime(booking.booking_date, booking.booking_time)) {
             return respondProfileAction(req, res, {
                 success: false,
                 message: 'Past or completed bookings cannot be rescheduled.'
@@ -1127,11 +1134,67 @@ function rescheduleBooking(req, res) {
 function getRescheduleSuggestions(req, res) {
     const bookingId = Number(req.params.bookingId);
     const userId = req.session.user?.id;
+    const requestedDate = String(req.query.bookingDate || '').trim();
 
     if (!bookingId || !userId) {
         return res.status(404).json({
             success: false,
             message: 'The selected booking could not be found.'
+        });
+    }
+
+    if (requestedDate) {
+        const dateState = Booking.getBookingDateState(requestedDate);
+
+        if (!dateState.valid || dateState.timing === 'past') {
+            return res.status(400).json({
+                success: false,
+                message: 'Please choose today or a future booking date.',
+                slots: []
+            });
+        }
+
+        return Booking.getManageableByIdForCustomer(bookingId, userId, (lookupError, booking) => {
+            if (lookupError) {
+                console.error(lookupError);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Reschedule availability could not be loaded.',
+                    slots: []
+                });
+            }
+
+            if (!booking) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'That booking could not be found on your account.',
+                    slots: []
+                });
+            }
+
+            return Booking.getAvailableSlots(
+                booking.salon_id,
+                booking.service_id,
+                requestedDate,
+                { excludeBookingId: bookingId, durationMins: booking.duration_mins },
+                (slotError, slots = [], meta = {}) => {
+                    if (slotError) {
+                        console.error(slotError);
+                        return res.status(500).json({
+                            success: false,
+                            message: 'Reschedule availability could not be loaded.',
+                            slots: []
+                        });
+                    }
+
+                    return res.json({
+                        success: true,
+                        slots,
+                        message: slots.length ? '' : 'No available slots for this date.',
+                        meta
+                    });
+                }
+            );
         });
     }
 
