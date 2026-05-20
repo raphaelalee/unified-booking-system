@@ -15,6 +15,10 @@
     </p>
     <div class="hero-actions">
         <a class="button primary" href="/profile#bookings">View my bookings</a>
+        <% if (typeof bookingId !== 'undefined' && bookingId) { %>
+            <a class="button secondary" href="/receipt/<%= encodeURIComponent(bookingId) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
+            <a class="button secondary" href="/receipt/<%= encodeURIComponent(bookingId) %>/pdf">Download Receipt</a>
+        <% } %>
         <a class="button secondary" href="<%= typeof anotherBookingPath !== 'undefined' ? anotherBookingPath : '/merchant/' + merchant.id %>">Create another booking</a>
     </div>
 </section>

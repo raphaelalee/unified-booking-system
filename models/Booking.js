@@ -1683,9 +1683,11 @@ function getReceiptById(bookingId, callback) {
             users.email,
             salons.salon_id AS merchant_id,
             salons.salon_name AS merchant_name,
+            salons.address AS merchant_address,
             salons.merchant_id AS merchant_user_id,
             services.service_id,
             services.service_name,
+            services.duration_mins,
             services.price AS service_price,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings

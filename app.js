@@ -386,6 +386,32 @@ app.get('/contact', allowGuestOrCustomer, (req, res) => {
     res.render('contact', { title: 'Contact Us' });
 });
 
+app.get('/terms', allowGuestOrCustomer, (req, res) => {
+    res.render('legal', {
+        title: 'Terms of Service',
+        heading: 'Terms of Service',
+        summary: 'These prototype terms explain how Vaniday booking, rewards, and merchant services should be used.',
+        sections: [
+            { title: 'Bookings', copy: 'Customers are responsible for selecting accurate service, date, and contact details. Merchants may review, confirm, reschedule, or cancel bookings according to their availability policies.' },
+            { title: 'Accounts', copy: 'Keep your login details private and update your profile information when it changes. Vaniday may protect accounts from suspicious or abusive activity.' },
+            { title: 'Rewards and Payments', copy: 'Promotions, points, cashback, vouchers, and refunds are subject to eligibility checks and merchant or admin review where applicable.' }
+        ]
+    });
+});
+
+app.get('/privacy', allowGuestOrCustomer, (req, res) => {
+    res.render('legal', {
+        title: 'Privacy Policy',
+        heading: 'Privacy Policy',
+        summary: 'This prototype privacy policy describes how Vaniday uses account, booking, and location-related data.',
+        sections: [
+            { title: 'Account Data', copy: 'We use your name, email, phone number, and profile details to manage bookings, receipts, rewards, support requests, and notifications.' },
+            { title: 'Location Data', copy: 'Browser location is used only in your current session to sort nearby salons when you choose to allow it. Browsing remains available if permission is denied.' },
+            { title: 'Service Providers', copy: 'Booking confirmations and reminders may use configured email, SMS, WhatsApp, payment, and QR services.' }
+        ]
+    });
+});
+
 app.get('/products', allowGuestOrCustomer, (req, res) => {
     Product.getAll((error, products) => {
         if (error) {
@@ -445,6 +471,8 @@ app.post('/payment', requireCustomer, merchantController.confirmPayment);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
 app.get('/receipt/:id', requireLogin, receiptController.showReceipt);
 app.get('/receipt/:id/pdf', requireLogin, receiptController.downloadReceiptPdf);
+app.get('/receipt/:id/google-calendar', requireLogin, receiptController.openBookingGoogleCalendar);
+app.get('/receipt/:id/calendar.ics', requireLogin, receiptController.downloadBookingCalendar);
 app.get('/pickup-verify/order/:id', receiptController.verifyPickup);
 app.post('/pickup-verify/order/:id/confirm', receiptController.confirmPickup);
 app.get('/receipt-checkin/:id', receiptController.checkIn);

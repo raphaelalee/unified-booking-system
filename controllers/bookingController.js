@@ -393,6 +393,7 @@ function createBooking(req, res) {
                         },
                         bookingDate,
                         bookingTime,
+                        bookingId,
                         bookingStatus: 'pending',
                         anotherBookingPath: '/services'
                     });

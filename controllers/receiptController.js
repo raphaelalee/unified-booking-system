@@ -83,6 +83,153 @@ function formatStatusLabel(value) {
         .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function escapeIcsText(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+}
+
+function foldIcsLine(line) {
+    const chunks = [];
+    let remaining = String(line || '');
+
+    while (remaining.length > 74) {
+        chunks.push(remaining.slice(0, 74));
+        remaining = ` ${remaining.slice(74)}`;
+    }
+
+    chunks.push(remaining);
+    return chunks.join('\r\n');
+}
+
+function getDateKey(value) {
+    if (!value) {
+        return '';
+    }
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return [
+            value.getFullYear(),
+            String(value.getMonth() + 1).padStart(2, '0'),
+            String(value.getDate()).padStart(2, '0')
+        ].join('-');
+    }
+
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+}
+
+function parseTimeParts(value) {
+    const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+
+    return match
+        ? { hours: Number(match[1]), minutes: Number(match[2]) }
+        : { hours: 0, minutes: 0 };
+}
+
+function addMinutesToLocalParts(dateKey, timeValue, durationMins) {
+    const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const time = parseTimeParts(timeValue);
+    const duration = Math.max(15, Number(durationMins || 60));
+
+    if (!match) {
+        return null;
+    }
+
+    const date = new Date(Date.UTC(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        time.hours,
+        time.minutes + duration
+    ));
+
+    return {
+        dateKey: date.toISOString().slice(0, 10),
+        time: date.toISOString().slice(11, 16)
+    };
+}
+
+function formatIcsLocalDateTime(dateKey, timeValue) {
+    const cleanDate = String(dateKey || '').replace(/-/g, '');
+    const time = parseTimeParts(timeValue);
+
+    if (!cleanDate || cleanDate.length !== 8) {
+        return '';
+    }
+
+    return `${cleanDate}T${String(time.hours).padStart(2, '0')}${String(time.minutes).padStart(2, '0')}00`;
+}
+
+function formatIcsUtcStamp(value = new Date()) {
+    return value.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function buildBookingCalendarIcs(receipt) {
+    const serviceName = receipt.items?.[0]?.name || 'Service booking';
+    const dateKey = getDateKey(receipt.bookingDate);
+    const bookingTime = receipt.bookingTime || '09:00';
+    const endParts = addMinutesToLocalParts(dateKey, bookingTime, receipt.durationMins);
+    const startValue = formatIcsLocalDateTime(dateKey, bookingTime);
+    const endValue = endParts ? formatIcsLocalDateTime(endParts.dateKey, endParts.time) : '';
+    const description = [
+        `Booking ID: ${receipt.id}`,
+        `Service: ${serviceName}`,
+        `Merchant: ${receipt.merchantName || 'Vaniday merchant'}`,
+        receipt.merchantAddress ? `Address: ${receipt.merchantAddress}` : '',
+        receipt.durationMins ? `Duration: ${receipt.durationMins} minutes` : '',
+        `Status: ${receipt.statusLabel || receipt.status || receipt.paymentStatus || 'confirmed'}`
+    ].filter(Boolean).join('\n');
+    const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Vaniday//Booking Calendar//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        `UID:vaniday-booking-${receipt.id}@vaniday.local`,
+        `DTSTAMP:${formatIcsUtcStamp()}`,
+        `DTSTART;TZID=Asia/Singapore:${startValue}`,
+        `DTEND;TZID=Asia/Singapore:${endValue}`,
+        `SUMMARY:${escapeIcsText(`Vaniday Booking - ${serviceName}`)}`,
+        `LOCATION:${escapeIcsText(receipt.merchantAddress || receipt.merchantName || 'Vaniday merchant')}`,
+        `DESCRIPTION:${escapeIcsText(description)}`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+    ];
+
+    return lines.map(foldIcsLine).join('\r\n');
+}
+
+function buildGoogleCalendarUrl(receipt) {
+    const serviceName = receipt.items?.[0]?.name || 'Service booking';
+    const dateKey = getDateKey(receipt.bookingDate);
+    const bookingTime = receipt.bookingTime || '09:00';
+    const endParts = addMinutesToLocalParts(dateKey, bookingTime, receipt.durationMins);
+    const startValue = formatIcsLocalDateTime(dateKey, bookingTime);
+    const endValue = endParts ? formatIcsLocalDateTime(endParts.dateKey, endParts.time) : startValue;
+    const description = [
+        `Booking ID: ${receipt.id}`,
+        `Service: ${serviceName}`,
+        `Merchant: ${receipt.merchantName || 'Vaniday merchant'}`,
+        receipt.merchantAddress ? `Address: ${receipt.merchantAddress}` : '',
+        receipt.durationMins ? `Duration: ${receipt.durationMins} minutes` : '',
+        `Status: ${receipt.statusLabel || receipt.status || receipt.paymentStatus || 'confirmed'}`
+    ].filter(Boolean).join('\n');
+    const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: `Vaniday Booking - ${serviceName}`,
+        dates: `${startValue}/${endValue}`,
+        ctz: 'Asia/Singapore',
+        details: description,
+        location: receipt.merchantAddress || receipt.merchantName || 'Vaniday merchant'
+    });
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 function getPickupMerchantName(receipt) {
     if (receipt.pickupMerchantName) {
         return receipt.pickupMerchantName;
@@ -156,7 +303,9 @@ function mapBookingReceipt(row, req) {
         userId: row.user_id,
         userName: row.customer_name,
         merchantName: row.merchant_name,
+        merchantAddress: row.merchant_address || '',
         merchantUserId: row.merchant_user_id,
+        durationMins: Number(row.duration_mins || 60),
         items: [
             {
                 name: row.service_name,
@@ -546,6 +695,51 @@ async function downloadReceiptPdf(req, res) {
     }
 }
 
+async function downloadBookingCalendar(req, res) {
+    try {
+        const data = await buildReceiptViewModel(req, req.params.id);
+
+        if (!data || !data.isBooking) {
+            return res.status(404).render('error', {
+                title: 'Calendar Not Found',
+                message: 'This booking calendar file could not be found.'
+            });
+        }
+
+        const filename = `vaniday-booking-${data.receipt.id}.ics`;
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(buildBookingCalendarIcs(data.receipt));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).render('error', {
+            title: 'Calendar Error',
+            message: 'The calendar file could not be generated.'
+        });
+    }
+}
+
+async function openBookingGoogleCalendar(req, res) {
+    try {
+        const data = await buildReceiptViewModel(req, req.params.id);
+
+        if (!data || !data.isBooking) {
+            return res.status(404).render('error', {
+                title: 'Calendar Not Found',
+                message: 'This booking calendar event could not be found.'
+            });
+        }
+
+        return res.redirect(buildGoogleCalendarUrl(data.receipt));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).render('error', {
+            title: 'Calendar Error',
+            message: 'The Google Calendar event could not be opened.'
+        });
+    }
+}
+
 function buildFallbackPdf(data) {
     return new Promise(async (resolve, reject) => {
         const buffers = [];
@@ -856,6 +1050,8 @@ function confirmPickup(req, res) {
 module.exports = {
     showReceipt,
     downloadReceiptPdf,
+    downloadBookingCalendar,
+    openBookingGoogleCalendar,
     checkIn,
     verifyPickup,
     confirmPickup

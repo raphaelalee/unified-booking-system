@@ -1,0 +1,18 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Vaniday</p>
+    <h1><%= heading %></h1>
+    <p><%= summary %></p>
+</section>
+
+<section class="section compact">
+    <article class="receipt-card">
+        <% sections.forEach((section) => { %>
+            <h2><%= section.title %></h2>
+            <p class="muted"><%= section.copy %></p>
+        <% }) %>
+    </article>
+</section>
+
+<%- include('partials/footer') %>

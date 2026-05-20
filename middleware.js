@@ -24,7 +24,7 @@ function setSecurityHeaders(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
 
     if (req.secure || req.get('x-forwarded-proto') === 'https') {
         res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');

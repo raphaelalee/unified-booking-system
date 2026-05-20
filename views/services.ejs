@@ -33,6 +33,11 @@
             return text.includes(serviceSearch.toLowerCase());
         })
         : allServices;
+    const displayedServices = [...filteredServices].sort((left, right) => {
+        const leftRating = Number(left.merchantRating || 0);
+        const rightRating = Number(right.merchantRating || 0);
+        return (Number.isNaN(rightRating) ? 0 : rightRating) - (Number.isNaN(leftRating) ? 0 : leftRating);
+    });
     const serviceVisuals = [
         {
             key: 'hair',
@@ -153,22 +158,36 @@
     </nav>
 <% } %>
 
+<section class="section compact services-location-section" data-services-location-section>
+    <div class="location-prompt-card">
+        <div>
+            <p class="eyebrow">Nearby salons</p>
+            <h2>Find services closest to you.</h2>
+            <p class="muted" data-location-status>Allow location to sort top-rated services by distance. Browsing still works if you skip this.</p>
+        </div>
+        <button class="button primary" type="button" data-allow-location>Allow Location</button>
+    </div>
+    <div class="location-search-row" data-location-search-wrap hidden>
+        <input type="search" data-location-search placeholder="Search by area, merchant, or service">
+    </div>
+</section>
+
 <section class="section compact services-shop-section services-spacious-page" id="service-catalog">
     <div class="section-heading services-list-heading services-list-headline">
         <div>
             <p class="eyebrow">Service Catalog</p>
-            <h2>Available services</h2>
+            <h2>Top-rated services near you</h2>
         </div>
-        <p><%= filteredServices.length %> matches ready for booking</p>
+        <p><%= displayedServices.length %> matches ready for booking</p>
     </div>
 
-    <% if (filteredServices.length === 0) { %>
+    <% if (displayedServices.length === 0) { %>
         <div class="notice">
             No services matched your search. Try hair, facial, spa, nails, massage, barber, or a location.
         </div>
     <% } else { %>
-        <div class="service-catalog-grid unified-service-grid services-shop-grid">
-            <% filteredServices.forEach((service, index) => { %>
+        <div class="service-catalog-grid unified-service-grid services-shop-grid" data-service-grid>
+            <% displayedServices.forEach((service, index) => { %>
                 <%
                     const merchantQrToken = service.merchantQrToken || merchantTokenById[service.merchantId];
                     const serviceBookingPath = merchantQrToken
@@ -181,7 +200,14 @@
                     const remainingOptions = serviceOptions.length - visibleOptions.length;
                     const serviceSlots = Array.isArray(service.slots) ? service.slots : [];
                 %>
-                <article class="service-catalog-card unified-service-card service-shop-card" style="--card-index: <%= index %>;">
+                <article
+                    class="service-catalog-card unified-service-card service-shop-card"
+                    style="--card-index: <%= index %>;"
+                    data-service-card
+                    data-service-name="<%= service.name %>"
+                    data-merchant-name="<%= service.merchantName %>"
+                    data-merchant-location="<%= service.merchantLocation %>"
+                    data-category="<%= service.merchantCategory %>">
                     <div class="service-card-image <%= serviceVisual.className %>">
                         <span class="service-image-badge"><%= serviceVisual.label %></span>
                         <span class="service-image-price">From $<%= service.price %></span>
@@ -208,6 +234,10 @@
                             <p class="service-merchant-line">
                                 <span><%= service.merchantName %></span>
                                 <span><%= service.merchantLocation %></span>
+                            </p>
+                            <p class="service-distance-line">
+                                <span data-nearest-label hidden>Nearest to you</span>
+                                <span data-distance-label hidden></span>
                             </p>
                         </div>
 

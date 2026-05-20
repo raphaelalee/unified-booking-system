@@ -917,7 +917,14 @@ function signupUser(req, res) {
     const confirmPassword = req.body.confirmPassword || '';
     const enteredReferralCode = (req.body.referralCode || '').trim().toUpperCase();
     const customerDetailsForm = getCustomerDetailsForm(req.body);
-    const signupForm = { name, email, phone, ...customerDetailsForm, referralCode: enteredReferralCode };
+    const termsAccepted = req.body.termsAccepted === 'on' || req.body.termsAccepted === 'true';
+    const signupForm = { name, email, phone, ...customerDetailsForm, referralCode: enteredReferralCode, termsAccepted };
+
+    if (!termsAccepted) {
+        req.session.signupError = 'Please agree to the Terms of Service and Privacy Policy to create an account.';
+        req.session.signupForm = signupForm;
+        return res.redirect('/signup');
+    }
 
     if (name.length < 2 || !isValidEmail(email) || !/^[689]\d{7}$/.test(phone)) {
         req.session.signupError = 'Please enter a valid name, email, and 8-digit Singapore handphone number.';

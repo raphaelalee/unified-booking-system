@@ -8,7 +8,7 @@
 
 <section class="section compact">
     <div class="login-layout">
-        <form class="login-form" action="/signup" method="POST">
+        <form class="login-form" action="/signup" method="POST" data-signup-form>
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div>
                 <p class="eyebrow">Customer Account</p>
@@ -86,7 +86,12 @@
                 <input type="text" name="referralCode" value="<%= form.referralCode || '' %>" placeholder="VANI0001" autocomplete="off">
             </label>
 
-            <button class="button primary full" type="submit">Create account</button>
+            <label class="terms-check">
+                <input type="checkbox" name="termsAccepted" value="on" required data-terms-checkbox <%= form.termsAccepted ? 'checked' : '' %>>
+                <span>I agree to the <a class="text-link" href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a class="text-link" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+            </label>
+
+            <button class="button primary full" type="submit" data-create-account disabled>Create account</button>
             <p class="auth-switch">Already have an account? <a class="text-link" href="/login">Log in</a></p>
         </form>
 

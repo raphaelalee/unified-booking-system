@@ -33,7 +33,10 @@
     <% } %>
     <% if (!pdfMode) { %>
         <div class="hero-actions">
-            <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download PDF</a>
+            <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download Receipt</a>
+            <% if (isBooking) { %>
+                <a class="button secondary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
+            <% } %>
             <% if (safeViewerRole === 'customer') { %>
                 <a class="button secondary" href="<%= supportRequestPath %>">Need help</a>
             <% } %>

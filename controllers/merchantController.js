@@ -1859,6 +1859,7 @@ function saveQrBooking(req, res) {
                     },
                     bookingDate: req.body.bookingDate,
                     bookingTime: validation.bookingTime,
+                    bookingId,
                     bookingStatus: confirmation.status,
                     whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                         merchant,
@@ -2025,6 +2026,7 @@ function saveSecureScanBooking(req, res) {
                         },
                         bookingDate: req.body.bookingDate,
                         bookingTime: validation.bookingTime,
+                        bookingId,
                         bookingStatus: confirmation.status,
                         anotherBookingPath: getSecureBookingPath(merchant),
                         whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({

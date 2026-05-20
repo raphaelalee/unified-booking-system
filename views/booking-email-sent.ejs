@@ -18,6 +18,8 @@
     <% } %>
     <div class="hero-actions">
         <a class="button primary" href="/profile">View my bookings</a>
+        <a class="button secondary" href="/receipt/<%= encodeURIComponent(booking.id) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
+        <a class="button secondary" href="/receipt/<%= encodeURIComponent(booking.id) %>/pdf">Download Receipt</a>
         <a class="button secondary" href="/services">Book another service</a>
     </div>
 </section>
