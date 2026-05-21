@@ -19,55 +19,210 @@
         'cream-cleanser': 'product-cleanser',
         'room-mist': 'product-fragrance'
     };
+    const getProductCategory = (product) => {
+        const text = `${product.name || ''} ${product.description || ''} ${product.category || ''}`.toLowerCase();
+        if (text.includes('hair') || text.includes('scalp')) return 'Haircare';
+        if (text.includes('cleanser') || text.includes('serum') || text.includes('pore') || text.includes('skin') || text.includes('face')) return 'Skincare';
+        if (text.includes('body') || text.includes('oil') || text.includes('spa')) return 'Bodycare';
+        if (text.includes('lip') || text.includes('makeup')) return 'Makeup';
+        if (text.includes('mist') || text.includes('wellness') || text.includes('fragrance')) return 'Wellness';
+        return product.category || 'Aftercare';
+    };
+    const categoryList = [...new Set(productList.map(getProductCategory))].sort();
+    const maxPrice = productList.reduce((max, product) => Math.max(max, Number(product.price || 0)), 0);
+    const formatStock = (product) => {
+        if (typeof product.stockQuantity === 'undefined') return 'Available';
+        const stock = Number(product.stockQuantity || 0);
+        if (stock <= 0) return 'Out of stock';
+        if (stock <= 5) return `${stock} left`;
+        return 'In stock';
+    };
 %>
 
-<section class="page-title">
-    <p class="eyebrow">Products</p>
-    <h1>Salon favourites for your aftercare routine.</h1>
-    <p>Browse beauty and wellness products that complement your appointments.</p>
+<section class="marketplace-hero">
+    <div class="marketplace-hero-copy">
+        <p class="eyebrow">Product marketplace</p>
+        <h1>Salon favourites for better aftercare.</h1>
+        <p>Shop beauty and wellness products recommended for post-treatment routines, daily care, and at-home maintenance.</p>
+        <div class="marketplace-hero-actions">
+            <a class="button primary" href="#product-catalog">Shop now</a>
+            <a class="button secondary" href="/cart">View cart (<%= typeof cartCount !== 'undefined' ? cartCount : 0 %>)</a>
+        </div>
+    </div>
+    <div class="marketplace-hero-image" aria-label="Facial aftercare products"></div>
 </section>
 
-<section class="section compact products-spacious-page">
-    <div class="section-heading products-list-headline">
+<section class="section compact products-marketplace-page" id="product-catalog">
+    <div class="marketplace-heading-row">
         <div>
-            <p class="eyebrow">Product Catalog</p>
+            <p class="eyebrow">Product catalog</p>
             <h2>Shop aftercare essentials</h2>
         </div>
-        <p><%= productList.length %> product<%= productList.length === 1 ? '' : 's' %> available</p>
+        <p><span data-product-count><%= productList.length %></span> product<%= productList.length === 1 ? '' : 's' %> available</p>
     </div>
 
-    <div class="product-grid products-shop-grid">
-        <% productList.forEach((product) => { %>
-            <%
-                const productImageClass = productImages[product.id] || 'product-skin';
-                const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
-            %>
-            <article class="product-card products-shop-card">
-                <div class="product-image <%= productImageClass %>" style="<%= productImageStyle %>">
-                    <span class="product-image-badge"><%= product.category %></span>
-                    <span class="product-image-price">$<%= Number(product.price || 0).toFixed(2) %></span>
-                </div>
+    <div class="marketplace-controls" data-marketplace-controls>
+        <label class="marketplace-search">
+            <span>Search products</span>
+            <input type="search" data-product-search placeholder="Search cleanser, serum, salon...">
+        </label>
 
-                <div class="product-shop-body">
-                    <p class="tag"><%= product.salonName || product.category %></p>
-                    <h2><%= product.name %></h2>
-                    <p class="muted"><%= product.description %></p>
-                </div>
+        <label>
+            <span>Category</span>
+            <select data-product-category>
+                <option value="">All categories</option>
+                <% categoryList.forEach((category) => { %>
+                    <option value="<%= category %>"><%= category %></option>
+                <% }) %>
+            </select>
+        </label>
 
-                <div class="product-shop-footer">
-                    <a class="button secondary full" href="/products/<%= product.id %>">View product</a>
-                    <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
-                        <input type="hidden" name="productId" value="<%= product.id %>">
-                        <input type="hidden" name="productName" value="<%= product.name %>">
-                        <input type="hidden" name="productCategory" value="<%= product.category %>">
-                        <input type="hidden" name="productDescription" value="<%= product.description %>">
-                        <input type="hidden" name="productPrice" value="<%= product.price %>">
-                        <button class="button secondary full" type="submit">Add to cart</button>
-                    </form>
-                </div>
-            </article>
-        <% }) %>
+        <label>
+            <span>Sort</span>
+            <select data-product-sort>
+                <option value="featured">Featured</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+                <option value="name-asc">Name: A to Z</option>
+            </select>
+        </label>
+
+        <label class="marketplace-price-filter">
+            <span>Max price <strong data-price-output>$<%= Number(maxPrice || 0).toFixed(0) %></strong></span>
+            <input type="range" min="0" max="<%= Math.ceil(maxPrice || 100) %>" value="<%= Math.ceil(maxPrice || 100) %>" data-product-price>
+        </label>
+
+        <a class="marketplace-cart-link" href="/cart" aria-label="Open cart">
+            <span></span>
+            Cart <strong><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></strong>
+        </a>
     </div>
+
+    <% if (productList.length === 0) { %>
+        <div class="marketplace-empty-state" data-product-empty>
+            <p class="eyebrow">No products</p>
+            <h2>No aftercare products are listed yet.</h2>
+            <p class="muted">Check back after merchants add retail products.</p>
+        </div>
+    <% } else { %>
+        <div class="products-marketplace-grid" data-products-grid>
+            <% productList.forEach((product, index) => { %>
+                <%
+                    const productImageClass = productImages[product.id] || 'product-skin';
+                    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+                    const category = getProductCategory(product);
+                    const merchantName = product.salonName || (product.category && !categoryList.includes(product.category) ? product.category : 'Vaniday Beauty Studio');
+                    const stockLabel = formatStock(product);
+                    const isOutOfStock = stockLabel === 'Out of stock';
+                %>
+                <article
+                    class="marketplace-product-card"
+                    data-product-card
+                    data-name="<%= product.name %>"
+                    data-description="<%= product.description || '' %>"
+                    data-merchant="<%= merchantName %>"
+                    data-category="<%= category %>"
+                    data-price="<%= Number(product.price || 0).toFixed(2) %>"
+                    data-index="<%= index %>">
+                    <a class="marketplace-product-image product-image <%= productImageClass %>" href="/products/<%= product.id %>" style="<%= productImageStyle %>" aria-label="View <%= product.name %>">
+                        <span class="product-image-badge"><%= category %></span>
+                        <span class="product-stock-badge <%= isOutOfStock ? 'is-empty' : '' %>"><%= stockLabel %></span>
+                    </a>
+
+                    <div class="marketplace-product-body">
+                        <div class="marketplace-product-meta">
+                            <span><%= merchantName %></span>
+                            <span>New</span>
+                        </div>
+                        <h3><%= product.name %></h3>
+                        <p><%= product.description %></p>
+                    </div>
+
+                    <div class="marketplace-product-footer">
+                        <strong>$<%= Number(product.price || 0).toFixed(2) %></strong>
+                        <div class="marketplace-product-actions">
+                            <a class="button secondary" href="/products/<%= product.id %>">View product</a>
+                            <form action="/cart/product/<%= product.id %>" method="POST" class="product-add-form">
+                                <input type="hidden" name="productId" value="<%= product.id %>">
+                                <button class="button primary" type="submit" <%= isOutOfStock ? 'disabled' : '' %>>Add to cart</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+
+        <div class="marketplace-empty-state" data-product-empty hidden>
+            <p class="eyebrow">No matches</p>
+            <h2>No products match your filters.</h2>
+            <p class="muted">Try a broader search, another category, or a higher price limit.</p>
+        </div>
+    <% } %>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const cards = Array.from(document.querySelectorAll('[data-product-card]'));
+    const grid = document.querySelector('[data-products-grid]');
+    const search = document.querySelector('[data-product-search]');
+    const category = document.querySelector('[data-product-category]');
+    const sort = document.querySelector('[data-product-sort]');
+    const price = document.querySelector('[data-product-price]');
+    const priceOutput = document.querySelector('[data-price-output]');
+    const count = document.querySelector('[data-product-count]');
+    const empty = document.querySelector('[data-product-empty]');
+
+    function normalize(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function applyFilters() {
+        const query = normalize(search ? search.value : '');
+        const selectedCategory = category ? category.value : '';
+        const maxPrice = price ? Number(price.value || price.max || 0) : Infinity;
+        let visibleCards = cards.filter((card) => {
+            const haystack = normalize(`${card.dataset.name} ${card.dataset.description} ${card.dataset.merchant} ${card.dataset.category}`);
+            const matchesSearch = !query || haystack.includes(query);
+            const matchesCategory = !selectedCategory || card.dataset.category === selectedCategory;
+            const matchesPrice = Number(card.dataset.price || 0) <= maxPrice;
+            return matchesSearch && matchesCategory && matchesPrice;
+        });
+
+        if (sort && grid) {
+            const mode = sort.value;
+            visibleCards = visibleCards.slice().sort((a, b) => {
+                if (mode === 'price-asc') return Number(a.dataset.price) - Number(b.dataset.price);
+                if (mode === 'price-desc') return Number(b.dataset.price) - Number(a.dataset.price);
+                if (mode === 'name-asc') return String(a.dataset.name).localeCompare(String(b.dataset.name));
+                return Number(a.dataset.index) - Number(b.dataset.index);
+            });
+            visibleCards.forEach((card) => grid.appendChild(card));
+        }
+
+        cards.forEach((card) => {
+            card.hidden = !visibleCards.includes(card);
+        });
+
+        if (priceOutput && price) {
+            priceOutput.textContent = '$' + Number(price.value || 0).toFixed(0);
+        }
+
+        if (count) {
+            count.textContent = String(visibleCards.length);
+        }
+
+        if (empty) {
+            empty.hidden = visibleCards.length > 0;
+        }
+    }
+
+    [search, category, sort, price].filter(Boolean).forEach((control) => {
+        control.addEventListener('input', applyFilters);
+        control.addEventListener('change', applyFilters);
+    });
+
+    applyFilters();
+});
+</script>
 
 <%- include('partials/footer') %>

@@ -660,29 +660,39 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
                 console.error(reviewsError);
             }
 
-            const summary = reviewSummary && reviewSummary.reviewCount > 0
-                ? reviewSummary
-                : {
-                    averageRating: Number(merchant.rating || 0) || null,
-                    reviewCount: 0
-                };
+            return Product.getAll((productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
+                }
 
-            return res.status(options.status || 200).render('merchant-detail', {
-                title: merchant.name,
-                merchant,
-                isFavourite: favouriteIds.includes(merchant.id),
-                canGenerateQr: Boolean(options.canGenerateQr),
-                errors: options.errors || [],
-                form: getPrefilledBookingForm(req, options.form || {}),
-                todayDate: getTodayInputValue(),
-                bookingUrl,
-                encodedBookingUrl: encodeURIComponent(bookingUrl),
-                whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
-                backUrl: backLink.url,
-                backLabel: backLink.label,
-                publicHolidays: getPublicHolidayDateMap(),
-                reviews: reviewsError ? [] : reviews,
-                reviewSummary: summary
+                const summary = reviewSummary && reviewSummary.reviewCount > 0
+                    ? reviewSummary
+                    : {
+                        averageRating: Number(merchant.rating || 0) || null,
+                        reviewCount: 0
+                    };
+                const merchantProducts = (productError ? [] : products).filter((product) => {
+                    return String(product.salonId || '') === String(merchant.id || '');
+                });
+
+                return res.status(options.status || 200).render('merchant-detail', {
+                    title: merchant.name,
+                    merchant,
+                    products: merchantProducts,
+                    isFavourite: favouriteIds.includes(merchant.id),
+                    canGenerateQr: Boolean(options.canGenerateQr),
+                    errors: options.errors || [],
+                    form: getPrefilledBookingForm(req, options.form || {}),
+                    todayDate: getTodayInputValue(),
+                    bookingUrl,
+                    encodedBookingUrl: encodeURIComponent(bookingUrl),
+                    whatsappEnquiryUrl: getWhatsAppEnquiryUrl(merchant, null, bookingUrl),
+                    backUrl: backLink.url,
+                    backLabel: backLink.label,
+                    publicHolidays: getPublicHolidayDateMap(),
+                    reviews: reviewsError ? [] : reviews,
+                    reviewSummary: summary
+                });
             });
         });
     });
@@ -1625,15 +1635,9 @@ function loadStorefrontMerchant(req, res, callback) {
 
 function showMerchantStorefront(req, res) {
     return loadStorefrontMerchant(req, res, (merchant) => {
-        return renderBookingPage(req, res, merchant, {
-            secureQr: true,
-            qrDebug: {
-                system: 'storefront',
-                label: 'Scan to Book',
-                token: req.params.merchantSlug,
-                routeTarget: `/m/${req.params.merchantSlug}`,
-                url: getMerchantStorefrontUrl(req, merchant)
-            }
+        return renderMerchantDetail(req, res, merchant, {
+            backUrl: '/services',
+            backLabel: 'Back to services'
         });
     });
 }

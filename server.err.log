@@ -3,3 +3,4 @@ Salon commission schema could not be prepared: connect ETIMEDOUT
 Merchant profile schema could not be prepared: connect ETIMEDOUT
 Service inventory schema could not be prepared: connect ETIMEDOUT
 Customer details schema could not be prepared: connect ETIMEDOUT
+Email booking confirmation skipped: Gmail SMTP rejected the login. Use a Gmail app password in SMTP_PASS, not the normal account password.

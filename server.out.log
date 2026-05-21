@@ -1,4 +1,6 @@
-◇ injected env (23) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (23) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
 ◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
-◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 Server is running on http://localhost:3000
+SMS booking confirmation skipped: SMS is not configured or booking phone is missing.
+Email booking confirmation skipped: SMTP is not configured or booking email is missing.

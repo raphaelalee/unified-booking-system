@@ -58,81 +58,169 @@
     <% } %>
 </section>
 
-<section class="section booking-layout">
-    <div class="booking-services-panel">
-        <div class="section-heading">
-            <p class="eyebrow">Services</p>
-            <h2>Choose an appointment</h2>
-        </div>
-
-        <div class="service-list">
-            <% bookingServices.forEach((service) => { %>
-                <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
-                <% const bookableItem = activeOption || service; %>
-                <% const packageIsSelected = requestedPurchaseType === 'package' && service.packageEnabled; %>
-                <% const displayPrice = packageIsSelected ? service.packagePrice : (promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price); %>
-                <article class="booking-service-card">
-                    <div>
-                        <h3><%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %></h3>
-                        <p class="muted">
-                            <%= bookableItem.duration || service.duration %> &middot;
-                            <% if (promoOriginalPrice !== null && promoDisplayPrice !== null) { %>
-                                <span class="promotion-original-price">$<%= promoOriginalPrice %></span>
-                            <% } %>
-                            $<%= displayPrice %>
-                            <% if (packageIsSelected) { %>
-                                &middot; <%= service.packageSessions %> sessions
-                            <% } %>
-                        </p>
-                        <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                            <% if (activeOption) { %>
-                                <p class="muted">
-                                    Selected option: <%= activeOption.name %>
-                                    <% if (promoDisplayPrice !== null) { %>
-                                        ($<%= promoDisplayPrice %>)
-                                    <% } else { %>
-                                        ($<%= activeOption.price %>)
-                                    <% } %>
-                                </p>
-                            <% } else { %>
-                                <p class="muted">
-                                    Options:
-                                    <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
-                                </p>
-                            <% } %>
-                        <% } %>
-                        <% if (service.packageEnabled) { %>
-                            <p class="muted">Package available: <%= service.packageSessions %> sessions for $<%= Number(service.packagePrice).toFixed(2) %>.</p>
-                        <% } %>
-                        <p class="muted">Choose a date to see live availability.</p>
-                    </div>
-                    <span class="service-price">$<%= displayPrice %></span>
-                </article>
+<section class="section booking-section">
+    <% if (errors.length > 0) { %>
+        <div class="notice error booking-error-notice">
+            <% errors.forEach((error) => { %>
+                <p><%= error %></p>
             <% }) %>
         </div>
-    </div>
+    <% } %>
 
-    <aside class="booking-form-panel">
+    <form action="<%= bookingPath %>" method="POST" class="booking-layout booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>" data-availability-url="/booking/<%= merchant.id %>/available-slots">
+        <input type="hidden" name="merchantId" value="<%= merchant.id %>">
+        <% if (typeof qrDebug !== 'undefined' && qrDebug && qrDebug.token) { %>
+            <input type="hidden" name="bookingSource" value="<%= qrDebug.system || 'qr' %>">
+            <input type="hidden" name="qrToken" value="<%= qrDebug.token %>">
+        <% } %>
+        <% if (requestedOptionId) { %>
+            <input type="hidden" name="serviceOptionId" value="<%= requestedOptionId %>">
+        <% } %>
+        <input type="hidden" name="purchaseType" value="<%= requestedPurchaseType === 'package' ? 'package' : 'single' %>" data-purchase-type-field>
+        <input type="hidden" name="professionalName" value="Any Available" data-professional-field>
+
+        <div class="booking-native-fields" aria-hidden="true">
+            <label>
+                Service
+                <select name="serviceId" class="js-service-select" tabindex="-1">
+                    <option value="">Select a service</option>
+                    <% bookingServices.forEach((service) => { %>
+                        <option
+                            value="<%= service.id %>"
+                            data-purchase-type="single"
+                            data-service-name="<%= service.name %>"
+                            data-service-duration="<%= service.duration || '' %>"
+                            data-service-price="<%= Number(service.price || 0).toFixed(2) %>"
+                            <%= requestedServiceId === String(service.id) && requestedPurchaseType !== 'package' ? 'selected' : '' %>>
+                            <%= service.name %> - single session $<%= Number(service.price).toFixed(2) %>
+                        </option>
+                        <% if (service.packageEnabled) { %>
+                            <option
+                                value="<%= service.id %>"
+                                data-purchase-type="package"
+                                data-service-name="<%= service.name %> package"
+                                data-service-duration="<%= service.duration || '' %>"
+                                data-service-price="<%= Number(service.packagePrice || service.price || 0).toFixed(2) %>"
+                                <%= requestedServiceId === String(service.id) && requestedPurchaseType === 'package' ? 'selected' : '' %>>
+                                <%= service.name %> package - <%= service.packageSessions %> sessions $<%= Number(service.packagePrice).toFixed(2) %>
+                            </option>
+                        <% } %>
+                    <% }) %>
+                </select>
+            </label>
+            <label>
+                Date
+                <input type="date" name="bookingDate" value="<%= form.bookingDate || todayDate %>" min="<%= todayDate %>" tabindex="-1">
+            </label>
+            <label>
+                Time slot
+                <select name="bookingTime" class="js-time-select" data-selected-time="<%= form.bookingTime || '' %>" tabindex="-1">
+                    <option value="">Checking availability...</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="booking-services-panel">
+            <div class="section-heading">
+                <p class="eyebrow">Services</p>
+                <h2>Choose an appointment</h2>
+            </div>
+
+            <div class="service-list booking-service-options">
+                <% bookingServices.forEach((service) => { %>
+                    <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
+                    <% const bookableItem = activeOption || service; %>
+                    <% const packageIsSelected = requestedPurchaseType === 'package' && service.packageEnabled; %>
+                    <% const displayPrice = packageIsSelected ? service.packagePrice : (promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price); %>
+                    <% const isSelectedServiceCard = requestedServiceId === String(service.id); %>
+                    <button
+                        class="booking-service-card booking-service-option <%= isSelectedServiceCard ? 'is-selected' : '' %>"
+                        type="button"
+                        data-service-card
+                        data-service-id="<%= service.id %>"
+                        data-purchase-type="<%= packageIsSelected ? 'package' : 'single' %>"
+                        data-service-name="<%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %>"
+                        data-service-duration="<%= bookableItem.duration || service.duration || '' %>"
+                        data-service-price="<%= Number(displayPrice || 0).toFixed(2) %>">
+                        <span>
+                            <strong><%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %></strong>
+                            <span class="muted">
+                                <%= bookableItem.duration || service.duration %> &middot;
+                                <% if (promoOriginalPrice !== null && promoDisplayPrice !== null) { %>
+                                    <span class="promotion-original-price">$<%= promoOriginalPrice %></span>
+                                <% } %>
+                                $<%= displayPrice %>
+                                <% if (packageIsSelected) { %>
+                                    &middot; <%= service.packageSessions %> sessions
+                                <% } %>
+                            </span>
+                            <% if (Array.isArray(service.options) && service.options.length > 0) { %>
+                                <span class="muted">
+                                    <% if (activeOption) { %>
+                                        Selected option: <%= activeOption.name %>
+                                    <% } else { %>
+                                        Options: <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
+                                    <% } %>
+                                </span>
+                            <% } %>
+                            <% if (service.packageEnabled) { %>
+                                <span class="muted">Package available: <%= service.packageSessions %> sessions for $<%= Number(service.packagePrice).toFixed(2) %>.</span>
+                            <% } %>
+                        </span>
+                        <span class="service-price">$<%= displayPrice %></span>
+                    </button>
+                <% }) %>
+            </div>
+
+            <div class="booking-picker-stack">
+                <section class="booking-picker-card">
+                    <div class="booking-picker-heading">
+                        <span class="booking-picker-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><path d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>
+                        </span>
+                        <h3>Select Date</h3>
+                    </div>
+                    <div class="booking-date-strip js-date-card-list" aria-label="Select booking date"></div>
+                    <span class="muted js-public-holiday-message" hidden></span>
+                </section>
+
+                <section class="booking-picker-card">
+                    <div class="booking-picker-heading">
+                        <span class="booking-picker-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><path d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                        </span>
+                        <h3>Available Times</h3>
+                    </div>
+                    <div class="booking-time-grid js-time-slot-list" aria-label="Select available time">
+                        <button class="time-slot-pill is-disabled" type="button" disabled>Checking availability...</button>
+                    </div>
+                    <p class="muted booking-slot-note">Booked and past slots are removed automatically.</p>
+                </section>
+
+                <section class="booking-picker-card">
+                    <div class="booking-picker-heading">
+                        <span class="booking-picker-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/></svg>
+                        </span>
+                        <h3>Select Professional <span>(Optional)</span></h3>
+                    </div>
+                    <div class="booking-professional-list js-professional-list" aria-label="Select professional">
+                        <button class="professional-pill is-selected" type="button" data-professional="Any Available">Any Available</button>
+                        <button class="professional-pill" type="button" data-professional="Sarah">Sarah</button>
+                        <button class="professional-pill" type="button" data-professional="Jessica">Jessica</button>
+                        <button class="professional-pill" type="button" data-professional="Emily">Emily</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <aside class="booking-form-panel">
         <div>
             <p class="eyebrow">Your details</p>
             <h2>Confirm booking</h2>
             <p class="muted">Select a service, date, and time. We will save your booking request.</p>
         </div>
 
-        <% if (errors.length > 0) { %>
-            <div class="notice error">
-                <% errors.forEach((error) => { %>
-                    <p><%= error %></p>
-                <% }) %>
-            </div>
-        <% } %>
-
-        <form action="<%= bookingPath %>" method="POST" class="booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>" data-availability-url="/booking/<%= merchant.id %>/available-slots">
-            <input type="hidden" name="merchantId" value="<%= merchant.id %>">
-            <% if (typeof qrDebug !== 'undefined' && qrDebug && qrDebug.token) { %>
-                <input type="hidden" name="bookingSource" value="<%= qrDebug.system || 'qr' %>">
-                <input type="hidden" name="qrToken" value="<%= qrDebug.token %>">
-            <% } %>
             <div class="form-row">
                 <label>
                     Full name
@@ -149,51 +237,32 @@
                 <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
             </label>
 
-            <label>
-                Service
-                <select name="serviceId" class="js-service-select">
-                    <option value="">Select a service</option>
-                    <% bookingServices.forEach((service) => { %>
-                        <option
-                            value="<%= service.id %>"
-                            data-purchase-type="single"
-                            <%= requestedServiceId === String(service.id) && requestedPurchaseType !== 'package' ? 'selected' : '' %>>
-                            <%= service.name %> - single session $<%= Number(service.price).toFixed(2) %>
-                        </option>
-                        <% if (service.packageEnabled) { %>
-                            <option
-                                value="<%= service.id %>"
-                                data-purchase-type="package"
-                                <%= requestedServiceId === String(service.id) && requestedPurchaseType === 'package' ? 'selected' : '' %>>
-                                <%= service.name %> package - <%= service.packageSessions %> sessions $<%= Number(service.packagePrice).toFixed(2) %>
-                            </option>
-                        <% } %>
-                    <% }) %>
-                </select>
-            </label>
-            <input type="hidden" name="purchaseType" value="<%= requestedPurchaseType === 'package' ? 'package' : 'single' %>" data-purchase-type-field>
-
-            <% if (requestedOptionId) { %>
-                <input type="hidden" name="serviceOptionId" value="<%= requestedOptionId %>">
-            <% } %>
-
-            <div class="form-row">
-                <label>
-                    Date
-                    <input type="date" name="bookingDate" value="<%= form.bookingDate || todayDate %>" min="<%= todayDate %>">
-                    <span class="muted js-public-holiday-message" hidden></span>
-                </label>
-
-                <label>
-                    Time slot
-                    <select name="bookingTime" class="js-time-select" data-selected-time="<%= form.bookingTime || '' %>">
-                        <option value="">Checking availability...</option>
-                    </select>
-                </label>
+            <div class="booking-summary-card" aria-live="polite">
+                <div class="booking-summary-heading">
+                    <p class="eyebrow">Summary</p>
+                    <strong class="js-summary-price">$0.00</strong>
+                </div>
+                <dl>
+                    <div>
+                        <dt>Service</dt>
+                        <dd class="js-summary-service">Select a service</dd>
+                    </div>
+                    <div>
+                        <dt>Date</dt>
+                        <dd class="js-summary-date">Choose a date</dd>
+                    </div>
+                    <div>
+                        <dt>Time</dt>
+                        <dd class="js-summary-time">Choose a time</dd>
+                    </div>
+                    <div>
+                        <dt>Professional</dt>
+                        <dd class="js-summary-professional">Any Available</dd>
+                    </div>
+                </dl>
             </div>
 
             <button class="button primary full js-confirm-booking" type="submit" disabled>Confirm booking</button>
-        </form>
 
         <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
             <div class="whatsapp-booking-panel">
@@ -212,7 +281,8 @@
                 <p class="muted"><strong>Route target:</strong> <%= qrDebug.routeTarget %></p>
             </div>
         <% } %>
-    </aside>
+        </aside>
+    </form>
 </section>
 
 <script>
