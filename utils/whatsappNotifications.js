@@ -1,10 +1,13 @@
+function isWhatsAppEnabled() {
+    return String(process.env.WHATSAPP_NOTIFICATIONS_ENABLED || process.env.WHATSAPP_AUTOMATION_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
 function getConfig() {
     return {
-        accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
-        phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
-        apiVersion: process.env.WHATSAPP_API_VERSION || 'v23.0',
-        templateName: process.env.WHATSAPP_TEMPLATE_NAME,
-        templateLanguage: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US'
+        accountSid: process.env.TWILIO_ACCOUNT_SID,
+        authToken: process.env.TWILIO_AUTH_TOKEN,
+        from: process.env.TWILIO_WHATSAPP_FROM,
+        statusCallback: process.env.TWILIO_WHATSAPP_STATUS_CALLBACK_URL
     };
 }
 
@@ -16,14 +19,22 @@ function formatRecipientPhone(phone) {
     }
 
     if (digits.startsWith('65') && digits.length === 10) {
-        return digits;
+        return `+${digits}`;
     }
 
     if (/^[689]\d{7}$/.test(digits)) {
-        return `65${digits}`;
+        return `+65${digits}`;
     }
 
-    return digits;
+    return phone.startsWith('+') ? phone : `+${digits}`;
+}
+
+function formatWhatsAppAddress(phone) {
+    const formatted = String(phone || '').startsWith('whatsapp:')
+        ? String(phone || '').replace(/^whatsapp:/, '')
+        : formatRecipientPhone(phone);
+
+    return formatted ? `whatsapp:${formatted}` : '';
 }
 
 function buildBookingMessage(booking) {
@@ -33,8 +44,9 @@ function buildBookingMessage(booking) {
         `Service: ${booking.serviceName}`,
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
+        booking.checkInUrl ? `Check-in: ${booking.checkInUrl}` : '',
         'Please contact the merchant if you need to reschedule or cancel.'
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 }
 
 function buildReminderMessage(booking) {
@@ -72,95 +84,46 @@ function buildCancellationMessage(booking) {
     ].filter(Boolean).join('\n');
 }
 
-function buildTemplatePayload(to, booking, config) {
-    return {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'template',
-        template: {
-            name: config.templateName,
-            language: {
-                code: config.templateLanguage
-            },
-            components: [
-                {
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: booking.customerName },
-                        { type: 'text', text: booking.serviceName },
-                        { type: 'text', text: booking.merchantName },
-                        { type: 'text', text: booking.bookingDate },
-                        { type: 'text', text: booking.bookingTime }
-                    ]
-                }
-            ]
-        }
-    };
-}
-
-function buildTextPayload(to, body) {
-    return {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'text',
-        text: {
-            preview_url: false,
-            body
-        }
-    };
-}
-
-async function sendWhatsAppPayload(payload) {
+async function sendWhatsAppText(phone, message) {
     const config = getConfig();
+    const to = formatWhatsAppAddress(phone);
+    const from = formatWhatsAppAddress(config.from);
+    const body = String(message || '').trim();
 
-    if (!config.accessToken || !config.phoneNumberId) {
+    if (!isWhatsAppEnabled() || !config.accountSid || !config.authToken || !from || !to || !body) {
         return { skipped: true };
     }
 
-    const response = await fetch(`https://graph.facebook.com/${config.apiVersion}/${config.phoneNumberId}/messages`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${config.accessToken}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+    const params = new URLSearchParams({
+        To: to,
+        From: from,
+        Body: body.slice(0, 4000)
     });
 
+    if (config.statusCallback) {
+        params.set('StatusCallback', config.statusCallback);
+    }
+
+    const credentials = Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64');
+    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params
+    });
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        const message = data?.error?.message || `WhatsApp API returned ${response.status}`;
-        throw new Error(message);
+        throw new Error(data.message || `Twilio WhatsApp failed with status ${response.status}`);
     }
 
     return data;
 }
 
-async function sendWhatsAppText(phone, message) {
-    const to = formatRecipientPhone(phone);
-
-    if (!to) {
-        return { skipped: true };
-    }
-
-    return sendWhatsAppPayload(buildTextPayload(to, String(message || '').trim()));
-}
-
-async function sendBookingNotification(booking) {
-    const config = getConfig();
-    const to = formatRecipientPhone(booking.phone);
-
-    if (!config.accessToken || !config.phoneNumberId || !to) {
-        return { skipped: true };
-    }
-
-    const payload = config.templateName
-        ? buildTemplatePayload(to, booking, config)
-        : buildTextPayload(to, buildBookingMessage(booking));
-
-    return sendWhatsAppPayload(payload);
+function sendBookingNotification(booking) {
+    return sendWhatsAppText(booking.phone, buildBookingMessage(booking));
 }
 
 function sendBookingReminder(booking) {
@@ -177,6 +140,7 @@ function sendBookingCancellationNotification(booking) {
 
 module.exports = {
     formatRecipientPhone,
+    formatWhatsAppAddress,
     sendBookingCancellationNotification,
     sendBookingNotification,
     sendBookingReminder,

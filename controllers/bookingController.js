@@ -14,6 +14,11 @@ const {
     sendBookingRescheduleSms
 } = require('../utils/smsNotifications');
 const {
+    sendBookingCancellationNotification,
+    sendBookingNotification,
+    sendBookingRescheduleNotification
+} = require('../utils/whatsappNotifications');
+const {
     getBookingCheckInUrl,
     signBookingCheckInToken,
     verifyBookingCheckInToken
@@ -446,6 +451,23 @@ function createBooking(req, res) {
                     console.error('SMS booking confirmation failed:', smsError.message);
                 });
 
+                sendBookingNotification({
+                    bookingId,
+                    customerName,
+                    phone: req.session.user.phone || req.body.phone,
+                    merchantName: service.salonName || 'Vaniday merchant',
+                    serviceName: bookedServiceName,
+                    bookingDate,
+                    bookingTime,
+                    checkInUrl: checkinUrl
+                }).then((whatsappResult) => {
+                    if (whatsappResult?.skipped) {
+                        console.log('WhatsApp booking confirmation skipped: WhatsApp is not configured or booking phone is missing.');
+                    }
+                }).catch((whatsappError) => {
+                    console.error('WhatsApp booking confirmation failed:', whatsappError.message);
+                });
+
                 return res.render('booking-email-sent', {
                     title: 'Booking Confirmed',
                     booking: {
@@ -641,6 +663,22 @@ function cancelBooking(req, res) {
                 }
             }).catch((smsError) => {
                 console.error('SMS cancellation notification failed:', smsError.message);
+            });
+
+            sendBookingCancellationNotification({
+                customerName: req.session.user.name || booking.customer_name || 'Customer',
+                phone: req.session.user.phone || booking.phone,
+                merchantName: booking.merchant_name || 'Vaniday merchant',
+                serviceName: booking.service_name,
+                bookingDate: String(booking.booking_date).slice(0, 10),
+                bookingTime: booking.booking_time,
+                reason
+            }).then((whatsappResult) => {
+                if (whatsappResult?.skipped) {
+                    console.log('WhatsApp cancellation notification skipped: WhatsApp is not configured or customer phone is missing.');
+                }
+            }).catch((whatsappError) => {
+                console.error('WhatsApp cancellation notification failed:', whatsappError.message);
             });
 
             return respondProfileAction(req, res, {
@@ -969,6 +1007,21 @@ function rescheduleBooking(req, res) {
                     }
                 }).catch((smsError) => {
                     console.error('SMS reschedule notification failed:', smsError.message);
+                });
+
+                sendBookingRescheduleNotification({
+                    customerName: req.session.user.name || booking.customer_name || 'Customer',
+                    phone: req.session.user.phone || booking.phone,
+                    merchantName: booking.merchant_name || 'Vaniday merchant',
+                    serviceName: booking.service_name,
+                    bookingDate,
+                    bookingTime
+                }).then((whatsappResult) => {
+                    if (whatsappResult?.skipped) {
+                        console.log('WhatsApp reschedule notification skipped: WhatsApp is not configured or customer phone is missing.');
+                    }
+                }).catch((whatsappError) => {
+                    console.error('WhatsApp reschedule notification failed:', whatsappError.message);
                 });
 
                 return respondProfileAction(req, res, {

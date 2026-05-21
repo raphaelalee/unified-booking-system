@@ -102,6 +102,14 @@ function resetSession(phone) {
 }
 
 function extractIncomingMessages(body = {}) {
+    if (body.From && body.Body !== undefined) {
+        return [{
+            from: body.From,
+            text: body.Body,
+            type: body.MessageType || 'text'
+        }];
+    }
+
     const entries = Array.isArray(body.entry) ? body.entry : [];
     return entries.flatMap((entry) => {
         return (entry.changes || []).flatMap((change) => {
@@ -124,7 +132,7 @@ function getWebhook(req, res) {
         return res.status(200).send(challenge);
     }
 
-    return res.sendStatus(403);
+    return res.status(200).send('Twilio WhatsApp webhook is ready.');
 }
 
 async function sendReply(phone, message) {
