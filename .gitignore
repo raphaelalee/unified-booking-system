@@ -9,3 +9,5 @@ package-lock.json
 package.json
 package-lock.json
 package.json
+server.err.log
+server.out.log

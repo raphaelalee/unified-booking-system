@@ -1,0 +1,221 @@
+Service package schema could not be prepared: connect ETIMEDOUT
+Salon commission schema could not be prepared: connect ETIMEDOUT
+Merchant profile schema could not be prepared: connect ETIMEDOUT
+Service inventory schema could not be prepared: connect ETIMEDOUT
+Customer details schema could not be prepared: connect ETIMEDOUT
+WhatsApp reminder job failed: Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+SMS reminder job failed: Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+WhatsApp reminder job failed: Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
+SMS reminder job failed: Error: connect ECONNREFUSED ::1:3305
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '::1',
+  port: 3305,
+  fatal: true
+}
