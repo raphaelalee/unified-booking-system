@@ -5,7 +5,20 @@
     const rewardRedemptions = appointments.rewardRedemptions || {};
     const customerInsights = customerReport?.insights || {};
     const sales = salesReport || {};
-    const merchantChartPayload = {
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
+    const allBookings = Array.isArray(appointments.allBookings) ? appointments.allBookings : [];
+    const uniqueBookings = Array.from(new Map(allBookings.map((booking, index) => {
+        const key = booking.id || `${booking.customerEmail || booking.email || booking.customerName || 'customer'}-${booking.bookingDate || booking.booking_date || index}-${booking.bookingTime || booking.booking_time || ''}-${booking.serviceName || booking.service_name || ''}`;
+        return [String(key), booking];
+    })).values());
+    const statusRows = Object.entries(uniqueBookings.reduce((counts, booking) => {
+        const status = normalizeStatus(booking.status);
+        counts[status] = (counts[status] || 0) + 1;
+        return counts;
+    }, {})).map(([status, count]) => ({ status, count }));
+    const topCustomers = Array.isArray(customerInsights.topCustomers) ? customerInsights.topCustomers : [];
+    const chartPayload = {
         salesLabels: (sales.dailySales || []).map((day) => day.label),
         salesRevenue: (sales.dailySales || []).map((day) => Number(day.revenue || 0)),
         salesOrders: (sales.dailySales || []).map((day) => Number(day.orders || 0)),
@@ -13,58 +26,126 @@
         ageValues: customerInsights.chartPayload?.ageValues || [0],
         genderLabels: customerInsights.chartPayload?.genderLabels || ['Not set'],
         genderValues: customerInsights.chartPayload?.genderValues || [0],
+        contactLabels: customerInsights.chartPayload?.contactMethodLabels || ['Not set'],
+        contactValues: customerInsights.chartPayload?.contactMethodValues || [0],
         serviceLabels: customerInsights.chartPayload?.serviceLabels || ['No service'],
         serviceValues: customerInsights.chartPayload?.serviceValues || [0],
         hourLabels: customerInsights.chartPayload?.hourLabels || ['No bookings'],
-        hourValues: customerInsights.chartPayload?.hourValues || [0]
+        hourValues: customerInsights.chartPayload?.hourValues || [0],
+        statusLabels: statusRows.length ? statusRows.map((row) => row.status.replace(/_/g, ' ')) : ['No bookings'],
+        statusValues: statusRows.length ? statusRows.map((row) => row.count) : [0]
     };
-    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const exportPayload = {
+        salesTrends: (sales.dailySales || []).map((day) => ({ label: day.label, revenue: Number(day.revenue || 0).toFixed(2), orders: Number(day.orders || 0) })),
+        bookingStatus: statusRows,
+        topServices: chartPayload.serviceLabels.map((label, index) => ({ service: label, bookings: chartPayload.serviceValues[index] || 0 })),
+        peakHours: chartPayload.hourLabels.map((label, index) => ({ hour: label, bookings: chartPayload.hourValues[index] || 0 })),
+        customers: topCustomers.map((customer) => ({
+            customerName: customer.customerName,
+            customerEmail: customer.customerEmail,
+            visits: customer.visits,
+            spend: Number(customer.spend || 0).toFixed(2),
+            lastBookingDate: customer.lastBookingDate
+        })),
+        rewardImpact: [{
+            rewardBookingCount: rewardRedemptions.rewardBookingCount || 0,
+            totalRedeemedValue: Number(rewardRedemptions.totalRedeemedValue || 0).toFixed(2),
+            loyaltyDrivenRevenue: Number(rewardRedemptions.loyaltyDrivenRevenue || 0).toFixed(2),
+            repeatRewardCustomers: rewardRedemptions.repeatRewardCustomers || 0
+        }]
+    };
 %>
 
-<section class="section compact merchant-analytics-page">
+<section class="section compact merchant-analytics-page analytics-command-center">
     <div class="merchant-analytics-shell">
-        <header class="merchant-dashboard-hero">
+        <header class="merchant-dashboard-hero analytics-hero-panel">
             <div>
-                <p class="eyebrow">Analytics</p>
-                <h1>Revenue and booking performance</h1>
-                <span>Track revenue, booking demand, customer trends, and promotion contribution.</span>
+                <p class="eyebrow">Merchant Analytics</p>
+                <h1>Revenue, Customers, and Demand</h1>
+                <span>See what is selling, when customers book, which services pull demand, and download only the report you need.</span>
+            </div>
+            <div class="analytics-toolbar" data-export-scope="merchant">
+                <label>
+                    <span>Download dataset</span>
+                    <select data-export-select>
+                        <option value="salesTrends">Sales trends</option>
+                        <option value="bookingStatus">Booking status</option>
+                        <option value="topServices">Top services</option>
+                        <option value="peakHours">Peak hours</option>
+                        <option value="customers">Top customers</option>
+                        <option value="rewardImpact">Reward impact</option>
+                    </select>
+                </label>
+                <button class="button primary" type="button" data-export-button>Download CSV</button>
             </div>
         </header>
 
-        <section class="merchant-kpi-grid">
-            <article class="merchant-kpi-card accent-green"><span>Monthly revenue</span><strong>$<%= formatCurrency(appointments.monthlyRevenue) %></strong><small>service booking revenue</small></article>
-            <article class="merchant-kpi-card accent-orange"><span>Reward bookings</span><strong><%= rewardRedemptions.rewardBookingCount || 0 %></strong><small>bookings using points</small></article>
-            <article class="merchant-kpi-card accent-blue"><span>Repeat customers</span><strong><%= appointments.repeatCustomers || 0 %></strong><small>retention signal</small></article>
-            <article class="merchant-kpi-card accent-yellow"><span>Top service</span><strong><%= customerInsights.topServiceName || 'No service' %></strong><small>highest demand</small></article>
+        <section class="analytics-kpi-strip">
+            <article class="analytics-kpi-card accent-green"><span>Monthly revenue</span><strong>$<%= formatCurrency(appointments.monthlyRevenue) %></strong><small>service booking revenue</small></article>
+            <article class="analytics-kpi-card accent-blue"><span>Bookings</span><strong><%= uniqueBookings.length %></strong><small><%= appointments.pendingAppointments?.length || 0 %> pending approvals</small></article>
+            <article class="analytics-kpi-card accent-orange"><span>Repeat customers</span><strong><%= appointments.repeatCustomers || 0 %></strong><small><%= customerInsights.repeatRate || 0 %>% repeat rate</small></article>
+            <article class="analytics-kpi-card accent-yellow"><span>Top service</span><strong><%= customerInsights.topServiceName || 'No service' %></strong><small>highest demand service</small></article>
         </section>
 
-        <section class="merchant-kpi-grid">
-            <article class="merchant-kpi-card accent-orange"><span>Redeemed value</span><strong>$<%= formatCurrency(rewardRedemptions.totalRedeemedValue) %></strong><small>reward discount given</small></article>
-            <article class="merchant-kpi-card accent-green"><span>Loyalty revenue</span><strong>$<%= formatCurrency(rewardRedemptions.loyaltyDrivenRevenue) %></strong><small>paid revenue after rewards</small></article>
-            <article class="merchant-kpi-card accent-blue"><span>Reward repeat customers</span><strong><%= rewardRedemptions.repeatRewardCustomers || 0 %></strong><small>reward users with repeat bookings</small></article>
-            <article class="merchant-kpi-card accent-yellow"><span>Promo redemptions</span><strong><%= appointments.loyaltyRedemptions || 0 %></strong><small>campaign usage</small></article>
+        <section class="analytics-control-panel">
+            <div>
+                <p class="eyebrow">Interactive View</p>
+                <h2>Focus the chart on the decision you are making</h2>
+            </div>
+            <div class="analytics-segmented-control" role="group" aria-label="Merchant analytics chart view">
+                <button type="button" class="active" data-merchant-chart-mode="sales">Sales</button>
+                <button type="button" data-merchant-chart-mode="services">Services</button>
+                <button type="button" data-merchant-chart-mode="hours">Hours</button>
+                <button type="button" data-merchant-chart-mode="customers">Customers</button>
+            </div>
         </section>
 
         <section class="merchant-insight-grid">
-            <article class="merchant-chart-card span-8">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Sales Analytics</p><h2>Revenue and orders</h2></div></div>
-                <div class="merchant-chart-box"><canvas id="merchantSalesChart"></canvas></div>
+            <article class="merchant-chart-card span-8 analytics-chart-panel">
+                <div class="merchant-card-heading">
+                    <div><p class="eyebrow">Performance</p><h2 data-merchant-chart-title>Sales trend</h2></div>
+                    <span class="analytics-data-note">Products + booking signal</span>
+                </div>
+                <div class="merchant-chart-box analytics-main-chart"><canvas id="merchantAnalyticsChart"></canvas></div>
             </article>
-            <article class="merchant-chart-card span-4">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Demand</p><h2>Peak booking hour</h2></div></div>
-                <div class="merchant-insight-callout">
-                    <strong><%= customerInsights.peakHour || 'No bookings' %></strong>
-                    <p><%= customerInsights.suggestedFocus || 'Customer patterns will appear after more bookings.' %></p>
+            <article class="merchant-chart-card span-4 analytics-action-card">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Best Next Action</p><h2>What merchant can do</h2></div></div>
+                <div class="analytics-insight-list">
+                    <p><strong>Staff peak hours</strong><span><%= customerInsights.peakHour || 'No bookings' %> is currently your strongest timing signal.</span></p>
+                    <p><strong>Promote the winner</strong><span><%= customerInsights.suggestedFocus || 'Customer patterns will appear after more bookings.' %></span></p>
+                    <p><strong>Reward loyal buyers</strong><span><%= rewardRedemptions.repeatRewardCustomers || 0 %> repeat reward customers can be targeted with follow-up offers.</span></p>
                 </div>
             </article>
-            <article class="merchant-chart-card span-6">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Bookings</p><h2>Top services</h2></div></div>
-                <div class="merchant-chart-box small"><canvas id="merchantServiceChart"></canvas></div>
+
+            <article class="merchant-chart-card span-4">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Demand</p><h2>Booking status</h2></div></div>
+                <div class="merchant-chart-box small"><canvas id="merchantStatusChart"></canvas></div>
             </article>
-            <article class="merchant-chart-card span-6">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Timing</p><h2>Booking trends by hour</h2></div></div>
-                <div class="merchant-chart-box small"><canvas id="merchantHourChart"></canvas></div>
+            <article class="merchant-chart-card span-4">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Customers</p><h2>Top customers</h2></div></div>
+                <div class="analytics-ranking-list">
+                    <% topCustomers.slice(0, 5).forEach((customer, index) => { %>
+                        <article>
+                            <span><%= index + 1 %></span>
+                            <div><strong><%= customer.customerName || 'Customer' %></strong><small><%= customer.visits %> visits · last <%= customer.lastBookingDate || 'n/a' %></small></div>
+                            <b>$<%= formatCurrency(customer.spend) %></b>
+                        </article>
+                    <% }) %>
+                    <% if (!topCustomers.length) { %>
+                        <p class="muted">Customer rankings appear after bookings are recorded.</p>
+                    <% } %>
+                </div>
             </article>
+            <article class="merchant-chart-card span-4">
+                <div class="merchant-card-heading"><div><p class="eyebrow">Rewards</p><h2>Loyalty impact</h2></div></div>
+                <div class="analytics-mini-table">
+                    <p><span>Reward bookings</span><strong><%= rewardRedemptions.rewardBookingCount || 0 %></strong></p>
+                    <p><span>Redeemed value</span><strong>$<%= formatCurrency(rewardRedemptions.totalRedeemedValue) %></strong></p>
+                    <p><span>Loyalty revenue</span><strong>$<%= formatCurrency(rewardRedemptions.loyaltyDrivenRevenue) %></strong></p>
+                    <p><span>Repeat reward customers</span><strong><%= rewardRedemptions.repeatRewardCustomers || 0 %></strong></p>
+                </div>
+            </article>
+
             <article class="merchant-chart-card span-6">
                 <div class="merchant-card-heading"><div><p class="eyebrow">User Analysis</p><h2>Age segments</h2></div></div>
                 <div class="merchant-chart-box small"><canvas id="merchantAgeChart"></canvas></div>
@@ -80,18 +161,97 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     (() => {
-        const chartPayload = <%- JSON.stringify(merchantChartPayload) %>;
-        const chartPalette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16' };
-        const options = { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } };
+        const chartPayload = <%- JSON.stringify(chartPayload) %>;
+        const exportPayload = <%- JSON.stringify(exportPayload) %>;
+        const palette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
+        const mainCanvas = document.getElementById('merchantAnalyticsChart');
+        const title = document.querySelector('[data-merchant-chart-title]');
+        let mainChart;
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
+        };
+        const chartConfigs = {
+            sales: {
+                title: 'Sales trend',
+                type: 'line',
+                labels: chartPayload.salesLabels,
+                datasets: [
+                    { label: 'Revenue', data: chartPayload.salesRevenue, borderColor: palette.green, backgroundColor: 'rgba(79,104,71,.14)', fill: true, tension: 0.35 },
+                    { label: 'Orders', data: chartPayload.salesOrders, borderColor: palette.blue, backgroundColor: 'rgba(32,137,156,.12)', tension: 0.35 }
+                ]
+            },
+            services: {
+                title: 'Top services by bookings',
+                type: 'bar',
+                labels: chartPayload.serviceLabels,
+                datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(79,104,71,.32)' }],
+                options: { ...baseOptions, indexAxis: 'y' }
+            },
+            hours: {
+                title: 'Peak booking hours',
+                type: 'bar',
+                labels: chartPayload.hourLabels,
+                datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223,124,22,.32)' }]
+            },
+            customers: {
+                title: 'Customer contact preference',
+                type: 'doughnut',
+                labels: chartPayload.contactLabels,
+                datasets: [{ data: chartPayload.contactValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }]
+            }
+        };
+        const renderMainChart = (mode) => {
+            if (!mainCanvas || typeof Chart === 'undefined') return;
+            const config = chartConfigs[mode] || chartConfigs.sales;
+            if (mainChart) mainChart.destroy();
+            if (title) title.textContent = config.title;
+            mainChart = new Chart(mainCanvas, {
+                type: config.type,
+                data: { labels: config.labels, datasets: config.datasets },
+                options: config.type === 'doughnut'
+                    ? { responsive: true, maintainAspectRatio: false, plugins: baseOptions.plugins }
+                    : (config.options || baseOptions)
+            });
+        };
         const makeChart = (id, config) => {
             const canvas = document.getElementById(id);
             if (canvas && typeof Chart !== 'undefined') new Chart(canvas, config);
         };
-        makeChart('merchantSalesChart', { type: 'line', data: { labels: chartPayload.salesLabels, datasets: [{ label: 'Revenue', data: chartPayload.salesRevenue, borderColor: chartPalette.green, backgroundColor: 'rgba(79,104,71,.12)', fill: true }, { label: 'Orders', data: chartPayload.salesOrders, borderColor: chartPalette.blue }] }, options });
-        makeChart('merchantServiceChart', { type: 'bar', data: { labels: chartPayload.serviceLabels, datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(79,104,71,.3)' }] }, options: { ...options, indexAxis: 'y' } });
-        makeChart('merchantHourChart', { type: 'bar', data: { labels: chartPayload.hourLabels, datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223,124,22,.32)' }] }, options });
-        makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.28)' }] }, options });
-        makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [chartPalette.green, chartPalette.blue, chartPalette.orange, '#d4a017', '#a64032'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: options.plugins } });
+
+        document.querySelectorAll('[data-merchant-chart-mode]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('[data-merchant-chart-mode]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+                renderMainChart(button.dataset.merchantChartMode);
+            });
+        });
+
+        makeChart('merchantStatusChart', { type: 'doughnut', data: { labels: chartPayload.statusLabels, datasets: [{ data: chartPayload.statusValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+        makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.28)' }] }, options: baseOptions });
+        makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+
+        const toCsv = (rows) => {
+            if (!rows || !rows.length) return '';
+            const headers = Object.keys(rows[0]);
+            const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            return [headers.join(','), ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(','))].join('\n');
+        };
+
+        document.querySelector('[data-export-button]')?.addEventListener('click', () => {
+            const selected = document.querySelector('[data-export-select]')?.value || 'salesTrends';
+            const csv = toCsv(exportPayload[selected] || []);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `vaniday-merchant-${selected}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+
+        renderMainChart('sales');
     })();
 </script>
 

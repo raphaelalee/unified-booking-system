@@ -2,47 +2,177 @@
 
 <%
     const platformBookings = Array.isArray(bookings) ? bookings : [];
+    const safeMerchants = Array.isArray(merchants) ? merchants : [];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
+    const uniqueBookings = Array.from(new Map(platformBookings.map((booking, index) => {
+        const key = booking.id || `${booking.email || booking.customer_email || 'customer'}-${booking.merchant_id || booking.merchantId || 'merchant'}-${booking.booking_date || booking.bookingDate || index}-${booking.booking_time || booking.bookingTime || ''}`;
+        return [String(key), booking];
+    })).values());
+    const merchantById = new Map(safeMerchants.map((merchant) => [String(merchant.id || merchant.salon_id || merchant.salonId || ''), merchant]));
+    const statusCounts = uniqueBookings.reduce((counts, booking) => {
+        const status = normalizeStatus(booking.status);
+        counts[status] = (counts[status] || 0) + 1;
+        return counts;
+    }, {});
+    const uniqueBookingRevenue = uniqueBookings.reduce((sum, booking) => sum + Number(booking.service_price || booking.price || 0), 0);
+    const merchantPerformanceMap = {};
+    uniqueBookings.forEach((booking) => {
+        const merchantId = String(booking.merchant_id || booking.merchantId || '');
+        const merchant = merchantById.get(merchantId) || {};
+        const name = booking.merchant_name || merchant.salon_name || merchant.name || 'Unassigned merchant';
+        if (!merchantPerformanceMap[name]) {
+            merchantPerformanceMap[name] = { merchant: name, bookings: 0, revenue: 0, completed: 0, pending: 0 };
+        }
+        merchantPerformanceMap[name].bookings += 1;
+        merchantPerformanceMap[name].revenue += Number(booking.service_price || booking.price || 0);
+        if (['completed', 'checked_in', 'confirmed', 'paid'].includes(normalizeStatus(booking.status))) {
+            merchantPerformanceMap[name].completed += 1;
+        }
+        if (normalizeStatus(booking.status) === 'pending') {
+            merchantPerformanceMap[name].pending += 1;
+        }
+    });
+    const merchantPerformance = Object.values(merchantPerformanceMap)
+        .sort((left, right) => right.revenue - left.revenue || right.bookings - left.bookings)
+        .slice(0, 8);
+    const categoryRows = Object.entries(merchantReport.merchantCategories || {})
+        .map(([category, count]) => ({ category, merchants: count }))
+        .sort((left, right) => right.merchants - left.merchants);
     const days = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    for (let index = 6; index >= 0; index -= 1) {
+    for (let index = 13; index >= 0; index -= 1) {
         const date = new Date(today);
         date.setDate(today.getDate() - index);
         days.push({ key: date.toISOString().slice(0, 10), label: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }), bookings: 0, revenue: 0 });
     }
     const dayMap = days.reduce((map, day) => { map[day.key] = day; return map; }, {});
-    platformBookings.forEach((booking) => {
-        const key = booking.booking_date instanceof Date ? booking.booking_date.toISOString().slice(0, 10) : String(booking.booking_date || '').slice(0, 10);
+    uniqueBookings.forEach((booking) => {
+        const key = booking.booking_date instanceof Date ? booking.booking_date.toISOString().slice(0, 10) : String(booking.booking_date || booking.bookingDate || '').slice(0, 10);
         if (dayMap[key]) {
             dayMap[key].bookings += 1;
-            dayMap[key].revenue += Number(booking.service_price || 0);
+            dayMap[key].revenue += Number(booking.service_price || booking.price || 0);
         }
     });
-    const chartPayload = { labels: days.map((day) => day.label), bookings: days.map((day) => day.bookings), revenue: days.map((day) => Number(day.revenue.toFixed(2))) };
+    const chartPayload = {
+        labels: days.map((day) => day.label),
+        bookings: days.map((day) => day.bookings),
+        revenue: days.map((day) => Number(day.revenue.toFixed(2))),
+        statusLabels: Object.keys(statusCounts).length ? Object.keys(statusCounts).map((status) => status.replace(/_/g, ' ')) : ['No bookings'],
+        statusValues: Object.values(statusCounts).length ? Object.values(statusCounts) : [0],
+        merchantLabels: merchantPerformance.map((row) => row.merchant),
+        merchantRevenue: merchantPerformance.map((row) => Number(row.revenue.toFixed(2))),
+        merchantBookings: merchantPerformance.map((row) => row.bookings)
+    };
+    const exportPayload = {
+        bookingTrends: days.map((day) => ({ date: day.key, bookings: day.bookings, revenue: Number(day.revenue.toFixed(2)) })),
+        merchantPerformance,
+        bookingStatus: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
+        merchantCategories: categoryRows,
+        platformSummary: [{
+            merchants: stats.merchantCount,
+            merchantAccounts: stats.merchantUserCount,
+            customers: stats.customerCount,
+            bookings: uniqueBookings.length,
+            bookingRevenue: Number(uniqueBookingRevenue || 0).toFixed(2),
+            rewardRedemptions: loyaltySummary?.redemptionCount || 0
+        }]
+    };
 %>
 
-<section class="admin-dashboard-v2">
+<section class="admin-dashboard-v2 analytics-command-center">
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
-        <header class="admin-dashboard-header">
-            <div><p class="eyebrow">Analytics</p><h1>Platform Analytics</h1><p>Revenue analytics, QR analytics, booking trends, and platform health signals.</p></div>
+        <header class="admin-dashboard-header analytics-hero-panel">
+            <div>
+                <p class="eyebrow">Platform Analytics</p>
+                <h1>Admin Decision Hub</h1>
+                <p>Track marketplace revenue, merchant health, booking quality, and export the exact dataset needed for reporting.</p>
+            </div>
+            <div class="analytics-toolbar" data-export-scope="admin">
+                <label>
+                    <span>Download dataset</span>
+                    <select data-export-select>
+                        <option value="platformSummary">Platform summary</option>
+                        <option value="bookingTrends">Booking trends</option>
+                        <option value="merchantPerformance">Merchant performance</option>
+                        <option value="bookingStatus">Booking status</option>
+                        <option value="merchantCategories">Merchant categories</option>
+                    </select>
+                </label>
+                <button class="button primary" type="button" data-export-button>Download CSV</button>
+            </div>
         </header>
 
-        <section class="admin-stat-grid">
-            <article class="admin-stat-card accent-green"><strong>$<%= formatCurrency(stats.bookingRevenue) %></strong><span>Total booking revenue</span></article>
-            <article class="admin-stat-card accent-blue"><strong><%= stats.bookingCount %></strong><span>Total bookings</span></article>
-            <article class="admin-stat-card accent-orange"><strong><%= loyaltySummary?.redemptionCount || 0 %></strong><span>Reward redemptions</span></article>
+        <section class="analytics-kpi-strip">
+            <article class="analytics-kpi-card accent-green"><span>Total revenue</span><strong>$<%= formatCurrency(uniqueBookingRevenue) %></strong><small>deduplicated booking revenue</small></article>
+            <article class="analytics-kpi-card accent-blue"><span>Total bookings</span><strong><%= uniqueBookings.length %></strong><small><%= stats.uniqueBookedCustomers %> unique booked customers</small></article>
+            <article class="analytics-kpi-card accent-orange"><span>Merchants</span><strong><%= stats.merchantCount %></strong><small><%= merchantReport.merchantsWithoutServices.length %> need services</small></article>
+            <article class="analytics-kpi-card accent-yellow"><span>Reward activity</span><strong><%= loyaltySummary?.redemptionCount || 0 %></strong><small>reward redemptions</small></article>
+        </section>
+
+        <section class="analytics-control-panel">
+            <div>
+                <p class="eyebrow">Interactive View</p>
+                <h2>Switch the main chart by business question</h2>
+            </div>
+            <div class="analytics-segmented-control" role="group" aria-label="Admin analytics chart view">
+                <button type="button" class="active" data-admin-chart-mode="revenue">Revenue</button>
+                <button type="button" data-admin-chart-mode="bookings">Bookings</button>
+                <button type="button" data-admin-chart-mode="merchants">Merchants</button>
+                <button type="button" data-admin-chart-mode="status">Status</button>
+            </div>
         </section>
 
         <section class="admin-grid">
-            <article class="admin-panel admin-chart-panel span-8">
-                <div class="admin-panel-heading"><div><p class="eyebrow">Revenue</p><h2>Revenue and bookings</h2></div></div>
-                <div class="admin-chart-box"><canvas id="adminRevenueChart"></canvas></div>
+            <article class="admin-panel admin-chart-panel span-8 analytics-chart-panel">
+                <div class="admin-panel-heading">
+                    <div><p class="eyebrow">Trend</p><h2 data-admin-chart-title>Revenue trend</h2></div>
+                    <span class="analytics-data-note"><%= days[0].label %> - <%= days[days.length - 1].label %></span>
+                </div>
+                <div class="admin-chart-box analytics-main-chart"><canvas id="adminAnalyticsChart"></canvas></div>
             </article>
-            <article class="admin-panel span-4">
-                <div class="admin-panel-heading"><div><p class="eyebrow">Performance</p><h2>Promotion contribution</h2></div></div>
-                <div class="admin-smart-widget"><strong><%= loyaltySummary?.redemptionCount || 0 %></strong><span>voucher redemptions</span><small>Reward shop and campaign activity</small></div>
+            <article class="admin-panel span-4 analytics-action-card">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Best Next Action</p><h2>What admin can do</h2></div></div>
+                <div class="analytics-insight-list">
+                    <p><strong>Scale winners</strong><span>Use merchant performance to find salons worth featuring in campaigns.</span></p>
+                    <p><strong>Fix quality gaps</strong><span>Use status mix and validation issues to reduce pending or incomplete bookings.</span></p>
+                    <p><strong>Export clean reports</strong><span>Download one focused dataset instead of a full database dump.</span></p>
+                </div>
+            </article>
+        </section>
+
+        <section class="admin-grid">
+            <article class="admin-panel span-6">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Merchant Performance</p><h2>Top merchants by revenue</h2></div></div>
+                <div class="analytics-ranking-list">
+                    <% merchantPerformance.forEach((row, index) => { %>
+                        <article>
+                            <span><%= index + 1 %></span>
+                            <div><strong><%= row.merchant %></strong><small><%= row.bookings %> bookings · <%= row.completed %> active/completed</small></div>
+                            <b>$<%= formatCurrency(row.revenue) %></b>
+                        </article>
+                    <% }) %>
+                    <% if (!merchantPerformance.length) { %>
+                        <p class="muted">Merchant performance appears after platform bookings are recorded.</p>
+                    <% } %>
+                </div>
+            </article>
+            <article class="admin-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Status Mix</p><h2>Booking quality</h2></div></div>
+                <div class="admin-chart-box small"><canvas id="adminStatusChart"></canvas></div>
+            </article>
+            <article class="admin-panel span-3">
+                <div class="admin-panel-heading"><div><p class="eyebrow">Coverage</p><h2>Merchant categories</h2></div></div>
+                <div class="analytics-mini-table">
+                    <% categoryRows.slice(0, 6).forEach((row) => { %>
+                        <p><span><%= row.category %></span><strong><%= row.merchants %></strong></p>
+                    <% }) %>
+                    <% if (!categoryRows.length) { %>
+                        <p><span>No category data</span><strong>0</strong></p>
+                    <% } %>
+                </div>
             </article>
         </section>
     </div>
@@ -51,20 +181,97 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     (() => {
-        const payload = <%- JSON.stringify(chartPayload) %>;
-        const canvas = document.getElementById('adminRevenueChart');
-        if (!canvas || typeof Chart === 'undefined') return;
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: payload.labels,
-                datasets: [
-                    { label: 'Bookings', data: payload.bookings, borderColor: '#20899c', backgroundColor: 'rgba(32,137,156,.12)', fill: true },
-                    { label: 'Revenue', data: payload.revenue, borderColor: '#4f6847', backgroundColor: 'rgba(79,104,71,.12)', fill: true }
-                ]
+        const chartPayload = <%- JSON.stringify(chartPayload) %>;
+        const exportPayload = <%- JSON.stringify(exportPayload) %>;
+        const palette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
+        const canvas = document.getElementById('adminAnalyticsChart');
+        const title = document.querySelector('[data-admin-chart-title]');
+        let mainChart;
+
+        const chartConfigs = {
+            revenue: {
+                title: 'Revenue trend',
+                type: 'line',
+                labels: chartPayload.labels,
+                datasets: [{ label: 'Revenue', data: chartPayload.revenue, borderColor: palette.green, backgroundColor: 'rgba(79,104,71,.14)', fill: true, tension: 0.35 }]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            bookings: {
+                title: 'Booking trend',
+                type: 'bar',
+                labels: chartPayload.labels,
+                datasets: [{ label: 'Bookings', data: chartPayload.bookings, backgroundColor: 'rgba(32,137,156,.34)', borderColor: palette.blue, borderWidth: 1 }]
+            },
+            merchants: {
+                title: 'Merchant revenue leaderboard',
+                type: 'bar',
+                labels: chartPayload.merchantLabels,
+                datasets: [{ label: 'Revenue', data: chartPayload.merchantRevenue, backgroundColor: 'rgba(79,104,71,.32)' }]
+            },
+            status: {
+                title: 'Booking status mix',
+                type: 'doughnut',
+                labels: chartPayload.statusLabels,
+                datasets: [{ data: chartPayload.statusValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }]
+            }
+        };
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
+        };
+
+        const renderMainChart = (mode) => {
+            if (!canvas || typeof Chart === 'undefined') return;
+            const config = chartConfigs[mode] || chartConfigs.revenue;
+            if (mainChart) mainChart.destroy();
+            if (title) title.textContent = config.title;
+            mainChart = new Chart(canvas, {
+                type: config.type,
+                data: { labels: config.labels, datasets: config.datasets },
+                options: config.type === 'doughnut'
+                    ? { responsive: true, maintainAspectRatio: false, plugins: commonOptions.plugins }
+                    : commonOptions
+            });
+        };
+
+        document.querySelectorAll('[data-admin-chart-mode]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('[data-admin-chart-mode]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+                renderMainChart(button.dataset.adminChartMode);
+            });
         });
+
+        const statusCanvas = document.getElementById('adminStatusChart');
+        if (statusCanvas && typeof Chart !== 'undefined') {
+            new Chart(statusCanvas, {
+                type: 'doughnut',
+                data: { labels: chartPayload.statusLabels, datasets: [{ data: chartPayload.statusValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        const toCsv = (rows) => {
+            if (!rows || !rows.length) return '';
+            const headers = Object.keys(rows[0]);
+            const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            return [headers.join(','), ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(','))].join('\n');
+        };
+
+        document.querySelector('[data-export-button]')?.addEventListener('click', () => {
+            const selected = document.querySelector('[data-export-select]')?.value || 'platformSummary';
+            const csv = toCsv(exportPayload[selected] || []);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `vaniday-admin-${selected}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+
+        renderMainChart('revenue');
     })();
 </script>
 
