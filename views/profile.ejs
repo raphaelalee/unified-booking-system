@@ -333,8 +333,7 @@
                     <% } else { %>
                         <div class="profile-booking-grid">
                             <% profileUpcomingBookings.forEach((booking) => { %>
-                                <article class="profile-booking-card" data-booking-card="<%= booking.id %>" data-booking="<%- bookingDataFor(booking) %>">
-                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                <article class="profile-booking-card profile-booking-card-no-thumb" data-booking-card="<%= booking.id %>" data-booking="<%- bookingDataFor(booking) %>">
                                     <div class="profile-booking-card-main">
                                         <div class="profile-booking-card-head">
                                             <div>
@@ -381,8 +380,7 @@
                     <% } else { %>
                         <div class="profile-booking-grid compact">
                             <% profilePastBookings.forEach((booking) => { %>
-                                <article class="profile-booking-card">
-                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                <article class="profile-booking-card profile-booking-card-no-thumb">
                                     <div class="profile-booking-card-main">
                                         <div class="profile-booking-card-head">
                                             <div>
@@ -416,8 +414,7 @@
                     <% } else { %>
                         <div class="profile-booking-grid compact">
                             <% profileCancelledBookings.forEach((booking) => { %>
-                                <article class="profile-booking-card is-cancelled">
-                                    <img class="profile-booking-thumb" src="<%= booking.service_image_url || profileImageFallback %>" alt="<%= booking.service_name %> thumbnail" loading="lazy" onerror="this.src='<%= profileImageFallback %>'">
+                                <article class="profile-booking-card profile-booking-card-no-thumb is-cancelled">
                                     <div class="profile-booking-card-main">
                                         <div class="profile-booking-card-head">
                                             <div>

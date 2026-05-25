@@ -6470,6 +6470,44 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     font-weight: 800;
 }
 
+.merchant-product-image-preview {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background-position: center;
+    background-size: cover;
+}
+
+.merchant-product-editor input[type="file"] {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-product-editor input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--sage-strong);
+    color: #fffdf7;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.form-hint {
+    color: var(--sage-readable);
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
 .merchant-product-copy-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }

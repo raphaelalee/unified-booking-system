@@ -9,6 +9,10 @@ const Review = require('../models/Review');
 const Loyalty = require('../models/Loyalty');
 const AuditLog = require('../models/AuditLog');
 const {
+    getProductImagePath,
+    deleteProductImageFile
+} = require('../utils/productUpload');
+const {
     getBookingCheckInUrl,
     getMerchantStorefrontSlug,
     getMerchantStorefrontUrl
@@ -212,12 +216,14 @@ function renderServiceForm(res, {
     });
 }
 
-function getProductForm(body = {}) {
+function getProductForm(body = {}, imageUrlOverride = null) {
     return {
         name: String(body.name || '').trim(),
         price: String(body.price || '').trim(),
         stockQuantity: String(body.stockQuantity || body.stock_quantity || '').trim(),
-        imageUrl: String(body.imageUrl || body.image_url || '').trim(),
+        imageUrl: imageUrlOverride !== null
+            ? String(imageUrlOverride || '').trim()
+            : String(body.imageUrl || body.image_url || body.currentImageUrl || '').trim(),
         description: String(body.description || '').trim(),
         ingredients: String(body.ingredients || '').trim(),
         howToUse: String(body.howToUse || body.how_to_use || '').trim()
@@ -353,10 +359,6 @@ function validateProductForm(form) {
 
     if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
         errors.push('Please enter a valid stock quantity.');
-    }
-
-    if (form.imageUrl && !/^https?:\/\/.+/i.test(form.imageUrl)) {
-        errors.push('Image URL must start with http:// or https://.');
     }
 
     return errors;
@@ -1942,12 +1944,15 @@ function showNewProduct(req, res) {
             return handled;
         }
 
+        const uploadError = req.session.merchantError;
+        req.session.merchantError = null;
+
         return res.render('merchant-product-form', {
             title: 'Add Product',
             merchant,
             product: null,
             form: getProductForm(),
-            errors: []
+            errors: uploadError ? [uploadError] : []
         });
     });
 }
@@ -1960,10 +1965,13 @@ function createProduct(req, res) {
             return handled;
         }
 
-        const form = getProductForm(req.body);
+        const uploadedImagePath = getProductImagePath(req.file);
+        const form = getProductForm(req.body, uploadedImagePath || '');
         const errors = validateProductForm(form);
 
         if (errors.length > 0) {
+            deleteProductImageFile(uploadedImagePath);
+            form.imageUrl = '';
             return res.status(400).render('merchant-product-form', {
                 title: 'Add Product',
                 merchant,
@@ -1976,6 +1984,7 @@ function createProduct(req, res) {
         return Product.createForMerchant(req.session.user.id, buildProductPayload(form), (createError, result) => {
             if (createError) {
                 console.error(createError);
+                deleteProductImageFile(uploadedImagePath);
                 return res.status(500).render('merchant-product-form', {
                     title: 'Add Product',
                     merchant,
@@ -1986,6 +1995,7 @@ function createProduct(req, res) {
             }
 
             if (!result || result.affectedRows === 0) {
+                deleteProductImageFile(uploadedImagePath);
                 return res.status(403).render('error', {
                     title: 'Merchant Not Assigned',
                     message: 'Your merchant account needs an admin-created salon before products can be listed.'
@@ -2023,6 +2033,13 @@ function createProduct(req, res) {
 }
 
 function showEditProduct(req, res) {
+    const productId = Number(req.params.productId);
+
+    if (!Number.isInteger(productId) || productId < 1) {
+        req.session.merchantError = 'Product could not be found.';
+        return res.redirect('/merchant/products');
+    }
+
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
 
@@ -2045,6 +2062,9 @@ function showEditProduct(req, res) {
                     message: 'This product does not belong to your merchant account.'
                 });
             }
+
+            const uploadError = req.session.merchantError;
+            req.session.merchantError = null;
 
             return res.render('merchant-product-form', {
                 title: 'Edit Product',
@@ -2059,13 +2079,21 @@ function showEditProduct(req, res) {
                     ingredients: product.ingredients || '',
                     howToUse: product.howToUse || ''
                 },
-                errors: []
+                errors: uploadError ? [uploadError] : []
             });
         });
     });
 }
 
 function updateProduct(req, res) {
+    const productId = Number(req.params.productId);
+
+    if (!Number.isInteger(productId) || productId < 1) {
+        deleteProductImageFile(getProductImagePath(req.file));
+        req.session.merchantError = 'Product could not be found.';
+        return res.redirect('/merchant/products');
+    }
+
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
 
@@ -2073,9 +2101,12 @@ function updateProduct(req, res) {
             return handled;
         }
 
+        const uploadedImagePath = getProductImagePath(req.file);
+
         return Product.findForMerchant(req.session.user.id, req.params.productId, (productError, product) => {
             if (productError) {
                 console.error(productError);
+                deleteProductImageFile(uploadedImagePath);
                 return res.status(500).render('error', {
                     title: 'Product Not Found',
                     message: 'Product data could not be loaded.'
@@ -2083,16 +2114,17 @@ function updateProduct(req, res) {
             }
 
             if (!product) {
-                return res.status(404).render('error', {
-                    title: 'Product Not Found',
-                    message: 'This product does not belong to your merchant account.'
-                });
+                deleteProductImageFile(uploadedImagePath);
+                req.session.merchantError = 'This product could not be found for your merchant account.';
+                return res.redirect('/merchant/products');
             }
 
-            const form = getProductForm(req.body);
+            const form = getProductForm(req.body, uploadedImagePath || product.imageUrl || '');
             const errors = validateProductForm(form);
 
             if (errors.length > 0) {
+                deleteProductImageFile(uploadedImagePath);
+                form.imageUrl = product.imageUrl || '';
                 return res.status(400).render('merchant-product-form', {
                     title: 'Edit Product',
                     merchant,
@@ -2105,6 +2137,8 @@ function updateProduct(req, res) {
             return Product.updateForMerchant(req.session.user.id, product.id, buildProductPayload(form), (updateError, result) => {
                 if (updateError) {
                     console.error(updateError);
+                    deleteProductImageFile(uploadedImagePath);
+                    form.imageUrl = product.imageUrl || '';
                     return res.status(500).render('merchant-product-form', {
                         title: 'Edit Product',
                         merchant,
@@ -2117,6 +2151,9 @@ function updateProduct(req, res) {
                 req.session.merchantSuccess = result.affectedRows > 0 ? 'Product updated successfully.' : null;
                 req.session.merchantError = result.affectedRows > 0 ? null : 'Product could not be updated.';
                 if (result.affectedRows > 0) {
+                    if (uploadedImagePath && uploadedImagePath !== product.imageUrl) {
+                        deleteProductImageFile(product.imageUrl);
+                    }
                     notifyMerchant(req.session.user.id, {
                         actorUserId: req.session.user.id,
                         type: 'product_update',
@@ -2125,6 +2162,8 @@ function updateProduct(req, res) {
                         linkUrl: '/merchant/products',
                         dedupeKey: `merchant-product-updated-${product.id}-${Date.now()}`
                     });
+                } else {
+                    deleteProductImageFile(uploadedImagePath);
                 }
                 return res.redirect('/merchant/products');
             });

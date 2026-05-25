@@ -108,7 +108,7 @@
         <div class="products-marketplace-grid" data-products-grid>
             <% productList.forEach((product, index) => { %>
                 <%
-                    const productImageClass = productImages[product.id] || 'product-skin';
+                    const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
                     const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
                     const category = getProductCategory(product);
                     const merchantName = product.salonName || (product.category && !categoryList.includes(product.category) ? product.category : 'Vaniday Beauty Studio');

@@ -56,8 +56,12 @@
         </div>
         <div class="merchant-product-list">
             <% products.forEach((product) => { %>
+                <%
+                    const productImageClass = product.imageUrl ? '' : 'product-skin';
+                    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+                %>
                 <article class="merchant-product-row compact">
-                    <div class="merchant-product-thumb product-skin" style="<%= product.imageUrl ? `background-image: url('${product.imageUrl}')` : '' %>"></div>
+                    <div class="merchant-product-thumb <%= productImageClass %>" style="<%= productImageStyle %>"></div>
                     <div class="merchant-product-main">
                         <h2><%= product.name %></h2>
                         <p class="muted"><%= product.salonName %></p>

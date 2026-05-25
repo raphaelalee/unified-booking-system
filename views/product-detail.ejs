@@ -9,7 +9,7 @@
         'cream-cleanser': 'product-cleanser',
         'room-mist': 'product-fragrance'
     };
-    const productImageClass = productImages[product.id] || 'product-skin';
+    const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
     const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
     const productReviews = Array.isArray(reviews) ? reviews : [];
     const averageRating = Number.isFinite(reviewSummary?.averageRating) ? reviewSummary.averageRating : null;

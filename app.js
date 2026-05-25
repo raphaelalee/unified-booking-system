@@ -19,6 +19,7 @@ const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
+const { uploadProductImage } = require('./utils/productUpload');
 const { startSmsReminderScheduler } = require('./services/smsAutomation');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
@@ -185,6 +186,30 @@ function handleSupportScreenshotUpload(req, res, next) {
     });
 }
 
+function handleProductImageUpload(req, res, next) {
+    uploadProductImage(req, res, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        req.session.merchantError = error.message || 'Product photo could not be uploaded.';
+        const editMatch = req.originalUrl.match(/^\/merchant\/products\/(\d+)/);
+        res.redirect(editMatch ? `/merchant/products/${editMatch[1]}/edit` : '/merchant/products/new');
+    });
+}
+
+function redirectMerchantProductDetail(req, res) {
+    const productId = Number(req.params.productId);
+
+    if (!Number.isInteger(productId) || productId < 1) {
+        req.session.merchantError = 'Product could not be found.';
+        return res.redirect('/merchant/products');
+    }
+
+    return res.redirect(`/merchant/products/${productId}/edit`);
+}
+
 app.get('/', allowGuestOrCustomer, merchantController.showHome);
 app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
@@ -300,9 +325,10 @@ app.post('/merchant/services/:serviceId', requireRole('merchant'), merchantDashb
 app.post('/merchant/services/:serviceId/delete', requireRole('merchant'), merchantDashboardController.deleteService);
 app.get('/merchant/products', requireRole('merchant'), merchantDashboardController.listProducts);
 app.get('/merchant/products/new', requireRole('merchant'), merchantDashboardController.showNewProduct);
-app.post('/merchant/products', requireRole('merchant'), merchantDashboardController.createProduct);
+app.post('/merchant/products', requireRole('merchant'), handleProductImageUpload, merchantDashboardController.createProduct);
 app.get('/merchant/products/:productId/edit', requireRole('merchant'), merchantDashboardController.showEditProduct);
-app.post('/merchant/products/:productId', requireRole('merchant'), merchantDashboardController.updateProduct);
+app.get('/merchant/products/:productId', requireRole('merchant'), redirectMerchantProductDetail);
+app.post('/merchant/products/:productId', requireRole('merchant'), handleProductImageUpload, merchantDashboardController.updateProduct);
 app.post('/merchant/products/:productId/restock', requireRole('merchant'), merchantDashboardController.restockProduct);
 app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
 app.get('/merchant/promotions', requireRole('merchant'), merchantDashboardController.listPromotions);

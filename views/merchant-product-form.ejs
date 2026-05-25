@@ -1,6 +1,11 @@
 <%- include('partials/header', { title }) %>
 
 <section class="section compact merchant-products-page">
+    <%
+        const safeCsrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
+        const productFormActionBase = product ? `/merchant/products/${product.id}` : '/merchant/products';
+        const productFormAction = `${productFormActionBase}?_csrf=${encodeURIComponent(safeCsrfToken)}`;
+    %>
     <header class="merchant-products-hero">
         <div class="merchant-products-hero-copy">
             <p class="eyebrow">Products</p>
@@ -12,7 +17,8 @@
         </div>
     </header>
 
-    <form class="merchant-product-editor" action="<%= product ? `/merchant/products/${product.id}` : '/merchant/products' %>" method="POST">
+    <form class="merchant-product-editor" action="<%= productFormAction %>" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<%= safeCsrfToken %>">
         <% if (errors.length > 0) { %>
             <div class="notice error">
                 <% errors.forEach((error) => { %>
@@ -66,8 +72,13 @@
                 </label>
 
                 <label>
-                    Image URL
-                    <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/product.jpg">
+                    Product photo
+                    <% if (form.imageUrl) { %>
+                        <span class="merchant-product-image-preview" style="background-image: url('<%= form.imageUrl %>')" aria-label="Current product photo"></span>
+                    <% } %>
+                    <input type="hidden" name="currentImageUrl" value="<%= form.imageUrl %>">
+                    <input type="file" name="productImage" accept="image/*">
+                    <span class="form-hint"><%= product ? 'Choose a new photo to replace the current one.' : 'Upload a JPG, PNG, or phone photo up to 8 MB.' %></span>
                 </label>
             </aside>
         </div>
