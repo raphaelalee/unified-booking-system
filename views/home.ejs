@@ -1,23 +1,38 @@
 <%- include('partials/header', { title }) %>
 
-<section class="hero">
-    <div class="hero-content">
-        <p class="eyebrow">Beauty bookings and rewards</p>
-        <h1>Vaniday</h1>
-        <p class="hero-text">
-            A refined place to discover beauty, spa, grooming, products, rewards, and appointment times.
-        </p>
-        <div class="hero-actions">
-            <a class="button primary" href="/services">Explore services</a>
-            <a class="button secondary" href="/merchants">View merchants</a>
-        </div>
-    </div>
-    <div class="hero-visual" aria-label="Luxury beauty product editorial"></div>
-</section>
-
 <%
     const serviceSearch = typeof search !== 'undefined' ? search : '';
-    const serviceMerchants = typeof merchants !== 'undefined' ? merchants : [];
+    const serviceMerchants = Array.isArray(merchants) && merchants.length > 0
+        ? merchants
+        : [
+            {
+                id: 1,
+                name: 'Vaniday Beauty Studio',
+                category: 'Beauty & Wellness',
+                location: 'Orchard',
+                rating: '4.8',
+                promotion: '20% off first booking',
+                description: 'Facials, hair styling, and beauty treatments with simple digital booking.'
+            },
+            {
+                id: 2,
+                name: 'FreshGlow Spa',
+                category: 'Spa',
+                location: 'Tampines',
+                rating: '4.6',
+                promotion: 'Free add-on massage above $80',
+                description: 'Relaxing spa and massage sessions with clear appointment slots.'
+            },
+            {
+                id: 3,
+                name: 'Urban Groom Barbers',
+                category: 'Grooming',
+                location: 'Woodlands',
+                rating: '4.7',
+                promotion: '$5 student discount',
+                description: 'Fast grooming services with QR booking and digital receipts.'
+            }
+        ];
     const stats = typeof portalStats !== 'undefined' ? portalStats : {
         merchantCount: serviceMerchants.length,
         serviceCount: 0,
@@ -25,7 +40,24 @@
         slotCount: 0,
         startingPrice: 0
     };
-    const allServices = typeof serviceCatalog !== 'undefined' ? serviceCatalog : [];
+    const allServices = Array.isArray(serviceCatalog) && serviceCatalog.length > 0
+        ? serviceCatalog
+        : serviceMerchants.flatMap((merchant) => {
+            const fallbackServices = Array.isArray(merchant.services) && merchant.services.length > 0
+                ? merchant.services
+                : [{ id: `${merchant.id}-featured`, name: merchant.category || 'Beauty Service', duration: '45 mins', price: 35 }];
+
+            return fallbackServices.map((service) => ({
+                ...service,
+                merchantId: merchant.id,
+                merchantName: merchant.name,
+                merchantLocation: merchant.location,
+                merchantCategory: merchant.category,
+                merchantRating: merchant.rating,
+                merchantPromotion: merchant.promotion,
+                serviceBookingPath: `/merchants/${merchant.id}`
+            }));
+        });
     const filteredServices = serviceSearch
         ? allServices.filter((service) => {
             const text = [
@@ -35,121 +67,347 @@
                 service.merchantName,
                 service.merchantLocation,
                 service.merchantCategory,
-                service.merchantPromotion,
-                service.merchantPosSystem,
-                service.merchantBookingSystem,
-                service.merchantIntegrationStatus
+                service.merchantPromotion
             ].join(' ').toLowerCase();
 
             return text.includes(serviceSearch.toLowerCase());
         })
         : allServices;
+    const formatPrice = (value) => `$${Number(value || 0).toFixed(0)}`;
+    const getBookingHref = (service) => service.serviceBookingPath || `/merchants/${service.merchantId || ''}`;
+    const popularServices = [
+        {
+            title: 'Facial Treatment',
+            category: 'Facial',
+            copy: 'Hydration, cleansing, glow care, and skin recovery sessions.',
+            imageClass: 'home-service-facial',
+            href: '/services?search=facial'
+        },
+        {
+            title: 'Hair Salon',
+            category: 'Hair',
+            copy: 'Cuts, colouring, blowouts, scalp care, and styling appointments.',
+            imageClass: 'home-service-hair',
+            href: '/services?search=hair'
+        },
+        {
+            title: 'Spa & Massage',
+            category: 'Spa',
+            copy: 'Body care, aromatherapy massage, scrubs, wraps, and wellness time.',
+            imageClass: 'home-service-spa',
+            href: '/services?search=spa'
+        },
+        {
+            title: 'Nails',
+            category: 'Nails',
+            copy: 'Manicures, pedicures, gel polish, and hand care treatments.',
+            imageClass: 'home-service-nails',
+            href: '/services?search=nails'
+        },
+        {
+            title: 'Grooming',
+            category: 'Grooming',
+            copy: 'Haircuts, shaves, beard trims, and quick grooming sessions.',
+            imageClass: 'home-service-grooming',
+            href: '/services?search=grooming'
+        }
+    ];
+    const benefitCards = [
+        ['All merchants in one platform', 'Compare salons, spas, grooming, and wellness merchants without switching apps.'],
+        ['Easy booking without calling', 'Choose services, dates, and times online instead of waiting for replies.'],
+        ['Rewards, cashback, and promotions', 'Use offers, collect points, and keep your beauty spending visible.'],
+        ['QR check-in and digital receipts', 'Receive confirmation, QR access, and receipts after booking or checkout.']
+    ];
+    const promotionCards = serviceMerchants
+        .filter((merchant) => merchant.promotion)
+        .slice(0, 3)
+        .map((merchant) => ({
+            title: merchant.promotion,
+            merchantName: merchant.name,
+            discount: merchant.promotion.match(/\d+%|\$\d+/)?.[0] || 'Special offer',
+            expiry: 'Limited availability',
+            href: `/merchants/${merchant.id}?from=home-promo`
+        }));
+    const safePromotions = promotionCards.length > 0
+        ? promotionCards
+        : [
+            { title: 'First Trial Glow', merchantName: 'Vaniday partners', discount: '20%', expiry: 'This month', href: '/promotions' },
+            { title: 'Happy Hour Wellness', merchantName: 'Selected spas', discount: '15%', expiry: 'Weekdays', href: '/promotions' },
+            { title: 'Beauty Rewards Boost', merchantName: 'Vaniday', discount: '2x points', expiry: 'Ongoing', href: '/reward-shop' }
+        ];
+    const recommendedMerchants = serviceMerchants.slice(0, 6);
+    const featuredServices = filteredServices.slice(0, 5);
+    const carouselCards = [
+        ...recommendedMerchants.slice(0, 3).map((merchant, index) => ({
+            type: 'Merchant',
+            title: merchant.name,
+            copy: merchant.description || `${merchant.category || 'Beauty'} merchant in ${merchant.location || 'Singapore'}.`,
+            meta: `${merchant.location || 'Singapore'} - Rating ${merchant.rating || 'New'}`,
+            href: `/merchants/${merchant.id}?from=home-carousel`,
+            cta: 'View',
+            imageClass: `home-merchant-${(index % 3) + 1}`
+        })),
+        ...featuredServices.slice(0, 2).map((service, index) => ({
+            type: 'Service',
+            title: service.name,
+            copy: `${service.merchantName || 'Vaniday merchant'} - ${service.duration || 'Flexible timing'}`,
+            meta: `From ${formatPrice(service.price)}`,
+            href: getBookingHref(service),
+            cta: 'Book',
+            imageClass: index === 0 ? 'home-service-facial' : 'home-service-spa'
+        }))
+    ].slice(0, 5);
 %>
 
-<section class="page-title services-unified-hero">
-    <div>
-        <p class="eyebrow">Services & Booking Portal</p>
-        <h1>All merchants, services, prices and booking systems in one place.</h1>
-        <p>
-            Compare salon, spa, nail, facial and grooming services from connected merchants.
-            Check availability, promotions and POS booking integrations before booking.
+<section class="hero vaniday-home-hero">
+    <div class="hero-content vaniday-home-hero-copy">
+        <p class="eyebrow">Beauty, wellness, and rewards</p>
+        <h1>Book your next self-care appointment with Vaniday.</h1>
+        <p class="hero-text">
+            Discover trusted salons, spas, grooming studios, promotions, products, rewards, QR check-in, and digital receipts in one refined booking platform.
         </p>
-        <form class="portal-search services-search" action="/services" method="GET">
-            <input
-                type="search"
-                name="search"
-                value="<%= serviceSearch %>"
-                placeholder="Search services, merchants, location, promotion, POS, or booking system"
-            >
-            <button class="button primary" type="submit">Search</button>
-        </form>
+        <div class="hero-actions">
+            <a class="button primary" href="/services">Explore Services</a>
+            <a class="button secondary" href="/merchants">View Merchants</a>
+            <a class="button secondary" href="/services#service-catalog">Book Now</a>
+        </div>
+        <div class="home-hero-stats" aria-label="Vaniday platform summary">
+            <span><strong><%= stats.merchantCount %></strong> merchants</span>
+            <span><strong><%= stats.serviceCount || filteredServices.length %></strong> services</span>
+            <span><strong><%= stats.slotCount %></strong> open slots</span>
+        </div>
     </div>
-
-    <aside class="portal-summary-panel services-summary-panel" aria-label="Services and merchant summary">
-        <div class="portal-stat">
-            <span>Merchants</span>
-            <strong><%= stats.merchantCount %></strong>
+    <div class="hero-visual vaniday-home-visual" aria-label="Spa treatment room and beauty products">
+        <div class="home-visual-panel">
+            <span>From <strong>$<%= stats.startingPrice || 0 %></strong></span>
+            <span><%= stats.promotionCount || safePromotions.length %> live offers</span>
         </div>
-        <div class="portal-stat">
-            <span>Services</span>
-            <strong><%= filteredServices.length %></strong>
-        </div>
-        <div class="portal-stat">
-            <span>Open slots</span>
-            <strong><%= stats.slotCount %></strong>
-        </div>
-        <div class="portal-stat">
-            <span>From</span>
-            <strong>$<%= stats.startingPrice %></strong>
-        </div>
-    </aside>
+    </div>
 </section>
 
 <% if (success) { %>
-    <section class="notice success">
+    <section class="notice success home-notice">
         <%= success %>
     </section>
 <% } %>
 
-<section class="section compact">
-    <div class="content-grid">
-        <article class="content-card image-card service-hair">
-            <span>Hair</span>
-            <h2>Cut, colour and styling</h2>
-            <p>Book haircuts, blowouts, styling, colour refreshes, and treatment sessions.</p>
-        </article>
-        <article class="content-card image-card service-spa">
-            <span>Spa</span>
-            <h2>Massage and body care</h2>
-            <p>Relax with aromatherapy massage, body scrubs, and wellness treatments.</p>
-        </article>
-        <article class="content-card image-card service-nails">
-            <span>Nails</span>
-            <h2>Manicure and pedicure</h2>
-            <p>Choose express manicures, classic polish, nail care, and hand treatments.</p>
-        </article>
-        <article class="content-card image-card service-facial">
-            <span>Facial</span>
-            <h2>Skin and glow treatments</h2>
-            <p>Find facials designed for hydration, cleansing, brightening, and recovery.</p>
-        </article>
+<section class="home-search-band" aria-label="Search Vaniday">
+    <div>
+        <p class="eyebrow">Find your appointment</p>
+        <h2>Search services, merchants, location, or price.</h2>
+    </div>
+    <form class="home-search-form" action="/services" method="GET">
+        <label>
+            <span>Service or merchant</span>
+            <input type="search" name="search" value="<%= serviceSearch %>" placeholder="Facial, spa, Orchard...">
+        </label>
+        <label>
+            <span>Category</span>
+            <select name="category">
+                <option value="">Any category</option>
+                <option value="facial">Facial</option>
+                <option value="hair">Hair</option>
+                <option value="spa">Spa</option>
+                <option value="nails">Nails</option>
+                <option value="grooming">Grooming</option>
+            </select>
+        </label>
+        <label>
+            <span>Max price</span>
+            <select name="maxPrice">
+                <option value="">Any price</option>
+                <option value="50">Under $50</option>
+                <option value="80">Under $80</option>
+                <option value="120">Under $120</option>
+            </select>
+        </label>
+        <button class="button primary" type="submit">Search</button>
+    </form>
+</section>
+
+<section class="home-section home-featured-section" aria-label="Featured carousel">
+    <div class="home-section-heading">
+        <div>
+            <p class="eyebrow">Featured now</p>
+            <h2>Recommended picks for your next visit.</h2>
+        </div>
+        <div class="home-carousel-controls">
+            <button type="button" data-home-carousel-prev aria-label="Previous featured item">&lsaquo;</button>
+            <button type="button" data-home-carousel-next aria-label="Next featured item">&rsaquo;</button>
+        </div>
     </div>
 
-    <div class="section-cta">
-        <div>
-            <h2>One unified booking experience</h2>
-            <p class="muted">Choose by service, compare connected merchants, or open the merchant QR booking flow.</p>
+    <div class="home-carousel" data-home-carousel>
+        <div class="home-carousel-track" data-home-carousel-track>
+            <% carouselCards.forEach((card) => { %>
+                <article class="home-carousel-card">
+                    <div class="home-card-image <%= card.imageClass %>" aria-hidden="true"></div>
+                    <div class="home-card-body">
+                        <span class="home-card-kicker"><%= card.type %></span>
+                        <h3><%= card.title %></h3>
+                        <p><%= card.copy %></p>
+                        <div class="home-card-footer">
+                            <strong><%= card.meta %></strong>
+                            <a class="button secondary" href="<%= card.href %>"><%= card.cta %></a>
+                        </div>
+                    </div>
+                </article>
+            <% }) %>
         </div>
-        <a class="button secondary" href="/merchants">View merchant directory</a>
+        <div class="home-carousel-dots" data-home-carousel-dots aria-label="Featured carousel position">
+            <% carouselCards.forEach((card, index) => { %>
+                <button type="button" class="<%= index === 0 ? 'is-active' : '' %>" data-home-carousel-dot="<%= index %>" aria-label="Go to featured item <%= index + 1 %>"></button>
+            <% }) %>
+        </div>
     </div>
 </section>
 
-<section class="section">
-    <div class="editorial-section-heading">
+<section class="home-section">
+    <div class="home-section-heading">
         <div>
-            <p class="eyebrow">Featured merchants</p>
-            <h2>Selected Vaniday partners</h2>
+            <p class="eyebrow">Popular services</p>
+            <h2>Browse by care type.</h2>
         </div>
-        <a class="text-link" href="/merchants">View directory</a>
+        <a class="text-link" href="/services">View all services</a>
     </div>
 
-    <div class="merchant-grid home-editorial-grid home-partner-grid">
-        <% merchants.forEach((merchant, index) => { %>
-            <article class="merchant-card">
-                <div class="merchant-card-image merchant-thumb-<%= merchant.id %>" aria-hidden="true"></div>
-                <div>
-                    <p class="tag"><%= merchant.category %></p>
-                    <h3><%= merchant.name %></h3>
-                    <p class="muted"><%= merchant.location %> &middot; Rating <%= merchant.rating %></p>
-                    <p><%= merchant.description %></p>
-                </div>
-                <div class="card-footer">
-                    <span class="promotion"><%= merchant.promotion %></span>
-                    <a class="text-link" href="/merchants/<%= merchant.id %>?from=home">View merchant</a>
+    <div class="home-service-grid">
+        <% popularServices.forEach((service) => { %>
+            <article class="home-service-card">
+                <div class="home-card-image <%= service.imageClass %>" aria-hidden="true"></div>
+                <div class="home-card-body">
+                    <span class="home-card-kicker"><%= service.category %></span>
+                    <h3><%= service.title %></h3>
+                    <p><%= service.copy %></p>
+                    <a class="button secondary" href="<%= service.href %>">Explore</a>
                 </div>
             </article>
         <% }) %>
     </div>
 </section>
+
+<section class="home-section home-benefits-section">
+    <div class="home-section-heading">
+        <div>
+            <p class="eyebrow">Why choose Vaniday</p>
+            <h2>Everything around the appointment, handled neatly.</h2>
+        </div>
+    </div>
+    <div class="home-benefit-grid">
+        <% benefitCards.forEach((benefit, index) => { %>
+            <article class="home-benefit-card">
+                <span><%= index + 1 %></span>
+                <h3><%= benefit[0] %></h3>
+                <p><%= benefit[1] %></p>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<section class="home-section">
+    <div class="home-section-heading">
+        <div>
+            <p class="eyebrow">Promotions</p>
+            <h2>Offers worth checking before you book.</h2>
+        </div>
+        <a class="text-link" href="/promotions">All promotions</a>
+    </div>
+
+    <div class="home-promo-grid">
+        <% safePromotions.forEach((promo) => { %>
+            <article class="home-promo-card">
+                <span class="home-card-kicker"><%= promo.merchantName %></span>
+                <h3><%= promo.title %></h3>
+                <strong><%= promo.discount %></strong>
+                <p><%= promo.expiry %></p>
+                <a class="button primary" href="<%= promo.href %>">Use Promo</a>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<section class="home-section home-how-section">
+    <div class="home-section-heading">
+        <div>
+            <p class="eyebrow">How it works</p>
+            <h2>Book in three simple steps.</h2>
+        </div>
+    </div>
+    <div class="home-step-grid">
+        <article>
+            <span>1</span>
+            <h3>Search services or merchants</h3>
+            <p>Compare care types, location, promotions, ratings, and starting prices.</p>
+        </article>
+        <article>
+            <span>2</span>
+            <h3>Choose date and time</h3>
+            <p>Pick an available appointment slot from the service booking page.</p>
+        </article>
+        <article>
+            <span>3</span>
+            <h3>Book and receive confirmation</h3>
+            <p>Get your booking confirmation, QR receipt, and appointment details.</p>
+        </article>
+    </div>
+</section>
+
+<section class="home-section">
+    <div class="home-section-heading">
+        <div>
+            <p class="eyebrow">Recommended merchants</p>
+            <h2>Trusted places to start with.</h2>
+        </div>
+        <a class="text-link" href="/merchants">View merchant directory</a>
+    </div>
+
+    <div class="home-merchant-grid">
+        <% recommendedMerchants.forEach((merchant, index) => { %>
+            <article class="home-merchant-card">
+                <div class="home-card-image home-merchant-<%= (index % 3) + 1 %>" aria-hidden="true"></div>
+                <div class="home-card-body">
+                    <span class="home-card-kicker"><%= merchant.category || 'Beauty & Wellness' %></span>
+                    <h3><%= merchant.name %></h3>
+                    <p><%= merchant.location || 'Singapore' %> - Rating <%= merchant.rating || 'New' %></p>
+                    <p><%= merchant.description || 'Book beauty and wellness services through Vaniday.' %></p>
+                    <a class="button secondary" href="/merchants/<%= merchant.id %>?from=home-recommended">View Merchant</a>
+                </div>
+            </article>
+        <% }) %>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const carousel = document.querySelector('[data-home-carousel]');
+        const track = document.querySelector('[data-home-carousel-track]');
+        const dots = Array.from(document.querySelectorAll('[data-home-carousel-dot]'));
+        const previous = document.querySelector('[data-home-carousel-prev]');
+        const next = document.querySelector('[data-home-carousel-next]');
+
+        if (!carousel || !track || dots.length === 0) {
+            return;
+        }
+
+        let activeIndex = 0;
+
+        const setActive = (index) => {
+            activeIndex = (index + dots.length) % dots.length;
+            const firstCard = track.querySelector('.home-carousel-card');
+            const gap = 16;
+            const cardWidth = firstCard ? firstCard.getBoundingClientRect().width + gap : 0;
+            track.scrollTo({ left: cardWidth * activeIndex, behavior: 'smooth' });
+            dots.forEach((dot, dotIndex) => {
+                dot.classList.toggle('is-active', dotIndex === activeIndex);
+            });
+        };
+
+        previous?.addEventListener('click', () => setActive(activeIndex - 1));
+        next?.addEventListener('click', () => setActive(activeIndex + 1));
+        dots.forEach((dot, index) => {
+            dot.addEventListener('click', () => setActive(index));
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

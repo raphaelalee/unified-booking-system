@@ -1,7 +1,42 @@
         </div>
     </main>
     <footer class="site-footer">
-        <p>&copy; 2026 Vaniday. Beauty, wellness, rewards, and refined bookings.</p>
+        <div class="site-footer-grid">
+            <section class="site-footer-brand" aria-label="Vaniday footer">
+                <a class="site-footer-logo" href="/">
+                    <span>V</span>
+                    <strong>Vaniday</strong>
+                </a>
+                <p>Beauty, wellness, rewards, and refined bookings in one customer platform.</p>
+            </section>
+
+            <section>
+                <h2>Explore</h2>
+                <a href="/services">Services</a>
+                <a href="/merchants">Merchants</a>
+                <a href="/products">Products</a>
+                <a href="/promotions">Promotions</a>
+            </section>
+
+            <section>
+                <h2>Support</h2>
+                <a href="/help-center">Help Center</a>
+                <a href="/contact">Contact</a>
+                <a href="/about">About Vaniday</a>
+                <a href="/legal">Legal</a>
+            </section>
+
+            <section>
+                <h2>Contact</h2>
+                <p>Singapore beauty and wellness booking support.</p>
+                <p>support@vaniday.sg</p>
+                <p>Mon-Fri, 9:00 AM-6:00 PM</p>
+            </section>
+        </div>
+        <div class="site-footer-bottom">
+            <p>&copy; 2026 Vaniday. All rights reserved.</p>
+            <p>QR check-in &middot; Digital receipts &middot; Rewards</p>
+        </div>
     </footer>
     <% if (typeof showChatbot !== 'undefined' && showChatbot) { %>
         <%- include('chatbot') %>
