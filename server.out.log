@@ -1,8 +1,0 @@
-
-> start
-> node app.js
-
-◇ injected env (41) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
-◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-Server is running on http://localhost:3000
