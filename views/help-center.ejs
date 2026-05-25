@@ -316,16 +316,45 @@
         const assistant = document.querySelector('[data-support-assistant]');
         const supportFormPanel = document.querySelector('[data-support-form-panel]');
         const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const debounce = (callback, delay = 240) => {
+            let timer = null;
+
+            return (...args) => {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(() => callback(...args), delay);
+            };
+        };
 
         const applySearch = () => {
             const query = (searchInput?.value || '').trim().toLowerCase();
+            let visibleCount = 0;
+
             helpCards.forEach((card) => {
                 const text = `${card.textContent} ${card.dataset.helpKeywords || ''}`.toLowerCase();
-                card.hidden = Boolean(query) && !text.includes(query);
+                const isVisible = !query || text.includes(query);
+                card.hidden = !isVisible;
+
+                if (isVisible) {
+                    visibleCount += 1;
+                }
             });
+
+            let empty = document.querySelector('[data-help-empty]');
+
+            if (!empty) {
+                empty = document.createElement('div');
+                empty.className = 'live-search-empty';
+                empty.dataset.helpEmpty = 'true';
+                empty.textContent = 'No results found.';
+                document.querySelector('.support-category-grid')?.after(empty);
+            }
+
+            if (empty) {
+                empty.hidden = visibleCount > 0;
+            }
         };
 
-        searchInput?.addEventListener('input', applySearch);
+        searchInput?.addEventListener('input', debounce(applySearch));
         document.querySelector('[data-help-search-button]')?.addEventListener('click', applySearch);
 
         if (toast) {

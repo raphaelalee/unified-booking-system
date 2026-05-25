@@ -29,7 +29,21 @@ const {
 
 function isValidBookingDate(value) {
     const state = Booking.getBookingDateState(value);
-    return state.valid && state.timing !== 'past';
+    return state.valid && state.timing !== 'past' && state.timing !== 'too_future';
+}
+
+function getBookingDateErrorMessage(value) {
+    const state = Booking.getBookingDateState(value);
+
+    if (!state.valid || state.timing === 'past') {
+        return 'Please choose today or a future booking date.';
+    }
+
+    if (state.timing === 'too_future') {
+        return 'Please choose a booking date within 2 months.';
+    }
+
+    return '';
 }
 
 function normalizeBookingTime(value) {
@@ -317,8 +331,10 @@ function createBooking(req, res) {
         return res.redirect('/services');
     }
 
-    if (!isValidBookingDate(bookingDate)) {
-        req.session.profileError = 'Please choose today or a future booking date.';
+    const dateErrorMessage = getBookingDateErrorMessage(bookingDate);
+
+    if (dateErrorMessage) {
+        req.session.profileError = dateErrorMessage;
         return res.redirect(req.get('Referrer') || '/services');
     }
 
@@ -884,10 +900,12 @@ function rescheduleBooking(req, res) {
         });
     }
 
-    if (!isValidBookingDate(bookingDate)) {
+    const dateErrorMessage = getBookingDateErrorMessage(bookingDate);
+
+    if (dateErrorMessage) {
         return respondProfileAction(req, res, {
             success: false,
-            message: 'Please choose today or a future booking date.'
+            message: dateErrorMessage
         });
     }
 
@@ -1200,10 +1218,12 @@ function getRescheduleSuggestions(req, res) {
     if (requestedDate) {
         const dateState = Booking.getBookingDateState(requestedDate);
 
-        if (!dateState.valid || dateState.timing === 'past') {
+        if (!dateState.valid || dateState.timing === 'past' || dateState.timing === 'too_future') {
             return res.status(400).json({
                 success: false,
-                message: 'Please choose today or a future booking date.',
+                message: dateState.timing === 'too_future'
+                    ? 'Please choose a booking date within 2 months.'
+                    : 'Please choose today or a future booking date.',
                 slots: []
             });
         }

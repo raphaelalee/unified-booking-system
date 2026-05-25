@@ -1,5 +1,6 @@
 (function () {
-    const DATE_CARD_COUNT = 10;
+    const DATE_CARD_COUNT = 14;
+    const DATE_NAV_STEP_DAYS = 7;
 
     function parseLocalDate(value) {
         const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -17,6 +18,63 @@
             String(date.getMonth() + 1).padStart(2, '0'),
             String(date.getDate()).padStart(2, '0')
         ].join('-');
+    }
+
+    function addDays(date, days) {
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + days);
+        return nextDate;
+    }
+
+    function addMonths(date, months) {
+        const nextDate = new Date(date);
+        const originalDay = nextDate.getDate();
+
+        nextDate.setDate(1);
+        nextDate.setMonth(nextDate.getMonth() + months);
+        nextDate.setDate(Math.min(originalDay, new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()));
+
+        return nextDate;
+    }
+
+    function clampDate(date, minDate, maxDate) {
+        if (date < minDate) {
+            return new Date(minDate);
+        }
+
+        if (date > maxDate) {
+            return new Date(maxDate);
+        }
+
+        return new Date(date);
+    }
+
+    function getDateBounds(dateInput) {
+        const minDate = parseLocalDate(dateInput?.min) || new Date();
+        const parsedMaxDate = parseLocalDate(dateInput?.max);
+        const fallbackMaxDate = addMonths(minDate, 2);
+        const maxDate = parsedMaxDate && parsedMaxDate > minDate ? parsedMaxDate : fallbackMaxDate;
+
+        return {
+            minDate,
+            maxDate
+        };
+    }
+
+    function getVisibleDates(windowStart, maxDate) {
+        const visibleDates = [];
+
+        for (let index = 0; index < DATE_CARD_COUNT; index += 1) {
+            const date = addDays(windowStart, index);
+
+            if (date > maxDate) {
+                break;
+            }
+
+            visibleDates.push(date);
+        }
+
+        return visibleDates;
     }
 
     function formatDisplayDate(value) {
@@ -148,6 +206,17 @@
         updateSummary(form);
     }
 
+    function setBookingDateValue(form, dateKey) {
+        const dateInput = form.querySelector('input[name="bookingDate"]');
+
+        if (!dateInput) {
+            return;
+        }
+
+        dateInput.value = dateKey;
+        dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     function syncTimePills(form) {
         const timeSelect = form.querySelector('.js-time-select');
         const selectedTime = timeSelect?.value || '';
@@ -174,7 +243,7 @@
 
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = availableSlots.length ? 'Select a time' : 'No available slots';
+        placeholder.textContent = availableSlots.length ? 'Select a time' : 'No available slots for this date. Please choose another date.';
         timeSelect.appendChild(placeholder);
 
         availableSlots.forEach((slot) => {
@@ -195,7 +264,7 @@
                 empty.type = 'button';
                 empty.className = 'time-slot-pill is-disabled';
                 empty.disabled = true;
-                empty.textContent = 'No times available';
+                empty.textContent = 'No available slots for this date. Please choose another date.';
                 timeList.appendChild(empty);
             }
 
@@ -234,6 +303,8 @@
 
         const serviceId = serviceSelect.value;
         const bookingDate = dateInput.value;
+        const selectedDate = parseLocalDate(bookingDate);
+        const { minDate, maxDate } = getDateBounds(dateInput);
 
         if (!serviceId) {
             setTimeSelectState(form, 'Select a service first');
@@ -242,6 +313,18 @@
 
         if (!bookingDate) {
             setTimeSelectState(form, 'Select a date first');
+            return;
+        }
+
+        if (!selectedDate || selectedDate < minDate) {
+            setTimeSelectState(form, 'Choose today or a future date');
+            updateSummary(form);
+            return;
+        }
+
+        if (selectedDate > maxDate) {
+            setTimeSelectState(form, 'Choose a date within 2 months');
+            updateSummary(form);
             return;
         }
 
@@ -275,6 +358,43 @@
             });
     }
 
+    function getDateControls(form, dateList) {
+        const card = dateList.closest('.booking-picker-card') || dateList.parentElement;
+        let controls = card.querySelector('.js-date-controls');
+
+        if (!controls) {
+            controls = document.createElement('div');
+            controls.className = 'booking-date-controls js-date-controls';
+            controls.innerHTML = `
+                <span class="booking-date-range js-date-range" aria-live="polite"></span>
+                <div class="booking-date-nav">
+                    <button class="button secondary compact js-date-prev" type="button">Previous Week</button>
+                    <button class="button secondary compact js-date-next" type="button">Next Week</button>
+                </div>
+            `;
+            card.insertBefore(controls, dateList);
+        }
+
+        if (controls.dataset.ready !== 'true') {
+            const shiftWindow = (dayOffset) => {
+                const dateInput = form.querySelector('input[name="bookingDate"]');
+                const { minDate, maxDate } = getDateBounds(dateInput);
+                const latestWindowStart = clampDate(addDays(maxDate, -(DATE_CARD_COUNT - 1)), minDate, maxDate);
+                const currentStart = parseLocalDate(form.dataset.dateWindowStart) || parseLocalDate(dateInput.value) || minDate;
+                const nextStart = clampDate(addDays(currentStart, dayOffset), minDate, latestWindowStart);
+
+                form.dataset.dateWindowStart = formatDateKey(nextStart);
+                setBookingDateValue(form, formatDateKey(nextStart));
+            };
+
+            controls.querySelector('.js-date-prev')?.addEventListener('click', () => shiftWindow(-DATE_NAV_STEP_DAYS));
+            controls.querySelector('.js-date-next')?.addEventListener('click', () => shiftWindow(DATE_NAV_STEP_DAYS));
+            controls.dataset.ready = 'true';
+        }
+
+        return controls;
+    }
+
     function renderDateCards(form) {
         const dateInput = form.querySelector('input[name="bookingDate"]');
         const dateList = form.querySelector('.js-date-card-list');
@@ -283,19 +403,44 @@
             return;
         }
 
-        const minDate = parseLocalDate(dateInput.min) || new Date();
-        const selectedDate = parseLocalDate(dateInput.value) || minDate;
+        const { minDate, maxDate } = getDateBounds(dateInput);
+        const selectedDate = clampDate(parseLocalDate(dateInput.value) || minDate, minDate, maxDate);
+        const latestWindowStart = clampDate(addDays(maxDate, -(DATE_CARD_COUNT - 1)), minDate, maxDate);
+        let windowStart = parseLocalDate(form.dataset.dateWindowStart) || selectedDate;
 
-        if (!dateInput.value || selectedDate < minDate) {
-            dateInput.value = formatDateKey(minDate);
+        if (!dateInput.value || formatDateKey(selectedDate) !== dateInput.value) {
+            dateInput.value = formatDateKey(selectedDate);
         }
 
+        if (selectedDate < windowStart || selectedDate > addDays(windowStart, DATE_CARD_COUNT - 1)) {
+            windowStart = selectedDate;
+        }
+
+        windowStart = clampDate(windowStart, minDate, latestWindowStart);
+        form.dataset.dateWindowStart = formatDateKey(windowStart);
         dateList.innerHTML = '';
 
-        for (let index = 0; index < DATE_CARD_COUNT; index += 1) {
-            const date = new Date(minDate);
-            date.setDate(minDate.getDate() + index);
+        const controls = getDateControls(form, dateList);
+        const visibleDates = getVisibleDates(windowStart, maxDate);
+        const prevButton = controls.querySelector('.js-date-prev');
+        const nextButton = controls.querySelector('.js-date-next');
+        const rangeLabel = controls.querySelector('.js-date-range');
 
+        if (prevButton) {
+            prevButton.disabled = addDays(windowStart, -DATE_NAV_STEP_DAYS) < minDate;
+        }
+
+        if (nextButton) {
+            nextButton.disabled = addDays(windowStart, DATE_NAV_STEP_DAYS) > latestWindowStart;
+        }
+
+        if (rangeLabel && visibleDates.length) {
+            const firstVisibleDate = visibleDates[0];
+            const lastVisibleDate = visibleDates[visibleDates.length - 1];
+            rangeLabel.textContent = `${firstVisibleDate.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })} - ${lastVisibleDate.toLocaleDateString('en-SG', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }
+
+        visibleDates.forEach((date) => {
             const dateKey = formatDateKey(date);
             const button = document.createElement('button');
             button.type = 'button';
@@ -313,14 +458,11 @@
             }
 
             button.addEventListener('click', () => {
-                dateInput.value = dateKey;
-                dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-                dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-                syncDateCards(form);
+                setBookingDateValue(form, dateKey);
             });
 
             dateList.appendChild(button);
-        }
+        });
 
         syncDateCards(form);
     }
@@ -424,12 +566,7 @@
         });
 
         dateInput?.addEventListener('change', () => {
-            syncDateCards(form);
-            loadAvailableSlots(form);
-        });
-
-        dateInput?.addEventListener('input', () => {
-            syncDateCards(form);
+            renderDateCards(form);
             loadAvailableSlots(form);
         });
 

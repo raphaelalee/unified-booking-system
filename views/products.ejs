@@ -176,6 +176,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return String(value || '').trim().toLowerCase();
     }
 
+    function debounce(callback, delay = 240) {
+        let timer = null;
+
+        return (...args) => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => callback(...args), delay);
+        };
+    }
+
     function applyFilters() {
         const query = normalize(search ? search.value : '');
         const selectedCategory = category ? category.value : '';
@@ -216,8 +225,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    const debouncedApplyFilters = debounce(applyFilters);
+
     [search, category, sort, price].filter(Boolean).forEach((control) => {
-        control.addEventListener('input', applyFilters);
+        control.addEventListener('input', debouncedApplyFilters);
         control.addEventListener('change', applyFilters);
     });
 

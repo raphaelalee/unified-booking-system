@@ -49,6 +49,14 @@
         const searchWrap = section.querySelector('[data-location-search-wrap]');
         const searchInput = section.querySelector('[data-location-search]');
         const cards = Array.from(grid.querySelectorAll('[data-service-card]'));
+        const debounce = (callback, delay = 240) => {
+            let timer = null;
+
+            return (...args) => {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(() => callback(...args), delay);
+            };
+        };
 
         const setStatus = (message) => {
             if (status) {
@@ -127,7 +135,7 @@
             );
         });
 
-        searchInput?.addEventListener('input', applyLocationSearch);
+        searchInput?.addEventListener('input', debounce(applyLocationSearch));
     }
 
     setupServicesLocation();

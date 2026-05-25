@@ -544,6 +544,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         whatsappEnquiryUrl: getWhatsAppEnquiryUrl(bookingMerchant, selectedService, bookingUrl),
         qrDebug: options.qrDebug || null,
         todayDate: getTodayInputValue(),
+        maxBookingDate: Booking.getBookingMaxDateKey(),
         publicHolidays: getPublicHolidayDateMap()
     });
 }
@@ -567,6 +568,14 @@ function getBookingAvailability(req, res) {
         return res.status(400).json({
             success: false,
             message: 'Please choose today or a future booking date.',
+            slots: []
+        });
+    }
+
+    if (dateState.timing === 'too_future') {
+        return res.status(400).json({
+            success: false,
+            message: 'Please choose a booking date within 2 months.',
             slots: []
         });
     }
@@ -734,6 +743,10 @@ function validateBooking(merchant, form) {
 
     if (!dateState.valid || dateState.timing === 'past') {
         errors.push('Please choose today or a future booking date.');
+    }
+
+    if (dateState.timing === 'too_future') {
+        errors.push('Please choose a booking date within 2 months.');
     }
 
     const holidayName = getPublicHolidayName(form.bookingDate);

@@ -38,7 +38,7 @@ function normalizeDate(value) {
 
     const state = Booking.getBookingDateState(raw);
 
-    return state.valid && state.timing !== 'past' ? raw : '';
+    return state.valid && state.timing !== 'past' && state.timing !== 'too_future' ? raw : '';
 }
 
 function normalizeTime(value) {
@@ -181,7 +181,7 @@ async function handleDateStep(phone, text, session) {
     const bookingDate = normalizeDate(text);
 
     if (!bookingDate) {
-        return sendReply(phone, 'Please enter a valid future date in YYYY-MM-DD format.');
+        return sendReply(phone, 'Please enter a valid date in YYYY-MM-DD format, from today up to 2 months ahead.');
     }
 
     session.step = 'time';

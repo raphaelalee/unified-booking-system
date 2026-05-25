@@ -23,6 +23,7 @@
         ? selectedPromotion.originalPrice
         : null;
     const lockPromotionOption = Boolean(selectedPromotion && requestedOptionId);
+    const bookingMaxDate = typeof maxBookingDate !== 'undefined' && maxBookingDate ? maxBookingDate : '';
 %>
 
 <section class="booking-hero">
@@ -110,7 +111,7 @@
             </label>
             <label>
                 Date
-                <input type="date" name="bookingDate" value="<%= form.bookingDate || todayDate %>" min="<%= todayDate %>" tabindex="-1">
+                <input type="date" name="bookingDate" value="<%= form.bookingDate || todayDate %>" min="<%= todayDate %>" <% if (bookingMaxDate) { %>max="<%= bookingMaxDate %>"<% } %> tabindex="-1">
             </label>
             <label>
                 Time slot
@@ -173,6 +174,11 @@
             </div>
 
             <div class="booking-picker-stack">
+                <header class="booking-date-time-heading">
+                    <h2>Select Date &amp; Time</h2>
+                    <p>Choose when you'd like to visit <%= merchant.name %>.</p>
+                </header>
+
                 <section class="booking-picker-card">
                     <div class="booking-picker-heading">
                         <span class="booking-picker-icon" aria-hidden="true">
@@ -180,6 +186,7 @@
                         </span>
                         <h3>Select Date</h3>
                     </div>
+                    <p class="muted booking-date-helper">You can book up to 2 months in advance.</p>
                     <div class="booking-date-strip js-date-card-list" aria-label="Select booking date"></div>
                     <span class="muted js-public-holiday-message" hidden></span>
                 </section>

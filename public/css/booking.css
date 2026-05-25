@@ -166,15 +166,37 @@
     gap: 18px;
 }
 
+.booking-date-time-heading {
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.booking-date-time-heading h2 {
+    margin: 0;
+    color: var(--ink, #263b2d);
+    font-family: var(--font-sans, inherit);
+    font-size: clamp(1.85rem, 3vw, 2.45rem);
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.booking-date-time-heading p {
+    margin: 0;
+    color: var(--muted, #6d756b);
+    font-size: clamp(1rem, 1.6vw, 1.18rem);
+    line-height: 1.5;
+}
+
 .booking-picker-card,
 .booking-summary-card {
     display: grid;
-    gap: 18px;
-    padding: clamp(18px, 2vw, 24px);
+    gap: 20px;
+    padding: clamp(20px, 2.4vw, 30px);
     border: 1px solid rgba(64, 84, 63, 0.14);
-    border-radius: 8px;
-    background: rgba(255, 255, 252, 0.9);
-    box-shadow: 0 14px 34px rgba(63, 81, 64, 0.07);
+    border-radius: 24px;
+    background: rgba(255, 255, 252, 0.96);
+    box-shadow: 0 14px 34px rgba(63, 81, 64, 0.08);
 }
 
 .booking-picker-heading,
@@ -187,6 +209,11 @@
 
 .booking-picker-heading {
     justify-content: flex-start;
+}
+
+.booking-date-helper {
+    margin: -6px 0 0;
+    font-size: 0.9rem;
 }
 
 .booking-picker-heading h3 {
@@ -223,24 +250,45 @@
     stroke-linejoin: round;
 }
 
+.booking-date-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.booking-date-range {
+    color: var(--ink, #3f5140);
+    font-weight: 900;
+    text-align: left;
+}
+
+.booking-date-nav {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .booking-date-strip {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(92px, 1fr);
-    gap: 12px;
-    overflow-x: auto;
-    padding: 2px 4px 10px;
-    scrollbar-width: thin;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 104px));
+    gap: 14px;
+    justify-content: start;
+    overflow: visible;
+    padding: 2px 0 0;
 }
 
 .booking-date-card {
-    min-height: 108px;
+    width: 100%;
+    max-width: 104px;
+    min-height: 112px;
     display: grid;
     place-items: center;
-    gap: 5px;
-    padding: 14px 12px;
+    gap: 6px;
+    padding: 16px 12px;
     border: 1px solid rgba(64, 84, 63, 0.14);
-    border-radius: 8px;
+    border-radius: 16px;
     background: rgba(255, 255, 252, 0.95);
     color: var(--ink, #3f5140);
     cursor: pointer;
@@ -251,13 +299,14 @@
 .booking-date-card span,
 .booking-date-card small {
     color: inherit;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 850;
+    text-transform: uppercase;
 }
 
 .booking-date-card strong {
     color: inherit;
-    font-size: 1.8rem;
+    font-size: 2rem;
     line-height: 1;
 }
 
@@ -271,20 +320,22 @@
 
 .booking-time-grid,
 .booking-professional-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+    gap: 14px 16px;
+    align-items: center;
 }
 
 .time-slot-pill,
 .professional-pill {
     min-height: 48px;
+    min-width: 126px;
     padding: 0 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 1px solid rgba(64, 84, 63, 0.14);
-    border-radius: 999px;
+    border-radius: 16px;
     background: rgba(255, 255, 252, 0.96);
     color: var(--ink, #3f5140);
     font: inherit;
@@ -312,6 +363,12 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+}
+
+.time-slot-pill.is-disabled {
+    grid-column: 1 / -1;
+    width: fit-content;
+    max-width: 100%;
 }
 
 .booking-slot-note {
@@ -390,8 +447,25 @@
 }
 
 @media (max-width: 620px) {
+    .booking-date-controls {
+        align-items: stretch;
+    }
+
+    .booking-date-nav {
+        width: 100%;
+    }
+
+    .booking-date-nav .button {
+        flex: 1 1 140px;
+    }
+
     .booking-date-strip {
-        grid-auto-columns: 86px;
+        grid-template-columns: repeat(2, minmax(0, 104px));
+    }
+
+    .booking-time-grid,
+    .booking-professional-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .booking-summary-card dl > div {
@@ -401,7 +475,7 @@
 
     .time-slot-pill,
     .professional-pill {
-        flex: 1 1 138px;
+        min-width: 0;
         padding: 0 16px;
     }
 }

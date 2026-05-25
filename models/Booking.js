@@ -6,6 +6,7 @@ const BOOKING_CONFIRMED_STATUSES = ['confirmed', 'paid', 'checked_in', 'complete
 const BOOKING_UNAVAILABLE_STATUSES = [...BOOKING_REVIEW_STATUSES, ...BOOKING_CONFIRMED_STATUSES];
 const SINGAPORE_TIME_ZONE = 'Asia/Singapore';
 const SAME_DAY_MIN_LEAD_MINUTES = 30;
+const MAX_BOOKING_ADVANCE_MONTHS = 2;
 let bookingManagementSchemaReady = false;
 let bookingManagementSchemaPending = false;
 let bookingManagementSchemaQueue = [];
@@ -299,6 +300,30 @@ function getDateKey(value) {
     return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
 }
 
+function parseDateKey(dateKey) {
+    const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!match) {
+        return null;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+        Number.isNaN(date.getTime())
+        || date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== month - 1
+        || date.getUTCDate() !== day
+    ) {
+        return null;
+    }
+
+    return { year, month, day, date };
+}
+
 function getSingaporeNowParts(now = new Date()) {
     const formatter = new Intl.DateTimeFormat('en-SG', {
         timeZone: SINGAPORE_TIME_ZONE,
@@ -327,6 +352,28 @@ function getSingaporeTodayKey(now = new Date()) {
     return getSingaporeNowParts(now).dateKey;
 }
 
+function addMonthsToDateKey(dateKey, monthOffset) {
+    const parsed = parseDateKey(dateKey);
+
+    if (!parsed) {
+        return '';
+    }
+
+    const targetFirst = new Date(Date.UTC(parsed.year, parsed.month - 1 + Number(monthOffset || 0), 1));
+    const targetLast = new Date(Date.UTC(targetFirst.getUTCFullYear(), targetFirst.getUTCMonth() + 1, 0));
+    const clampedDay = Math.min(parsed.day, targetLast.getUTCDate());
+
+    return [
+        targetFirst.getUTCFullYear(),
+        String(targetFirst.getUTCMonth() + 1).padStart(2, '0'),
+        String(clampedDay).padStart(2, '0')
+    ].join('-');
+}
+
+function getBookingMaxDateKey(now = new Date()) {
+    return addMonthsToDateKey(getSingaporeTodayKey(now), MAX_BOOKING_ADVANCE_MONTHS);
+}
+
 function addDaysToDateKey(dateKey, dayOffset) {
     const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -341,13 +388,15 @@ function addDaysToDateKey(dateKey, dayOffset) {
 function getBookingDateState(bookingDate, now = new Date()) {
     const dateKey = getDateKey(bookingDate);
     const singaporeNow = getSingaporeNowParts(now);
+    const maxDateKey = getBookingMaxDateKey(now);
 
-    if (!dateKey) {
+    if (!dateKey || !parseDateKey(dateKey)) {
         return {
             valid: false,
             dateKey: '',
             timing: 'invalid',
-            singaporeNow
+            singaporeNow,
+            maxDateKey
         };
     }
 
@@ -356,7 +405,18 @@ function getBookingDateState(bookingDate, now = new Date()) {
             valid: true,
             dateKey,
             timing: 'past',
-            singaporeNow
+            singaporeNow,
+            maxDateKey
+        };
+    }
+
+    if (dateKey > maxDateKey) {
+        return {
+            valid: true,
+            dateKey,
+            timing: 'too_future',
+            singaporeNow,
+            maxDateKey
         };
     }
 
@@ -365,7 +425,8 @@ function getBookingDateState(bookingDate, now = new Date()) {
             valid: true,
             dateKey,
             timing: 'today',
-            singaporeNow
+            singaporeNow,
+            maxDateKey
         };
     }
 
@@ -373,14 +434,15 @@ function getBookingDateState(bookingDate, now = new Date()) {
         valid: true,
         dateKey,
         timing: 'future',
-        singaporeNow
+        singaporeNow,
+        maxDateKey
     };
 }
 
 function filterSlotsForBookingDate(slots, bookingDate, now = new Date()) {
     const dateState = getBookingDateState(bookingDate, now);
 
-    if (!dateState.valid || dateState.timing === 'past') {
+    if (!dateState.valid || dateState.timing === 'past' || dateState.timing === 'too_future') {
         return {
             slots: [],
             dateState
@@ -827,7 +889,7 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
     });
     const initialDateState = getBookingDateState(bookingDate, config.now);
 
-    if (!initialDateState.valid || initialDateState.timing === 'past') {
+    if (!initialDateState.valid || initialDateState.timing === 'past' || initialDateState.timing === 'too_future') {
         done(null, [], emptyMeta(initialDateState));
         return;
     }
@@ -2019,6 +2081,7 @@ module.exports = {
     getAllInDatabase,
     getByMerchantUserId,
     getBookingDateState,
+    getBookingMaxDateKey,
     getCheckInDetails,
     getNotificationDetailsById,
     getSupportBookingsByUserId,
