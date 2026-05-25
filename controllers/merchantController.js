@@ -13,8 +13,9 @@ const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const UserVoucher = require('../models/UserVoucher');
 const User = require('../models/User');
+const GiftCardVoucher = require('../models/GiftCardVoucher');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
-const { sendBookingConfirmationEmail } = require('../utils/emailNotifications');
+const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
@@ -63,6 +64,92 @@ function calculateVoucherDiscount(voucher, amount) {
     }
 
     return Math.min(Number(voucher.remainingValue || 0), grossAmount);
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
+
+function getGiftCardExpiryDate() {
+    const expiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    return expiry.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function parseGiftCardForm(body, sessionUser) {
+    const rawAmount = String(body.customAmount || body.amount || '').trim();
+    const amount = Number(rawAmount || 0);
+    const deliveryOption = String(body.deliveryOption || 'self') === 'recipient' ? 'recipient' : 'self';
+    const recipientEmail = deliveryOption === 'recipient'
+        ? String(body.recipientEmail || '').trim()
+        : String(sessionUser?.email || '').trim();
+    const recipientName = String(body.recipientName || '').trim();
+    const senderName = String(body.senderName || sessionUser?.name || '').trim();
+    const message = String(body.message || '').trim();
+    const deliveryDateOption = String(body.deliveryDateOption || 'now') === 'schedule' ? 'schedule' : 'now';
+    const scheduledSendDate = deliveryDateOption === 'schedule'
+        ? String(body.scheduledDate || '').trim()
+        : null;
+
+    return {
+        amount,
+        deliveryOption,
+        recipientEmail,
+        recipientName,
+        senderName,
+        message,
+        deliveryDateOption,
+        scheduledSendDate
+    };
+}
+
+async function persistGiftCardVouchers(req, payment) {
+    const giftCardItems = (payment.items || []).filter((item) => String(item.type) === 'Gift Card' && item.giftCard);
+
+    if (!giftCardItems.length) {
+        return [];
+    }
+
+    const saved = [];
+
+    for (const item of giftCardItems) {
+        const giftCard = item.giftCard || {};
+        const recipientEmail = giftCard.deliveryOption === 'recipient'
+            ? giftCard.recipientEmail
+            : String(req.session.user?.email || '').trim();
+        const payload = {
+            code: GiftCardVoucher.generateCode('VANI'),
+            amount: Number(item.price || 0),
+            balance: Number(item.price || 0),
+            senderUserId: Number(req.session.user?.id || null) || null,
+            senderName: String(giftCard.senderName || req.session.user?.name || '').trim(),
+            recipientName: String(giftCard.recipientName || '').trim(),
+            recipientEmail: recipientEmail || null,
+            message: String(giftCard.message || '').trim(),
+            deliveryOption: giftCard.deliveryOption || 'self',
+            scheduledSendDate: giftCard.scheduledSendDate || null,
+            expiryDate: getGiftCardExpiryDate(),
+            status: 'active'
+        };
+
+        try {
+            const result = await new Promise((resolve, reject) => {
+                GiftCardVoucher.create(payload, (error, resultData) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+
+                    resolve({ id: resultData.insertId, voucherCode: payload.code, ...payload });
+                });
+            });
+
+            saved.push(result);
+        } catch (error) {
+            console.error('Gift card voucher persistence failed:', error.message);
+        }
+    }
+
+    return saved;
 }
 
 function appendQueryParams(path, params = {}) {
@@ -2278,11 +2365,22 @@ function addProductToCart(req, res) {
 }
 
 function addGiftCardToCart(req, res) {
-    const allowedAmounts = [20, 50, 80, 100];
-    const amount = Number(req.body.amount || 0);
+    const giftCard = parseGiftCardForm(req.body, req.session.user);
+    const minAmount = 10;
+    const maxAmount = 500;
 
-    if (!allowedAmounts.includes(amount)) {
-        req.session.success = 'Please select a valid gift card amount.';
+    if (!Number.isFinite(giftCard.amount) || giftCard.amount < minAmount || giftCard.amount > maxAmount) {
+        req.session.success = `Please enter a valid gift card amount between $${minAmount} and $${maxAmount}.`;
+        return res.redirect('/giftcards');
+    }
+
+    if (giftCard.deliveryOption === 'recipient' && !isValidEmail(giftCard.recipientEmail)) {
+        req.session.success = 'Please enter a valid recipient email address.';
+        return res.redirect('/giftcards');
+    }
+
+    if (giftCard.deliveryDateOption === 'schedule' && !giftCard.scheduledSendDate) {
+        req.session.success = 'Please select a delivery date for your gift card.';
         return res.redirect('/giftcards');
     }
 
@@ -2292,14 +2390,15 @@ function addGiftCardToCart(req, res) {
         type: 'Gift Card',
         merchantId: null,
         merchantName: 'Vaniday',
-        serviceId: `gift-card-${amount}`,
-        serviceName: `$${amount} Vaniday Gift Card`,
+        serviceId: `gift-card-${giftCard.amount}-${Date.now()}`,
+        serviceName: `$${giftCard.amount} Vaniday Gift Card`,
         duration: 'Digital gift card for beauty, salon, spa, and grooming appointments.',
-        price: amount,
-        quantity: 1
+        price: giftCard.amount,
+        quantity: 1,
+        giftCard
     });
 
-    req.session.success = `$${amount} gift card was added to your cart.`;
+    req.session.success = `$${giftCard.amount} gift card was added to your cart.`;
     return res.redirect('/cart');
 }
 
@@ -3156,6 +3255,28 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
 
     applyPaymentSideEffects(req, payment);
     await savePaidReceipt(req, paidPayment, paymentMethod);
+
+    const savedGiftCards = await persistGiftCardVouchers(req, paidPayment);
+    await Promise.all(savedGiftCards.map(async (giftCard) => {
+        try {
+            const emailTarget = giftCard.recipientEmail || req.session.user?.email;
+            await sendGiftCardEmail({
+                email: emailTarget,
+                recipientName: giftCard.recipientName,
+                senderName: giftCard.senderName,
+                amount: giftCard.amount,
+                voucherCode: giftCard.voucherCode,
+                message: giftCard.message,
+                expiryDate: giftCard.expiryDate,
+                redeemLink: process.env.BASE_URL ? `${String(process.env.BASE_URL).replace(/\/$/, '')}` : 'https://vaniday.sg',
+                deliveryOption: giftCard.deliveryOption
+            });
+            console.log(`Gift card email sent to ${emailTarget}`);
+        } catch (error) {
+            console.error('Gift card email failed:', error.message);
+        }
+    }));
+
     await notifyPaymentCompleted(req, paidPayment, transactionId);
 
     return paidPayment.receiptId;

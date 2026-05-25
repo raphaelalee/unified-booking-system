@@ -199,6 +199,135 @@ async function sendBookingConfirmationEmail(booking) {
     }
 }
 
+function buildGiftCardEmailText(entry) {
+    return [
+        `Hi ${entry.recipientName || 'there'},`,
+        '',
+        `${entry.senderName ? `${entry.senderName} has sent you` : 'You have received'} a Vaniday gift card.`,
+        '',
+        `Gift card amount: $${Number(entry.amount || 0).toFixed(2)}`,
+        `Voucher code: ${entry.voucherCode}`,
+        entry.recipientEmail ? `Recipient email: ${entry.recipientEmail}` : '',
+        entry.message ? '' : '',
+        entry.message ? 'Message:' : '',
+        entry.message || '',
+        '',
+        `Expiry date: ${entry.expiryDate || 'Valid for 12 months from purchase date'}`,
+        '',
+        `Redeem your gift card at ${entry.redeemLink}`,
+        '',
+        'Thank you,',
+        'Vaniday'
+    ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
+}
+
+function buildGiftCardEmailHtml(entry) {
+    const escapeHtml = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    return `
+        <div style="margin:0;padding:0;background:#eaf4ee;font-family:Arial,Helvetica,sans-serif;color:#26362f;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#eaf4ee;padding:24px 0;">
+                <tr>
+                    <td align="center" style="padding:0 12px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;border-collapse:collapse;background:#ffffff;border:1px solid #d9e5dc;border-radius:16px;overflow:hidden;">
+                            <tr>
+                                <td style="padding:28px 32px;background:linear-gradient(135deg,#235a3e 0%,#7abf88 100%);color:#ffffff;">
+                                    <h1 style="margin:0;font-family:Georgia,serif;font-size:30px;line-height:1.1;">Vaniday Gift Card</h1>
+                                    <p style="margin:8px 0 0;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#d5f0dd;">Beauty, salon, spa and grooming</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:28px 32px;">
+                                    <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:#2d3f34;">${escapeHtml(entry.senderName || 'A Vaniday gift card')}</p>
+                                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f3fbf5;border:1px solid #d9e9db;border-radius:12px;">
+                                        <tr>
+                                            <td style="padding:18px 20px;border-bottom:1px solid #d9e9db;font-size:14px;color:#667c70;">Gift card amount</td>
+                                            <td align="right" style="padding:18px 20px;font-size:20px;font-weight:700;color:#214a34;">$${Number(entry.amount || 0).toFixed(2)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:18px 20px;border-bottom:1px solid #d9e9db;font-size:14px;color:#667c70;">Voucher code</td>
+                                            <td align="right" style="padding:18px 20px;font-size:16px;font-weight:700;color:#214a34;">${escapeHtml(entry.voucherCode)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:18px 20px;border-bottom:1px solid #d9e9db;font-size:14px;color:#667c70;">Expires</td>
+                                            <td align="right" style="padding:18px 20px;font-size:14px;color:#214a34;">${escapeHtml(entry.expiryDate || '12 months from purchase')}</td>
+                                        </tr>
+                                    </table>
+                                    ${entry.message ? `<div style="margin:24px 0 0;padding:20px;background:#ffffff;border:1px solid #d9e9db;border-radius:12px;"><p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#4a6759;">Personalised message</p><p style="margin:0;font-size:15px;line-height:1.6;color:#2d3f34;">${escapeHtml(entry.message)}</p></div>` : ''}
+                                    <div style="margin:24px 0 0;padding:20px;background:#f4fbf4;border:1px solid #dbe9dd;border-radius:12px;">
+                                        <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#2e4f38;">Redeem your gift card</p>
+                                        <p style="margin:0;font-size:15px;line-height:1.7;color:#3d5d4b;">Use the link below to book your Vaniday appointment and apply the gift card code at checkout.</p>
+                                        <p style="margin:16px 0 0;"><a href="${escapeHtml(entry.redeemLink)}" style="display:inline-block;padding:12px 18px;background:#235a3e;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">Redeem on Vaniday</a></p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:18px 32px;background:#f1f8f1;color:#5d7a66;font-size:12px;line-height:1.6;text-align:center;">
+                                    ${escapeHtml(entry.deliveryOption === 'recipient' ? 'This gift card was sent to the recipient email address specified by the buyer.' : 'This gift card was sent to your email address.' )}
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    `;
+}
+
+async function sendGiftCardEmail(entry) {
+    const normalized = {
+        email: entry.email,
+        recipientName: entry.recipientName,
+        senderName: entry.senderName,
+        amount: entry.amount,
+        voucherCode: entry.voucherCode,
+        message: entry.message,
+        expiryDate: entry.expiryDate,
+        redeemLink: entry.redeemLink || 'https://vaniday.sg',
+        deliveryOption: entry.deliveryOption || 'self'
+    };
+    const config = getEmailConfig();
+
+    if (!isConfigured(config) || !normalized.email) {
+        return { skipped: true };
+    }
+
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: {
+            user: config.user,
+            pass: config.pass
+        },
+        tls: {
+            rejectUnauthorized: config.rejectUnauthorized
+        }
+    });
+
+    try {
+        return await transporter.sendMail({
+            from: config.from,
+            to: normalized.email,
+            subject: `Your Vaniday gift card is ready`,
+            text: buildGiftCardEmailText(normalized),
+            html: buildGiftCardEmailHtml(normalized)
+        });
+    } catch (error) {
+        if (isSmtpAuthError(error)) {
+            console.error('Email gift card delivery skipped: Gmail SMTP rejected the login. Use a Gmail app password in SMTP_PASS, not the normal account password.');
+            return { skipped: true, reason: 'smtp_auth_failed' };
+        }
+        throw error;
+    }
+}
+
 module.exports = {
-    sendBookingConfirmationEmail
+    sendBookingConfirmationEmail,
+    sendGiftCardEmail
 };

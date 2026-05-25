@@ -6,6 +6,12 @@ ensureServiceSchema((error) => {
     }
 });
 
+ensureCategorySchema((error) => {
+    if (error) {
+        console.error('Service category schema could not be prepared:', error.message || error);
+    }
+});
+
 ensureSalonCommissionSchema((error) => {
     if (error) {
         console.error('Salon commission schema could not be prepared:', error.message || error);
@@ -78,12 +84,47 @@ function ensureServiceSchema(callback) {
             alters.push('ADD COLUMN package_price DECIMAL(10,2) NOT NULL DEFAULT 0.00');
         }
 
+        if (!fields.has('gender_target')) {
+            alters.push("ADD COLUMN gender_target ENUM('male','female','unisex') NOT NULL DEFAULT 'unisex'");
+        }
+
+        if (!fields.has('display_order')) {
+            alters.push('ADD COLUMN display_order INT NOT NULL DEFAULT 999');
+        }
+
+        if (!fields.has('short_description')) {
+            alters.push('ADD COLUMN short_description VARCHAR(255) DEFAULT NULL');
+        }
+
         if (alters.length === 0) {
             callback(null);
             return;
         }
 
         db.query(`ALTER TABLE services ${alters.join(', ')}`, callback);
+    });
+}
+
+function ensureCategorySchema(callback) {
+    db.query('SHOW COLUMNS FROM categories', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('display_order')) {
+            alters.push('ADD COLUMN display_order INT NOT NULL DEFAULT 999');
+        }
+
+        if (alters.length === 0) {
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE categories ${alters.join(', ')}`, callback);
     });
 }
 
@@ -257,11 +298,15 @@ function mapMerchantRows(rows) {
                 salonId: row.salon_id,
                 categoryId: row.category_id,
                 category: row.category_name,
+                categoryDisplayOrder: Number(row.category_display_order || 999),
                 name: row.service_name,
                 description: row.description || '',
+                shortDescription: row.short_description || '',
+                genderTarget: String(row.gender_target || 'unisex'),
                 durationMins: row.duration_mins,
                 duration: `${row.duration_mins} mins`,
                 price: Number(row.price),
+                displayOrder: Number(row.display_order || 999),
                 ...getPackageFields(row),
                 slots: []
             });
@@ -325,7 +370,7 @@ function getMerchantByUserId(userId, callback) {
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
         WHERE salons.merchant_id = ?
-        ORDER BY services.service_id, service_slots.timeslot
+        ORDER BY categories.display_order, services.display_order, services.service_name, service_slots.timeslot
     `;
 
     db.query(sql, [userId], (error, rows) => {
@@ -387,7 +432,7 @@ function getMerchantBySalonId(salonId, callback) {
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
         WHERE salons.salon_id = ?
-        ORDER BY services.service_id, service_slots.timeslot
+        ORDER BY categories.display_order, services.display_order, services.service_name, service_slots.timeslot
     `;
 
     db.query(sql, [salonId], (error, rows) => {
@@ -419,9 +464,9 @@ function getMerchantBySalonId(salonId, callback) {
 
 function getCategories(callback) {
     const sql = `
-        SELECT category_id, category_name
+        SELECT category_id, category_name, display_order
         FROM categories
-        ORDER BY category_name
+        ORDER BY display_order, category_name
     `;
 
     db.query(sql, callback);
@@ -461,7 +506,7 @@ function getAllServices(callback) {
         INNER JOIN users ON users.user_id = salons.merchant_id
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
-        ORDER BY salons.salon_name, services.service_id, service_slots.timeslot
+        ORDER BY salons.salon_name, categories.display_order, services.display_order, services.service_name, service_slots.timeslot
     `;
 
     db.query(sql, (error, rows) => {
@@ -515,7 +560,11 @@ function findServiceForMerchant(userId, serviceId, callback) {
             services.package_enabled,
             services.package_sessions,
             services.package_price,
+            services.gender_target,
+            services.display_order,
+            services.short_description,
             categories.category_name,
+            categories.display_order AS category_display_order,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM services
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -576,7 +625,11 @@ function findServiceById(serviceId, callback) {
             services.package_enabled,
             services.package_sessions,
             services.package_price,
+            services.gender_target,
+            services.display_order,
+            services.short_description,
             categories.category_name,
+            categories.display_order AS category_display_order,
             salons.salon_name,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM services
@@ -735,8 +788,8 @@ function createServiceForSalon(serviceData, callback) {
             }
 
             const insertSql = `
-                INSERT INTO services (salon_id, category_id, service_name, description, duration_mins, price, package_enabled, package_sessions, package_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO services (salon_id, category_id, service_name, description, duration_mins, price, package_enabled, package_sessions, package_price, gender_target, display_order, short_description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
             const values = [
                 serviceData.salonId,
@@ -747,7 +800,10 @@ function createServiceForSalon(serviceData, callback) {
                 serviceData.price,
                 serviceData.packageEnabled ? 1 : 0,
                 serviceData.packageSessions || 0,
-                serviceData.packagePrice || 0
+                serviceData.packagePrice || 0,
+                serviceData.genderTarget || 'unisex',
+                serviceData.displayOrder || 999,
+                serviceData.shortDescription || null
             ];
 
             connection.query(insertSql, values, (insertError, result) => {
@@ -800,7 +856,10 @@ function updateService(userId, serviceId, serviceData, callback) {
                     services.price = ?,
                     services.package_enabled = ?,
                     services.package_sessions = ?,
-                    services.package_price = ?
+                    services.package_price = ?,
+                    services.gender_target = ?,
+                    services.display_order = ?,
+                    services.short_description = ?
                 WHERE services.service_id = ?
                     AND salons.merchant_id = ?
             `;
@@ -813,6 +872,9 @@ function updateService(userId, serviceId, serviceData, callback) {
                 serviceData.packageEnabled ? 1 : 0,
                 serviceData.packageSessions || 0,
                 serviceData.packagePrice || 0,
+                serviceData.genderTarget || 'unisex',
+                serviceData.displayOrder || 999,
+                serviceData.shortDescription || null,
                 serviceId,
                 userId
             ];
@@ -876,7 +938,10 @@ function updateServiceAsAdmin(serviceId, serviceData, callback) {
                     price = ?,
                     package_enabled = ?,
                     package_sessions = ?,
-                    package_price = ?
+                    package_price = ?,
+                    gender_target = ?,
+                    display_order = ?,
+                    short_description = ?
                 WHERE service_id = ?
             `;
             const values = [
@@ -889,6 +954,9 @@ function updateServiceAsAdmin(serviceId, serviceData, callback) {
                 serviceData.packageEnabled ? 1 : 0,
                 serviceData.packageSessions || 0,
                 serviceData.packagePrice || 0,
+                serviceData.genderTarget || 'unisex',
+                serviceData.displayOrder || 999,
+                serviceData.shortDescription || null,
                 serviceId
             ];
 

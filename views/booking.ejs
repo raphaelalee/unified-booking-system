@@ -24,6 +24,97 @@
         : null;
     const lockPromotionOption = Boolean(selectedPromotion && requestedOptionId);
     const bookingMaxDate = typeof maxBookingDate !== 'undefined' && maxBookingDate ? maxBookingDate : '';
+
+    const normalizeText = (text) => String(text || '').toLowerCase();
+    const hasPattern = (text, patterns = []) =>
+        patterns.some((pattern) => normalizeText(text).includes(pattern));
+
+    const bookingCategories = [
+        {
+            id: 'hair-cut',
+            title: 'Hair Cut',
+            patterns: ['cut', 'haircut', 'fade', 'fringe', 'trim']
+        },
+        {
+            id: 'hair-colour',
+            title: 'Hair Colour / Hair Dye',
+            patterns: ['colour', 'color', 'dye', 'highlight', 'balayage', 'root']
+        },
+        {
+            id: 'perms',
+            title: 'Perms',
+            patterns: ['perm']
+        },
+        {
+            id: 'wash-blow',
+            title: 'Wash and Blow / Styling',
+            patterns: ['wash', 'blow', 'style', 'styling']
+        },
+        {
+            id: 'treatment',
+            title: 'Treatment',
+            patterns: ['treatment', 'scalp', 'repair']
+        },
+        {
+            id: 'other',
+            title: 'Other Services',
+            patterns: []
+        }
+    ];
+
+    const categorizedServices = bookingCategories.map((category) => ({
+        ...category,
+        services: []
+    }));
+
+    const getServiceDisplayName = (service) => String(service.name || '');
+    const getServiceGenderLabel = (service) => {
+        const normalizedName = normalizeText(service.name);
+
+        if (hasPattern(normalizedName, ['male', 'men', 'him', 'barber'])) {
+            return 'Male';
+        }
+
+        if (hasPattern(normalizedName, ['female', 'women', 'her', 'ladies'])) {
+            return 'Female';
+        }
+
+        const genderTarget = String(service.genderTarget || '').toLowerCase();
+        if (genderTarget === 'male') {
+            return 'Male';
+        }
+        if (genderTarget === 'female') {
+            return 'Female';
+        }
+
+        return 'Unisex';
+    };
+
+    const getServicePriceText = (service) => {
+        const price = Number(service.price || 0);
+        const packagePrice = Number(service.packagePrice || 0);
+
+        if (service.packageEnabled && packagePrice > 0 && packagePrice !== price) {
+            const minPrice = Math.min(price, packagePrice);
+            const maxPrice = Math.max(price, packagePrice);
+            return minPrice === maxPrice
+                ? `$${minPrice.toFixed(2)}`
+                : `$${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)}`;
+        }
+
+        return `$${price.toFixed(2)}`;
+    };
+
+    bookingServices.forEach((service) => {
+        const matchedCategory = categorizedServices.find((category) =>
+            category.patterns.length > 0 && hasPattern(service.name, category.patterns)
+        );
+
+        const targetCategory = matchedCategory || categorizedServices.find((category) => category.id === 'other');
+        targetCategory.services.push(service);
+    });
+
+    const visibleServiceGroups = categorizedServices.filter((group) => group.services.length > 0);
 %>
 
 <section class="booking-hero">
@@ -127,49 +218,63 @@
                 <h2>Choose an appointment</h2>
             </div>
 
-            <div class="service-list booking-service-options">
-                <% bookingServices.forEach((service) => { %>
-                    <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
-                    <% const bookableItem = activeOption || service; %>
-                    <% const packageIsSelected = requestedPurchaseType === 'package' && service.packageEnabled; %>
-                    <% const displayPrice = packageIsSelected ? service.packagePrice : (promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price); %>
-                    <% const isSelectedServiceCard = requestedServiceId === String(service.id); %>
-                    <button
-                        class="booking-service-card booking-service-option <%= isSelectedServiceCard ? 'is-selected' : '' %>"
-                        type="button"
-                        data-service-card
-                        data-service-id="<%= service.id %>"
-                        data-purchase-type="<%= packageIsSelected ? 'package' : 'single' %>"
-                        data-service-name="<%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %>"
-                        data-service-duration="<%= bookableItem.duration || service.duration || '' %>"
-                        data-service-price="<%= Number(displayPrice || 0).toFixed(2) %>">
-                        <span>
-                            <strong><%= service.name %><%= activeOption ? ' - ' + activeOption.name : '' %></strong>
-                            <span class="muted">
-                                <%= bookableItem.duration || service.duration %> &middot;
-                                <% if (promoOriginalPrice !== null && promoDisplayPrice !== null) { %>
-                                    <span class="promotion-original-price">$<%= promoOriginalPrice %></span>
-                                <% } %>
-                                $<%= displayPrice %>
-                                <% if (packageIsSelected) { %>
-                                    &middot; <%= service.packageSessions %> sessions
-                                <% } %>
-                            </span>
-                            <% if (Array.isArray(service.options) && service.options.length > 0) { %>
-                                <span class="muted">
-                                    <% if (activeOption) { %>
-                                        Selected option: <%= activeOption.name %>
-                                    <% } else { %>
-                                        Options: <%= service.options.map((option) => option.name + ' ($' + option.price + ')').join(', ') %>
-                                    <% } %>
-                                </span>
-                            <% } %>
-                            <% if (service.packageEnabled) { %>
-                                <span class="muted">Package available: <%= service.packageSessions %> sessions for $<%= Number(service.packagePrice).toFixed(2) %>.</span>
-                            <% } %>
-                        </span>
-                        <span class="service-price">$<%= displayPrice %></span>
-                    </button>
+            <div class="service-list booking-service-options booking-service-groups">
+                <% visibleServiceGroups.forEach((group, groupIndex) => { %>
+                    <section class="category-group <%= groupIndex === 0 ? 'is-open' : '' %>" data-category-group>
+                        <button
+                            class="category-group-header"
+                            type="button"
+                            aria-expanded="<%= groupIndex === 0 ? 'true' : 'false' %>"
+                            data-category-toggle>
+                            <span><%= group.title %></span>
+                            <span class="toggle-icon" aria-hidden="true">&#9660;</span>
+                        </button>
+
+                        <div class="category-group-body">
+                            <% group.services.forEach((service) => { %>
+                                <% const activeOption = selectedBookingOption && String(selectedBookingService?.id) === String(service.id) ? selectedBookingOption : null; %>
+                                <% const bookableItem = activeOption || service; %>
+                                <% const packageIsSelected = requestedPurchaseType === 'package' && service.packageEnabled; %>
+                                <% const displayPrice = packageIsSelected ? service.packagePrice : (promoDisplayPrice !== null ? promoDisplayPrice : bookableItem.price); %>
+                                <% const isSelectedServiceCard = requestedServiceId === String(service.id); %>
+                                <% const serviceInfo = service.shortDescription || service.description || ''; %>
+                                <% const displayName = getServiceDisplayName(service); %>
+                                <% const genderLabel = getServiceGenderLabel(service); %>
+                                <% const serviceDescription = service.shortDescription || service.description || ''; %>
+                                <% const priceText = getServicePriceText(service); %>
+                                <% const durationText = bookableItem.duration || service.duration || ''; %>
+                                <% const labelName = activeOption ? `${displayName} - ${activeOption.name}` : displayName; %>
+                                <button
+                                    class="booking-service-card booking-service-row booking-service-option <%= isSelectedServiceCard ? 'is-selected' : '' %>"
+                                    type="button"
+                                    data-service-card
+                                    data-service-id="<%= service.id %>"
+                                    data-purchase-type="<%= packageIsSelected ? 'package' : 'single' %>"
+                                    data-service-name="<%= labelName %>"
+                                    data-service-duration="<%= durationText %>"
+                                    data-service-price="<%= Number(displayPrice || 0).toFixed(2) %>">
+                                    <span class="service-row-left">
+                                        <span class="service-row-checkbox" aria-hidden="true"></span>
+                                        <span class="service-row-main">
+                                            <span class="service-row-title">
+                                                <strong><%= labelName %></strong>
+                                                <span class="service-row-gender"><%= genderLabel %></span>
+                                            </span>
+                                            <% if (serviceDescription) { %>
+                                                <span class="service-row-description"><%= serviceDescription %></span>
+                                            <% } %>
+                                            <span class="service-row-meta"><%= durationText %> &middot; <%= priceText %><% if (packageIsSelected) { %> &middot; <%= service.packageSessions %> sessions<% } %></span>
+                                        </span>
+                                    </span>
+                                    <span class="service-row-right">
+                                        <% if (serviceInfo) { %>
+                                            <span class="service-row-info" title="<%= serviceInfo %>">i</span>
+                                        <% } %>
+                                    </span>
+                                </button>
+                            <% }) %>
+                        </div>
+                    </section>
                 <% }) %>
             </div>
 
@@ -376,6 +481,20 @@
 
         serviceSelect.addEventListener('change', syncBookingAction);
         syncBookingAction();
+    })();
+
+    (() => {
+        document.querySelectorAll('[data-category-toggle]').forEach((toggleButton) => {
+            toggleButton.addEventListener('click', () => {
+                const category = toggleButton.closest('[data-category-group]');
+                if (!category) {
+                    return;
+                }
+
+                const expanded = category.classList.toggle('is-open');
+                toggleButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            });
+        });
     })();
 </script>
 
