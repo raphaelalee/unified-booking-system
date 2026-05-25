@@ -255,6 +255,8 @@
             <p id="stripe-payment-note" class="muted payment-note" style="display:none;">
                 Continue to complete this prototype Stripe payment.
             </p>
+            <div id="paypal-message" class="notice error" style="display:none;"></div>
+            <div id="paypal-button-container" style="display:none;"></div>
 
             <button id="payment-submit-button" class="button primary full" type="submit">Continue with Apple Pay</button>
         </form>
@@ -285,24 +287,73 @@
                 <% } %>
                 <p class="cart-total-line"><span>Total due</span><strong id="payment-summary-total">$<%= paymentAmountDue.toFixed(2) %></strong></p>
             </div>
-            <p class="muted">Prototype payment only. No real card charge is made.</p>
+            <p class="muted">
+                PayPal uses a real sandbox checkout flow. Other payment methods on this page remain prototype flows.
+            </p>
         </aside>
     </div>
 </section>
 
+<% if (paypalEnabled && paypalClientId) { %>
+<script src="https://www.paypal.com/sdk/js?client-id=<%= encodeURIComponent(paypalClientId) %>&currency=SGD&intent=capture"></script>
+<% } %>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const form = document.querySelector('.payment-form');
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
     const cardFields = document.getElementById('card-payment-fields');
     const netsNote = document.getElementById('nets-payment-note');
     const walletNote = document.getElementById('wallet-payment-note');
     const stripeNote = document.getElementById('stripe-payment-note');
     const submitButton = document.getElementById('payment-submit-button');
+    const paypalButtonContainer = document.getElementById('paypal-button-container');
+    const paypalMessage = document.getElementById('paypal-message');
     const redeemPointsInput = document.getElementById('payment-redeem-points');
     const pointsRow = document.getElementById('payment-points-row');
     const pointsValue = document.getElementById('payment-points-value');
     const summaryTotal = document.getElementById('payment-summary-total');
     const liveTotal = document.getElementById('payment-live-total');
+    const paypalEnabled = <%= paypalEnabled ? 'true' : 'false' %>;
+
+    function setPayPalMessage(message) {
+        if (!paypalMessage) return;
+        paypalMessage.style.display = message ? '' : 'none';
+        paypalMessage.innerHTML = message ? '<p>' + String(message) + '</p>' : '';
+    }
+
+    function collectPaymentPayload() {
+        if (!form) return {};
+        const formData = new FormData(form);
+        const payload = {};
+
+        formData.forEach((value, key) => {
+            payload[key] = value;
+        });
+
+        payload.redeemCashback = formData.get('redeemCashback') ? 'on' : '';
+        return payload;
+    }
+
+    async function postJson(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken,
+                Accept: 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Request failed.');
+        }
+
+        return data;
+    }
 
     function formatMoney(value) {
         return '$' + Number(value || 0).toFixed(2);
@@ -333,10 +384,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const input = card.querySelector('input[name="paymentMethod"]');
             card.classList.toggle('is-selected', input && input.checked);
         });
+        const isPaypal = selected === 'paypal';
         if (cardFields) cardFields.style.display = selected === 'card' ? '' : 'none';
         if (netsNote) netsNote.style.display = selected === 'nets' ? '' : 'none';
         if (stripeNote) stripeNote.style.display = selected === 'stripe' ? '' : 'none';
-        if (walletNote) walletNote.style.display = ['apple_pay', 'paypal'].includes(selected) ? '' : 'none';
+        if (walletNote) walletNote.style.display = ['apple_pay'].includes(selected) ? '' : 'none';
+        if (paypalButtonContainer) paypalButtonContainer.style.display = isPaypal ? '' : 'none';
+        if (submitButton) submitButton.style.display = isPaypal ? 'none' : '';
         if (submitButton) {
             const labels = {
                 apple_pay: 'Continue with Apple Pay',
@@ -347,6 +401,42 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             submitButton.textContent = labels[selected] || 'Continue payment';
         }
+
+        if (!isPaypal) {
+            setPayPalMessage('');
+        } else if (!paypalEnabled) {
+            setPayPalMessage('PayPal is not configured on this server yet.');
+        }
+    }
+
+    if (paypalEnabled && window.paypal && paypalButtonContainer) {
+        window.paypal.Buttons({
+            style: {
+                layout: 'vertical',
+                shape: 'rect',
+                label: 'paypal'
+            },
+            createOrder: async function () {
+                setPayPalMessage('');
+                const payload = collectPaymentPayload();
+                const result = await postJson('/api/paypal/create-order', payload);
+                return result.orderId;
+            },
+            onApprove: async function (data) {
+                setPayPalMessage('');
+                const result = await postJson('/api/paypal/capture-order', { orderId: data.orderID });
+                if (result.redirectUrl) {
+                    window.location.assign(result.redirectUrl);
+                }
+            },
+            onCancel: function () {
+                setPayPalMessage('PayPal checkout was cancelled before payment was approved.');
+            },
+            onError: function (error) {
+                console.error('PayPal checkout error:', error);
+                setPayPalMessage(error?.message || 'PayPal checkout could not be completed.');
+            }
+        }).render('#paypal-button-container');
     }
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));

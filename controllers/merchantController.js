@@ -19,6 +19,7 @@ const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/em
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
+const paypal = require('../services/paypal');
 const {
     getBookingCheckInUrl,
     getMerchantStorefrontPath,
@@ -2527,7 +2528,7 @@ function checkout(req, res) {
             console.error(walletError);
         }
 
-        return res.render('payment', {
+        return res.render('payment', getPaymentViewModel({
             title: 'Payment',
             amount,
             merchantName: fulfilmentMerchantName,
@@ -2551,7 +2552,7 @@ function checkout(req, res) {
             redeemPointsRequested: 0,
             loyalty: walletError ? null : loyalty,
             error: null
-        });
+        }));
     });
 }
 
@@ -2663,7 +2664,7 @@ async function showPayment(req, res) {
             Number(booking.service_price || 0)
         );
 
-        return res.render('payment', {
+        return res.render('payment', getPaymentViewModel({
             title: 'Payment',
             amount: Number(booking.service_price || 0),
             merchantName: booking.merchant_name,
@@ -2687,7 +2688,7 @@ async function showPayment(req, res) {
             rewardRedemption,
             redeemPointsRequested: 0,
             error: null
-        });
+        }));
     } catch (error) {
         console.error(error);
         return res.status(500).render('error', {
@@ -2724,6 +2725,20 @@ function getPaymentMethodLabel(method) {
     };
 
     return labels[method] || labels.card;
+}
+
+function getPaymentViewModel(payment) {
+    return {
+        paypalClientId: paypal.getClientId(),
+        paypalEnabled: paypal.isConfigured(),
+        ...payment
+    };
+}
+
+function buildPayPalDescription(payment) {
+    const itemName = String(payment.serviceName || payment.kind || 'Vaniday payment').trim();
+    const merchantName = String(payment.merchantName || 'Vaniday').trim();
+    return `${itemName} - ${merchantName}`.slice(0, 127);
 }
 
 async function buildTrustedPayment(req, payment) {
@@ -2776,7 +2791,7 @@ async function buildTrustedPayment(req, payment) {
 }
 
 function renderPaymentForm(res, payment, error = null) {
-    return res.status(error ? 400 : 200).render('payment', {
+    return res.status(error ? 400 : 200).render('payment', getPaymentViewModel({
         title: 'Payment',
         selectedItemIds: [],
         fulfilment: '',
@@ -2791,7 +2806,7 @@ function renderPaymentForm(res, payment, error = null) {
         loyalty: null,
         ...payment,
         error
-    });
+    }));
 }
 
 function getLoyaltyView(userId) {
@@ -2988,6 +3003,29 @@ async function applyCashbackRedemption(req, payment) {
         cashbackRedeemed,
         amount: Math.max(0, Math.round((Number(payment.amount || 0) - cashbackRedeemed) * 100) / 100)
     };
+}
+
+async function prepareTrustedPayment(req, payment) {
+    let trustedPayment = await buildTrustedPayment(req, payment);
+
+    if (trustedPayment.kind === 'booking') {
+        trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
+        trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
+        trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
+        trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
+        trustedPayment.rewardRedemption = await getRewardRedemptionView(
+            req.session.user.id,
+            trustedPayment.merchantId,
+            trustedPayment.serviceId,
+            trustedPayment.amount
+        );
+    }
+
+    trustedPayment = await applyVoucherRedemption(req, trustedPayment);
+    trustedPayment = await applyPointRedemption(req, trustedPayment);
+    trustedPayment = await applyCashbackRedemption(req, trustedPayment);
+
+    return trustedPayment;
 }
 
 function persistPaidTransaction(payment, paymentMethod) {
@@ -3287,22 +3325,7 @@ async function confirmPayment(req, res) {
     let trustedPayment;
 
     try {
-        trustedPayment = await buildTrustedPayment(req, payment);
-        if (trustedPayment.kind === 'booking') {
-            trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
-            trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
-            trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
-            trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
-            trustedPayment.rewardRedemption = await getRewardRedemptionView(
-                req.session.user.id,
-                trustedPayment.merchantId,
-                trustedPayment.serviceId,
-                trustedPayment.amount
-            );
-        }
-        trustedPayment = await applyVoucherRedemption(req, trustedPayment);
-        trustedPayment = await applyPointRedemption(req, trustedPayment);
-        trustedPayment = await applyCashbackRedemption(req, trustedPayment);
+        trustedPayment = await prepareTrustedPayment(req, payment);
     } catch (error) {
         const fallbackVouchers = payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : [];
         const fallbackRewardRedemption = trustedPayment?.kind === 'booking'
@@ -3338,6 +3361,13 @@ async function confirmPayment(req, res) {
     }
 
     const selectedPaymentMethod = req.body.paymentMethod || 'card';
+
+    if (selectedPaymentMethod === 'paypal') {
+        return renderPaymentForm(res, getPaymentViewModel({
+            ...trustedPayment,
+            redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
+        }), 'Use the PayPal button to approve this payment before it can be recorded.');
+    }
 
     if (selectedPaymentMethod === 'nets') {
         const txnRetrievalRef = `PROTO-${Date.now()}`;
@@ -3416,6 +3446,117 @@ function showPaymentSuccess(req, res) {
     });
 }
 
+async function createPayPalOrder(req, res) {
+    const payment = getPaymentPayload(req.body || {});
+    let trustedPayment;
+
+    if (!paypal.isConfigured()) {
+        return res.status(503).json({
+            success: false,
+            message: 'PayPal is not configured on the server.'
+        });
+    }
+
+    try {
+        trustedPayment = await prepareTrustedPayment(req, payment);
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Payment could not be prepared.'
+        });
+    }
+
+    if (!Number.isFinite(trustedPayment.amount) || trustedPayment.amount <= 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'PayPal requires a positive payment amount.'
+        });
+    }
+
+    try {
+        const order = await paypal.createOrder({
+            amount: trustedPayment.amount,
+            currencyCode: 'SGD',
+            referenceId: trustedPayment.receiptId,
+            description: buildPayPalDescription(trustedPayment)
+        });
+
+        req.session.pendingPayPalOrders = req.session.pendingPayPalOrders || {};
+        req.session.pendingPayPalOrders[order.id] = {
+            ...trustedPayment,
+            paypalOrderId: order.id,
+            paypalStatus: order.status || 'CREATED'
+        };
+
+        return res.json({
+            success: true,
+            orderId: order.id
+        });
+    } catch (error) {
+        console.error('PayPal create order failed:', error.payload || error.message);
+        return res.status(502).json({
+            success: false,
+            message: 'PayPal could not create the order. Check sandbox credentials and try again.'
+        });
+    }
+}
+
+async function capturePayPalOrder(req, res) {
+    const orderId = String(req.body?.orderId || '').trim();
+    const pendingPayment = req.session.pendingPayPalOrders?.[orderId];
+
+    if (!paypal.isConfigured()) {
+        return res.status(503).json({
+            success: false,
+            message: 'PayPal is not configured on the server.'
+        });
+    }
+
+    if (!orderId || !pendingPayment) {
+        return res.status(400).json({
+            success: false,
+            message: 'PayPal order session is missing or expired.'
+        });
+    }
+
+    try {
+        const capture = await paypal.captureOrder(orderId);
+        const details = paypal.extractCaptureDetails(capture);
+        const expectedAmount = Number(pendingPayment.amount || 0).toFixed(2);
+
+        if (details.status !== 'COMPLETED' || details.captureStatus !== 'COMPLETED') {
+            throw new Error('PayPal capture was not completed.');
+        }
+
+        if (details.currencyCode !== 'SGD' || details.value.toFixed(2) !== expectedAmount) {
+            throw new Error('PayPal capture amount does not match the trusted payment amount.');
+        }
+
+        const receiptId = await completeTrustedPayment(req, {
+            ...pendingPayment,
+            paypalOrderId: details.orderId,
+            paypalCaptureId: details.captureId,
+            paypalPayerEmail: details.payerEmail,
+            paypalPayerId: details.payerId
+        }, 'PayPal');
+
+        delete req.session.pendingPayPalOrders[orderId];
+
+        return res.json({
+            success: true,
+            receiptId,
+            redirectUrl: `/receipt/${encodeURIComponent(receiptId)}`
+        });
+    } catch (error) {
+        console.error('PayPal capture failed:', error.payload || error.message);
+        delete req.session.pendingPayPalOrders[orderId];
+        return res.status(502).json({
+            success: false,
+            message: error.message || 'PayPal capture failed.'
+        });
+    }
+}
+
 function streamNetsPaymentStatus(req, res) {
     const txn = req.params.txnRetrievalRef;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -3466,5 +3607,7 @@ module.exports = {
     failNetsPayment,
     showNetsFail,
     showPaymentSuccess,
+    createPayPalOrder,
+    capturePayPalOrder,
     streamNetsPaymentStatus
 };

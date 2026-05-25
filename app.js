@@ -494,6 +494,8 @@ app.get('/checkout', requireCustomer, (req, res) => res.redirect('/cart'));
 app.post('/checkout', requireCustomer, merchantController.checkout);
 app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
+app.post('/api/paypal/create-order', requireCustomer, merchantController.createPayPalOrder);
+app.post('/api/paypal/capture-order', requireCustomer, merchantController.capturePayPalOrder);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
 app.get('/receipt/:id', requireLogin, receiptController.showReceipt);
 app.get('/receipt/:id/pdf', requireLogin, receiptController.downloadReceiptPdf);
