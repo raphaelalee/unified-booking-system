@@ -19,10 +19,14 @@ const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/em
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
+const { formatAppointmentDateTime } = require('../utils/dateTimeFormat');
 const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
+const nets = require('../services/nets');
 const {
     getBookingCheckInUrl,
+    getGuestReceiptPath,
+    getGuestReceiptUrl,
     getMerchantStorefrontPath,
     getMerchantStorefrontSlug,
     getMerchantStorefrontUrl,
@@ -34,6 +38,9 @@ const {
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 const hitpayPendingStore = new Map();
+
+const NETS_STATUS_POLL_MS = 3000;
+const NETS_STATUS_TIMEOUT_MS = 5 * 60 * 1000;
 
 function getTodayInputValue() {
     return Booking.getSingaporeTodayKey();
@@ -250,6 +257,34 @@ function notifyBooking(booking) {
     notifyBookingBySms(booking);
 }
 
+async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validation, bookingDate, bookingTime, checkInUrl }) {
+    if (!bookingId || !checkInUrl) {
+        return null;
+    }
+
+    const qrCodeDataUrl = await QRCode.toDataURL(checkInUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 240
+    });
+
+    return {
+        id: bookingId,
+        customerName: validation.customerName || req.session.user?.name || 'Guest',
+        email: validation.email || req.session.user?.email || '',
+        merchantName: merchant.name,
+        serviceName: validation.serviceName,
+        servicePrice: Number(validation.bookableItem?.price || validation.service?.price || 0),
+        bookingDate,
+        bookingTime,
+        appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
+        checkinUrl: checkInUrl,
+        qrCodeDataUrl,
+        receiptPath: getGuestReceiptPath(bookingId),
+        receiptUrl: getGuestReceiptUrl(req, bookingId)
+    };
+}
+
 function logNotificationError(error) {
     if (error) {
         console.error('Notification error:', error.message || error);
@@ -300,25 +335,28 @@ function notifyBookingCreated(req, merchant, validation, bookingId = null, statu
     const serviceName = validation.serviceName || validation.service?.name || 'your service';
     const appointmentLabel = `${req.body.bookingDate} at ${req.body.bookingTime}`;
     const customerLink = bookingId ? `/receipt/${bookingId}` : '/profile#bookings';
-    const bookingKey = bookingId || `${merchant.id}-${req.session.user.id}-${Date.now()}`;
+    const currentUserId = req.session.user?.id || null;
+    const bookingKey = bookingId || `${merchant.id}-${currentUserId || 'guest'}-${Date.now()}`;
     const isPending = String(status || '').toLowerCase() === 'pending';
 
-    createNotification({
-        recipientUserId: req.session.user.id,
-        recipientRole: 'customer',
-        actorUserId: merchant.merchantUserId || null,
-        type: isPending ? 'booking_pending' : 'booking_confirmed',
-        title: isPending ? 'Booking request pending' : 'Booking request confirmed',
-        message: isPending
-            ? `${serviceName} at ${merchant.name} for ${appointmentLabel} is waiting for merchant review.`
-            : `${serviceName} at ${merchant.name} is booked for ${appointmentLabel}.`,
-        linkUrl: customerLink,
-        dedupeKey: bookingId ? `booking-created-customer-${bookingId}` : null,
-        metadata: { merchantId: merchant.id, bookingId, serviceName }
-    });
+    if (currentUserId) {
+        createNotification({
+            recipientUserId: currentUserId,
+            recipientRole: 'customer',
+            actorUserId: merchant.merchantUserId || null,
+            type: isPending ? 'booking_pending' : 'booking_confirmed',
+            title: isPending ? 'Booking request pending' : 'Booking request confirmed',
+            message: isPending
+                ? `${serviceName} at ${merchant.name} for ${appointmentLabel} is waiting for merchant review.`
+                : `${serviceName} at ${merchant.name} is booked for ${appointmentLabel}.`,
+            linkUrl: customerLink,
+            dedupeKey: bookingId ? `booking-created-customer-${bookingId}` : null,
+            metadata: { merchantId: merchant.id, bookingId, serviceName }
+        });
+    }
 
     createMerchantNotification(merchant, {
-        actorUserId: req.session.user.id,
+        actorUserId: currentUserId,
         type: 'booking',
         title: isPending ? 'Booking needs review' : 'New booking received',
         message: isPending
@@ -330,7 +368,7 @@ function notifyBookingCreated(req, merchant, validation, bookingId = null, statu
     });
 
     createRoleNotification('admin', {
-        actorUserId: req.session.user.id,
+        actorUserId: currentUserId,
         type: 'booking',
         title: isPending ? 'Customer booking needs review' : 'New customer booking',
         message: isPending
@@ -1020,6 +1058,11 @@ function validatePromotionForBooking(req, selectedPromotion, validation, callbac
         }
 
         if (promotion.type === 'first_trial') {
+            if (!req.session.user?.id) {
+                callback(null, { error: 'Please create an account or log in to use this First Trial promotion.' });
+                return;
+            }
+
             return Promotion.hasUserRedeemedPromotion(req.session.user.id, promotion.id, (redemptionError, hasRedeemed) => {
                 if (redemptionError) {
                     callback(redemptionError);
@@ -1892,14 +1935,6 @@ function saveQrBooking(req, res) {
             });
         }
 
-        if (!req.session.user) {
-            return renderBookingPage(req, res, merchant, {
-                status: 401,
-                errors: ['Please log in before confirming a booking.'],
-                form: req.body
-            });
-        }
-
         req.body.bookingTime = validation.bookingTime;
 
         return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
@@ -1921,7 +1956,7 @@ function saveQrBooking(req, res) {
         }
 
         const bookingData = {
-            userId: req.session.user.id,
+            userId: req.session.user?.id || null,
             merchantId: merchant.id,
             merchantName: merchant.name,
             serviceId: validation.service.id,
@@ -1956,7 +1991,19 @@ function saveQrBooking(req, res) {
                 });
             }
 
-                const finishSuccess = () => res.render('booking-success', {
+                const bookingId = getInsertedBookingId(confirmation.result);
+                const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+                const finishSuccess = async () => {
+                    const bookingReceipt = await buildBookingReceiptForSuccess(req, {
+                        bookingId,
+                        merchant,
+                        validation,
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: validation.bookingTime,
+                        checkInUrl
+                    });
+
+                    return res.render('booking-success', {
                     title: confirmation.confirmed ? 'Booking Confirmed' : 'Booking Pending',
                     merchant,
                     service: {
@@ -1969,6 +2016,7 @@ function saveQrBooking(req, res) {
                     bookingTime: validation.bookingTime,
                     bookingId,
                     bookingStatus: confirmation.status,
+                    bookingReceipt,
                     whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                         merchant,
                         service: { name: validation.serviceName },
@@ -1978,26 +2026,23 @@ function saveQrBooking(req, res) {
                         phone: validation.phone,
                         bookingUrl: getBookingUrl(req, merchant, validation.service)
                     }))
-                });
-
-                const bookingId = getInsertedBookingId(confirmation.result);
-                const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+                    });
+                };
 
                 notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
-                if (confirmation.confirmed) {
-                    notifyBooking({
-                        customerName: validation.customerName,
-                        email: validation.email,
-                        phone: validation.phone,
-                        merchantName: merchant.name,
-                        serviceName: validation.serviceName,
-                        bookingDate: req.body.bookingDate,
-                        bookingTime: validation.bookingTime,
-                        checkInUrl
-                    });
-                }
+                notifyBooking({
+                    customerName: validation.customerName,
+                    email: validation.email,
+                    phone: validation.phone,
+                    merchantName: merchant.name,
+                    serviceName: validation.serviceName,
+                    bookingDate: req.body.bookingDate,
+                    bookingTime: validation.bookingTime,
+                    checkInUrl,
+                    receiptUrl: bookingId ? getGuestReceiptUrl(req, bookingId) : ''
+                });
 
-                if (promotionRecord?.id) {
+                if (promotionRecord?.id && req.session.user?.id) {
                     return Promotion.createRedemption({
                         promotionId: promotionRecord.id,
                         userId: req.session.user.id,
@@ -2008,11 +2053,17 @@ function saveQrBooking(req, res) {
                             console.error(redemptionError);
                         }
 
-                        return finishSuccess();
+                        return finishSuccess().catch((successError) => {
+                            console.error(successError);
+                            return res.redirect('/services');
+                        });
                     });
                 }
 
-                return finishSuccess();
+                return finishSuccess().catch((successError) => {
+                    console.error(successError);
+                    return res.redirect('/services');
+                });
         });
     });
     });
@@ -2055,15 +2106,6 @@ function saveSecureScanBooking(req, res) {
             });
         }
 
-        if (!req.session.user) {
-            return renderBookingPage(req, res, merchant, {
-                status: 401,
-                errors: ['Please log in before confirming a booking.'],
-                form: req.body,
-                secureQr: true
-            });
-        }
-
         req.body.bookingTime = validation.bookingTime;
 
         return validatePromotionForBooking(req, getPromotionSelection(req.query), validation, (promotionValidationError, promotionRecord) => {
@@ -2087,7 +2129,7 @@ function saveSecureScanBooking(req, res) {
             }
 
             const bookingData = {
-                userId: req.session.user.id,
+                userId: req.session.user?.id || null,
                 merchantId: merchant.id,
                 merchantName: merchant.name,
                 serviceId: validation.service.id,
@@ -2123,7 +2165,19 @@ function saveSecureScanBooking(req, res) {
                     });
                 }
 
-                    const finishSuccess = () => res.render('booking-success', {
+                    const bookingId = getInsertedBookingId(confirmation.result);
+                    const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+                    const finishSuccess = async () => {
+                        const bookingReceipt = await buildBookingReceiptForSuccess(req, {
+                            bookingId,
+                            merchant,
+                            validation,
+                            bookingDate: req.body.bookingDate,
+                            bookingTime: validation.bookingTime,
+                            checkInUrl
+                        });
+
+                        return res.render('booking-success', {
                         title: confirmation.confirmed ? 'Booking Confirmed' : 'Booking Pending',
                         merchant,
                         service: {
@@ -2136,6 +2190,7 @@ function saveSecureScanBooking(req, res) {
                         bookingTime: validation.bookingTime,
                         bookingId,
                         bookingStatus: confirmation.status,
+                        bookingReceipt,
                         anotherBookingPath: getSecureBookingPath(merchant),
                         whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
                             merchant,
@@ -2146,26 +2201,23 @@ function saveSecureScanBooking(req, res) {
                             phone: validation.phone,
                             bookingUrl: getSecureBookingUrl(req, merchant, validation.service)
                         }))
-                    });
-
-                    const bookingId = getInsertedBookingId(confirmation.result);
-                    const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
+                        });
+                    };
 
                     notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
-                    if (confirmation.confirmed) {
-                        notifyBooking({
-                            customerName: validation.customerName,
-                            email: validation.email,
-                            phone: validation.phone,
-                            merchantName: merchant.name,
-                            serviceName: validation.serviceName,
-                            bookingDate: req.body.bookingDate,
-                            bookingTime: validation.bookingTime,
-                            checkInUrl
-                        });
-                    }
+                    notifyBooking({
+                        customerName: validation.customerName,
+                        email: validation.email,
+                        phone: validation.phone,
+                        merchantName: merchant.name,
+                        serviceName: validation.serviceName,
+                        bookingDate: req.body.bookingDate,
+                        bookingTime: validation.bookingTime,
+                        checkInUrl,
+                        receiptUrl: bookingId ? getGuestReceiptUrl(req, bookingId) : ''
+                    });
 
-                    if (promotionRecord?.id) {
+                    if (promotionRecord?.id && req.session.user?.id) {
                         return Promotion.createRedemption({
                             promotionId: promotionRecord.id,
                             userId: req.session.user.id,
@@ -2176,11 +2228,17 @@ function saveSecureScanBooking(req, res) {
                                 console.error(redemptionError);
                             }
 
-                            return finishSuccess();
+                            return finishSuccess().catch((successError) => {
+                                console.error(successError);
+                                return res.redirect(getSecureBookingPath(merchant));
+                            });
                         });
                     }
 
-                    return finishSuccess();
+                    return finishSuccess().catch((successError) => {
+                        console.error(successError);
+                        return res.redirect(getSecureBookingPath(merchant));
+                    });
             });
         });
     });
@@ -2300,6 +2358,28 @@ function createBooking(req, res) {
     return res.redirect('/');
 }
 
+function wantsCartJson(req) {
+    return req.xhr
+        || String(req.body?.responseType || req.query?.responseType || '').toLowerCase() === 'json'
+        || String(req.get('accept') || '').includes('application/json');
+}
+
+function respondCartAdded(req, res, message, item = null) {
+    const cartCount = getCartItemCount(req.session.cart || []);
+
+    if (wantsCartJson(req)) {
+        return res.json({
+            success: true,
+            message,
+            cartCount,
+            item
+        });
+    }
+
+    req.session.success = message;
+    return res.redirect('/cart');
+}
+
 function addToCart(req, res) {
     const merchant = Merchant.findById(req.params.merchantId);
     const service = Merchant.findService(req.params.merchantId, req.body.serviceId);
@@ -2312,7 +2392,7 @@ function addToCart(req, res) {
     }
 
     req.session.cart = req.session.cart || [];
-    req.session.cart.push({
+    const cartItem = {
         id: Date.now(),
         merchantId: merchant.id,
         merchantName: merchant.name,
@@ -2321,10 +2401,10 @@ function addToCart(req, res) {
         serviceName: service.name,
         duration: service.duration,
         price: service.price
-    });
+    };
+    req.session.cart.push(cartItem);
 
-    req.session.success = `${service.name} was added to your cart.`;
-    return res.redirect('/cart');
+    return respondCartAdded(req, res, `${service.name} was added to your cart.`, cartItem);
 }
 
 function addProductToCart(req, res) {
@@ -2363,8 +2443,7 @@ function addProductToCart(req, res) {
             });
         }
 
-        req.session.success = `${product.name} was added to your cart.`;
-        return res.redirect('/cart');
+        return respondCartAdded(req, res, `${product.name} was added to your cart.`, existingProduct || req.session.cart[req.session.cart.length - 1]);
     });
 }
 
@@ -3527,6 +3606,59 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
     return paidPayment.receiptId;
 }
 
+async function renderNetsQrPayment(req, res, trustedPayment) {
+    let qrData;
+    let qrPayload;
+    let txnRetrievalRef;
+    let isPrototypeQr = false;
+    let netsErrorMessage = null;
+
+    try {
+        const txnId = nets.createSandboxTxnId();
+        qrData = await nets.requestNetsQr(trustedPayment.amount, txnId);
+
+        if (!nets.isQrSuccess(qrData)) {
+            throw new Error(`NETS QR request was not accepted: ${JSON.stringify(qrData)}`);
+        }
+
+        qrPayload = qrData.qr_code;
+        txnRetrievalRef = qrData.txn_retrieval_ref;
+    } catch (error) {
+        console.error('NETS QR request failed:', error.message);
+        const fallbackTxnId = `PROTO-${Date.now()}`;
+        qrData = nets.createPrototypeNetsQr(trustedPayment.amount, fallbackTxnId);
+        qrPayload = qrData.qr_code;
+        txnRetrievalRef = qrData.txn_retrieval_ref;
+        isPrototypeQr = true;
+        netsErrorMessage = error.message;
+    }
+
+    req.session.pendingNetsPayment = {
+        ...trustedPayment,
+        txnRetrievalRef,
+        netsQrData: qrData,
+        isPrototypeQr,
+        netsConfirmed: isPrototypeQr
+    };
+
+    return res.render('netsQR', {
+        title: 'NETS QR Payment',
+        total: trustedPayment.amount,
+        qrCodeUrl: await QRCode.toDataURL(qrPayload),
+        txnRetrievalRef,
+        isPrototypeQr,
+        netsErrorMessage,
+        completeUrl: '/nets/complete',
+        failCompleteUrl: '/nets/complete-fail',
+        successRedirect: '/payment/success',
+        failRedirect: '/nets-qr/fail',
+        backPrimaryUrl: '/cart',
+        backPrimaryLabel: 'Back to cart',
+        backSecondaryUrl: '/services',
+        backSecondaryLabel: 'Browse services'
+    });
+}
+
 async function confirmPayment(req, res) {
     const payment = getPaymentPayload(req.body);
     let trustedPayment;
@@ -3584,28 +3716,7 @@ async function confirmPayment(req, res) {
     }
 
     if (selectedPaymentMethod === 'nets') {
-        const txnRetrievalRef = `PROTO-${Date.now()}`;
-        req.session.pendingNetsPayment = {
-            ...trustedPayment,
-            txnRetrievalRef
-        };
-
-        return res.render('netsQR', {
-            title: 'NETS QR Payment',
-            total: trustedPayment.amount,
-            qrCodeUrl: await QRCode.toDataURL(`NETS:${txnRetrievalRef}:${trustedPayment.amount}`),
-            txnRetrievalRef,
-            isPrototypeQr: true,
-            netsErrorMessage: null,
-            completeUrl: '/nets/complete',
-            failCompleteUrl: '/nets/complete-fail',
-            successRedirect: '/payment/success',
-            failRedirect: '/nets-qr/fail',
-            backPrimaryUrl: '/cart',
-            backPrimaryLabel: 'Back to cart',
-            backSecondaryUrl: '/services',
-            backSecondaryLabel: 'Browse services'
-        });
+        return renderNetsQrPayment(req, res, trustedPayment);
     }
 
     try {
@@ -3625,6 +3736,14 @@ async function completeNetsPayment(req, res) {
     }
 
     try {
+        if (!payment.isPrototypeQr && !payment.netsConfirmed) {
+            const status = await nets.checkStatus(payment.txnRetrievalRef);
+            if (status.status !== 'SUCCESS') {
+                return res.status(409).json({ ok: false, status: status.status });
+            }
+            payment.netsConfirmed = true;
+        }
+
         const receiptId = await completeTrustedPayment(req, payment, 'NETS QR');
         req.session.lastPayment = { receiptId };
         req.session.pendingNetsPayment = null;
@@ -3989,11 +4108,69 @@ function streamNetsPaymentStatus(req, res) {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const data = JSON.stringify(String(txn).startsWith('PROTO-')
-        ? { success: true, prototype: true }
-        : { txnRetrievalRef: txn, status: 'unknown' });
-    res.write(`data: ${data}\n\n`);
-    res.end();
+    const send = (payload) => {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    const pendingPayment = req.session.pendingNetsPayment;
+    if (!pendingPayment || String(pendingPayment.txnRetrievalRef) !== String(txn)) {
+        send({ fail: true, message: 'Payment session not found.' });
+        res.end();
+        return;
+    }
+
+    if (pendingPayment.isPrototypeQr || String(txn).startsWith('PROTO-')) {
+        pendingPayment.netsConfirmed = true;
+        send({ success: true, prototype: true });
+        res.end();
+        return;
+    }
+
+    let closed = false;
+    const startedAt = Date.now();
+    let interval;
+
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        if (interval) clearInterval(interval);
+        res.end();
+    };
+
+    const poll = async () => {
+        try {
+            const result = await nets.checkStatus(txn);
+            if (result.status === 'SUCCESS') {
+                pendingPayment.netsConfirmed = true;
+                send({ success: true, txnRetrievalRef: txn });
+                close();
+                return;
+            }
+
+            if (result.status === 'FAIL') {
+                send({ fail: true, txnRetrievalRef: txn });
+                close();
+                return;
+            }
+
+            send({
+                pending: true,
+                txnRetrievalRef: txn,
+                timeout: Date.now() - startedAt >= NETS_STATUS_TIMEOUT_MS
+            });
+
+            if (Date.now() - startedAt >= NETS_STATUS_TIMEOUT_MS) {
+                close();
+            }
+        } catch (error) {
+            console.error('NETS status check failed:', error.message);
+            send({ pending: true, txnRetrievalRef: txn, message: error.message });
+        }
+    };
+
+    interval = setInterval(poll, NETS_STATUS_POLL_MS);
+    req.on('close', close);
+    poll();
 }
 
 module.exports = {

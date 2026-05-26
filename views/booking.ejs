@@ -330,23 +330,29 @@
         <div>
             <p class="eyebrow">Your details</p>
             <h2>Confirm booking</h2>
-            <p class="muted">Select a service, date, and time. We will save your booking request.</p>
+            <p class="muted">
+                <% if (currentUser) { %>
+                    Select a service, date, and time. We will save your booking request to your account.
+                <% } else { %>
+                    Continue as guest by entering your contact details. Guest bookings do not earn points or credits.
+                <% } %>
+            </p>
         </div>
 
             <div class="form-row">
                 <label>
                     Full name
-                    <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name">
+                    <input type="text" name="customerName" value="<%= form.customerName || '' %>" placeholder="Enter your name" required>
                 </label>
                 <label>
                     Phone number
-                    <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8">
+                    <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8" pattern="[689][0-9]{7}" required>
                 </label>
             </div>
 
             <label>
                 Email address
-                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com">
+                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" required>
             </label>
 
             <div class="booking-summary-card" aria-live="polite">
@@ -374,7 +380,7 @@
                 </dl>
             </div>
 
-            <button class="button primary full js-confirm-booking" type="submit" disabled>Confirm booking</button>
+            <button class="button primary full js-confirm-booking" type="submit" disabled><%= currentUser ? 'Confirm booking' : 'Continue as guest' %></button>
 
         <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
             <div class="whatsapp-booking-panel">

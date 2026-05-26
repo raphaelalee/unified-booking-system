@@ -9,7 +9,8 @@ const MerchantService = require('../models/MerchantService');
 const {
     getBookingCheckInUrl,
     getPublicBaseUrl,
-    signBookingCheckInToken
+    signBookingCheckInToken,
+    verifyGuestReceiptToken
 } = require('../utils/qrToken');
 const {
     formatAppointmentDateTime,
@@ -462,6 +463,11 @@ function receiptItemsBelongToMerchant(receipt, merchant, merchantUserId) {
 function canViewReceipt(req, receipt, merchant = null) {
     const user = req.session.user;
 
+    if (!user && receipt?.type === 'booking') {
+        const tokenBookingId = verifyGuestReceiptToken(req.query.receiptToken || req.query.token);
+        return tokenBookingId && String(tokenBookingId) === String(receipt.id);
+    }
+
     if (!user || !receipt) {
         return false;
     }
@@ -514,6 +520,10 @@ async function loadReceipt(req, id) {
         if (bookingReceipt) {
             return canViewReceipt(req, bookingReceipt, merchant) ? bookingReceipt : null;
         }
+    }
+
+    if (!user) {
+        return null;
     }
 
     const orderMatch = String(id).match(/^order-(\d+)$/);

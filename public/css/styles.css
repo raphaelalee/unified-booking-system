@@ -2207,6 +2207,8 @@ textarea {
 .booking-service-row .service-row-checkbox {
     width: 18px;
     height: 18px;
+    display: grid;
+    place-items: center;
     border: 1px solid rgba(79, 98, 82, 0.4);
     border-radius: 4px;
     background: #fff;
@@ -2214,10 +2216,22 @@ textarea {
     margin-top: 4px;
 }
 
+.booking-service-row .service-row-checkbox::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: transparent;
+}
+
 .booking-service-row:hover .service-row-checkbox,
 .booking-service-row.is-selected .service-row-checkbox {
     border-color: var(--sage);
-    background: rgba(131, 152, 131, 0.15);
+    background: var(--sage);
+}
+
+.booking-service-row.is-selected .service-row-checkbox::after {
+    background: #fff;
 }
 
 .booking-service-row .service-row-main {

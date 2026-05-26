@@ -42,6 +42,7 @@ function buildBookingEmailText(booking) {
         `Service: ${booking.serviceName}`,
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
+        booking.receiptUrl ? `Receipt link: ${booking.receiptUrl}` : '',
         booking.checkinUrl ? `Check-in QR link: ${booking.checkinUrl}` : '',
         '',
         'Please contact the merchant if you need to reschedule or cancel.',
@@ -66,6 +67,14 @@ function buildBookingEmailHtml(booking, qrCid = '') {
                                         ${qrCid ? `<img src="cid:${qrCid}" alt="Booking check-in QR code" width="180" height="180" style="display:block;margin:0 auto 12px;width:180px;height:180px;border:0;">` : ''}
                                         <p style="margin:0;font-size:13px;line-height:1.5;color:#496356;">Show this QR code when you arrive.</p>
                                         <a href="${escapeHtml(booking.checkinUrl)}" style="display:inline-block;margin:10px 0 0;font-size:12px;line-height:1.5;color:#496356;word-break:break-all;">${escapeHtml(booking.checkinUrl)}</a>
+                                    </div>`
+        : '';
+    const receiptBlock = booking.receiptUrl
+        ? `
+                                    <div style="margin-top:24px;padding:18px 20px;background:#fffaf3;border:1px solid #e5d8c8;border-radius:10px;">
+                                        <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#241f1a;">Receipt</p>
+                                        <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#5f5448;">Use this link to view or download your booking receipt.</p>
+                                        <a href="${escapeHtml(booking.receiptUrl)}" style="display:inline-block;padding:11px 16px;background:#3f513a;color:#fffdf7;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;">Open receipt</a>
                                     </div>`
         : '';
 
@@ -116,6 +125,7 @@ function buildBookingEmailHtml(booking, qrCid = '') {
                                     </div>
 
                                     ${qrBlock}
+                                    ${receiptBlock}
 
                                     <p style="margin:26px 0 0;font-size:14px;line-height:1.6;color:#5f5448;">Thank you,<br><strong>Vaniday</strong></p>
                                 </td>

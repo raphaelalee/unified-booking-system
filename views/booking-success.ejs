@@ -14,13 +14,53 @@
         <%= isPendingBooking ? 'The merchant will review this appointment request.' : 'Please refer to your email for the confirmation details and check-in QR code.' %>
     </p>
     <div class="hero-actions">
-        <a class="button primary" href="/profile#bookings">View my bookings</a>
+        <% if (currentUser) { %>
+            <a class="button primary" href="/profile#bookings">View my bookings</a>
+        <% } %>
         <% if (typeof bookingId !== 'undefined' && bookingId) { %>
-            <a class="button secondary" href="/receipt/<%= encodeURIComponent(bookingId) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
-            <a class="button secondary" href="/receipt/<%= encodeURIComponent(bookingId) %>/pdf">Download Receipt</a>
+            <% const receiptBasePath = bookingReceipt && bookingReceipt.receiptPath ? bookingReceipt.receiptPath : `/receipt/${encodeURIComponent(bookingId)}`; %>
+            <a class="button secondary" href="<%= receiptBasePath %>">View Receipt</a>
+            <a class="button secondary" href="<%= receiptBasePath.replace(`/receipt/${encodeURIComponent(bookingId)}`, `/receipt/${encodeURIComponent(bookingId)}/google-calendar`) %>" target="_blank" rel="noopener">Add to Google Calendar</a>
+            <a class="button secondary" href="<%= receiptBasePath.replace(`/receipt/${encodeURIComponent(bookingId)}`, `/receipt/${encodeURIComponent(bookingId)}/pdf`) %>">Download Receipt</a>
         <% } %>
         <a class="button secondary" href="<%= typeof anotherBookingPath !== 'undefined' ? anotherBookingPath : '/merchant/' + merchant.id %>">Create another booking</a>
     </div>
 </section>
+
+<% if (typeof bookingReceipt !== 'undefined' && bookingReceipt && bookingReceipt.qrCodeDataUrl) { %>
+    <section class="section compact receipt-section">
+        <div class="receipt-layout">
+            <article class="receipt-card">
+                <div class="receipt-meta-grid">
+                    <p><span>Booking ID</span><strong>#<%= bookingReceipt.id %></strong></p>
+                    <p><span>Customer</span><strong><%= bookingReceipt.customerName %></strong></p>
+                    <p><span>Service</span><strong><%= bookingReceipt.serviceName %></strong></p>
+                    <p><span>Merchant</span><strong><%= bookingReceipt.merchantName %></strong></p>
+                    <p><span>Date/time</span><strong><%= bookingReceipt.appointmentLabel %></strong></p>
+                    <p><span>Amount</span><strong>$<%= Number(bookingReceipt.servicePrice || 0).toFixed(2) %></strong></p>
+                </div>
+                <p class="muted">
+                    <% if (currentUser) { %>
+                        This receipt is also available from your profile.
+                    <% } else { %>
+                        Save this page or keep the confirmation email. Guest bookings are not attached to an account.
+                    <% } %>
+                </p>
+                <div class="hero-actions">
+                    <a class="button secondary" href="<%= bookingReceipt.receiptPath %>">View Receipt</a>
+                    <a class="button secondary" href="<%= bookingReceipt.receiptPath.replace(`/receipt/${encodeURIComponent(bookingReceipt.id)}`, `/receipt/${encodeURIComponent(bookingReceipt.id)}/pdf`) %>">Download Receipt</a>
+                    <a class="button secondary" href="<%= bookingReceipt.receiptPath.replace(`/receipt/${encodeURIComponent(bookingReceipt.id)}`, `/receipt/${encodeURIComponent(bookingReceipt.id)}/calendar.ics`) %>">Download Calendar</a>
+                </div>
+            </article>
+
+            <aside class="receipt-qr-panel">
+                <p class="eyebrow">Scan to Check In</p>
+                <img class="qr-code" src="<%= bookingReceipt.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= bookingReceipt.id %>">
+                <p class="muted">Show this QR code when checking in at the merchant counter.</p>
+                <a class="qr-link" href="<%= bookingReceipt.checkinUrl %>"><%= bookingReceipt.checkinUrl %></a>
+            </aside>
+        </div>
+    </section>
+<% } %>
 
 <%- include('partials/footer') %>

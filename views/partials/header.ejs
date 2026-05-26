@@ -14,14 +14,15 @@
     <% } %>
     <link rel="stylesheet" href="/css/styles.css?v=sandy-editorial-1">
     <link rel="stylesheet" href="/css/cart.css?v=1">
-    <link rel="stylesheet" href="/css/payment.css?v=1">
+    <link rel="stylesheet" href="/css/payment.css?v=3">
     <link rel="stylesheet" href="/css/receipt.css?v=1">
     <link rel="stylesheet" href="/css/booking.css?v=5">
     <link rel="stylesheet" href="/css/green-theme.css?v=3">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=16">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=41">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=43">
     <script src="/js/security.js?v=1" defer></script>
+    <script src="/js/cart-feedback.js?v=1" defer></script>
 </head>
 <body>
     <header class="site-header">
@@ -97,7 +98,7 @@
                     <div class="nav-commerce-links">
                         <a class="bag-link" href="/cart" aria-label="Cart">
                             <span class="bag-icon" aria-hidden="true">
-                                <span class="bag-count"><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
+                                <span class="bag-count" data-cart-count><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
                             </span>
                         </a>
                     </div>

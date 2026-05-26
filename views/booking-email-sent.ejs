@@ -17,9 +17,13 @@
         </div>
     <% } %>
     <div class="hero-actions">
-        <a class="button primary" href="/profile">View my bookings</a>
-        <a class="button secondary" href="/receipt/<%= encodeURIComponent(booking.id) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
-        <a class="button secondary" href="/receipt/<%= encodeURIComponent(booking.id) %>/pdf">Download Receipt</a>
+        <% const receiptPath = booking.receiptPath || `/receipt/${encodeURIComponent(booking.id)}`; %>
+        <% if (currentUser) { %>
+            <a class="button primary" href="/profile">View my bookings</a>
+        <% } %>
+        <a class="button secondary" href="<%= receiptPath %>">View Receipt</a>
+        <a class="button secondary" href="<%= receiptPath.replace(`/receipt/${encodeURIComponent(booking.id)}`, `/receipt/${encodeURIComponent(booking.id)}/google-calendar`) %>" target="_blank" rel="noopener">Add to Google Calendar</a>
+        <a class="button secondary" href="<%= receiptPath.replace(`/receipt/${encodeURIComponent(booking.id)}`, `/receipt/${encodeURIComponent(booking.id)}/pdf`) %>">Download Receipt</a>
         <a class="button secondary" href="/services">Book another service</a>
     </div>
 </section>
@@ -39,7 +43,18 @@
                     <strong><%= booking.appointmentLabel || booking.bookingDate %></strong>
                 </p>
             </div>
-            <p class="muted">Use the QR code from your email when checking in at the merchant counter.</p>
+            <p class="muted">
+                <% if (currentUser) { %>
+                    This receipt is also available from your profile.
+                <% } else { %>
+                    Save this page or keep the confirmation email. Guest bookings are not attached to an account.
+                <% } %>
+            </p>
+            <div class="hero-actions">
+                <a class="button secondary" href="<%= receiptPath %>">View Receipt</a>
+                <a class="button secondary" href="<%= receiptPath.replace(`/receipt/${encodeURIComponent(booking.id)}`, `/receipt/${encodeURIComponent(booking.id)}/pdf`) %>">Download Receipt</a>
+                <a class="button secondary" href="<%= receiptPath.replace(`/receipt/${encodeURIComponent(booking.id)}`, `/receipt/${encodeURIComponent(booking.id)}/calendar.ics`) %>">Download Calendar</a>
+            </div>
         </article>
 
         <aside class="receipt-qr-panel">

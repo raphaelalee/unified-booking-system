@@ -46,7 +46,7 @@
         <p>Shop beauty and wellness products recommended for post-treatment routines, daily care, and at-home maintenance.</p>
         <div class="marketplace-hero-actions">
             <a class="button primary" href="#product-catalog">Shop now</a>
-            <a class="button secondary" href="/cart">View cart (<%= typeof cartCount !== 'undefined' ? cartCount : 0 %>)</a>
+            <a class="button secondary" href="/cart">View cart (<span data-cart-count><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>)</a>
         </div>
     </div>
     <div class="marketplace-hero-image" aria-label="Facial aftercare products"></div>
@@ -92,10 +92,6 @@
             <input type="range" min="0" max="<%= Math.ceil(maxPrice || 100) %>" value="<%= Math.ceil(maxPrice || 100) %>" data-product-price>
         </label>
 
-        <a class="marketplace-cart-link" href="/cart" aria-label="Open cart">
-            <span></span>
-            Cart <strong><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></strong>
-        </a>
     </div>
 
     <% if (productList.length === 0) { %>

@@ -24,6 +24,16 @@ function signBookingCheckInToken(bookingId) {
     return `${id}.${signature}`;
 }
 
+function signGuestReceiptToken(bookingId) {
+    const id = String(bookingId);
+    const signature = crypto
+        .createHmac('sha256', getSecret())
+        .update(`guest-receipt:${id}`)
+        .digest('base64url');
+
+    return `${id}.${signature}`;
+}
+
 function verifyMerchantToken(merchantId, token) {
     if (!merchantId || !token) {
         return false;
@@ -49,6 +59,31 @@ function verifyBookingCheckInToken(token) {
     }
 
     const expected = signBookingCheckInToken(bookingId);
+    const expectedBuffer = Buffer.from(expected);
+    const tokenBuffer = Buffer.from(String(token));
+
+    if (
+        expectedBuffer.length !== tokenBuffer.length
+        || !crypto.timingSafeEqual(expectedBuffer, tokenBuffer)
+    ) {
+        return null;
+    }
+
+    return bookingId;
+}
+
+function verifyGuestReceiptToken(token) {
+    if (!token) {
+        return null;
+    }
+
+    const [bookingId] = String(token).split('.');
+
+    if (!bookingId || !/^\d+$/.test(bookingId)) {
+        return null;
+    }
+
+    const expected = signGuestReceiptToken(bookingId);
     const expectedBuffer = Buffer.from(expected);
     const tokenBuffer = Buffer.from(String(token));
 
@@ -118,9 +153,19 @@ function getBookingCheckInUrl(req, bookingId) {
     return `${getPublicBaseUrl(req)}${getBookingCheckInPath(bookingId)}`;
 }
 
+function getGuestReceiptPath(bookingId) {
+    return `/receipt/${encodeURIComponent(bookingId)}?receiptToken=${encodeURIComponent(signGuestReceiptToken(bookingId))}`;
+}
+
+function getGuestReceiptUrl(req, bookingId) {
+    return `${getPublicBaseUrl(req)}${getGuestReceiptPath(bookingId)}`;
+}
+
 module.exports = {
     getBookingCheckInPath,
     getBookingCheckInUrl,
+    getGuestReceiptPath,
+    getGuestReceiptUrl,
     getMerchantStorefrontPath,
     getMerchantStorefrontUrl,
     getMerchantStorefrontSlug,
@@ -130,6 +175,8 @@ module.exports = {
     parseMerchantStorefrontSlug,
     signMerchantToken,
     signBookingCheckInToken,
+    signGuestReceiptToken,
     verifyBookingCheckInToken,
+    verifyGuestReceiptToken,
     verifyMerchantToken
 };

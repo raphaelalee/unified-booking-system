@@ -45,8 +45,25 @@ function ensureBookingManagementSchema(callback) {
         }
 
         const fields = new Set(columns.map((column) => column.Field));
+        const userIdColumn = columns.find((column) => column.Field === 'user_id');
         const statusColumn = columns.find((column) => column.Field === 'status');
         const alters = [];
+
+        if (userIdColumn && String(userIdColumn.Null || '').toUpperCase() === 'NO') {
+            alters.push('MODIFY COLUMN user_id INT DEFAULT NULL');
+        }
+
+        if (!fields.has('guest_customer_name')) {
+            alters.push('ADD COLUMN guest_customer_name VARCHAR(100) DEFAULT NULL AFTER user_id');
+        }
+
+        if (!fields.has('guest_email')) {
+            alters.push('ADD COLUMN guest_email VARCHAR(100) DEFAULT NULL AFTER guest_customer_name');
+        }
+
+        if (!fields.has('guest_phone')) {
+            alters.push('ADD COLUMN guest_phone VARCHAR(20) DEFAULT NULL AFTER guest_email');
+        }
 
         if (statusColumn && !['paid', 'checked_in', 'no_show'].every((status) => String(statusColumn.Type || '').includes(status))) {
             alters.push("MODIFY COLUMN status ENUM('pending','confirmed','paid','checked_in','completed','cancelled','no_show') DEFAULT 'pending'");
@@ -540,9 +557,9 @@ function getAllInDatabase(callback) {
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
             COALESCE(bookings.merchant_id, salons.salon_id) AS merchant_id,
-            users.name AS customer_name,
-            users.email,
-            users.phone AS customer_phone,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+            COALESCE(users.email, bookings.guest_email) AS email,
+            COALESCE(users.phone, bookings.guest_phone) AS customer_phone,
             users.age AS customer_age,
             users.birthday AS customer_birthday,
             users.gender AS customer_gender,
@@ -554,7 +571,7 @@ function getAllInDatabase(callback) {
             services.duration_mins,
             services.price AS service_price
         FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         ORDER BY bookings.booking_id DESC
@@ -580,9 +597,9 @@ function getByMerchantUserId(userId, callback) {
             bookings.status,
             bookings.refund_status,
             bookings.checked_in_at,
-            users.name AS customer_name,
-            users.email,
-            users.phone AS customer_phone,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+            COALESCE(users.email, bookings.guest_email) AS email,
+            COALESCE(users.phone, bookings.guest_phone) AS customer_phone,
             users.age AS customer_age,
             users.birthday AS customer_birthday,
             users.gender AS customer_gender,
@@ -595,7 +612,7 @@ function getByMerchantUserId(userId, callback) {
             services.price AS service_price,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
@@ -644,9 +661,9 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
             bookings.checked_in_at,
-            users.name AS customer_name,
-            users.email,
-            users.phone AS customer_phone,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+            COALESCE(users.email, bookings.guest_email) AS email,
+            COALESCE(users.phone, bookings.guest_phone) AS customer_phone,
             users.age AS customer_age,
             users.birthday AS customer_birthday,
             users.gender AS customer_gender,
@@ -656,7 +673,7 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
             services.service_name,
             services.price AS service_price
         FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         WHERE bookings.booking_id = ?
@@ -709,28 +726,33 @@ function hasExistingBookingInDatabase(merchantId, serviceId, bookingDate, bookin
 }
 
 function createInDatabase(bookingData, callback) {
-    if (!bookingData.userId) {
-        callback(new Error('A logged-in user is required to save this booking in the current database schema.'));
-        return;
-    }
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    const sql = `
-        INSERT INTO bookings
-            (user_id, merchant_id, service_id, booking_date, timeslot, status, qr_code_token)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
+        const sql = `
+            INSERT INTO bookings
+                (user_id, guest_customer_name, guest_email, guest_phone, merchant_id, service_id, booking_date, timeslot, status, qr_code_token)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
 
-    const values = [
-        bookingData.userId,
-        bookingData.merchantId,
-        bookingData.serviceId,
-        bookingData.bookingDate,
-        normalizeTimeForDatabase(bookingData.bookingTime),
-        bookingData.status || 'pending',
-        bookingData.qrCodeToken || null
-    ];
+        const values = [
+            bookingData.userId || null,
+            bookingData.guestCustomerName || bookingData.customerName || null,
+            bookingData.guestEmail || bookingData.email || null,
+            bookingData.guestPhone || bookingData.phone || null,
+            bookingData.merchantId,
+            bookingData.serviceId,
+            bookingData.bookingDate,
+            normalizeTimeForDatabase(bookingData.bookingTime),
+            bookingData.status || 'pending',
+            bookingData.qrCodeToken || null
+        ];
 
-    db.query(sql, values, callback);
+        db.query(sql, values, callback);
+    });
 }
 
 function createCustomerBooking(bookingData, callback) {
@@ -847,11 +869,11 @@ function hasBookingClash(merchantId, bookingDate, startTime, endTime, options, c
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             services.duration_mins,
             services.service_id,
-            users.name AS customer_name,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
             services.service_name
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         WHERE bookings.merchant_id = ?
             AND bookings.booking_id <> ?
             AND bookings.booking_date = ?
@@ -1380,11 +1402,11 @@ function findOverlappingBookings(merchantId, bookingId, bookingDate, bookingTime
             bookings.booking_id AS id,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             services.duration_mins,
-            users.name AS customer_name,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
             services.service_name
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         WHERE bookings.merchant_id = ?
             AND bookings.booking_id <> ?
             AND bookings.booking_date = ?
@@ -1741,8 +1763,8 @@ function getReceiptById(bookingId, callback) {
             bookings.status,
             bookings.checked_in_at,
             transactions.created_at AS paid_at,
-            users.name AS customer_name,
-            users.email,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+            COALESCE(users.email, bookings.guest_email) AS email,
             salons.salon_id AS merchant_id,
             salons.salon_name AS merchant_name,
             salons.address AS merchant_address,
@@ -1753,7 +1775,7 @@ function getReceiptById(bookingId, callback) {
             services.price AS service_price,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
@@ -1780,9 +1802,9 @@ function getNotificationDetailsById(bookingId, callback) {
             bookings.booking_date,
             TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
             bookings.status,
-            users.name AS customer_name,
-            users.email,
-            users.phone,
+            COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+            COALESCE(users.email, bookings.guest_email) AS email,
+            COALESCE(users.phone, bookings.guest_phone) AS phone,
             services.service_id,
             salons.salon_id,
             salons.salon_name AS merchant_name,
@@ -1790,7 +1812,7 @@ function getNotificationDetailsById(bookingId, callback) {
             services.service_name,
             services.price AS service_price
         FROM bookings
-        INNER JOIN users ON users.user_id = bookings.user_id
+        LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         WHERE bookings.booking_id = ?
@@ -1843,21 +1865,21 @@ function getWhatsAppReminderCandidates(startAt, endAt, reminderType, callback) {
                 bookings.booking_date,
                 TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
                 bookings.status,
-                users.name AS customer_name,
-                users.email,
-                users.phone,
+                COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+                COALESCE(users.email, bookings.guest_email) AS email,
+                COALESCE(users.phone, bookings.guest_phone) AS phone,
                 salons.salon_name AS merchant_name,
                 salons.merchant_id AS merchant_user_id,
                 services.service_name,
                 services.price AS service_price
             FROM bookings
-            INNER JOIN users ON users.user_id = bookings.user_id
+            LEFT JOIN users ON users.user_id = bookings.user_id
             INNER JOIN services ON services.service_id = bookings.service_id
             INNER JOIN salons ON salons.salon_id = services.salon_id
             LEFT JOIN whatsapp_reminder_logs ON whatsapp_reminder_logs.booking_id = bookings.booking_id
                 AND whatsapp_reminder_logs.reminder_type = ?
-            WHERE users.phone IS NOT NULL
-                AND users.phone <> ''
+            WHERE COALESCE(users.phone, bookings.guest_phone) IS NOT NULL
+                AND COALESCE(users.phone, bookings.guest_phone) <> ''
                 AND bookings.status NOT IN ('cancelled', 'completed', 'checked_in')
                 AND TIMESTAMP(bookings.booking_date, bookings.timeslot) BETWEEN ? AND ?
                 AND whatsapp_reminder_logs.log_id IS NULL

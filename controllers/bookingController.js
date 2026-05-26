@@ -20,6 +20,8 @@ const {
 } = require('../utils/whatsappNotifications');
 const {
     getBookingCheckInUrl,
+    getGuestReceiptPath,
+    getGuestReceiptUrl,
     signBookingCheckInToken,
     verifyBookingCheckInToken
 } = require('../utils/qrToken');
@@ -178,17 +180,19 @@ function notifyBookingCreated(bookingId) {
 
         const appointmentLabel = `${String(booking.booking_date).slice(0, 10)} at ${booking.booking_time}`;
 
-        notifyUser(booking.user_id, 'customer', {
-            actorUserId: booking.merchant_user_id || null,
-            type: 'booking_confirmed',
-            title: 'Booking request submitted',
-            message: `${booking.service_name} at ${booking.merchant_name} is booked for ${appointmentLabel}.`,
-            linkUrl: `/receipt/${booking.id}`,
-            dedupeKey: `web-booking-customer-${booking.id}`
-        });
+        if (booking.user_id) {
+            notifyUser(booking.user_id, 'customer', {
+                actorUserId: booking.merchant_user_id || null,
+                type: 'booking_confirmed',
+                title: 'Booking request submitted',
+                message: `${booking.service_name} at ${booking.merchant_name} is booked for ${appointmentLabel}.`,
+                linkUrl: `/receipt/${booking.id}`,
+                dedupeKey: `web-booking-customer-${booking.id}`
+            });
+        }
 
         notifyUser(booking.merchant_user_id, 'merchant', {
-            actorUserId: booking.user_id,
+            actorUserId: booking.user_id || null,
             type: 'booking',
             title: 'New booking received',
             message: `${booking.customer_name || 'A customer'} booked ${booking.service_name} for ${appointmentLabel}.`,
@@ -197,7 +201,7 @@ function notifyBookingCreated(bookingId) {
         });
 
         notifyRole('admin', {
-            actorUserId: booking.user_id,
+            actorUserId: booking.user_id || null,
             type: 'booking',
             title: 'New customer booking',
             message: `${booking.customer_name || 'A customer'} booked ${booking.service_name} at ${booking.merchant_name}.`,
@@ -325,6 +329,10 @@ function createBooking(req, res) {
     const serviceId = req.body.serviceId || req.params.serviceId;
     const bookingDate = req.body.bookingDate;
     const bookingTime = normalizeBookingTime(req.body.bookingTime);
+    const isGuestBooking = !req.session.user;
+    const customerName = (req.body.customerName || req.session.user?.name || '').trim();
+    const email = (req.body.email || req.session.user?.email || '').trim();
+    const phone = (req.body.phone || req.session.user?.phone || '').trim();
 
     if (!serviceId || serviceId === 'select') {
         req.session.profileError = 'Please select a service before confirming your booking.';
@@ -341,6 +349,23 @@ function createBooking(req, res) {
     if (!bookingTime) {
         req.session.profileError = 'Please choose a valid booking time.';
         return res.redirect(req.get('Referrer') || '/services');
+    }
+
+    if (isGuestBooking) {
+        if (customerName.length < 2) {
+            req.session.profileError = 'Please enter your full name to continue as guest.';
+            return res.redirect(req.get('Referrer') || '/services');
+        }
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            req.session.profileError = 'Please enter a valid email address to continue as guest.';
+            return res.redirect(req.get('Referrer') || '/services');
+        }
+
+        if (!/^[689]\d{7}$/.test(phone)) {
+            req.session.profileError = 'Please enter a valid 8-digit Singapore phone number to continue as guest.';
+            return res.redirect(req.get('Referrer') || '/services');
+        }
     }
 
     const holidayName = getPublicHolidayName(bookingDate);
@@ -380,9 +405,12 @@ function createBooking(req, res) {
             : Number(service.price || 0);
 
         return Booking.autoConfirmBooking({
-            userId: req.session.user.id,
+            userId: req.session.user?.id || null,
             serviceId: service.id,
             merchantId: service.salonId,
+            customerName,
+            email,
+            phone,
             bookingDate,
             bookingTime,
             durationMins: service.durationMins
@@ -427,14 +455,12 @@ function createBooking(req, res) {
                     margin: 2,
                     width: 220
                 });
-                const email = (req.body.email || req.session.user.email || '').trim();
-                const customerName = (req.body.customerName || req.session.user.name || 'Customer').trim();
                 let emailSkipped = false;
 
                 try {
                     const emailResult = await sendBookingConfirmationEmail({
                         bookingId,
-                        customerName,
+                        customerName: customerName || 'Customer',
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
                         serviceName: bookedServiceName,
@@ -442,7 +468,8 @@ function createBooking(req, res) {
                         bookingTime,
                         checkinUrl,
                         checkinToken,
-                        qrCodeDataUrl
+                        qrCodeDataUrl,
+                        receiptUrl: getGuestReceiptUrl(req, bookingId)
                     });
                     emailSkipped = Boolean(emailResult?.skipped);
                 } catch (emailError) {
@@ -452,8 +479,8 @@ function createBooking(req, res) {
 
                 sendBookingConfirmationSms({
                     bookingId,
-                    customerName,
-                    phone: req.session.user.phone || req.body.phone,
+                    customerName: customerName || 'Customer',
+                    phone,
                     merchantName: service.salonName || 'Vaniday merchant',
                     serviceName: bookedServiceName,
                     bookingDate,
@@ -469,8 +496,8 @@ function createBooking(req, res) {
 
                 sendBookingNotification({
                     bookingId,
-                    customerName,
-                    phone: req.session.user.phone || req.body.phone,
+                    customerName: customerName || 'Customer',
+                    phone,
                     merchantName: service.salonName || 'Vaniday merchant',
                     serviceName: bookedServiceName,
                     bookingDate,
@@ -488,7 +515,7 @@ function createBooking(req, res) {
                     title: 'Booking Confirmed',
                     booking: {
                         id: bookingId,
-                        customerName,
+                        customerName: customerName || 'Customer',
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
                         serviceName: bookedServiceName,
@@ -499,7 +526,9 @@ function createBooking(req, res) {
                         appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
                         checkinUrl,
                         checkinToken,
-                        qrCodeDataUrl
+                        qrCodeDataUrl,
+                        receiptPath: getGuestReceiptPath(bookingId),
+                        receiptUrl: getGuestReceiptUrl(req, bookingId)
                     },
                     showQrDebug: process.env.NODE_ENV === 'development',
                     emailSkipped

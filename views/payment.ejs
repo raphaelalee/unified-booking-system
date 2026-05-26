@@ -180,53 +180,19 @@
 
             <fieldset class="payment-methods">
                 <legend class="eyebrow">Choose payment</legend>
-                <label class="payment-method-card featured is-selected">
-                    <input type="radio" name="paymentMethod" value="apple_pay" checked>
-                    <span class="payment-method-icon">AP</span>
+                <label class="payment-method-select-card">
                     <span>
-                        <strong>Apple Pay</strong>
-                        <small>Fast wallet checkout</small>
+                        <strong>Payment method</strong>
+                        <small>Select how you want to complete this payment.</small>
                     </span>
-                </label>
-                <label class="payment-method-card">
-                    <input type="radio" name="paymentMethod" value="paypal">
-                    <span class="payment-method-icon">PP</span>
-                    <span>
-                        <strong>PayPal</strong>
-                        <small>Pay with your PayPal account</small>
-                    </span>
-                </label>
-                <label class="payment-method-card">
-                    <input type="radio" name="paymentMethod" value="stripe">
-                    <span class="payment-method-icon">ST</span>
-                    <span>
-                        <strong>Stripe</strong>
-                        <small>Secure hosted card payment</small>
-                    </span>
-                </label>
-                <label class="payment-method-card">
-                    <input type="radio" name="paymentMethod" value="nets">
-                    <span class="payment-method-icon">QR</span>
-                    <span>
-                        <strong>NETS QR</strong>
-                        <small>Scan and pay locally</small>
-                    </span>
-                </label>
-                <label class="payment-method-card">
-                    <input type="radio" name="paymentMethod" value="paynow">
-                    <span class="payment-method-icon">PN</span>
-                    <span>
-                        <strong>PayNow</strong>
-                        <small>Singapore instant bank transfer with QR or mobile banking</small>
-                    </span>
-                </label>
-                <label class="payment-method-card">
-                    <input type="radio" name="paymentMethod" value="card">
-                    <span class="payment-method-icon">CC</span>
-                    <span>
-                        <strong>Card payment</strong>
-                        <small>Manual prototype card form</small>
-                    </span>
+                    <select name="paymentMethod" id="payment-method-select">
+                        <option value="apple_pay" selected>Apple Pay - fast wallet checkout</option>
+                        <option value="paypal">PayPal - pay with your PayPal account</option>
+                        <option value="stripe">Stripe - secure hosted card payment</option>
+                        <option value="nets">NETS QR - scan and pay locally</option>
+                        <option value="paynow">PayNow - instant bank transfer</option>
+                        <option value="card">Card payment - manual prototype card form</option>
+                    </select>
                 </label>
             </fieldset>
 
@@ -312,6 +278,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const form = document.querySelector('.payment-form');
+    const methodField = document.querySelector('[name="paymentMethod"]');
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
     const cardFields = document.getElementById('card-payment-fields');
     const netsNote = document.getElementById('nets-payment-note');
@@ -391,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncPaymentMethod() {
-        const selected = methodInputs.find((input) => input.checked)?.value || 'apple_pay';
+        const selected = methodField?.value || methodInputs.find((input) => input.checked)?.value || 'apple_pay';
         document.querySelectorAll('.payment-method-card').forEach((card) => {
             const input = card.querySelector('input[name="paymentMethod"]');
             card.classList.toggle('is-selected', input && input.checked);
@@ -454,6 +421,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));
+    methodField?.addEventListener('change', syncPaymentMethod);
     if (redeemPointsInput) {
         redeemPointsInput.addEventListener('input', syncPointRedemption);
         redeemPointsInput.addEventListener('change', syncPointRedemption);

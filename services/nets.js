@@ -11,6 +11,7 @@ const NETS_MID = process.env.NETS_MID || process.env.NETS_MERCHANT_ID || "";
 const NETS_TID = process.env.NETS_TID || process.env.NETS_TERMINAL_ID || "";
 const NETS_NOTIFY_MOBILE = process.env.NETS_NOTIFY_MOBILE || "";
 const NETS_SANDBOX_MERCHANT_ID = process.env.NETS_SANDBOX_MERCHANT_ID || "";
+const NETS_TXN_ID = process.env.NETS_TXN_ID || "";
 
 function mustHaveEnv(name, value) {
   if (!value || !String(value).trim()) {
@@ -18,8 +19,10 @@ function mustHaveEnv(name, value) {
   }
 }
 
-mustHaveEnv("API_KEY", API_KEY);
-mustHaveEnv("PROJECT_ID", PROJECT_ID);
+function validateNetsCredentials() {
+  mustHaveEnv("API_KEY", API_KEY);
+  mustHaveEnv("PROJECT_ID", PROJECT_ID);
+}
 
 async function postJson(url, body, timeoutMs) {
   const controller = new AbortController();
@@ -73,6 +76,8 @@ async function postJson(url, body, timeoutMs) {
  * @returns {object} - { qr_code, txn_retrieval_ref, response_code, txn_status, ... }
  */
 async function requestNetsQr(amount, txnId) {
+  validateNetsCredentials();
+
   const amt = Number(amount);
 
   if (!Number.isFinite(amt) || amt <= 0) {
@@ -113,8 +118,12 @@ async function requestNetsQr(amount, txnId) {
 }
 
 function createSandboxTxnId() {
+  if (NETS_TXN_ID) {
+    return NETS_TXN_ID;
+  }
+
   if (!NETS_SANDBOX_MERCHANT_ID) {
-    throw new Error("Missing environment variable: NETS_SANDBOX_MERCHANT_ID");
+    throw new Error("Missing environment variable: NETS_SANDBOX_MERCHANT_ID or NETS_TXN_ID");
   }
 
   return `sandbox_nets|m|${NETS_SANDBOX_MERCHANT_ID}`;
@@ -154,6 +163,8 @@ function isQrSuccess(qrData) {
  * @returns {{status: 'SUCCESS'|'FAIL'|'PENDING', data: object}}
  */
 async function checkStatus(txnRetrievalRef) {
+  validateNetsCredentials();
+
   if (!txnRetrievalRef || !String(txnRetrievalRef).trim()) {
     throw new Error("Missing txnRetrievalRef for NETS enquiry");
   }
