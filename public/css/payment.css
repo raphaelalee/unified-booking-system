@@ -170,6 +170,10 @@
 
 .payment-note {
     margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(251, 245, 234, 0.58);
+    border: 1px solid rgba(64, 78, 59, 0.1);
 }
 
 .payment-summary-card {

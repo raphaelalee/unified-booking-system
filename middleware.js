@@ -47,7 +47,7 @@ function verifyCsrfToken(req, res, next) {
         return next();
     }
 
-    if (req.path === '/webhooks/whatsapp') {
+    if (req.path === '/webhooks/whatsapp' || req.path === '/webhooks/hitpay') {
         return next();
     }
 

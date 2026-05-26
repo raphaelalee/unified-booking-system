@@ -48,6 +48,12 @@ if (isProduction && sessionSecret === 'dev-only-vaniday-session-secret-change-me
 
 app.set('trust proxy', 1);
 
+function captureRawBody(req, res, buffer) {
+    if (buffer?.length) {
+        req.rawBody = buffer.toString('utf8');
+    }
+}
+
 // Set up EJS for your Views
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -58,8 +64,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
     redirect: false,
     maxAge: isProduction ? '7d' : 0
 })); // For CSS, Images, JS
-app.use(bodyParser.urlencoded({ extended: true, limit: '100kb' }));
-app.use(bodyParser.json({ limit: '100kb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '100kb', verify: captureRawBody }));
+app.use(bodyParser.json({ limit: '100kb', verify: captureRawBody }));
 app.use(session({
     name: 'vaniday.sid',
     secret: sessionSecret,
@@ -263,6 +269,7 @@ app.get('/auth/google', userController.startGoogleLogin);
 app.get('/auth/google/callback', userController.handleGoogleCallback);
 app.get('/webhooks/whatsapp', whatsappController.getWebhook);
 app.post('/webhooks/whatsapp', whatsappController.postWebhook);
+app.post('/webhooks/hitpay', merchantController.handleHitPayWebhook);
 app.get('/signup', userController.showSignup);
 app.get('/ref/:referralCode', userController.openReferralSignup);
 app.post('/signup', authRateLimit, userController.signupUser);
@@ -496,6 +503,8 @@ app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
 app.post('/api/paypal/create-order', requireCustomer, merchantController.createPayPalOrder);
 app.post('/api/paypal/capture-order', requireCustomer, merchantController.capturePayPalOrder);
+app.get('/payment/hitpay/return', requireCustomer, merchantController.handleHitPayReturn);
+app.get('/payment/hitpay/status/:requestId', requireCustomer, merchantController.getHitPayStatus);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
 app.get('/receipt/:id', requireLogin, receiptController.showReceipt);
 app.get('/receipt/:id/pdf', requireLogin, receiptController.downloadReceiptPdf);

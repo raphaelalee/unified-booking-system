@@ -19,6 +19,7 @@ const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/em
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
+const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
 const {
     getBookingCheckInUrl,
@@ -31,6 +32,8 @@ const {
     verifyMerchantToken
 } = require('../utils/qrToken');
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
+
+const hitpayPendingStore = new Map();
 
 function getTodayInputValue() {
     return Booking.getSingaporeTodayKey();
@@ -2741,6 +2744,202 @@ function buildPayPalDescription(payment) {
     return `${itemName} - ${merchantName}`.slice(0, 127);
 }
 
+function buildHitPayPurpose(payment) {
+    const itemName = String(payment.serviceName || payment.kind || 'Vaniday payment').trim();
+    const merchantName = String(payment.merchantName || 'Vaniday').trim();
+    return `${merchantName} - ${itemName}`.slice(0, 255);
+}
+
+function getPublicBaseUrl(req) {
+    const configured = String(process.env.PUBLIC_BASE_URL || process.env.BASE_URL || '').trim();
+
+    if (configured) {
+        return configured.replace(/\/$/, '');
+    }
+
+    return `${req.protocol}://${req.get('host')}`;
+}
+
+function saveSession(req) {
+    return new Promise((resolve, reject) => {
+        if (!req.session) {
+            resolve();
+            return;
+        }
+
+        req.session.save((error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve();
+        });
+    });
+}
+
+function getHitPayWebhookSalt() {
+    return String(process.env.HITPAY_WEBHOOK_SALT || process.env.HITPAY_SALT || '').trim();
+}
+
+function shouldTrustHitPayRedirect() {
+    return String(process.env.HITPAY_TRUST_REDIRECT || '').trim().toLowerCase() === 'true';
+}
+
+function verifyHitPayWebhookSignature(rawBody, signature) {
+    const salt = getHitPayWebhookSalt();
+    const signedPayload = String(rawBody || '');
+    const receivedSignature = String(signature || '').trim();
+
+    if (!salt || !signedPayload || !receivedSignature) {
+        return false;
+    }
+
+    const expected = crypto.createHmac('sha256', salt).update(signedPayload).digest('hex');
+
+    if (expected.length !== receivedSignature.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(receivedSignature));
+}
+
+function storePendingHitPayPayment(requestId, payment) {
+    const key = String(requestId || '').trim();
+
+    if (!key) {
+        return;
+    }
+
+    hitpayPendingStore.set(key, {
+        ...payment,
+        storedAt: Date.now()
+    });
+}
+
+function getPendingHitPayPayment(req, requestId) {
+    const key = String(requestId || '').trim();
+
+    if (!key) {
+        return null;
+    }
+
+    return req.session?.pendingHitPayPayments?.[key]
+        || hitpayPendingStore.get(key)
+        || null;
+}
+
+function clearPendingHitPayPayment(req, requestId) {
+    const key = String(requestId || '').trim();
+
+    if (!key) {
+        return;
+    }
+
+    if (req.session?.pendingHitPayPayments) {
+        delete req.session.pendingHitPayPayments[key];
+    }
+
+    hitpayPendingStore.delete(key);
+}
+
+function findExistingReceipt(receiptId) {
+    return new Promise((resolve, reject) => {
+        PurchaseHistory.getByReceiptIdAny(receiptId, (error, row) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(row ? String(row.receipt_id) : '');
+        });
+    });
+}
+
+function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getStableHitPayStatus(requestId, redirectStatus) {
+    const attempts = String(redirectStatus || '').trim().toLowerCase() === 'completed' ? 5 : 1;
+    let paymentRequest = null;
+    let actualStatus = '';
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        paymentRequest = await hitpay.getPaymentRequest(requestId);
+        actualStatus = String(paymentRequest?.status || '').trim().toLowerCase();
+
+        if (actualStatus === 'completed' || actualStatus === 'failed' || actualStatus === 'expired' || actualStatus === 'canceled' || actualStatus === 'inactive') {
+            break;
+        }
+
+        if (attempt < attempts - 1) {
+            await delay(1500);
+        }
+    }
+
+    return {
+        paymentRequest,
+        actualStatus
+    };
+}
+
+async function finalizeHitPayPayment(req, requestId, pendingPayment) {
+    if (shouldTrustHitPayRedirect()) {
+        const receiptId = await completeTrustedPayment(req, {
+            ...pendingPayment,
+            hitpayRequestId: requestId,
+            hitpayStatus: 'redirect_completed'
+        }, 'PayNow');
+
+        clearPendingHitPayPayment(req, requestId);
+        await saveSession(req);
+
+        return {
+            done: true,
+            actualStatus: 'redirect_completed',
+            receiptId
+        };
+    }
+
+    const existingReceiptId = await findExistingReceipt(pendingPayment.receiptId);
+
+    if (existingReceiptId) {
+        clearPendingHitPayPayment(req, requestId);
+        await saveSession(req);
+        return {
+            done: true,
+            actualStatus: 'completed',
+            receiptId: existingReceiptId
+        };
+    }
+
+    const paymentRequest = await hitpay.getPaymentRequest(requestId);
+    const actualStatus = String(paymentRequest?.status || '').trim().toLowerCase();
+
+    if (actualStatus !== 'completed') {
+        return {
+            done: false,
+            actualStatus
+        };
+    }
+
+    const receiptId = await completeTrustedPayment(req, {
+        ...pendingPayment,
+        hitpayRequestId: requestId,
+        hitpayStatus: actualStatus
+    }, 'PayNow');
+
+    clearPendingHitPayPayment(req, requestId);
+    await saveSession(req);
+
+    return {
+        done: true,
+        actualStatus,
+        receiptId
+    };
+}
+
 async function buildTrustedPayment(req, payment) {
     if (payment.bookingId) {
         const booking = await getBookingReceipt(payment.bookingId);
@@ -2793,6 +2992,13 @@ async function buildTrustedPayment(req, payment) {
 function renderPaymentForm(res, payment, error = null) {
     return res.status(error ? 400 : 200).render('payment', getPaymentViewModel({
         title: 'Payment',
+        amount: Number(payment.amount || 0),
+        merchantName: payment.merchantName || 'Vaniday',
+        serviceName: payment.serviceName || 'Payment',
+        cartItemId: payment.cartItemId || '',
+        cartCheckout: payment.cartCheckout === true,
+        checkoutId: payment.checkoutId || '',
+        bookingId: payment.bookingId || '',
         selectedItemIds: [],
         fulfilment: '',
         pickupMerchantId: '',
@@ -2800,6 +3006,7 @@ function renderPaymentForm(res, payment, error = null) {
         deliveryUnit: '',
         deliveryPostal: '',
         deliveryPhone: '',
+        useCashback: payment.useCashback === true,
         selectedVoucherId: payment.selectedVoucherId || '',
         availableVouchers: payment.availableVouchers || [],
         birthdayPromotion: payment.birthdayPromotion || null,
@@ -3369,6 +3576,13 @@ async function confirmPayment(req, res) {
         }), 'Use the PayPal button to approve this payment before it can be recorded.');
     }
 
+    if (selectedPaymentMethod === 'paynow') {
+        return startHitPayPayment(req, res, {
+            ...trustedPayment,
+            redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
+        });
+    }
+
     if (selectedPaymentMethod === 'nets') {
         const txnRetrievalRef = `PROTO-${Date.now()}`;
         req.session.pendingNetsPayment = {
@@ -3557,6 +3771,218 @@ async function capturePayPalOrder(req, res) {
     }
 }
 
+async function startHitPayPayment(req, res, trustedPayment) {
+    if (!hitpay.isConfigured()) {
+        return renderPaymentForm(res, {
+            ...trustedPayment,
+            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
+        }, 'HitPay is not configured on the server.');
+    }
+
+    const baseUrl = getPublicBaseUrl(req);
+    const redirectUrl = `${baseUrl}/payment/hitpay/return`;
+
+    try {
+        const request = await hitpay.createPaymentRequest({
+            amount: Number(trustedPayment.amount || 0).toFixed(2),
+            currency: 'SGD',
+            payment_methods: ['paynow_online'],
+            email: req.session.user?.email || '',
+            name: req.session.user?.name || trustedPayment.userName || 'Customer',
+            purpose: buildHitPayPurpose(trustedPayment),
+            reference_number: String(trustedPayment.receiptId || ''),
+            redirect_url: redirectUrl,
+            send_email: false,
+            send_sms: false
+        });
+
+        if (!request?.id || !request?.url) {
+            throw new Error('HitPay did not return a checkout URL.');
+        }
+
+        req.session.pendingHitPayPayments = req.session.pendingHitPayPayments || {};
+        req.session.pendingHitPayPayments[request.id] = {
+            ...trustedPayment,
+            hitpayRequestId: request.id
+        };
+        storePendingHitPayPayment(request.id, {
+            ...trustedPayment,
+            hitpayRequestId: request.id
+        });
+        await saveSession(req);
+
+        return res.redirect(request.url);
+    } catch (error) {
+        console.error('HitPay create payment failed:', error.payload || error.message);
+        return renderPaymentForm(res, {
+            ...trustedPayment,
+            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
+        }, 'HitPay checkout could not be started. Check sandbox configuration and try again.');
+    }
+}
+
+async function handleHitPayReturn(req, res) {
+    const requestId = String(req.query.reference || req.query.request_id || '').trim();
+    const redirectStatus = String(req.query.status || '').trim().toLowerCase();
+    const pendingPayment = getPendingHitPayPayment(req, requestId);
+    const recordedReceiptId = req.session.lastPayment?.receiptId || '';
+
+    if (!requestId || !pendingPayment) {
+        if (redirectStatus === 'completed' && recordedReceiptId) {
+            return res.redirect(`/receipt/${encodeURIComponent(recordedReceiptId)}`);
+        }
+
+        return res.status(400).render('error', {
+            title: 'HitPay Session Missing',
+            message: 'The HitPay payment session is missing or expired.'
+        });
+    }
+
+    try {
+        if (redirectStatus === 'completed' && shouldTrustHitPayRedirect()) {
+            const { receiptId } = await finalizeHitPayPayment(req, requestId, pendingPayment);
+            return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+        }
+
+        const { actualStatus } = await getStableHitPayStatus(requestId, redirectStatus);
+
+        if (actualStatus !== 'completed') {
+            if (redirectStatus === 'completed' && actualStatus === 'pending') {
+                return res.render('hitpay-pending', {
+                    title: 'Confirming PayNow Payment',
+                    requestId,
+                    amount: Number(pendingPayment.amount || 0),
+                    merchantName: pendingPayment.merchantName || 'Vaniday',
+                    serviceName: pendingPayment.serviceName || 'Payment'
+                });
+            }
+
+            clearPendingHitPayPayment(req, requestId);
+            await saveSession(req);
+            return renderPaymentForm(res, {
+                ...pendingPayment,
+                redeemPointsRequested: pendingPayment.redeemPointsRequested || 0
+            }, `HitPay payment was not completed${actualStatus ? ` (${actualStatus})` : ''}.`);
+        }
+
+        const { receiptId } = await finalizeHitPayPayment(req, requestId, pendingPayment);
+        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+    } catch (error) {
+        console.error('HitPay return verification failed:', error.payload || error.message);
+
+        if (redirectStatus === 'completed' && recordedReceiptId) {
+            return res.redirect(`/receipt/${encodeURIComponent(recordedReceiptId)}`);
+        }
+
+        return renderPaymentForm(res, {
+            ...pendingPayment,
+            redeemPointsRequested: pendingPayment.redeemPointsRequested || 0
+        }, 'HitPay payment could not be verified. Please try again.');
+    }
+}
+
+async function getHitPayStatus(req, res) {
+    const requestId = String(req.params.requestId || '').trim();
+    const pendingPayment = getPendingHitPayPayment(req, requestId);
+    const recordedReceiptId = req.session.lastPayment?.receiptId || '';
+
+    if (!requestId || !pendingPayment) {
+        if (recordedReceiptId) {
+            return res.json({
+                success: true,
+                status: 'completed',
+                redirectUrl: `/receipt/${encodeURIComponent(recordedReceiptId)}`
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: 'HitPay payment session is missing or expired.'
+        });
+    }
+
+    try {
+        const result = await finalizeHitPayPayment(req, requestId, pendingPayment);
+
+        if (result.done) {
+            return res.json({
+                success: true,
+                status: 'completed',
+                redirectUrl: `/receipt/${encodeURIComponent(result.receiptId)}`
+            });
+        }
+
+        return res.json({
+            success: true,
+            status: result.actualStatus || 'pending'
+        });
+    } catch (error) {
+        console.error('HitPay status polling failed:', error.payload || error.message);
+        return res.status(502).json({
+            success: false,
+            message: 'HitPay payment could not be verified.'
+        });
+    }
+}
+
+async function handleHitPayWebhook(req, res) {
+    const rawBody = req.rawBody || '';
+    const signature = req.get('Hitpay-Signature') || '';
+    const eventType = String(req.get('Hitpay-Event-Type') || '').trim().toLowerCase();
+    const eventObject = String(req.get('Hitpay-Event-Object') || '').trim().toLowerCase();
+
+    if (!verifyHitPayWebhookSignature(rawBody, signature)) {
+        return res.status(401).json({
+            success: false,
+            message: 'Invalid HitPay signature.'
+        });
+    }
+
+    if (eventType !== 'completed' || eventObject !== 'payment_request') {
+        return res.json({
+            success: true,
+            ignored: true
+        });
+    }
+
+    const payload = req.body || {};
+    const requestId = String(payload.id || '').trim();
+    const pendingPayment = getPendingHitPayPayment(req, requestId);
+
+    if (!requestId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Missing HitPay payment request ID.'
+        });
+    }
+
+    if (!pendingPayment) {
+        const existingReceiptId = payload.reference_number
+            ? await findExistingReceipt(String(payload.reference_number).trim()).catch(() => '')
+            : '';
+
+        return res.json({
+            success: true,
+            ignored: !existingReceiptId
+        });
+    }
+
+    try {
+        const result = await finalizeHitPayPayment(req, requestId, pendingPayment);
+        return res.json({
+            success: true,
+            completed: result.done,
+            receiptId: result.receiptId || null
+        });
+    } catch (error) {
+        console.error('HitPay webhook failed:', error.payload || error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'HitPay webhook processing failed.'
+        });
+    }
+}
+
 function streamNetsPaymentStatus(req, res) {
     const txn = req.params.txnRetrievalRef;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -3609,5 +4035,8 @@ module.exports = {
     showPaymentSuccess,
     createPayPalOrder,
     capturePayPalOrder,
+    handleHitPayReturn,
+    getHitPayStatus,
+    handleHitPayWebhook,
     streamNetsPaymentStatus
 };

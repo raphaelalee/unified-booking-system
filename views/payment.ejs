@@ -213,6 +213,14 @@
                     </span>
                 </label>
                 <label class="payment-method-card">
+                    <input type="radio" name="paymentMethod" value="paynow">
+                    <span class="payment-method-icon">PN</span>
+                    <span>
+                        <strong>PayNow</strong>
+                        <small>Singapore instant bank transfer with QR or mobile banking</small>
+                    </span>
+                </label>
+                <label class="payment-method-card">
                     <input type="radio" name="paymentMethod" value="card">
                     <span class="payment-method-icon">CC</span>
                     <span>
@@ -248,6 +256,9 @@
 
             <p id="nets-payment-note" class="muted payment-note" style="display:none;">
                 Continue to generate a NETS QR code for this payment.
+            </p>
+            <p id="paynow-payment-note" class="muted payment-note" style="display:none;">
+                Continue to secure HitPay checkout to complete this PayNow payment.
             </p>
             <p id="wallet-payment-note" class="muted payment-note">
                 Continue to complete this prototype wallet payment.
@@ -304,6 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
     const cardFields = document.getElementById('card-payment-fields');
     const netsNote = document.getElementById('nets-payment-note');
+    const paynowNote = document.getElementById('paynow-payment-note');
     const walletNote = document.getElementById('wallet-payment-note');
     const stripeNote = document.getElementById('stripe-payment-note');
     const submitButton = document.getElementById('payment-submit-button');
@@ -387,6 +399,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const isPaypal = selected === 'paypal';
         if (cardFields) cardFields.style.display = selected === 'card' ? '' : 'none';
         if (netsNote) netsNote.style.display = selected === 'nets' ? '' : 'none';
+        if (paynowNote) paynowNote.style.display = selected === 'paynow' ? '' : 'none';
         if (stripeNote) stripeNote.style.display = selected === 'stripe' ? '' : 'none';
         if (walletNote) walletNote.style.display = ['apple_pay'].includes(selected) ? '' : 'none';
         if (paypalButtonContainer) paypalButtonContainer.style.display = isPaypal ? '' : 'none';
@@ -397,6 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 paypal: 'Continue with PayPal',
                 stripe: 'Continue with Stripe',
                 nets: 'Generate NETS QR',
+                paynow: 'Continue with PayNow',
                 card: 'Continue card payment'
             };
             submitButton.textContent = labels[selected] || 'Continue payment';

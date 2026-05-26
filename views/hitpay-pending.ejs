@@ -1,0 +1,76 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">PayNow</p>
+    <h1>Confirming your payment.</h1>
+    <p>
+        We received your return from HitPay and are waiting for final confirmation for
+        <strong><%= serviceName %></strong> at <strong><%= merchantName %></strong>.
+    </p>
+</section>
+
+<section class="section compact">
+    <div class="login-layout">
+        <div class="login-form">
+            <div class="notice success">
+                <p>Amount: <strong>$<%= Number(amount || 0).toFixed(2) %></strong></p>
+                <p id="hitpay-status-text">Checking payment status...</p>
+            </div>
+            <div class="hero-actions">
+                <a class="button secondary" href="/payment">Back to payment</a>
+                <a class="text-link" href="/cart">Back to cart</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const requestId = '<%= requestId %>';
+    const statusText = document.getElementById('hitpay-status-text');
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    async function poll() {
+        attempts += 1;
+
+        try {
+            const response = await fetch(`/payment/hitpay/status/${encodeURIComponent(requestId)}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin'
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || 'Payment confirmation failed.');
+            }
+
+            if (data.status === 'completed' && data.redirectUrl) {
+                window.location.assign(data.redirectUrl);
+                return;
+            }
+
+            if (statusText) {
+                statusText.textContent = `Waiting for HitPay confirmation${data.status ? ` (${data.status})` : ''}...`;
+            }
+
+            if (attempts < maxAttempts) {
+                window.setTimeout(poll, 2000);
+                return;
+            }
+
+            if (statusText) {
+                statusText.textContent = 'Confirmation is taking longer than expected. Please refresh this page in a moment.';
+            }
+        } catch (error) {
+            if (statusText) {
+                statusText.textContent = error.message || 'Payment confirmation failed.';
+            }
+        }
+    }
+
+    poll();
+});
+</script>
+
+<%- include('partials/footer') %>
