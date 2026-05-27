@@ -23,6 +23,7 @@ const { formatAppointmentDateTime } = require('../utils/dateTimeFormat');
 const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
 const nets = require('../services/nets');
+const stripe = require('../services/stripe');
 const {
     getBookingCheckInUrl,
     getGuestReceiptPath,
@@ -3766,6 +3767,13 @@ async function confirmPayment(req, res) {
         return renderNetsQrPayment(req, res, trustedPayment);
     }
 
+    if (selectedPaymentMethod === 'stripe') {
+        return startStripePayment(req, res, {
+            ...trustedPayment,
+            redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
+        });
+    }
+
     try {
         const receiptId = await completeTrustedPayment(req, trustedPayment, getPaymentMethodLabel(selectedPaymentMethod));
         return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
@@ -4149,6 +4157,153 @@ async function handleHitPayWebhook(req, res) {
     }
 }
 
+async function startStripePayment(req, res, trustedPayment) {
+    if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PUBLISHABLE_KEY) {
+        return renderPaymentForm(res, {
+            ...trustedPayment,
+            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
+        }, 'Stripe is not configured on the server.');
+    }
+
+    const appUrl = String(process.env.APP_URL || '').trim().replace(/\/$/, '');
+    
+    if (!appUrl) {
+        console.error('Stripe payment failed: APP_URL not configured in environment');
+        return renderPaymentForm(res, {
+            ...trustedPayment,
+            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
+        }, 'Server configuration error. Please try again.');
+    }
+
+    const successUrl = `${appUrl}/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${appUrl}/stripe/cancel?session_id={CHECKOUT_SESSION_ID}`;
+
+    try {
+        const productName = `${trustedPayment.serviceName || 'Payment'} - ${trustedPayment.merchantName || 'Vaniday'}`;
+        
+        const session = await stripe.createCheckoutSession({
+            items: (trustedPayment.items || []).map(item => ({
+                name: item.name,
+                type: item.type,
+                quantity: item.quantity,
+                price: item.price
+            })),
+            subtotal: trustedPayment.amount,
+            deliveryFee: 0,
+            successUrl,
+            cancelUrl,
+            productName
+        });
+
+        if (!session?.id || !session?.url) {
+            throw new Error('Stripe did not return a valid session or URL.');
+        }
+
+        // Store pending payment in session
+        req.session.pendingStripePayments = req.session.pendingStripePayments || {};
+        req.session.pendingStripePayments[session.id] = {
+            ...trustedPayment,
+            stripeSessionId: session.id
+        };
+        await saveSession(req);
+
+        console.log('Stripe session ID:', session.id);
+        console.log('Stripe session URL:', session.url);
+
+        return res.redirect(303, session.url);
+    } catch (error) {
+        console.error('Stripe checkout session creation failed:', error);
+        return renderPaymentForm(res, {
+            ...trustedPayment,
+            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
+        }, 'Stripe checkout could not be started. Check configuration and try again.');
+    }
+}
+
+async function handleStripeReturn(req, res) {
+    const sessionId = String(req.query.session_id || '').trim();
+
+    if (!sessionId) {
+        console.error('Stripe return: Missing session_id parameter');
+        return res.status(400).render('error', {
+            title: 'Stripe Session Missing',
+            message: 'The Stripe payment session is missing or invalid.'
+        });
+    }
+
+    const pendingPayment = req.session.pendingStripePayments?.[sessionId];
+
+    if (!pendingPayment) {
+        console.error(`Stripe return: No pending payment found for session ${sessionId}`);
+        return res.status(400).render('error', {
+            title: 'Stripe Session Missing',
+            message: 'The Stripe payment session is missing or expired.'
+        });
+    }
+
+    try {
+        const session = await stripe.retrieveCheckoutSession(sessionId);
+
+        if (!session) {
+            throw new Error('Stripe session could not be retrieved.');
+        }
+
+        const paymentIntent = session.payment_intent;
+        if (!paymentIntent) {
+            throw new Error('Stripe payment intent not found in session.');
+        }
+
+        // Check if payment was successful
+        if (paymentIntent.status !== 'succeeded') {
+            console.warn(`Stripe payment not succeeded. Status: ${paymentIntent.status}`);
+            delete req.session.pendingStripePayments[sessionId];
+            await saveSession(req);
+            
+            return res.status(400).render('error', {
+                title: 'Payment Failed',
+                message: 'The Stripe payment was not completed. Please try again.'
+            });
+        }
+
+        // Payment succeeded - complete the transaction
+        const receiptId = await completeTrustedPayment(req, pendingPayment, 'Stripe');
+        delete req.session.pendingStripePayments[sessionId];
+        req.session.lastPayment = { receiptId };
+        await saveSession(req);
+
+        console.log(`Stripe payment successful. Receipt: ${receiptId}, Session: ${sessionId}`);
+
+        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+    } catch (error) {
+        console.error('Stripe return handler error:', error.message);
+        delete req.session.pendingStripePayments[sessionId];
+        
+        return res.status(500).render('error', {
+            title: 'Payment Error',
+            message: 'An error occurred while processing your Stripe payment. Please try again.'
+        });
+    }
+}
+
+async function handleStripeCancel(req, res) {
+    const sessionId = String(req.query.session_id || '').trim();
+    const pendingPayment = sessionId ? req.session.pendingStripePayments?.[sessionId] : null;
+
+    if (sessionId) {
+        console.log(`Stripe payment cancelled by user. Session: ${sessionId}`);
+        if (req.session.pendingStripePayments) {
+            delete req.session.pendingStripePayments[sessionId];
+        }
+        await saveSession(req);
+    }
+
+    if (pendingPayment) {
+        return renderPaymentForm(res, pendingPayment, 'Stripe payment was cancelled. Please try again or choose a different payment method.');
+    }
+
+    return res.redirect('/payment');
+}
+
 function streamNetsPaymentStatus(req, res) {
     const txn = req.params.txnRetrievalRef;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -4262,5 +4417,8 @@ module.exports = {
     handleHitPayReturn,
     getHitPayStatus,
     handleHitPayWebhook,
+    startStripePayment,
+    handleStripeReturn,
+    handleStripeCancel,
     streamNetsPaymentStatus
 };

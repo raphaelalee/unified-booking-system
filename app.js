@@ -505,6 +505,10 @@ app.post('/api/paypal/create-order', requireCustomer, merchantController.createP
 app.post('/api/paypal/capture-order', requireCustomer, merchantController.capturePayPalOrder);
 app.get('/payment/hitpay/return', requireCustomer, merchantController.handleHitPayReturn);
 app.get('/payment/hitpay/status/:requestId', requireCustomer, merchantController.getHitPayStatus);
+app.get('/stripe/success', requireCustomer, merchantController.handleStripeReturn);
+app.get('/stripe/cancel', requireCustomer, merchantController.handleStripeCancel);
+app.get('/payment/stripe/success', requireCustomer, merchantController.handleStripeReturn);
+app.get('/payment/stripe/cancel', requireCustomer, merchantController.handleStripeCancel);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
 app.get('/receipt/:id', receiptController.showReceipt);
 app.get('/receipt/:id/pdf', receiptController.downloadReceiptPdf);
