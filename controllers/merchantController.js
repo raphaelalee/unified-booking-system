@@ -3644,7 +3644,7 @@ async function renderNetsQrPayment(req, res, trustedPayment) {
     return res.render('netsQR', {
         title: 'NETS QR Payment',
         total: trustedPayment.amount,
-        qrCodeUrl: await QRCode.toDataURL(qrPayload),
+        qrCodeUrl: await buildNetsQrCodeUrl(qrPayload),
         txnRetrievalRef,
         isPrototypeQr,
         netsErrorMessage,
@@ -3656,6 +3656,53 @@ async function renderNetsQrPayment(req, res, trustedPayment) {
         backPrimaryLabel: 'Back to cart',
         backSecondaryUrl: '/services',
         backSecondaryLabel: 'Browse services'
+    });
+}
+
+function getImageDataUrlFromBase64(value) {
+    const compact = String(value || '').replace(/\s/g, '');
+    if (!compact || !/^[A-Za-z0-9+/=]+$/.test(compact)) {
+        return null;
+    }
+
+    const buffer = Buffer.from(compact, 'base64');
+    const signature = buffer.subarray(0, 8).toString('hex');
+
+    if (signature === '89504e470d0a1a0a') {
+        return `data:image/png;base64,${compact}`;
+    }
+
+    if (buffer.subarray(0, 3).toString('hex') === 'ffd8ff') {
+        return `data:image/jpeg;base64,${compact}`;
+    }
+
+    return null;
+}
+
+async function buildNetsQrCodeUrl(qrPayload) {
+    const payload = typeof qrPayload === 'string' ? qrPayload.trim() : '';
+
+    if (!payload) {
+        throw new Error('NETS did not return a QR payload.');
+    }
+
+    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(payload)) {
+        return payload;
+    }
+
+    if (/^https:\/\//i.test(payload)) {
+        return payload;
+    }
+
+    const imageDataUrl = getImageDataUrlFromBase64(payload);
+    if (imageDataUrl) {
+        return imageDataUrl;
+    }
+
+    return QRCode.toDataURL(payload, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 280
     });
 }
 
