@@ -137,6 +137,29 @@
         ];
     const recommendedMerchants = serviceMerchants.slice(0, 6);
     const featuredServices = filteredServices.slice(0, 5);
+    const heroSlides = [
+        {
+            kicker: 'Hair salon',
+            title: 'Fresh cuts, colour, and styling',
+            copy: 'Compare salon services and reserve your next appointment without calling.',
+            imageClass: 'home-hero-slide-hair',
+            meta: 'From $35'
+        },
+        {
+            kicker: 'Spa retreat',
+            title: 'Body care for slower days',
+            copy: 'Find massages, scrubs, aromatherapy sessions, and wellness offers nearby.',
+            imageClass: 'home-hero-slide-spa',
+            meta: `${stats.promotionCount || safePromotions.length} live offers`
+        },
+        {
+            kicker: 'Facial studio',
+            title: 'Glow treatments with rewards',
+            copy: 'Book facials, earn points, and keep receipts neatly in one Vaniday account.',
+            imageClass: 'home-hero-slide-facial',
+            meta: `${stats.slotCount} open slots`
+        }
+    ];
     const carouselCards = [
         ...recommendedMerchants.slice(0, 3).map((merchant, index) => ({
             type: 'Merchant',
@@ -178,10 +201,26 @@
             <span><strong><%= stats.slotCount %></strong> open slots</span>
         </div>
     </div>
-    <div class="hero-visual vaniday-home-visual" aria-label="Spa treatment room and beauty products">
-        <div class="home-visual-panel">
-            <span>From <strong>$<%= stats.startingPrice || 0 %></strong></span>
-            <span><%= stats.promotionCount || safePromotions.length %> live offers</span>
+    <div class="hero-visual vaniday-home-visual" data-home-hero-carousel aria-label="Salon and wellness highlights">
+        <div class="home-hero-carousel-track">
+            <% heroSlides.forEach((slide, index) => { %>
+                <article class="home-hero-slide <%= slide.imageClass %> <%= index === 0 ? 'is-active' : '' %>" data-home-hero-slide>
+                    <div class="home-hero-slide-copy" aria-hidden="true">
+                        <span><%= slide.kicker %></span>
+                        <h2><%= slide.title %></h2>
+                        <p><%= slide.copy %></p>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+        <div class="home-hero-carousel-controls">
+            <button type="button" data-home-hero-prev aria-label="Previous salon highlight">&lsaquo;</button>
+            <div class="home-hero-carousel-dots" aria-label="Salon highlight position">
+                <% heroSlides.forEach((slide, index) => { %>
+                    <button type="button" class="<%= index === 0 ? 'is-active' : '' %>" data-home-hero-dot="<%= index %>" aria-label="Go to salon highlight <%= index + 1 %>"></button>
+                <% }) %>
+            </div>
+            <button type="button" data-home-hero-next aria-label="Next salon highlight">&rsaquo;</button>
         </div>
     </div>
 </section>
@@ -380,6 +419,51 @@
 
 <script>
     (() => {
+        const heroCarousel = document.querySelector('[data-home-hero-carousel]');
+        const heroSlides = Array.from(document.querySelectorAll('[data-home-hero-slide]'));
+        const heroDots = Array.from(document.querySelectorAll('[data-home-hero-dot]'));
+        const heroPrevious = document.querySelector('[data-home-hero-prev]');
+        const heroNext = document.querySelector('[data-home-hero-next]');
+        let heroActiveIndex = 0;
+        let heroTimer;
+
+        const setHeroActive = (index) => {
+            if (!heroCarousel || heroSlides.length === 0 || heroDots.length === 0) {
+                return;
+            }
+
+            heroActiveIndex = (index + heroSlides.length) % heroSlides.length;
+            heroSlides.forEach((slide, slideIndex) => {
+                slide.classList.toggle('is-active', slideIndex === heroActiveIndex);
+            });
+            heroDots.forEach((dot, dotIndex) => {
+                dot.classList.toggle('is-active', dotIndex === heroActiveIndex);
+            });
+        };
+
+        const restartHeroTimer = () => {
+            window.clearInterval(heroTimer);
+            heroTimer = window.setInterval(() => setHeroActive(heroActiveIndex + 1), 5200);
+        };
+
+        if (heroCarousel && heroSlides.length > 1) {
+            heroPrevious?.addEventListener('click', () => {
+                setHeroActive(heroActiveIndex - 1);
+                restartHeroTimer();
+            });
+            heroNext?.addEventListener('click', () => {
+                setHeroActive(heroActiveIndex + 1);
+                restartHeroTimer();
+            });
+            heroDots.forEach((dot, index) => {
+                dot.addEventListener('click', () => {
+                    setHeroActive(index);
+                    restartHeroTimer();
+                });
+            });
+            restartHeroTimer();
+        }
+
         const carousel = document.querySelector('[data-home-carousel]');
         const track = document.querySelector('[data-home-carousel-track]');
         const dots = Array.from(document.querySelectorAll('[data-home-carousel-dot]'));

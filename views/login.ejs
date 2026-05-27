@@ -10,6 +10,9 @@
     <div class="login-layout">
         <form class="login-form" action="/login" method="POST">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <% if (form.returnTo) { %>
+                <input type="hidden" name="returnTo" value="<%= form.returnTo %>">
+            <% } %>
             <div>
                 <p class="eyebrow">Customer Account</p>
                 <h2>Log in</h2>
@@ -31,7 +34,7 @@
 
             <button class="button primary full" type="submit">Log In</button>
             <div class="auth-divider"><span>or</span></div>
-            <a class="button google-login-button full" href="/auth/google" aria-label="Log in with Google">
+            <a class="button google-login-button full" href="/auth/google<%= form.returnTo ? `?returnTo=${encodeURIComponent(form.returnTo)}` : '' %>" aria-label="Log in with Google">
                 <span class="google-mark" aria-hidden="true">G</span>
                 Continue with Google
             </a>

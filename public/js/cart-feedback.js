@@ -103,6 +103,11 @@
 
             const data = await response.json();
 
+            if (response.status === 401 && data.redirectUrl) {
+                window.location.href = data.redirectUrl;
+                return;
+            }
+
             if (!response.ok || !data.success) {
                 showToast(data.message || 'Cart could not be updated.', true);
                 return;

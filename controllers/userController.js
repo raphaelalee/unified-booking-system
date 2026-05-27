@@ -14,7 +14,7 @@ const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Notification = require('../models/Notification');
 const { getCartItemCount } = require('../utils/cart');
-const { rotateCsrfToken } = require('../middleware');
+const { getSafeReturnPath, rotateCsrfToken } = require('../middleware');
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 
 const membershipTiers = [
@@ -612,7 +612,7 @@ function buildCustomerDetailsPayload(form) {
 function getDashboardPath(role) {
     if (role === 'admin') return '/admin';
     if (role === 'merchant') return '/merchant';
-    return '/profile';
+    return '/';
 }
 
 function getRoleLabel(role) {
@@ -659,6 +659,12 @@ function setAuthenticatedSession(req, user, message, callback) {
 }
 
 function completeLogin(req, res, user, message = 'You are logged in.') {
+    const safeReturnTo = getSafeReturnPath(req, req.session.loginReturnTo || req.body?.returnTo || req.query?.returnTo);
+    const fallbackPath = user.role === 'admin' || user.role === 'merchant'
+        ? getDashboardPath(user.role)
+        : '/';
+    const redirectPath = safeReturnTo || fallbackPath;
+
     return setAuthenticatedSession(req, user, message, (sessionError) => {
         if (sessionError) {
             console.error(sessionError);
@@ -666,7 +672,8 @@ function completeLogin(req, res, user, message = 'You are logged in.') {
             return res.redirect('/login');
         }
 
-        return res.redirect(getDashboardPath(req.session.user.role));
+        req.session.loginReturnTo = null;
+        return res.redirect(redirectPath);
     });
 }
 
@@ -788,8 +795,17 @@ function showLogin(req, res) {
         return res.redirect(getDashboardPath(req.session.user.role));
     }
 
+    const requestedReturnTo = getSafeReturnPath(req, req.query.returnTo);
+
+    if (requestedReturnTo) {
+        req.session.loginReturnTo = requestedReturnTo;
+    }
+
     const error = req.session.loginError;
-    const form = req.session.loginForm || {};
+    const form = {
+        ...(req.session.loginForm || {}),
+        returnTo: requestedReturnTo || getSafeReturnPath(req, req.session.loginReturnTo)
+    };
     req.session.loginError = null;
     req.session.loginForm = null;
 
@@ -803,6 +819,11 @@ function showLogin(req, res) {
 function loginUser(req, res) {
     const email = (req.body.email || '').trim().toLowerCase();
     const password = req.body.password || '';
+    const requestedReturnTo = getSafeReturnPath(req, req.body.returnTo);
+
+    if (requestedReturnTo) {
+        req.session.loginReturnTo = requestedReturnTo;
+    }
 
     if (!isValidEmail(email) || password.length < 1) {
         req.session.loginError = 'Please enter a valid email and password.';
@@ -849,6 +870,12 @@ function startGoogleLogin(req, res, next) {
     if (!hasGoogleAuthConfig()) {
         req.session.loginError = 'Google login is not configured yet.';
         return res.redirect('/login');
+    }
+
+    const requestedReturnTo = getSafeReturnPath(req, req.query.returnTo);
+
+    if (requestedReturnTo) {
+        req.session.loginReturnTo = requestedReturnTo;
     }
 
     return passport.authenticate('google', {

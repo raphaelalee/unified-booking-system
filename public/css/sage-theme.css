@@ -1496,118 +1496,385 @@ td {
 
 /* Customer homepage */
 body:not(.flappy-page) .page-container > .vaniday-home-hero {
-    min-height: clamp(560px, calc(100vh - 150px), 700px);
+    position: relative;
+    min-height: clamp(680px, calc(100vh - 106px), 820px);
     width: min(1640px, calc(100% - 48px));
-    margin: 0 auto;
-    padding: clamp(34px, 4.2vw, 64px) clamp(24px, 4.5vw, 70px) !important;
-    grid-template-columns: minmax(500px, 1fr) minmax(560px, 1fr);
-    gap: clamp(40px, 5vw, 86px);
-    align-items: stretch;
-    border-radius: 0 0 8px 8px;
+    margin: clamp(18px, 2.8vw, 34px) auto 0;
+    padding: 0 !important;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 253, 247, 0.52);
+    border-radius: 8px;
+    background: #26332a !important;
+    overflow: hidden;
+    box-shadow: 0 30px 86px rgba(38, 59, 43, 0.18);
+}
+
+body:not(.flappy-page) .page-container > .vaniday-home-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
     background:
-        linear-gradient(120deg, rgba(255, 253, 247, 0.98), rgba(238, 244, 233, 0.9)),
-        var(--nature-bg) !important;
+        linear-gradient(180deg, rgba(21, 28, 22, 0.3), rgba(21, 28, 22, 0.58)),
+        radial-gradient(circle at 50% 42%, rgba(255, 253, 247, 0.1), transparent 28rem);
+    pointer-events: none;
+}
+
+body:not(.flappy-page) .page-container > .vaniday-home-hero::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    z-index: 3;
+    height: clamp(42px, 5vw, 74px);
+    background: #fbf7ed;
+    clip-path: polygon(0 62%, 100% 28%, 100% 100%, 0 100%);
+    pointer-events: none;
 }
 
 body:not(.flappy-page) .vaniday-home-hero-copy {
-    align-self: stretch;
-    max-width: 760px;
-    min-height: clamp(500px, 39vw, 640px);
-    padding: clamp(38px, 4.5vw, 74px) clamp(34px, 4.5vw, 72px);
+    position: relative;
+    z-index: 4;
+    width: min(920px, calc(100% - 56px));
+    max-width: 920px;
+    min-height: auto;
+    padding: clamp(58px, 7vw, 96px) 0 clamp(200px, 18vw, 250px);
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    border: 1px solid rgba(79, 104, 71, 0.14);
-    border-radius: 8px;
-    background: rgba(255, 253, 247, 0.86);
-    box-shadow: 0 24px 60px rgba(38, 59, 43, 0.1);
+    align-items: center;
+    justify-content: end;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    text-align: center;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .eyebrow {
+    margin-bottom: 18px;
+    color: rgba(255, 253, 247, 0.88) !important;
+    text-shadow: 0 2px 18px rgba(18, 24, 17, 0.34);
 }
 
 body:not(.flappy-page) .vaniday-home-hero h1 {
-    max-width: 640px;
-    margin: 16px 0 26px;
-    color: var(--sage-strong) !important;
-    font-size: clamp(5.2rem, 7vw, 8rem) !important;
-    line-height: 0.94 !important;
+    max-width: none;
+    margin: 0 0 22px;
+    color: #fffdf7 !important;
+    font-size: clamp(5rem, 10vw, 9.8rem) !important;
+    font-weight: 600;
+    line-height: 0.78 !important;
+    text-shadow: 0 8px 34px rgba(18, 24, 17, 0.35);
 }
 
 .home-hero-tagline {
-    max-width: 660px;
-    margin: 0 0 14px;
-    color: var(--sage-ink);
-    font-size: clamp(1.12rem, 1.5vw, 1.38rem);
+    max-width: 700px;
+    margin: 0 0 16px;
+    color: #fffdf7;
+    font-size: clamp(1.22rem, 2vw, 1.72rem);
     font-weight: 800;
     line-height: 1.35;
+    text-shadow: 0 3px 18px rgba(18, 24, 17, 0.42);
 }
 
 body:not(.flappy-page) .vaniday-home-hero .hero-text {
-    max-width: 660px;
-    margin-bottom: 22px;
-    color: var(--sage-readable) !important;
-    font-size: clamp(0.95rem, 1.05vw, 1.06rem);
+    max-width: 680px;
+    margin-bottom: 28px;
+    color: rgba(255, 253, 247, 0.84) !important;
+    font-size: clamp(1rem, 1.35vw, 1.22rem);
     line-height: 1.65;
+    text-shadow: 0 3px 18px rgba(18, 24, 17, 0.4);
 }
 
 body:not(.flappy-page) .vaniday-home-hero .hero-actions {
-    justify-content: flex-start;
+    width: 760px !important;
+    max-width: 100%;
+    display: flex;
+    justify-content: center;
     max-width: none;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-actions .button {
+    min-width: 156px;
+    min-height: 52px;
+    border-color: rgba(255, 253, 247, 0.5);
+    box-shadow: 0 18px 40px rgba(18, 24, 17, 0.22);
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-actions .button.secondary {
+    background: rgba(255, 253, 247, 0.14);
+    color: #fffdf7;
+    backdrop-filter: blur(12px);
 }
 
 .home-hero-stats {
-    margin-top: 16px;
+    position: relative;
+    z-index: 1;
+    width: 720px !important;
+    max-width: 720px;
+    margin-top: 26px;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    gap: 12px;
 }
 
 .home-hero-stats span,
 .home-visual-panel span {
-    padding: 10px;
+    padding: 16px 18px;
     display: grid;
-    gap: 3px;
-    border: 1px solid rgba(79, 104, 71, 0.12);
+    gap: 6px;
+    border: 1px solid rgba(255, 253, 247, 0.44);
     border-radius: 8px;
-    background: rgba(238, 244, 233, 0.72);
-    color: var(--sage-readable);
-    font-size: 0.82rem;
+    background: rgba(255, 253, 247, 0.16);
+    color: rgba(255, 253, 247, 0.88);
+    font-size: 0.86rem;
     font-weight: 800;
+    text-align: left;
+    backdrop-filter: blur(14px);
 }
 
 .home-hero-stats strong,
 .home-visual-panel strong {
-    color: var(--sage-ink);
+    color: #fffdf7;
     font-size: 1.18rem;
 }
 
 body:not(.flappy-page) .vaniday-home-visual {
-    align-self: stretch;
-    height: auto;
-    min-height: 0;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    height: 100%;
+    min-height: 100%;
     width: 100%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    border-radius: 8px;
-    background:
-        linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(38, 59, 43, 0.18)),
-        var(--hero-img) !important;
-    background-position: center 78%;
-    background-size: cover;
-    box-shadow: 0 28px 70px rgba(38, 59, 43, 0.16);
+    display: block;
+    border-radius: 0;
+    background: #d9dfd0 !important;
+    box-shadow: none;
     overflow: hidden;
 }
 
-.home-visual-panel {
-    width: min(360px, calc(100% - 32px));
-    margin: 16px;
-    padding: 12px;
+body:not(.flappy-page) .vaniday-home-visual::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background:
+        linear-gradient(90deg, rgba(21, 28, 22, 0.12), transparent 24%, transparent 76%, rgba(21, 28, 22, 0.14)),
+        linear-gradient(180deg, rgba(21, 28, 22, 0.1), rgba(21, 28, 22, 0.38));
+    pointer-events: none;
+}
+
+.home-hero-carousel-track,
+.home-hero-slide {
+    position: absolute;
+    inset: 0;
+}
+
+.home-hero-slide {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    border: 1px solid rgba(255, 253, 247, 0.72);
-    border-radius: 8px;
-    background: rgba(255, 253, 247, 0.88);
+    align-content: end;
+    padding: clamp(24px, 4vw, 48px);
+    opacity: 0;
+    transform: scale(1.035);
+    transition: opacity 700ms ease, transform 1200ms ease;
+    background-position: center;
+    background-size: cover;
+    filter: saturate(0.72) contrast(0.98);
+}
+
+.home-hero-slide::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(18, 24, 17, 0.03), rgba(18, 24, 17, 0.62)),
+        linear-gradient(90deg, rgba(18, 24, 17, 0.34), transparent 58%);
+}
+
+.home-hero-slide.is-active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.home-hero-slide-hair {
+    background-image: var(--hair-img);
+}
+
+.home-hero-slide-spa {
+    background-image: var(--spa-img);
+}
+
+.home-hero-slide-facial {
+    background-image: var(--facial-img);
+}
+
+.home-hero-slide-copy {
+    display: none;
+}
+
+.home-hero-slide:not(.is-active) .home-hero-slide-copy {
+    animation: none;
+}
+
+.home-hero-slide-copy span,
+.home-hero-floating-card span {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.home-hero-slide-copy h2 {
+    margin: 8px 0 10px;
+    color: #fffdf7;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: clamp(2.4rem, 4.8vw, 5.8rem);
+    line-height: 0.92;
+}
+
+.home-hero-slide-copy p {
+    max-width: 430px;
+    margin: 0;
+    color: rgba(255, 253, 247, 0.86);
+    font-weight: 700;
+}
+
+.home-hero-floating-card,
+.home-hero-carousel-controls {
+    position: absolute;
+    z-index: 3;
+}
+
+.home-hero-floating-card {
+    display: none;
+}
+
+.home-hero-service-strip {
+    display: none;
+    position: absolute;
+    right: clamp(24px, 4vw, 58px);
+    bottom: clamp(108px, 9vw, 138px);
+    left: clamp(24px, 4vw, 58px);
+    z-index: 5;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.home-hero-service-strip span {
+    padding: 9px 12px;
+    border: 1px solid rgba(255, 253, 247, 0.56);
+    border-radius: 999px;
+    background: rgba(255, 253, 247, 0.18);
+    color: #fffdf7;
+    font-size: 0.8rem;
+    font-weight: 900;
     backdrop-filter: blur(10px);
+}
+
+.home-hero-service-strip span:nth-child(1) {
+    animation: homeHeroChip 6s ease-in-out infinite;
+}
+
+.home-hero-service-strip span:nth-child(2) {
+    animation: homeHeroChip 6s ease-in-out 500ms infinite;
+}
+
+.home-hero-service-strip span:nth-child(3) {
+    animation: homeHeroChip 6s ease-in-out 1s infinite;
+}
+
+.home-hero-service-strip span:nth-child(4) {
+    animation: homeHeroChip 6s ease-in-out 1.5s infinite;
+}
+
+.home-hero-carousel-controls {
+    right: clamp(24px, 4vw, 58px);
+    bottom: clamp(52px, 5vw, 76px);
+    left: clamp(24px, 4vw, 58px);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.home-hero-carousel-controls button,
+.home-hero-carousel-dots button {
+    cursor: pointer;
+}
+
+.home-hero-carousel-controls > button {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 253, 247, 0.62);
+    border-radius: 50%;
+    background: rgba(255, 253, 247, 0.18);
+    color: #fffdf7;
+    font-size: 1.55rem;
+    font-weight: 900;
+    backdrop-filter: blur(10px);
+}
+
+.home-hero-carousel-dots {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.home-hero-carousel-dots button {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 253, 247, 0.52);
+}
+
+.home-hero-carousel-dots button.is-active {
+    width: 34px;
+    background: #fffdf7;
+}
+
+@keyframes homeHeroCopyIn {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes homeHeroFloat {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes homeHeroChip {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    45% {
+        transform: translateY(-6px);
+    }
 }
 
 .home-notice,
@@ -1907,9 +2174,7 @@ body:not(.flappy-page) .vaniday-home-visual {
 
 @media (max-width: 1180px) {
     body:not(.flappy-page) .page-container > .vaniday-home-hero {
-        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.82fr);
         width: min(100% - 32px, 1180px);
-        gap: clamp(20px, 3vw, 38px);
     }
 
     body:not(.flappy-page) .vaniday-home-visual {
@@ -1936,11 +2201,16 @@ body:not(.flappy-page) .vaniday-home-visual {
 
 @media (max-width: 860px) {
     body:not(.flappy-page) .page-container > .vaniday-home-hero {
-        grid-template-columns: 1fr;
+        min-height: 760px;
+        margin-top: 16px;
+    }
+
+    body:not(.flappy-page) .page-container > .vaniday-home-hero::before {
+        width: 100%;
     }
 
     body:not(.flappy-page) .vaniday-home-hero h1 {
-        font-size: clamp(3.4rem, 12vw, 4.8rem) !important;
+        font-size: clamp(3.6rem, 14vw, 5.8rem) !important;
     }
 
     .home-hero-tagline {
@@ -1948,7 +2218,8 @@ body:not(.flappy-page) .vaniday-home-visual {
     }
 
     body:not(.flappy-page) .vaniday-home-visual {
-        min-height: 280px;
+        min-height: 100%;
+        border-top: 0;
     }
 
     .home-service-grid,
@@ -1972,17 +2243,45 @@ body:not(.flappy-page) .vaniday-home-visual {
     }
 
     .home-hero-stats,
-    .home-benefit-grid,
-    .home-visual-panel {
+    .home-benefit-grid {
         grid-template-columns: 1fr;
     }
 
+    .home-hero-stats {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
     body:not(.flappy-page) .page-container > .vaniday-home-hero {
-        padding: 20px 14px !important;
+        min-height: 820px;
+        width: min(100% - 18px, 560px);
+        padding: 0 !important;
     }
 
     body:not(.flappy-page) .vaniday-home-hero-copy {
-        padding: 20px;
+        width: min(100% - 28px, 520px);
+        padding: 48px 0 116px;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero .hero-actions {
+        width: 100% !important;
+        flex-direction: column;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero .hero-actions .button {
+        width: 100%;
+    }
+
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: 100%;
+    }
+
+    .home-hero-service-strip {
+        display: none;
+    }
+
+    .home-hero-carousel-controls {
+        display: none;
     }
 
     .home-carousel-track {
@@ -1997,6 +2296,16 @@ body:not(.flappy-page) .vaniday-home-visual {
     .home-card-footer .button,
     .home-search-form .button {
         width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-hero-slide,
+    .home-hero-slide-copy,
+    .home-hero-floating-card,
+    .home-hero-service-strip span {
+        animation: none;
+        transition: none;
     }
 }
 
@@ -10400,5 +10709,535 @@ body:not(.flappy-page) :where(.section-cta, .merchant-actions, .card-footer) .te
         padding-right: 16px !important;
         padding-left: 16px !important;
         white-space: normal !important;
+    }
+}
+
+/* Luxury editorial homepage refresh. Scoped to the customer homepage and loaded last. */
+:root {
+    --lux-ink: #1f1d19;
+    --lux-muted: #6c675e;
+    --lux-ivory: #fbf8f1;
+    --lux-cream: #f4efe5;
+    --lux-line: rgba(31, 29, 25, 0.14);
+    --lux-olive: #536648;
+}
+
+body:not(.flappy-page) {
+    color: var(--lux-ink);
+    background:
+        linear-gradient(180deg, rgba(251, 248, 241, 0.94), rgba(244, 239, 229, 0.96)),
+        var(--nature-bg) !important;
+    font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+}
+
+body:not(.flappy-page) main,
+.site-header,
+.site-footer {
+    width: min(1680px, calc(100% - 48px)) !important;
+}
+
+body:not(.flappy-page) main {
+    border-color: rgba(31, 29, 25, 0.1);
+    background: var(--lux-ivory) !important;
+    box-shadow: 0 28px 70px rgba(31, 29, 25, 0.08);
+}
+
+.site-header {
+    border-color: rgba(31, 29, 25, 0.1);
+    background: rgba(251, 248, 241, 0.94) !important;
+    box-shadow: none;
+}
+
+.brand,
+body:not(.flappy-page) h1,
+body:not(.flappy-page) h2,
+body:not(.flappy-page) h3 {
+    font-family: "Playfair Display", "Cormorant Garamond", Georgia, serif;
+}
+
+.nav-links,
+.nav-tools,
+body:not(.flappy-page) p,
+body:not(.flappy-page) .button,
+body:not(.flappy-page) input,
+body:not(.flappy-page) select {
+    font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+}
+
+body:not(.flappy-page) .page-container > .vaniday-home-hero {
+    min-height: 0;
+    width: min(1520px, calc(100% - 64px));
+    margin: clamp(34px, 5vw, 76px) auto 0;
+    display: grid;
+    grid-template-columns: minmax(360px, 0.88fr) minmax(520px, 1.12fr);
+    place-items: stretch;
+    border: 1px solid var(--lux-line);
+    border-radius: 0;
+    background: var(--lux-ivory) !important;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+body:not(.flappy-page) .page-container > .vaniday-home-hero::before,
+body:not(.flappy-page) .page-container > .vaniday-home-hero::after,
+body:not(.flappy-page) .vaniday-home-visual::before {
+    display: none !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero-copy {
+    position: relative;
+    z-index: 2;
+    width: auto;
+    max-width: none;
+    min-height: clamp(620px, 68vh, 760px);
+    padding: clamp(56px, 7vw, 112px);
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    text-align: left;
+    background:
+        linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(244, 239, 229, 0.95)),
+        var(--lux-ivory);
+}
+
+body:not(.flappy-page) .vaniday-home-hero .eyebrow {
+    margin-bottom: clamp(24px, 4vw, 48px);
+    color: var(--lux-olive) !important;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.34em;
+    text-shadow: none;
+}
+
+body:not(.flappy-page) .vaniday-home-hero h1 {
+    max-width: 680px;
+    margin: 0 0 30px;
+    color: var(--lux-ink) !important;
+    font-size: clamp(5.5rem, 9vw, 10.5rem) !important;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 0.86 !important;
+    text-shadow: none;
+}
+
+.home-hero-tagline {
+    max-width: 620px;
+    margin: 0 0 18px;
+    color: var(--lux-ink);
+    font-size: clamp(1.05rem, 1.35vw, 1.38rem);
+    font-weight: 700;
+    line-height: 1.38;
+    text-shadow: none;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-text {
+    max-width: 620px;
+    margin-bottom: 34px;
+    color: var(--lux-muted) !important;
+    font-size: clamp(0.95rem, 1.05vw, 1.08rem);
+    line-height: 1.9;
+    text-shadow: none;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-actions {
+    width: auto !important;
+    max-width: none;
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-actions .button {
+    min-width: 0;
+    min-height: 42px !important;
+    padding: 11px 20px !important;
+    border: 1px solid rgba(31, 29, 25, 0.18) !important;
+    border-radius: 999px;
+    background: transparent !important;
+    color: var(--lux-ink) !important;
+    box-shadow: none !important;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-actions .button.primary {
+    border-color: var(--lux-olive) !important;
+    background: var(--lux-olive) !important;
+    color: var(--lux-ivory) !important;
+}
+
+.home-hero-stats {
+    width: min(640px, 100%) !important;
+    max-width: 640px;
+    margin-top: clamp(42px, 5vw, 70px);
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr 1fr;
+    gap: 0;
+    border-top: 1px solid var(--lux-line);
+    border-left: 1px solid var(--lux-line);
+}
+
+.home-hero-stats span {
+    min-height: 104px;
+    padding: 20px;
+    border: 0;
+    border-right: 1px solid var(--lux-line);
+    border-bottom: 1px solid var(--lux-line);
+    border-radius: 0;
+    background: rgba(244, 239, 229, 0.58);
+    color: var(--lux-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    backdrop-filter: none;
+}
+
+.home-hero-stats strong {
+    margin-bottom: 8px;
+    color: var(--lux-ink);
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: clamp(2.1rem, 3vw, 3.2rem);
+    font-weight: 500;
+    line-height: 1;
+}
+
+body:not(.flappy-page) .vaniday-home-visual {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    min-height: clamp(620px, 68vh, 760px);
+    height: auto;
+    display: block;
+    overflow: hidden;
+    background: var(--lux-ink) !important;
+}
+
+.home-hero-slide {
+    padding: 0;
+    background-position: center;
+    background-size: cover;
+    filter: saturate(0.76) contrast(1.04);
+}
+
+.home-hero-slide::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(31, 29, 25, 0.14), transparent 38%),
+        linear-gradient(180deg, rgba(31, 29, 25, 0.06), rgba(31, 29, 25, 0.38));
+}
+
+.home-hero-slide-copy,
+.home-hero-floating-card,
+.home-hero-service-strip {
+    display: none !important;
+}
+
+.home-hero-carousel-controls {
+    right: clamp(24px, 4vw, 54px);
+    bottom: clamp(24px, 4vw, 54px);
+    left: auto;
+    z-index: 4;
+    width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.home-hero-carousel-controls > button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(251, 248, 241, 0.62);
+    border-radius: 50%;
+    background: rgba(31, 29, 25, 0.24);
+    color: var(--lux-ivory);
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.home-hero-carousel-dots button {
+    width: 7px;
+    height: 7px;
+    background: rgba(251, 248, 241, 0.54);
+}
+
+.home-hero-carousel-dots button.is-active {
+    width: 28px;
+    background: var(--lux-ivory);
+}
+
+.home-notice,
+.home-search-band,
+.home-section {
+    width: min(1320px, calc(100% - 64px));
+}
+
+.home-search-band {
+    margin-top: clamp(64px, 8vw, 112px);
+    padding: 0 0 clamp(42px, 5vw, 70px);
+    grid-template-columns: minmax(260px, 0.42fr) minmax(0, 0.58fr);
+    border: 0;
+    border-bottom: 1px solid var(--lux-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.home-section {
+    padding: clamp(72px, 9vw, 128px) 0 0;
+}
+
+.home-search-band h2,
+.home-section-heading h2 {
+    color: var(--lux-ink);
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: clamp(2.3rem, 4vw, 5rem);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 0.96;
+}
+
+.home-section-heading {
+    margin-bottom: clamp(26px, 4vw, 54px);
+    align-items: end;
+}
+
+.home-search-form {
+    grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.54fr) minmax(150px, 0.5fr) auto;
+    gap: 12px;
+}
+
+.home-search-form label {
+    color: var(--lux-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+}
+
+.home-search-form input,
+.home-search-form select {
+    min-height: 44px;
+    border: 0;
+    border-bottom: 1px solid var(--lux-line);
+    border-radius: 0;
+    background: transparent;
+}
+
+.home-search-form .button,
+.home-section-heading .button,
+.home-card-body .button,
+.home-card-footer .button,
+.home-promo-card .button {
+    min-height: 40px !important;
+    padding: 9px 16px !important;
+    border-radius: 999px;
+    box-shadow: none !important;
+    font-size: 0.76rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.home-carousel-track {
+    grid-auto-columns: minmax(340px, 430px);
+    gap: 18px;
+}
+
+.home-carousel-card,
+.home-service-card,
+.home-merchant-card,
+.home-promo-card,
+.home-benefit-card,
+.home-step-grid article {
+    border: 1px solid var(--lux-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.home-carousel-card,
+.home-service-card,
+.home-merchant-card {
+    grid-template-rows: 260px 1fr;
+}
+
+.home-card-image {
+    min-height: 240px;
+    filter: saturate(0.82) contrast(1.02);
+}
+
+.home-card-body,
+.home-benefit-card,
+.home-promo-card,
+.home-step-grid article {
+    padding: 24px;
+}
+
+.home-card-kicker {
+    color: var(--lux-olive);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+}
+
+.home-card-body h3,
+.home-promo-card h3,
+.home-benefit-card h3,
+.home-step-grid h3 {
+    color: var(--lux-ink);
+    font-size: clamp(1.25rem, 1.6vw, 1.8rem);
+    font-weight: 500;
+}
+
+.home-card-body p,
+.home-promo-card p,
+.home-benefit-card p,
+.home-step-grid p {
+    color: var(--lux-muted);
+    font-size: 0.92rem;
+    line-height: 1.8;
+}
+
+.home-service-grid,
+.home-merchant-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.home-benefit-grid {
+    grid-template-columns: 1.15fr 0.85fr 0.85fr 1.15fr;
+    gap: 18px;
+}
+
+.home-benefit-card span,
+.home-step-grid span {
+    width: auto;
+    height: auto;
+    place-items: start;
+    border-radius: 0;
+    background: transparent;
+    color: var(--lux-olive);
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 2.4rem;
+    font-weight: 500;
+}
+
+.home-promo-grid,
+.home-step-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.home-promo-card {
+    min-height: 280px;
+    align-content: space-between;
+    background: linear-gradient(135deg, rgba(244, 239, 229, 0.9), rgba(251, 248, 241, 0.74));
+}
+
+.home-promo-card strong {
+    color: var(--lux-ink);
+    font-size: clamp(2.8rem, 5vw, 5rem);
+    font-weight: 500;
+}
+
+@media (max-width: 1180px) {
+    body:not(.flappy-page) .page-container > .vaniday-home-hero {
+        grid-template-columns: 1fr;
+        width: min(100% - 36px, 980px);
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero-copy,
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: auto;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero-copy {
+        padding: clamp(44px, 8vw, 78px);
+    }
+
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: 520px;
+    }
+
+    .home-search-band,
+    .home-search-form {
+        grid-template-columns: 1fr;
+    }
+
+    .home-service-grid,
+    .home-merchant-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .home-benefit-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    body:not(.flappy-page) main,
+    .site-header,
+    .site-footer {
+        width: calc(100% - 18px) !important;
+    }
+
+    body:not(.flappy-page) .page-container > .vaniday-home-hero,
+    .home-notice,
+    .home-search-band,
+    .home-section {
+        width: min(100% - 20px, 560px);
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero-copy {
+        padding: 42px 24px;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero h1 {
+        font-size: clamp(4.1rem, 20vw, 6.4rem) !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero .hero-actions,
+    .home-hero-stats {
+        width: 100% !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero .hero-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero .hero-actions .button {
+        width: 100%;
+    }
+
+    .home-hero-stats,
+    .home-service-grid,
+    .home-merchant-grid,
+    .home-benefit-grid,
+    .home-promo-grid,
+    .home-step-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .home-hero-stats span {
+        min-height: auto;
+    }
+
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: 380px;
+    }
+
+    .home-hero-carousel-controls {
+        display: flex;
+        right: 20px;
+        bottom: 20px;
+    }
+
+    .home-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }

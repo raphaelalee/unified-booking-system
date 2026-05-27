@@ -20,6 +20,61 @@ function sendForbidden(req, res, message) {
     });
 }
 
+function getSafeReturnPath(req, candidate) {
+    const rawPath = String(candidate || '').trim();
+
+    if (!rawPath) {
+        return '';
+    }
+
+    try {
+        const parsed = new URL(rawPath, `${req.protocol}://${req.get('host')}`);
+        const currentOrigin = `${req.protocol}://${req.get('host')}`;
+
+        if (parsed.origin !== currentOrigin) {
+            return '';
+        }
+
+        const returnPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+        if (!returnPath.startsWith('/') || returnPath.startsWith('//') || returnPath.startsWith('/login') || returnPath.startsWith('/logout')) {
+            return '';
+        }
+
+        return returnPath;
+    } catch (error) {
+        return '';
+    }
+}
+
+function storeLoginReturnTo(req) {
+    const explicitReturnTo = getSafeReturnPath(req, req.body?.returnTo || req.query?.returnTo);
+    const referrerReturnTo = getSafeReturnPath(req, req.get('Referrer'));
+    const requestReturnTo = getSafeReturnPath(req, req.originalUrl);
+    const returnTo = explicitReturnTo || (SAFE_METHODS.has(req.method) ? requestReturnTo : referrerReturnTo || requestReturnTo);
+
+    if (returnTo) {
+        req.session.loginReturnTo = returnTo;
+    }
+
+    return returnTo;
+}
+
+function redirectToLogin(req, res) {
+    const returnTo = storeLoginReturnTo(req);
+    const loginPath = returnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login';
+
+    if (wantsJson(req)) {
+        return res.status(401).json({
+            success: false,
+            message: 'Please log in to continue.',
+            redirectUrl: loginPath
+        });
+    }
+
+    return res.redirect(loginPath);
+}
+
 function setSecurityHeaders(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -103,7 +158,7 @@ function createRateLimiter({ windowMs = 60000, max = 60, namespace = 'default', 
 
 function requireLogin(req, res, next) {
     if (!req.session.user) {
-        return res.redirect('/login');
+        return redirectToLogin(req, res);
     }
 
     return next();
@@ -133,7 +188,7 @@ function allowBookingViewer(req, res, next) {
 
 function requireCustomer(req, res, next) {
     if (!req.session.user) {
-        return res.redirect('/login');
+        return redirectToLogin(req, res);
     }
 
     if (req.session.user.role !== 'customer') {
@@ -149,7 +204,7 @@ function requireCustomer(req, res, next) {
 function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.session.user) {
-            return res.redirect('/login');
+            return redirectToLogin(req, res);
         }
 
         if (!roles.includes(req.session.user.role)) {
@@ -173,6 +228,7 @@ module.exports = {
     requireLogin,
     requireRole,
     rotateCsrfToken,
+    getSafeReturnPath,
     setSecurityHeaders,
     verifyCsrfToken
 };
