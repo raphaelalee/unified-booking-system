@@ -80,6 +80,20 @@
         cancelled: 'cancelled',
         no_show: 'no-show'
     };
+    const deliveryStatusLabels = {
+        processing: 'processing',
+        pending_pickup: 'pending pickup',
+        shipped: 'shipped',
+        delivered: 'delivered',
+        picked_up: 'picked up',
+        cancelled: 'cancelled'
+    };
+    const formatOrderDate = (value) => {
+        if (!value) return 'Date unavailable';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+        return date.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
     const merchantReviews = typeof reviews !== 'undefined' && Array.isArray(reviews) ? reviews : [];
     const merchantReviewSummary = typeof reviewSummary !== 'undefined' && reviewSummary
         ? reviewSummary
@@ -173,6 +187,58 @@
                     <strong>$<%= formatCurrency(payoutSummary.totalNetPayout) %></strong>
                     <small>Estimated amount remaining after commission</small>
                 </article>
+            </section>
+
+            <section class="merchant-product-orders-panel">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Product Orders</p>
+                        <h2>Recent paid orders</h2>
+                    </div>
+                    <a class="text-button" href="/merchant/orders"><%= recentOrders.length %> shown · manage all</a>
+                </div>
+
+                <% if (!recentOrders.length) { %>
+                    <div class="merchant-empty-state">
+                        <span>PO</span>
+                        <strong>No product orders yet</strong>
+                        <a class="text-button" href="/merchant/products">Review product catalogue</a>
+                    </div>
+                <% } else { %>
+                    <div class="merchant-product-order-list">
+                        <% recentOrders.forEach((order) => { %>
+                            <article class="merchant-product-order-card">
+                                <div class="merchant-product-order-main">
+                                    <div>
+                                        <span class="merchant-order-id">#<%= order.id %></span>
+                                        <strong><%= order.customerName || 'Customer' %></strong>
+                                        <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %></small>
+                                    </div>
+                                    <div class="merchant-product-order-amount">
+                                        <strong>$<%= formatCurrency(order.grossAmount || order.totalAmount) %></strong>
+                                        <small>Net $<%= formatCurrency(order.payoutAmount || order.totalAmount) %></small>
+                                    </div>
+                                    <span class="merchant-status-badge status-<%= String(order.deliveryStatus || 'processing').replace(/\s+/g, '_') %>">
+                                        <%= deliveryStatusLabels[String(order.deliveryStatus || 'processing')] || order.deliveryStatus || 'processing' %>
+                                    </span>
+                                </div>
+                                <div class="merchant-product-order-items">
+                                    <% (order.items || []).forEach((item) => { %>
+                                        <p>
+                                            <span><%= item.name %></span>
+                                            <strong>x<%= item.quantity %></strong>
+                                            <em>$<%= formatCurrency(item.lineTotal) %></em>
+                                        </p>
+                                    <% }) %>
+                                </div>
+                                <div class="merchant-product-order-footer">
+                                    <span><%= order.itemCount %> item<%= Number(order.itemCount || 0) === 1 ? '' : 's' %></span>
+                                    <span>Commission $<%= formatCurrency(order.commissionAmount) %></span>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
             </section>
 
             <section class="merchant-insight-grid">

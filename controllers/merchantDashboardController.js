@@ -390,6 +390,14 @@ function notifyMerchant(userId, notification) {
     }, logNotificationError);
 }
 
+function notifyCustomer(userId, notification) {
+    Notification.create({
+        ...notification,
+        recipientUserId: userId,
+        recipientRole: 'customer'
+    }, logNotificationError);
+}
+
 function notifyAdmins(notification) {
     Notification.createForRole('admin', notification, logNotificationError);
 }
@@ -402,6 +410,16 @@ function normalizeMerchantBookingStatus(value) {
     const status = String(value || '').trim().toLowerCase();
     const allowed = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
     return allowed.has(status) ? status : '';
+}
+
+function normalizeOrderDeliveryStatus(value) {
+    const status = String(value || '').trim().toLowerCase();
+    const allowed = new Set(['processing', 'packed', 'shipped', 'delivered', 'cancelled']);
+    return allowed.has(status) ? status : '';
+}
+
+function getDeliveryStatusLabel(value) {
+    return String(value || 'processing').replace(/_/g, ' ');
 }
 
 function buildMerchantReports(merchant, bookings = [], hadError = false) {
@@ -1056,6 +1074,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 },
                                 salesReport: {
                                     dailySales: salesDays,
+                                    allOrders: safeOrders,
                                     recentOrders: safeOrders.slice(0, 5),
                                     lowStockProducts,
                                     payoutSummary: {
@@ -1166,6 +1185,62 @@ const showCustomers = renderPortalView('merchant-customers', 'Merchant Customers
 const showAnalytics = renderPortalView('merchant-analytics', 'Merchant Analytics');
 const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
+const showOrders = renderPortalView('merchant-orders', 'Product Orders');
+
+function updateOrderStatus(req, res) {
+    const transactionId = Number(req.params.transactionId);
+    const status = normalizeOrderDeliveryStatus(req.body.deliveryStatus);
+
+    if (!Number.isInteger(transactionId) || transactionId < 1) {
+        req.session.merchantError = 'Order could not be found.';
+        return res.redirect('/merchant/orders');
+    }
+
+    if (!status) {
+        req.session.merchantError = 'Please choose a valid order status.';
+        return res.redirect('/merchant/orders');
+    }
+
+    return Transaction.getOrderById(transactionId, (lookupError, order) => {
+        if (lookupError) {
+            console.error(lookupError);
+            req.session.merchantError = 'Order details could not be loaded.';
+            return res.redirect('/merchant/orders');
+        }
+
+        if (!order || !order.merchantUserIds.includes(Number(req.session.user.id))) {
+            req.session.merchantError = 'This order could not be found for your merchant account.';
+            return res.redirect('/merchant/orders');
+        }
+
+        return Transaction.updateDeliveryStatus(transactionId, status, { merchantUserId: req.session.user.id }, (updateError, result) => {
+            if (updateError) {
+                console.error(updateError);
+                req.session.merchantError = 'Order status could not be updated.';
+                return res.redirect('/merchant/orders');
+            }
+
+            if (!result?.affectedRows) {
+                req.session.merchantError = 'Order status could not be updated for your merchant account.';
+                return res.redirect('/merchant/orders');
+            }
+
+            const statusLabel = getDeliveryStatusLabel(status);
+            notifyCustomer(order.userId, {
+                actorUserId: req.session.user.id,
+                type: 'order_update',
+                title: 'Order status updated',
+                message: `Your ${order.itemNames || 'product order'} order is now ${statusLabel}.`,
+                linkUrl: `/receipt/order-${transactionId}`,
+                dedupeKey: `merchant-order-status-${transactionId}-${status}-${Date.now()}`,
+                metadata: { transactionId, status }
+            });
+
+            req.session.merchantSuccess = `Order #${transactionId} updated to ${statusLabel}.`;
+            return res.redirect('/merchant/orders');
+        });
+    });
+}
 
 function showLoyaltySettings(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
@@ -2501,12 +2576,14 @@ module.exports = {
     showAnalytics,
     showSupport,
     showProfile,
+    showOrders,
     showLoyaltySettings,
     updateLoyaltySettings,
     updateProfile,
     showServices,
     generateQr,
     updateBookingStatus,
+    updateOrderStatus,
     updateRescheduleSettings,
     reviewRescheduleRequest,
     showSchedule,

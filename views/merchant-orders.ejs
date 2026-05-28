@@ -1,0 +1,146 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const sales = salesReport || {};
+    const orders = Array.isArray(sales.allOrders) ? sales.allOrders : [];
+    const payoutSummary = sales.payoutSummary || {
+        grossOrderSales: 0,
+        totalCommissionDeducted: 0,
+        totalNetPayout: 0
+    };
+    const statusOptions = [
+        { value: 'processing', label: 'Processing' },
+        { value: 'packed', label: 'Packed' },
+        { value: 'shipped', label: 'Shipped' },
+        { value: 'delivered', label: 'Delivered' },
+        { value: 'cancelled', label: 'Cancelled' }
+    ];
+    const statusLabels = statusOptions.reduce((labels, option) => {
+        labels[option.value] = option.label;
+        return labels;
+    }, {});
+    const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const formatOrderDate = (value) => {
+        if (!value) return 'Date unavailable';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+        return date.toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+%>
+
+<section class="section compact merchant-analytics-page merchant-orders-page">
+    <% if (success) { %>
+        <div class="notice success"><p><%= success %></p></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
+
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Product Orders</p>
+                <h1>Order fulfilment</h1>
+                <span>Track paid product orders, update delivery progress, and keep customers notified from one place.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button secondary" href="/merchant/products">Inventory</a>
+                <a class="button primary" href="/merchant/dashboard">Dashboard</a>
+            </div>
+        </header>
+
+        <section class="merchant-payout-summary-grid" aria-label="Product order payout summary">
+            <article class="merchant-payout-summary-card">
+                <span>Paid orders</span>
+                <strong><%= orders.length %></strong>
+                <small>Product transactions assigned to this merchant</small>
+            </article>
+            <article class="merchant-payout-summary-card">
+                <span>Gross sales</span>
+                <strong>$<%= formatCurrency(payoutSummary.grossOrderSales) %></strong>
+                <small>Before platform commission</small>
+            </article>
+            <article class="merchant-payout-summary-card">
+                <span>Net payout</span>
+                <strong>$<%= formatCurrency(payoutSummary.totalNetPayout) %></strong>
+                <small>After estimated commission</small>
+            </article>
+        </section>
+
+        <section class="merchant-product-orders-panel merchant-orders-management-panel">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">Queue</p>
+                    <h2>Manage product orders</h2>
+                </div>
+                <span><%= orders.length %> total</span>
+            </div>
+
+            <% if (!orders.length) { %>
+                <div class="merchant-empty-state">
+                    <span>PO</span>
+                    <strong>No paid product orders yet</strong>
+                    <a class="text-button" href="/merchant/products">Review product catalogue</a>
+                </div>
+            <% } else { %>
+                <div class="merchant-order-management-list">
+                    <% orders.forEach((order) => {
+                        const currentStatus = String(order.deliveryStatus || 'processing');
+                    %>
+                        <article class="merchant-order-management-card">
+                            <div class="merchant-order-management-main">
+                                <div>
+                                    <span class="merchant-order-id">#<%= order.id %></span>
+                                    <strong><%= order.customerName || 'Customer' %></strong>
+                                    <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %></small>
+                                </div>
+                                <span class="merchant-status-badge status-<%= currentStatus.replace(/\s+/g, '_') %>">
+                                    <%= statusLabels[currentStatus] || currentStatus %>
+                                </span>
+                            </div>
+
+                            <div class="merchant-order-management-items">
+                                <% (order.items || []).forEach((item) => { %>
+                                    <p>
+                                        <span><%= item.name %></span>
+                                        <strong>x<%= item.quantity %></strong>
+                                        <em>$<%= formatCurrency(item.lineTotal) %></em>
+                                    </p>
+                                <% }) %>
+                            </div>
+
+                            <div class="merchant-order-management-footer">
+                                <div>
+                                    <span>Gross</span>
+                                    <strong>$<%= formatCurrency(order.grossAmount || order.totalAmount) %></strong>
+                                </div>
+                                <div>
+                                    <span>Commission</span>
+                                    <strong>$<%= formatCurrency(order.commissionAmount) %></strong>
+                                </div>
+                                <div>
+                                    <span>Net payout</span>
+                                    <strong>$<%= formatCurrency(order.payoutAmount || order.totalAmount) %></strong>
+                                </div>
+                                <form action="/merchant/orders/<%= order.id %>/status" method="POST" class="merchant-order-status-form">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <label>
+                                        <span>Status</span>
+                                        <select name="deliveryStatus">
+                                            <% statusOptions.forEach((option) => { %>
+                                                <option value="<%= option.value %>" <%= option.value === currentStatus ? 'selected' : '' %>><%= option.label %></option>
+                                            <% }) %>
+                                        </select>
+                                    </label>
+                                    <button class="button primary" type="submit">Update</button>
+                                </form>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

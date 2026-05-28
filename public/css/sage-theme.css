@@ -8192,6 +8192,242 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
     line-height: 1;
 }
 
+.merchant-product-orders-panel {
+    padding: 18px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.82);
+    box-shadow: 0 12px 28px rgba(49, 69, 44, 0.07);
+}
+
+.merchant-product-order-list {
+    display: grid;
+    gap: 12px;
+}
+
+.merchant-product-order-card {
+    min-width: 0;
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(238, 244, 233, 0.68), rgba(255, 253, 247, 0.94));
+}
+
+.merchant-product-order-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 14px;
+    align-items: start;
+}
+
+.merchant-product-order-main > div,
+.merchant-product-order-items p {
+    min-width: 0;
+}
+
+.merchant-order-id {
+    width: fit-content;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    display: inline-flex;
+    border-radius: 999px;
+    background: rgba(79, 104, 71, 0.1);
+    color: var(--sage-ink);
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.merchant-product-order-main strong {
+    display: block;
+    color: var(--sage-ink);
+}
+
+.merchant-product-order-main small,
+.merchant-product-order-footer,
+.merchant-product-order-items em {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-product-order-amount {
+    text-align: right;
+}
+
+.merchant-product-order-amount strong {
+    font-size: 1.15rem;
+}
+
+.merchant-product-order-items {
+    display: grid;
+    gap: 8px;
+}
+
+.merchant-product-order-items p {
+    margin: 0;
+    padding: 9px 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.78);
+}
+
+.merchant-product-order-items span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--sage-ink);
+    font-weight: 900;
+}
+
+.merchant-product-order-items strong {
+    color: #20899c;
+}
+
+.merchant-product-order-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.84rem;
+}
+
+.merchant-product-order-footer span {
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(79, 104, 71, 0.08);
+}
+
+.merchant-orders-management-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.merchant-order-management-list {
+    display: grid;
+    gap: 14px;
+}
+
+.merchant-order-management-card {
+    min-width: 0;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9);
+    box-shadow: 0 10px 24px rgba(49, 69, 44, 0.06);
+}
+
+.merchant-order-management-main,
+.merchant-order-management-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+}
+
+.merchant-order-management-main > div {
+    min-width: 0;
+}
+
+.merchant-order-management-main strong {
+    display: block;
+    color: var(--sage-ink);
+    font-size: 1.08rem;
+}
+
+.merchant-order-management-main small {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.merchant-order-management-items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.merchant-order-management-items p {
+    min-width: 0;
+    margin: 0;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.1);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.46);
+}
+
+.merchant-order-management-items span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--sage-ink);
+    font-weight: 900;
+}
+
+.merchant-order-management-items strong {
+    color: #20899c;
+}
+
+.merchant-order-management-items em {
+    color: var(--sage-readable);
+    font-style: normal;
+    font-weight: 900;
+}
+
+.merchant-order-management-footer {
+    grid-template-columns: repeat(3, minmax(110px, 1fr)) minmax(280px, 1.3fr);
+    align-items: end;
+    padding-top: 4px;
+}
+
+.merchant-order-management-footer > div {
+    display: grid;
+    gap: 3px;
+}
+
+.merchant-order-management-footer > div span,
+.merchant-order-status-form label span {
+    color: var(--sage-readable);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.merchant-order-management-footer > div strong {
+    color: var(--sage-ink);
+}
+
+.merchant-order-status-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.merchant-order-status-form label {
+    margin: 0;
+    display: grid;
+    gap: 5px;
+}
+
+.merchant-order-status-form select {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 12px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-ink);
+    font: inherit;
+    font-weight: 800;
+}
+
 .merchant-insight-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -8754,7 +8990,8 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-calendar-booking.status-pending,
 .merchant-status-dot.status-pending,
-.merchant-status-badge.status-pending {
+.merchant-status-badge.status-pending,
+.merchant-status-badge.status-packed {
     border-color: #d4a017;
     background: rgba(212, 160, 23, 0.14);
     color: #946b0e;
@@ -8764,7 +9001,9 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 .merchant-status-dot.status-confirmed,
 .merchant-status-badge.status-confirmed,
 .merchant-status-dot.status-paid,
-.merchant-status-badge.status-paid {
+.merchant-status-badge.status-paid,
+.merchant-status-badge.status-processing,
+.merchant-status-badge.status-pending_pickup {
     border-color: #20899c;
     background: rgba(32, 137, 156, 0.12);
     color: #20899c;
@@ -8772,7 +9011,8 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-calendar-booking.status-checked_in,
 .merchant-status-dot.status-checked_in,
-.merchant-status-badge.status-checked_in {
+.merchant-status-badge.status-checked_in,
+.merchant-status-badge.status-shipped {
     border-color: #df7c16;
     background: rgba(223, 124, 22, 0.13);
     color: #a96018;
@@ -8780,7 +9020,9 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 
 .merchant-calendar-booking.status-completed,
 .merchant-status-dot.status-completed,
-.merchant-status-badge.status-completed {
+.merchant-status-badge.status-completed,
+.merchant-status-badge.status-delivered,
+.merchant-status-badge.status-picked_up {
     border-color: #4f6847;
     background: rgba(72, 151, 86, 0.14);
     color: #3f7a4c;
@@ -10188,9 +10430,20 @@ body:not(.flappy-page) .notification-card:nth-child(3) {
 @media (max-width: 640px) {
     .merchant-analytics-kpis,
     .merchant-order-row,
+    .merchant-product-order-main,
+    .merchant-product-order-items p,
+    .merchant-order-management-main,
+    .merchant-order-management-footer,
+    .merchant-order-management-items,
+    .merchant-order-management-items p,
+    .merchant-order-status-form,
     .merchant-alert-list a,
     .merchant-quick-actions {
         grid-template-columns: 1fr;
+    }
+
+    .merchant-product-order-amount {
+        text-align: left;
     }
 
     .merchant-card-heading {

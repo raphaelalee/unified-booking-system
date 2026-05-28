@@ -308,6 +308,8 @@ app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.
 app.get('/merchant', requireRole('merchant'), (req, res) => res.redirect('/merchant/dashboard'));
 app.get('/merchant/dashboard', requireRole('merchant'), merchantDashboardController.showDashboard);
 app.get('/merchant/bookings', requireRole('merchant'), merchantDashboardController.showBookings);
+app.get('/merchant/orders', requireRole('merchant'), merchantDashboardController.showOrders);
+app.post('/merchant/orders/:transactionId/status', requireRole('merchant'), merchantDashboardController.updateOrderStatus);
 app.get('/merchant/customers', requireRole('merchant'), merchantDashboardController.showCustomers);
 app.get('/merchant/analytics', requireRole('merchant'), merchantDashboardController.showAnalytics);
 app.get('/merchant/support', requireRole('merchant'), merchantDashboardController.showSupport);

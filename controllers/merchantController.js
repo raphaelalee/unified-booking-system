@@ -3427,7 +3427,7 @@ async function notifyPaymentCompleted(req, paidPayment, transactionId) {
                 type: 'order_received',
                 title: 'New product order received',
                 message: `${paidPayment.userName || 'A customer'} bought ${recipient.itemCount} item${recipient.itemCount === 1 ? '' : 's'} from ${recipient.salonName} ($${Number(recipient.totalAmount || 0).toFixed(2)}).`,
-                linkUrl: '/merchant',
+                linkUrl: '/merchant/orders',
                 dedupeKey: `payment-merchant-order-${transactionId}-${recipient.merchantUserId}`,
                 metadata: { receiptId: paidPayment.receiptId, transactionId }
             });

@@ -390,6 +390,19 @@ function getMerchantOrderReport(merchantUserId, callback) {
                     users.name AS customer_name,
                     COUNT(order_items.order_item_id) AS item_count,
                     SUM(order_items.quantity * order_items.price_at_purchase) AS merchant_total,
+                    GROUP_CONCAT(
+                        CONCAT(
+                            products.product_id,
+                            '::',
+                            REPLACE(REPLACE(products.name, '|', ' '), '::', ' - '),
+                            '::',
+                            order_items.quantity,
+                            '::',
+                            order_items.price_at_purchase
+                        )
+                        ORDER BY order_items.order_item_id ASC
+                        SEPARATOR '||'
+                    ) AS item_lines,
                     COALESCE(salons.commission_rate, 15.00) AS commission_rate
                 FROM transactions
                 INNER JOIN users ON users.user_id = transactions.user_id
@@ -419,11 +432,28 @@ function getMerchantOrderReport(merchantUserId, callback) {
 
                 callback(null, rows.map((row) => {
                     const commission = buildCommissionBreakdown(row.merchant_total || row.total_amount || 0, row.commission_rate);
+                    const items = String(row.item_lines || '')
+                        .split('||')
+                        .filter(Boolean)
+                        .map((line) => {
+                            const [productId, name, quantity, price] = line.split('::');
+                            const itemQuantity = Number(quantity || 1);
+                            const unitPrice = Number(price || 0);
+
+                            return {
+                                productId: Number(productId || 0),
+                                name: name || 'Product',
+                                quantity: itemQuantity,
+                                unitPrice,
+                                lineTotal: itemQuantity * unitPrice
+                            };
+                        });
 
                     return {
                         id: row.transaction_id,
                         userId: row.user_id,
                         customerName: row.customer_name || 'Customer',
+                        items,
                         totalAmount: commission.grossAmount,
                         grossAmount: commission.grossAmount,
                         commissionRate: commission.commissionRate,
