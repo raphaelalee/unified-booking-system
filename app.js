@@ -572,7 +572,7 @@ app.get('/customer/wallet', requireCustomer, loyaltyController.showWallet);
 app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
 app.post('/customer/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);
 app.post('/customer/checkout/apply-cashback', requireCustomer, loyaltyController.applyCashback);
-app.get('/cashback', requireCustomer, loyaltyController.showCashback);
+app.get('/cashback', requireCustomer, (req, res) => res.redirect('/profile#wallet'));
 
 app.get('/giftcards', requireCustomer, (req, res) => {
     const success = req.session.success;

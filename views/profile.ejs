@@ -866,6 +866,17 @@
                         const walletTransactions = loyalty && Array.isArray(loyalty.transactions)
                             ? loyalty.transactions
                             : [];
+                        const cashbackTransactions = walletTransactions.filter((entry) => {
+                            const type = String(entry.type || '').toUpperCase();
+                            return Number(entry.cashbackDelta || 0) !== 0
+                                || ['CASHBACK_USED', 'CASHBACK_EARNED', 'CASHBACK_REVERSED', 'REDEEMED'].includes(type);
+                        });
+                        const cashbackEarnedTotal = cashbackTransactions
+                            .filter((entry) => Number(entry.cashbackDelta || 0) > 0)
+                            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0);
+                        const cashbackUsedTotal = Math.abs(cashbackTransactions
+                            .filter((entry) => Number(entry.cashbackDelta || 0) < 0)
+                            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -906,6 +917,41 @@
                             <div>
                                 <span>Points value</span>
                                 <strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %> / pt</strong>
+                            </div>
+                        </div>
+
+                        <div class="wallet-activity-panel">
+                            <div class="wallet-section-heading">
+                                <div>
+                                    <p class="eyebrow">Cashback</p>
+                                    <h3>Use cashback from this wallet</h3>
+                                </div>
+                                <span><%= cashbackTransactions.length %> cashback entr<%= cashbackTransactions.length === 1 ? 'y' : 'ies' %></span>
+                            </div>
+                            <p class="muted">
+                                Cashback from point conversions and merchant campaigns is stored here, then can be applied during checkout.
+                                Refunded campaign cashback is reversed automatically.
+                            </p>
+                            <div class="wallet-rules-grid">
+                                <div>
+                                    <span>Available now</span>
+                                    <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
+                                </div>
+                                <div>
+                                    <span>Total earned</span>
+                                    <strong>$<%= cashbackEarnedTotal.toFixed(2) %></strong>
+                                </div>
+                                <div>
+                                    <span>Total used or reversed</span>
+                                    <strong>$<%= cashbackUsedTotal.toFixed(2) %></strong>
+                                </div>
+                            </div>
+                            <div class="hero-actions wallet-cashback-actions">
+                                <form action="/customer/checkout/apply-cashback" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <button class="button primary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use cashback in cart</button>
+                                </form>
+                                <a class="button secondary" href="/services">Book an appointment</a>
                             </div>
                         </div>
 

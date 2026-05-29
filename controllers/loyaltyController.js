@@ -172,10 +172,6 @@ function showWallet(req, res) {
     return renderWallet(req, res, 'wallet', 'Rewards Wallet');
 }
 
-function showCashback(req, res) {
-    return renderWallet(req, res, 'cashback', 'Cashback');
-}
-
 function redeemPoints(req, res) {
     const points = req.body.points;
     const redirectPath = req.originalUrl.startsWith('/customer/') ? '/customer/wallet' : '/profile#wallet';
@@ -287,7 +283,6 @@ module.exports = {
     applyCashback,
     redeemPoints,
     showAdminRules,
-    showCashback,
     showWallet,
     updateAdminRules
 };
