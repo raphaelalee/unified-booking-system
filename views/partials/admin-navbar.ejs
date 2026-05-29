@@ -1,0 +1,78 @@
+<%
+    const activePath = typeof currentPath !== 'undefined' ? currentPath : '';
+    const isActive = (paths) => paths.some((path) => activePath === path || activePath.startsWith(`${path}/`));
+    const adminGroups = [
+        {
+            label: 'Users',
+            active: isActive(['/admin/merchants']),
+            items: [
+                { label: 'Merchant Directory', href: '/admin/merchants' },
+                { label: 'Platform Health', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'Bookings',
+            active: isActive(['/admin/bookings']),
+            items: [
+                { label: 'Booking Operations', href: '/admin/bookings' }
+            ]
+        },
+        {
+            label: 'Marketplace',
+            active: isActive(['/admin/services', '/admin/products', '/admin/promotions', '/admin/cashback']),
+            items: [
+                { label: 'Services', href: '/admin/services' },
+                { label: 'Products', href: '/admin/products' },
+                { label: 'Promotions', href: '/admin/promotions' },
+                { label: 'Cashback Campaigns', href: '/admin/cashback' }
+            ]
+        },
+        {
+            label: 'Rewards',
+            active: isActive(['/admin/reward-shop', '/admin/rewards-game', '/admin/loyalty']),
+            items: [
+                { label: 'Reward Shop', href: '/admin/reward-shop' },
+                { label: 'Game Rewards', href: '/admin/rewards-game' },
+                { label: 'Platform Loyalty Rules', href: '/admin/loyalty' }
+            ]
+        },
+        {
+            label: 'Analytics',
+            active: isActive(['/admin/analytics', '/admin/platform-health']),
+            items: [
+                { label: 'Platform Analytics', href: '/admin/analytics' },
+                { label: 'Platform Health', href: '/admin/platform-health' }
+            ]
+        },
+        {
+            label: 'Moderation',
+            active: isActive(['/admin/reviews']),
+            items: [
+                { label: 'Review Moderation', href: '/admin/reviews' }
+            ]
+        },
+        {
+            label: 'System',
+            active: isActive(['/admin/audit-trail']),
+            items: [
+                { label: 'Audit Trail', href: '/admin/audit-trail' }
+            ]
+        }
+    ];
+%>
+
+<nav class="admin-primary-nav" aria-label="Admin primary navigation">
+    <a class="<%= activePath === '/admin/overview' || activePath === '/admin' ? 'active' : '' %>" href="/admin/overview">Overview</a>
+    <% adminGroups.forEach((group) => { %>
+        <div class="dropdown admin-nav-dropdown">
+            <button class="admin-nav-link dropdown-toggle <%= group.active ? 'active' : '' %>" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <%= group.label %>
+            </button>
+            <ul class="dropdown-menu">
+                <% group.items.forEach((item) => { %>
+                    <li><a class="dropdown-item" href="<%= item.href %>"><%= item.label %></a></li>
+                <% }) %>
+            </ul>
+        </div>
+    <% }) %>
+</nav>

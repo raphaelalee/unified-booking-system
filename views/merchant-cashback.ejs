@@ -1,67 +1,129 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Merchant Rewards</p>
-    <h1>Cashback campaigns</h1>
-    <p>Create merchant-funded cashback campaigns for products, services, or both.</p>
-</section>
+<%
+    const campaignList = Array.isArray(campaigns) ? campaigns : [];
+    const activeCount = campaignList.filter((campaign) => campaign.status === 'active').length;
+    const highestCashback = campaignList.reduce((max, campaign) => Math.max(max, Number(campaign.cashbackPercent || 0)), 0);
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Not set';
+        return date.toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' });
+    };
+%>
 
-<section class="section compact">
-    <% if (success) { %><div class="notice success"><%= success %></div><% } %>
-    <% if (error) { %><div class="notice error"><%= error %></div><% } %>
+<section class="section compact merchant-portal-page merchant-cashback-page">
+    <% if (success) { %><div class="notice success"><p><%= success %></p></div><% } %>
+    <% if (error) { %><div class="notice error"><p><%= error %></p></div><% } %>
 
-    <div class="account-panel-header">
+    <header class="merchant-dashboard-hero merchant-portal-hero">
         <div>
-            <p class="eyebrow"><%= merchant.name %></p>
-            <h2>Campaigns</h2>
+            <p class="eyebrow">Merchant Rewards</p>
+            <h1>Cashback campaigns</h1>
+            <span>Create cashback campaigns for <%= merchant.name %> only. Platform-wide cashback is controlled by admin loyalty rules.</span>
         </div>
-        <a class="button primary" href="/merchant/cashback/new">New campaign</a>
-    </div>
+        <div class="merchant-hero-actions">
+            <a class="button secondary" href="/merchant/loyalty">Reward rules</a>
+            <a class="button primary" href="/merchant/cashback/new">New campaign</a>
+        </div>
+    </header>
 
-    <% if (!campaigns.length) { %>
-        <div class="empty-state">
-            <h2>No cashback campaigns yet.</h2>
-            <p class="muted">Create a draft campaign and activate it when ready.</p>
+    <section class="marketplace-stat-grid merchant-portal-stats">
+        <article><span>Campaigns</span><strong><%= campaignList.length %></strong></article>
+        <article><span>Active</span><strong><%= activeCount %></strong></article>
+        <article><span>Highest Earn</span><strong><%= highestCashback.toFixed(2) %>%</strong></article>
+        <article><span>Scope</span><strong>Own store</strong></article>
+    </section>
+
+    <section class="marketplace-admin-panel merchant-portal-panel">
+        <div class="marketplace-admin-toolbar">
+            <div>
+                <p class="eyebrow">Cashback Records</p>
+                <h2>Merchant campaign list</h2>
+            </div>
+            <div class="marketplace-filter-row">
+                <label>
+                    <span class="sr-only">Search campaigns</span>
+                    <input class="js-merchant-cashback-search" type="search" placeholder="Search campaign">
+                </label>
+                <label>
+                    <span class="sr-only">Filter status</span>
+                    <select class="js-merchant-cashback-status">
+                        <option value="">All statuses</option>
+                        <option value="draft">Draft</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="expired">Expired</option>
+                    </select>
+                </label>
+            </div>
         </div>
-    <% } else { %>
-        <div class="admin-table-wrap">
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Earn</th>
-                        <th>Minimum</th>
-                        <th>Applies To</th>
-                        <th>Dates</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% campaigns.forEach((campaign) => { %>
+
+        <% if (!campaignList.length) { %>
+            <div class="empty-state marketplace-empty-state">
+                <h2>No cashback campaigns yet</h2>
+                <p class="muted">Create a draft campaign and activate it when the offer is ready.</p>
+                <a class="button primary" href="/merchant/cashback/new">New campaign</a>
+            </div>
+        <% } else { %>
+            <div class="admin-table-wrap marketplace-table-wrap">
+                <table class="admin-table marketplace-admin-table">
+                    <thead>
                         <tr>
-                            <td><strong><%= campaign.title %></strong></td>
-                            <td><%= Number(campaign.cashbackPercent || 0).toFixed(2) %>%</td>
-                            <td>$<%= Number(campaign.minimumSpend || 0).toFixed(2) %></td>
-                            <td><span class="sync-pill"><%= campaign.applicableType %></span></td>
-                            <td>
-                                <%= new Date(campaign.startAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %><br>
-                                <small>to <%= new Date(campaign.endAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></small>
-                            </td>
-                            <td><span class="sync-pill"><%= campaign.status %></span></td>
-                            <td>
-                                <a class="button secondary compact" href="/merchant/cashback/<%= campaign.id %>/edit">Edit</a>
-                                <form action="/merchant/cashback/<%= campaign.id %>/delete" method="POST" style="display:inline;">
-                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <button class="button secondary compact" type="submit">Delete</button>
-                                </form>
-                            </td>
+                            <th>Campaign</th>
+                            <th>Earn</th>
+                            <th>Minimum</th>
+                            <th>Applies To</th>
+                            <th>Dates</th>
+                            <th>Status</th>
+                            <th>Actions</th>
                         </tr>
-                    <% }) %>
-                </tbody>
-            </table>
-        </div>
-    <% } %>
+                    </thead>
+                    <tbody>
+                        <% campaignList.forEach((campaign) => { %>
+                            <tr class="js-merchant-cashback-row" data-status="<%= campaign.status %>" data-search="<%= `${campaign.title || ''} ${campaign.applicableType || ''}` %>">
+                                <td><strong><%= campaign.title %></strong><small>Merchant campaign</small></td>
+                                <td><%= Number(campaign.cashbackPercent || 0).toFixed(2) %>%</td>
+                                <td>$<%= Number(campaign.minimumSpend || 0).toFixed(2) %></td>
+                                <td><span class="sync-pill"><%= campaign.applicableType %></span></td>
+                                <td><%= formatDate(campaign.startAt) %><small>to <%= formatDate(campaign.endAt) %></small></td>
+                                <td><span class="sync-pill"><%= campaign.status %></span></td>
+                                <td>
+                                    <div class="marketplace-action-row">
+                                        <a class="button secondary compact" href="/merchant/cashback/<%= campaign.id %>/edit">Edit</a>
+                                        <form action="/merchant/cashback/<%= campaign.id %>/delete" method="POST">
+                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                            <button class="button secondary compact danger-button" type="submit">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
+    </section>
 </section>
+
+<script>
+    (() => {
+        const search = document.querySelector('.js-merchant-cashback-search');
+        const status = document.querySelector('.js-merchant-cashback-status');
+        const rows = Array.from(document.querySelectorAll('.js-merchant-cashback-row'));
+
+        const applyFilters = () => {
+            const query = (search?.value || '').trim().toLowerCase();
+            const selectedStatus = (status?.value || '').trim().toLowerCase();
+            rows.forEach((row) => {
+                const haystack = (row.dataset.search || '').toLowerCase();
+                const rowStatus = (row.dataset.status || '').toLowerCase();
+                row.hidden = Boolean(query && !haystack.includes(query)) || Boolean(selectedStatus && rowStatus !== selectedStatus);
+            });
+        };
+
+        search?.addEventListener('input', applyFilters);
+        status?.addEventListener('change', applyFilters);
+    })();
+</script>
 
 <%- include('partials/footer') %>

@@ -3,67 +3,91 @@
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
 
-<section class="page-title">
-    <p class="eyebrow">Admin</p>
-    <h1>Loyalty settings.</h1>
-    <p>Control how customers earn points, redeem points, and how far merchants can discount bookings.</p>
-</section>
-
-<section class="section compact">
-    <% if (success) { %>
-        <div class="notice success"><%= success %></div>
-    <% } %>
-    <% if (error) { %>
-        <div class="notice error"><%= error %></div>
-    <% } %>
-
-    <form class="account-panel account-form" action="/admin/loyalty" method="POST">
-        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-        <div class="account-panel-header">
+        <header class="admin-dashboard-header admin-loyalty-header">
             <div>
-                <p class="eyebrow">Configurable rules</p>
-                <h2>Platform Loyalty Rules</h2>
-                <p class="muted">These rules apply across all merchants on the Vaniday platform.</p>
+                <p class="eyebrow">Admin</p>
+                <h1>Platform loyalty rules</h1>
+                <p>Control points, platform-wide cashback, point conversion, expiry, and booking redemption limits for every merchant on Vaniday.</p>
             </div>
-        </div>
+            <a class="button secondary" href="/admin/cashback">Merchant campaigns</a>
+        </header>
 
-        <div class="form-grid">
-            <label>
-                Points per $1 paid
-                <input type="number" name="pointsPerDollar" min="1" step="1" value="<%= rules.pointsPerDollar %>" required>
-            </label>
-            <label>
-                Cashback percent
-                <input type="number" name="cashbackPercent" min="0" max="50" step="0.01" value="<%= rules.cashbackPercent %>" required>
-            </label>
-            <label>
-                Minimum points to redeem
-                <input type="number" name="minPointsToRedeem" min="1" step="1" value="<%= rules.minPointsToRedeem %>" required>
-            </label>
-            <label>
-                Cash value per point
-                <input type="number" name="pointsToCashRate" min="0.0001" step="0.0001" value="<%= rules.pointsToCashRate %>" required>
-            </label>
-            <label>
-                Maximum discount per booking %
-                <input type="number" name="maxDiscountPercent" min="0" max="100" step="0.01" value="<%= rules.maxDiscountPercent %>" required>
-            </label>
-            <label>
-                Points expiry period
-                <input type="number" name="pointsExpiryDays" min="1" step="1" value="<%= rules.pointsExpiryDays %>" required>
-            </label>
-        </div>
+        <% if (success) { %>
+            <div class="notice success"><%= success %></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><%= error %></div>
+        <% } %>
 
-        <label class="loyalty-toggle">
-            <input type="checkbox" name="isEnabled" <%= rules.isEnabled ? 'checked' : '' %>>
-            <span>Enable loyalty earning and redemption</span>
-        </label>
+        <section class="admin-loyalty-scope-grid" aria-label="Loyalty scope explanation">
+            <article>
+                <span>Platform cashback</span>
+                <strong><%= Number(rules.cashbackPercent || 0).toFixed(2) %>%</strong>
+                <p>This applies to every paid receipt from every merchant when platform loyalty is enabled.</p>
+            </article>
+            <article>
+                <span>Merchant cashback campaigns</span>
+                <strong>Scoped</strong>
+                <p>Merchant campaigns are separate promotional boosts and only apply to the campaign merchant.</p>
+            </article>
+            <article>
+                <span>Status</span>
+                <strong><%= rules.isEnabled ? 'Active' : 'Paused' %></strong>
+                <p>When paused, customers stop earning and redeeming platform loyalty rewards.</p>
+            </article>
+        </section>
 
-        <div class="account-form-actions">
-            <button class="button primary" type="submit">Save loyalty rules</button>
-        </div>
-    </form>
-</section>
+        <form class="admin-panel account-form admin-loyalty-form" action="/admin/loyalty" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <div class="admin-panel-heading">
+                <div>
+                    <p class="eyebrow">Configurable rules</p>
+                    <h2>Global earning and redemption</h2>
+                </div>
+            </div>
+
+            <div class="admin-loyalty-form-grid">
+                <label>
+                    <span>Points per $1 paid</span>
+                    <input type="number" name="pointsPerDollar" min="1" step="1" value="<%= rules.pointsPerDollar %>" required>
+                    <small>Base points earned on paid receipts platform-wide.</small>
+                </label>
+                <label>
+                    <span>Platform cashback percent</span>
+                    <input type="number" name="cashbackPercent" min="0" max="50" step="0.01" value="<%= rules.cashbackPercent %>" required>
+                    <small>Applies to all merchants. Merchant cashback campaigns are separate.</small>
+                </label>
+                <label>
+                    <span>Minimum points to redeem</span>
+                    <input type="number" name="minPointsToRedeem" min="1" step="1" value="<%= rules.minPointsToRedeem %>" required>
+                    <small>Minimum points a customer must convert or redeem.</small>
+                </label>
+                <label>
+                    <span>Cash value per point</span>
+                    <input type="number" name="pointsToCashRate" min="0.0001" step="0.0001" value="<%= rules.pointsToCashRate %>" required>
+                    <small>Example: 0.0100 means 100 points equals $1.00.</small>
+                </label>
+                <label>
+                    <span>Maximum points discount per booking %</span>
+                    <input type="number" name="maxDiscountPercent" min="0" max="100" step="0.01" value="<%= rules.maxDiscountPercent %>" required>
+                    <small>Caps booking discounts from point redemption.</small>
+                </label>
+                <label>
+                    <span>Points expiry period</span>
+                    <input type="number" name="pointsExpiryDays" min="1" step="1" value="<%= rules.pointsExpiryDays %>" required>
+                    <small>Number of days before earned points expire.</small>
+                </label>
+            </div>
+
+            <label class="loyalty-toggle admin-loyalty-toggle">
+                <input type="checkbox" name="isEnabled" <%= rules.isEnabled ? 'checked' : '' %>>
+                <span>Enable platform loyalty earning and redemption</span>
+            </label>
+
+            <div class="account-form-actions">
+                <button class="button primary" type="submit">Save platform rules</button>
+            </div>
+        </form>
 
     </div>
 </section>

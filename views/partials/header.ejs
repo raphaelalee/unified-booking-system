@@ -20,11 +20,17 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=3">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=16">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=48">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=50">
+    <link rel="stylesheet" href="/css/portal-refresh.css?v=5">
     <script src="/js/security.js?v=1" defer></script>
     <script src="/js/cart-feedback.js?v=1" defer></script>
 </head>
 <body>
+    <%
+        const navUserName = currentUser ? (currentUser.name || currentUser.email || currentUser.role || 'Account') : '';
+        const navUserInitial = navUserName ? navUserName.charAt(0).toUpperCase() : 'V';
+        const navUserRole = currentUser && currentUser.role ? String(currentUser.role) : '';
+    %>
     <header class="site-header">
         <nav class="nav">
             <a class="brand" href="/">
@@ -36,10 +42,12 @@
                     <button class="admin-nav-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminNavDrawer" aria-controls="adminNavDrawer" aria-label="Open admin navigation">
                         <span></span><span></span><span></span>
                     </button>
+                    <%- include('admin-navbar') %>
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <%- include('merchant-navbar') %>
                 <% } else { %>
                     <a href="/services">Services</a>
+                    <a href="/products">Products</a>
                     <div class="nav-dropdown">
                         <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">
                             <span>Promotions</span>
@@ -53,22 +61,36 @@
                             <a href="/promotions/featured-salons">Featured Salons</a>
                         </div>
                     </div>
-                    <a href="/products">Products</a>
                     <% if (currentUser && currentUser.role === 'customer') { %>
-                        <a href="/help-center">Help Center</a>
-                        <a href="/rewards-game">Games</a>
-                        <a href="/reward-shop">Reward Shop</a>
-                        <a href="/giftcards">Gift Cards</a>
+                        <div class="nav-dropdown">
+                            <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="rewards-menu">
+                                <span>Rewards</span>
+                                <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+                            </button>
+                            <div class="nav-dropdown-menu" id="rewards-menu" aria-label="Rewards menu">
+                                <a href="/profile#wallet">Wallet</a>
+                                <a href="/reward-shop">Reward Shop</a>
+                                <a href="/rewards-game">Games</a>
+                                <a href="/giftcards">Gift Cards</a>
+                            </div>
+                        </div>
                     <% } %>
+                    <div class="nav-dropdown">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="support-menu">
+                            <span>Support</span>
+                            <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+                        </button>
+                        <div class="nav-dropdown-menu" id="support-menu" aria-label="Support menu">
+                            <% if (currentUser && currentUser.role === 'customer') { %>
+                                <a href="/help-center">Help Center</a>
+                            <% } %>
+                            <a href="/about">About</a>
+                            <a href="/contact">Contact</a>
+                        </div>
+                    </div>
                 <% } %>
             </div>
             <div class="nav-tools">
-                <% if (!currentUser || currentUser.role === 'customer') { %>
-                    <div class="nav-support-links">
-                        <a href="/about">About</a>
-                        <a href="/contact">Contact</a>
-                    </div>
-                <% } %>
                 <div class="nav-account-links">
                     <% if (currentUser) { %>
                         <a class="notification-link" href="/notifications" aria-label="Notifications">
@@ -78,30 +100,47 @@
                                 <span class="notification-count"><%= notificationUnreadCount > 9 ? '9+' : notificationUnreadCount %></span>
                             <% } %>
                         </a>
-                    <% } %>
-                    <a class="profile-icon-link" href="/profile" aria-label="Profile">
-                        <span class="login-icon" aria-hidden="true"></span>
-                    </a>
-                    <% if (currentUser) { %>
-                        <% if (currentUser.role !== 'customer') { %>
-                            <span class="nav-role-pill"><%= currentUser.role %></span>
+                        <% if (currentUser.role === 'customer') { %>
+                            <a class="bag-link nav-bag-link" href="/cart" aria-label="Cart">
+                                <span class="bag-icon" aria-hidden="true">
+                                    <span class="bag-count" data-cart-count><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
+                                </span>
+                            </a>
                         <% } %>
-                        <form action="/logout" method="POST">
-                            <button class="text-button" type="submit">Log Out</button>
-                        </form>
+                        <div class="nav-dropdown nav-account-menu">
+                            <button class="nav-account-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu">
+                                <span class="nav-avatar" aria-hidden="true"><%= navUserInitial %></span>
+                                <span class="nav-account-copy">
+                                    <strong><%= navUserName %></strong>
+                                    <small><%= navUserRole %></small>
+                                </span>
+                                <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+                            </button>
+                            <div class="nav-dropdown-menu nav-account-dropdown" id="account-menu" aria-label="Account menu">
+                                <% if (currentUser.role === 'customer') { %>
+                                    <a href="/profile">Profile</a>
+                                    <a href="/profile#wallet">Wallet</a>
+                                    <a href="/profile/history">Purchase History</a>
+                                    <a href="/notifications">Notifications</a>
+                                <% } else if (currentUser.role === 'merchant') { %>
+                                    <a href="/merchant/dashboard">Merchant Dashboard</a>
+                                    <a href="/merchant/profile">Merchant Profile</a>
+                                    <a href="/merchant/profile#storefront-qr">Storefront QR</a>
+                                    <a href="/notifications">Notifications</a>
+                                <% } else if (currentUser.role === 'admin') { %>
+                                    <a href="/admin/dashboard">Admin Dashboard</a>
+                                    <a href="/notifications">Notifications</a>
+                                <% } %>
+                                <form action="/logout" method="POST">
+                                    <button type="submit">Log out</button>
+                                </form>
+                            </div>
+                        </div>
                     <% } else { %>
-                        <a class="signup-text-link" href="/signup">Sign Up</a>
+                        <a class="button secondary nav-login-link" href="/login">Log in</a>
+                        <a class="button primary nav-signup-link" href="/signup">Sign up</a>
                     <% } %>
                 </div>
-                <% if (currentUser && currentUser.role === 'customer') { %>
-                    <div class="nav-commerce-links">
-                        <a class="bag-link" href="/cart" aria-label="Cart">
-                            <span class="bag-icon" aria-hidden="true">
-                                <span class="bag-count" data-cart-count><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>
-                            </span>
-                        </a>
-                    </div>
-                <% } %>
             </div>
         </nav>
     </header>

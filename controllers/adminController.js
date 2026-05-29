@@ -3,6 +3,7 @@ const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
 const CashbackCampaign = require('../models/CashbackCampaign');
+const Product = require('../models/Product');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
@@ -308,6 +309,62 @@ function validateServiceForm(form) {
     }
 
     return errors;
+}
+
+function getProductForm(body = {}) {
+    return {
+        salonId: String(body.salonId || '').trim(),
+        name: String(body.name || '').trim(),
+        price: String(body.price || '').trim(),
+        stockQuantity: String(body.stockQuantity || '').trim(),
+        imageUrl: String(body.imageUrl || '').trim(),
+        description: String(body.description || '').trim(),
+        ingredients: String(body.ingredients || '').trim(),
+        howToUse: String(body.howToUse || '').trim()
+    };
+}
+
+function validateProductForm(form, salons = []) {
+    const errors = [];
+    const salonId = Number(form.salonId);
+    const price = Number(form.price);
+    const stockQuantity = Number(form.stockQuantity);
+    const validSalonIds = new Set((salons || []).map((salon) => Number(salon.salon_id)));
+
+    if (!Number.isInteger(salonId) || !validSalonIds.has(salonId)) {
+        errors.push('Please select a valid merchant salon.');
+    }
+
+    if (form.name.length < 2) {
+        errors.push('Product name must be at least 2 characters.');
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+        errors.push('Please enter a valid product price.');
+    }
+
+    if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+        errors.push('Please enter a valid stock quantity.');
+    }
+
+    if (form.imageUrl && !/^https?:\/\//i.test(form.imageUrl) && !form.imageUrl.startsWith('/')) {
+        errors.push('Image URL must start with http://, https://, or /.');
+    }
+
+    return errors;
+}
+
+function buildProductPayload(form) {
+    return {
+        salonId: Number(form.salonId),
+        name: form.name,
+        price: Number(form.price),
+        stockQuantity: Number(form.stockQuantity),
+        imageUrl: form.imageUrl,
+        description: form.description || `${form.name} from Vaniday merchant.`,
+        ingredients: form.ingredients || 'Ingredients will be updated by the merchant.',
+        howToUse: form.howToUse || 'Use as directed by the merchant.'
+    };
 }
 
 function getPromotionForm(body = {}) {
@@ -1037,6 +1094,229 @@ function listPromotions(req, res) {
     });
 }
 
+function listProducts(req, res) {
+    return Product.getAllMerchantProducts((productError, products = []) => {
+        if (productError) {
+            console.error(productError);
+            return res.status(500).render('error', {
+                title: 'Admin Products Error',
+                message: 'Merchant products could not be loaded from the database.'
+            });
+        }
+
+        const success = req.session.adminSuccess;
+        const error = req.session.adminError;
+        req.session.adminSuccess = null;
+        req.session.adminError = null;
+
+        return res.render('admin-products', {
+            title: 'Manage Products',
+            products,
+            success,
+            error
+        });
+    });
+}
+
+function renderAdminProductForm(res, status, viewModel) {
+    return MerchantService.getSalons((salonError, salons = []) => {
+        if (salonError) {
+            console.error(salonError);
+            return res.status(500).render('error', {
+                title: 'Merchant Salons Error',
+                message: 'Merchant salons could not be loaded from the database.'
+            });
+        }
+
+        return res.status(status).render('admin-product-form', {
+            salons,
+            ...viewModel
+        });
+    });
+}
+
+function showNewProduct(req, res) {
+    return renderAdminProductForm(res, 200, {
+        title: 'Add Product',
+        product: null,
+        form: getProductForm(),
+        errors: []
+    });
+}
+
+function createProduct(req, res) {
+    return MerchantService.getSalons((salonError, salons = []) => {
+        if (salonError) {
+            console.error(salonError);
+            return res.status(500).render('error', {
+                title: 'Merchant Salons Error',
+                message: 'Merchant salons could not be loaded from the database.'
+            });
+        }
+
+        const form = getProductForm(req.body);
+        const errors = validateProductForm(form, salons);
+
+        if (errors.length > 0) {
+            return res.status(400).render('admin-product-form', {
+                title: 'Add Product',
+                salons,
+                product: null,
+                form,
+                errors
+            });
+        }
+
+        const payload = buildProductPayload(form);
+
+        return Product.createAsAdmin(payload, (createError, result) => {
+            if (createError) {
+                console.error(createError);
+                return res.status(500).render('admin-product-form', {
+                    title: 'Add Product',
+                    salons,
+                    product: null,
+                    form,
+                    errors: ['Product could not be created. Please check the merchant and product details.']
+                });
+            }
+
+            req.session.adminSuccess = 'Product created successfully.';
+            notifyMerchantBySalonId(payload.salonId, {
+                actorUserId: req.session.user.id,
+                type: 'product_update',
+                title: 'Admin added a product',
+                message: `${payload.name} was added to your product catalogue by Vaniday admin.`,
+                linkUrl: '/merchant/products',
+                dedupeKey: `merchant-admin-product-created-${result?.insertId || Date.now()}`
+            });
+            return res.redirect('/admin/products');
+        });
+    });
+}
+
+function showEditProduct(req, res) {
+    return Product.findMerchantProductById(req.params.productId, (productError, product) => {
+        if (productError || !product) {
+            return res.status(productError ? 500 : 404).render('error', {
+                title: 'Product Not Found',
+                message: productError ? 'Product could not be loaded.' : 'The selected merchant product could not be found.'
+            });
+        }
+
+        return renderAdminProductForm(res, 200, {
+            title: 'Edit Product',
+            product,
+            form: {
+                salonId: String(product.salonId || ''),
+                name: product.name,
+                price: Number(product.price || 0).toFixed(2),
+                stockQuantity: String(product.stockQuantity || 0),
+                imageUrl: product.imageUrl || '',
+                description: product.description || '',
+                ingredients: product.ingredients || '',
+                howToUse: product.howToUse || ''
+            },
+            errors: []
+        });
+    });
+}
+
+function updateProduct(req, res) {
+    return Product.findMerchantProductById(req.params.productId, (productError, product) => {
+        if (productError || !product) {
+            return res.status(productError ? 500 : 404).render('error', {
+                title: 'Product Not Found',
+                message: productError ? 'Product could not be loaded.' : 'The selected merchant product could not be found.'
+            });
+        }
+
+        return MerchantService.getSalons((salonError, salons = []) => {
+            if (salonError) {
+                console.error(salonError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Salons Error',
+                    message: 'Merchant salons could not be loaded from the database.'
+                });
+            }
+
+            const form = getProductForm(req.body);
+            const errors = validateProductForm(form, salons);
+
+            if (errors.length > 0) {
+                return res.status(400).render('admin-product-form', {
+                    title: 'Edit Product',
+                    salons,
+                    product,
+                    form,
+                    errors
+                });
+            }
+
+            const payload = buildProductPayload(form);
+
+            return Product.updateAsAdmin(product.id, payload, (updateError, result) => {
+                if (updateError) {
+                    console.error(updateError);
+                    return res.status(500).render('admin-product-form', {
+                        title: 'Edit Product',
+                        salons,
+                        product,
+                        form,
+                        errors: ['Product could not be updated. Please check the merchant and product details.']
+                    });
+                }
+
+                req.session.adminSuccess = result?.affectedRows ? 'Product updated successfully.' : null;
+                req.session.adminError = result?.affectedRows ? null : 'Product could not be updated.';
+                if (result?.affectedRows) {
+                    notifyMerchantBySalonId(payload.salonId, {
+                        actorUserId: req.session.user.id,
+                        type: 'product_update',
+                        title: 'Admin updated a product',
+                        message: `${payload.name} was updated by Vaniday admin.`,
+                        linkUrl: '/merchant/products',
+                        dedupeKey: `merchant-admin-product-updated-${product.id}-${Date.now()}`
+                    });
+                }
+                return res.redirect('/admin/products');
+            });
+        });
+    });
+}
+
+function deleteProduct(req, res) {
+    return Product.findMerchantProductById(req.params.productId, (productError, product) => {
+        if (productError) {
+            console.error(productError);
+            req.session.adminError = 'Product could not be loaded for deletion.';
+            return res.redirect('/admin/products');
+        }
+
+        return Product.deleteAsAdmin(req.params.productId, (deleteError, deleted) => {
+            if (deleteError) {
+                console.error(deleteError);
+                req.session.adminError = 'Product could not be deleted.';
+                return res.redirect('/admin/products');
+            }
+
+            req.session.adminSuccess = deleted ? 'Product deleted successfully.' : null;
+            req.session.adminError = deleted ? null : 'Product could not be deleted.';
+            if (deleted && product) {
+                notifyMerchantBySalonId(product.salonId, {
+                    actorUserId: req.session.user.id,
+                    type: 'product_update',
+                    title: 'Admin removed a product',
+                    message: `${product.name} was removed from your product catalogue by Vaniday admin.`,
+                    linkUrl: '/merchant/products',
+                    dedupeKey: `merchant-admin-product-deleted-${product.id}-${Date.now()}`
+                });
+            }
+            return res.redirect('/admin/products');
+        });
+    });
+}
+
 function showNewPromotion(req, res) {
     return renderPromotionForm(res, {
         title: 'Add Promotion',
@@ -1694,6 +1974,12 @@ module.exports = {
     updateService,
     deleteService,
     listPromotions,
+    listProducts,
+    showNewProduct,
+    createProduct,
+    showEditProduct,
+    updateProduct,
+    deleteProduct,
     showEditPromotion,
     updatePromotion,
     deletePromotion,

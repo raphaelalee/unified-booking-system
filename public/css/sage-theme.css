@@ -2235,6 +2235,1526 @@ body:not(.flappy-page) .vaniday-home-visual::before {
     }
 }
 
+/* Merchant and admin portal professional refresh */
+body:has(.merchant-primary-nav) .site-header,
+body:has(.admin-nav-toggle) .site-header {
+    position: sticky !important;
+    top: 12px !important;
+    z-index: 1050 !important;
+    width: min(100% - 32px, 1500px) !important;
+    margin: 12px auto 0 !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    box-shadow: 0 18px 50px rgba(35, 42, 32, 0.10) !important;
+    backdrop-filter: blur(18px);
+}
+
+body:has(.merchant-primary-nav) .nav,
+body:has(.admin-nav-toggle) .nav {
+    min-height: 72px !important;
+    padding: 10px 14px !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 18px !important;
+}
+
+.merchant-primary-nav {
+    width: 100% !important;
+    padding: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    overflow: visible !important;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 999px;
+    background: #f6f8f3;
+}
+
+.merchant-primary-nav > a,
+.merchant-primary-nav .merchant-nav-link,
+.admin-nav-toggle,
+.merchant-nav-toggle {
+    min-height: 38px !important;
+    padding: 9px 13px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    border: 1px solid transparent !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    color: #344032 !important;
+    box-shadow: none !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 0.84rem !important;
+    font-weight: 850 !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+    text-decoration: none !important;
+    text-transform: none !important;
+    white-space: nowrap !important;
+}
+
+.merchant-primary-nav > a:hover,
+.merchant-primary-nav > a:focus-visible,
+.merchant-primary-nav > a.active,
+.merchant-primary-nav .merchant-nav-link:hover,
+.merchant-primary-nav .merchant-nav-link:focus-visible,
+.merchant-primary-nav .merchant-nav-link.active,
+.admin-nav-toggle:hover,
+.merchant-nav-toggle:hover {
+    border-color: rgba(47, 74, 50, 0.16) !important;
+    background: #2f4a32 !important;
+    color: #fff !important;
+}
+
+.merchant-primary-nav .dropdown {
+    position: relative;
+}
+
+.merchant-primary-nav .dropdown-menu {
+    min-width: 230px !important;
+    padding: 8px !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    box-shadow: 0 24px 70px rgba(35, 42, 32, 0.16) !important;
+}
+
+.merchant-primary-nav .dropdown-item {
+    min-height: 40px;
+    padding: 10px 12px !important;
+    border-radius: 8px;
+    color: #2f392d !important;
+    font-size: 0.9rem;
+    font-weight: 760;
+}
+
+.merchant-primary-nav .dropdown-item:hover,
+.merchant-primary-nav .dropdown-item:focus {
+    background: #f3f6ef !important;
+    color: #1f2f1f !important;
+}
+
+.admin-nav-toggle,
+.merchant-nav-toggle {
+    width: 42px !important;
+    padding: 0 !important;
+    display: none !important;
+    background: #2f4a32 !important;
+}
+
+.admin-nav-toggle span,
+.merchant-nav-toggle span {
+    width: 18px !important;
+    height: 2px !important;
+    border-radius: 999px;
+    background: currentColor !important;
+}
+
+.admin-dashboard-v2,
+.merchant-analytics-page,
+.merchant-products-page,
+.merchant-service-manager-page,
+.merchant-service-form-page {
+    width: min(100%, 1500px) !important;
+    margin: 0 auto !important;
+}
+
+.admin-dashboard-v2 {
+    padding: clamp(24px, 3vw, 38px) !important;
+    display: grid !important;
+    grid-template-columns: minmax(250px, 280px) minmax(0, 1fr) !important;
+    gap: 20px !important;
+    align-items: start !important;
+}
+
+.admin-sidebar {
+    position: sticky !important;
+    top: 104px !important;
+    min-width: 0 !important;
+    height: calc(100vh - 126px) !important;
+    padding: 16px !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    gap: 14px !important;
+    overflow: auto !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    box-shadow: 0 18px 48px rgba(35, 42, 32, 0.08) !important;
+}
+
+.admin-sidebar-brand {
+    min-height: 48px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    border-radius: 12px;
+    background: #2f4a32;
+    color: #fff !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 0.98rem !important;
+    font-weight: 900 !important;
+    text-decoration: none;
+}
+
+.admin-sidebar nav,
+.admin-sidebar-actions {
+    display: grid !important;
+    gap: 6px !important;
+}
+
+.admin-sidebar nav a,
+.admin-sidebar-group-toggle,
+.admin-drawer-link,
+.admin-nav-accordion .accordion-body a {
+    width: 100%;
+    min-height: 40px !important;
+    padding: 10px 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    color: #344032 !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+    text-align: left !important;
+    text-decoration: none !important;
+}
+
+.admin-sidebar nav a:hover,
+.admin-sidebar-group-toggle:hover,
+.admin-sidebar nav a.active,
+.admin-sidebar-group-toggle.active,
+.admin-drawer-link.active,
+.admin-nav-accordion .accordion-body a:hover {
+    border-color: rgba(47, 74, 50, 0.16) !important;
+    background: #eef4e9 !important;
+    color: #243a27 !important;
+}
+
+.admin-sidebar-group .collapse.show,
+.admin-sidebar-group .collapsing {
+    margin: 4px 0 8px;
+    padding: 4px 0 4px 10px;
+    border-left: 2px solid rgba(47, 74, 50, 0.18);
+}
+
+.admin-sidebar-group .collapse.show a,
+.admin-sidebar-group .collapsing a {
+    min-height: 36px !important;
+    color: #5e6b59 !important;
+    font-size: 0.82rem !important;
+}
+
+.admin-main-panel,
+.merchant-analytics-shell {
+    min-width: 0 !important;
+    display: grid !important;
+    gap: 18px !important;
+}
+
+.admin-dashboard-header,
+.merchant-dashboard-hero,
+.merchant-products-hero {
+    min-width: 0 !important;
+    padding: clamp(22px, 3vw, 34px) !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: space-between !important;
+    gap: 18px !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 16px !important;
+    background: linear-gradient(135deg, #ffffff 0%, #f6f8f3 100%) !important;
+    box-shadow: 0 18px 48px rgba(35, 42, 32, 0.07) !important;
+}
+
+.admin-dashboard-header h1,
+.merchant-dashboard-hero h1,
+.merchant-products-hero h1 {
+    margin: 0 !important;
+    color: #243124 !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: clamp(1.9rem, 4vw, 3.4rem) !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.02 !important;
+}
+
+.admin-dashboard-header p,
+.merchant-dashboard-hero span,
+.merchant-products-hero p {
+    max-width: 760px;
+    color: #657060 !important;
+    line-height: 1.65;
+}
+
+.admin-topbar-utilities,
+.merchant-hero-actions,
+.merchant-products-hero-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+}
+
+.admin-panel,
+.admin-table-wrap,
+.merchant-chart-card,
+.merchant-product-orders-panel,
+.merchant-schedule-panel,
+.merchant-service-slot-panel,
+.merchant-package-panel,
+.merchant-info-panel,
+.merchant-info-footer-panel,
+.merchant-products-empty,
+.merchant-products-toolbar,
+.merchant-product-row,
+.merchant-dashboard-lower-grid > *,
+.merchant-orders-management-panel,
+.merchant-product-orders-panel,
+.merchant-card,
+.account-panel {
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 16px 42px rgba(35, 42, 32, 0.06) !important;
+}
+
+.admin-panel,
+.merchant-chart-card,
+.merchant-product-orders-panel,
+.merchant-schedule-panel,
+.merchant-service-slot-panel,
+.merchant-package-panel,
+.merchant-info-panel,
+.merchant-info-footer-panel,
+.merchant-products-empty,
+.merchant-products-toolbar,
+.merchant-dashboard-lower-grid > *,
+.merchant-orders-management-panel {
+    padding: clamp(18px, 2.4vw, 26px) !important;
+}
+
+.admin-grid,
+.merchant-dashboard-lower-grid,
+.merchant-kpi-grid,
+.merchant-payout-summary-grid,
+.merchant-products-summary,
+.admin-stat-grid,
+.admin-analytics-kpis,
+.merchant-analytics-kpis,
+.merchant-insight-grid {
+    gap: 14px !important;
+}
+
+.admin-stat-card,
+.merchant-kpi-card,
+.merchant-payout-summary-card,
+.merchant-products-summary article,
+.merchant-analytics-kpi,
+.merchant-insight-card {
+    min-width: 0 !important;
+    border: 1px solid rgba(44, 55, 42, 0.10) !important;
+    border-radius: 14px !important;
+    background: #ffffff !important;
+    box-shadow: 0 12px 30px rgba(35, 42, 32, 0.05) !important;
+}
+
+.admin-panel-heading,
+.merchant-card-heading,
+.wallet-section-heading {
+    margin-bottom: 14px !important;
+    padding-bottom: 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 14px !important;
+    border-bottom: 1px solid rgba(44, 55, 42, 0.10) !important;
+}
+
+.admin-panel-heading h2,
+.merchant-card-heading h2,
+.merchant-service-slot-panel h2,
+.merchant-info-panel h2,
+.merchant-products-table-head,
+.merchant-product-main h2 {
+    color: #243124 !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-weight: 850 !important;
+    letter-spacing: 0 !important;
+}
+
+.admin-table-wrap {
+    overflow: auto !important;
+}
+
+.admin-table,
+.merchant-table {
+    width: 100% !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+}
+
+.admin-table th,
+.admin-table td,
+.merchant-table th,
+.merchant-table td {
+    padding: 14px 16px !important;
+    border-bottom: 1px solid rgba(44, 55, 42, 0.09) !important;
+    vertical-align: middle !important;
+}
+
+.admin-table th,
+.merchant-table th,
+.merchant-products-table-head {
+    background: #f6f8f3 !important;
+    color: #657060 !important;
+    font-size: 0.74rem !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+}
+
+.admin-table tbody tr:hover,
+.merchant-table tbody tr:hover,
+.merchant-product-row:hover,
+.merchant-product-order-card:hover,
+.merchant-order-management-card:hover {
+    background: #fbfcf8 !important;
+}
+
+.merchant-product-list,
+.merchant-product-order-list,
+.merchant-order-management-list,
+.merchant-alert-list,
+.admin-log-list,
+.admin-health-list {
+    display: grid !important;
+    gap: 10px !important;
+}
+
+.merchant-product-row,
+.merchant-product-order-card,
+.merchant-order-management-card,
+.admin-log-list article,
+.admin-health-list a {
+    border: 1px solid rgba(44, 55, 42, 0.10) !important;
+    border-radius: 12px !important;
+    background: #fbfcf8 !important;
+}
+
+.merchant-product-row {
+    padding: 14px !important;
+    align-items: center !important;
+}
+
+.account-form,
+.admin-panel.account-form,
+.merchant-service-form-page form,
+.merchant-products-page form,
+.merchant-analytics-page form {
+    gap: 16px !important;
+}
+
+.account-form label,
+.admin-panel.account-form label,
+.merchant-service-form-page label,
+.merchant-products-page label,
+.merchant-analytics-page label {
+    color: #2f392d !important;
+    font-weight: 850 !important;
+}
+
+.account-form input,
+.account-form select,
+.account-form textarea,
+.admin-topbar-utilities input,
+.merchant-service-form-page input,
+.merchant-service-form-page select,
+.merchant-service-form-page textarea,
+.merchant-products-page input,
+.merchant-products-page select,
+.merchant-products-page textarea,
+.merchant-analytics-page input,
+.merchant-analytics-page select,
+.merchant-analytics-page textarea {
+    min-height: 44px !important;
+    border: 1px solid rgba(44, 55, 42, 0.16) !important;
+    border-radius: 10px !important;
+    background: #fbfcf8 !important;
+    color: #263126 !important;
+    box-shadow: none !important;
+}
+
+.button.compact,
+.admin-table .button,
+.merchant-product-actions .button {
+    min-height: 36px !important;
+    padding: 8px 12px !important;
+    border-radius: 999px !important;
+    font-size: 0.78rem !important;
+}
+
+.sync-pill,
+.status-pill,
+.merchant-order-status,
+.merchant-product-stock {
+    border-radius: 999px !important;
+    font-weight: 850 !important;
+}
+
+.admin-nav-drawer,
+.merchant-nav-drawer {
+    background: #ffffff !important;
+}
+
+.admin-nav-drawer .offcanvas-header,
+.merchant-nav-drawer .offcanvas-header {
+    border-bottom: 1px solid rgba(44, 55, 42, 0.10);
+}
+
+.admin-nav-accordion .accordion-item,
+.merchant-nav-accordion .accordion-item {
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.admin-nav-accordion .accordion-button,
+.merchant-nav-accordion .accordion-button {
+    border-radius: 10px !important;
+    color: #344032 !important;
+    font-weight: 850 !important;
+}
+
+.admin-nav-accordion .accordion-button:not(.collapsed),
+.merchant-nav-accordion .accordion-button:not(.collapsed) {
+    background: #eef4e9 !important;
+    color: #243a27 !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 1200px) {
+    body:has(.merchant-primary-nav) .nav,
+    body:has(.admin-nav-toggle) .nav {
+        grid-template-columns: auto auto !important;
+    }
+
+    body:has(.merchant-primary-nav) .nav-links,
+    body:has(.admin-nav-toggle) .nav-links {
+        grid-column: 1 / -1;
+        justify-content: flex-start !important;
+    }
+
+    .merchant-primary-nav {
+        justify-content: flex-start !important;
+        overflow-x: auto !important;
+        border-radius: 12px;
+    }
+
+    .admin-dashboard-v2 {
+        grid-template-columns: 1fr !important;
+    }
+
+    .admin-sidebar {
+        display: none !important;
+    }
+
+    .admin-nav-toggle,
+    .merchant-nav-toggle {
+        display: inline-grid !important;
+        place-items: center !important;
+    }
+}
+
+@media (max-width: 760px) {
+    body:has(.merchant-primary-nav) .site-header,
+    body:has(.admin-nav-toggle) .site-header {
+        width: calc(100% - 18px) !important;
+        border-radius: 12px !important;
+    }
+
+    .admin-dashboard-v2,
+    .merchant-analytics-page,
+    .merchant-products-page,
+    .merchant-service-manager-page,
+    .merchant-service-form-page {
+        padding-right: 14px !important;
+        padding-left: 14px !important;
+    }
+
+    .admin-dashboard-header,
+    .merchant-dashboard-hero,
+    .merchant-products-hero,
+    .admin-panel-heading,
+    .merchant-card-heading {
+        align-items: stretch !important;
+        flex-direction: column !important;
+    }
+
+    .admin-topbar-utilities,
+    .merchant-hero-actions,
+    .merchant-products-hero-actions,
+    .admin-topbar-utilities .button,
+    .merchant-hero-actions .button,
+    .merchant-products-hero-actions .button {
+        width: 100%;
+    }
+
+    .merchant-product-row,
+    .merchant-product-order-main,
+    .merchant-order-management-main,
+    .form-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Profile wallet and rewards cleanup */
+.profile-redesign-page .account-membership-panel,
+.profile-redesign-page .loyalty-profile-panel {
+    padding: clamp(18px, 3vw, 28px) !important;
+}
+
+.profile-rewards-dashboard,
+.profile-wallet-dashboard {
+    display: grid;
+    gap: 18px;
+}
+
+.profile-rewards-hero,
+.profile-wallet-hero {
+    display: grid;
+    gap: 16px;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 12px;
+    background: #f8faf5;
+}
+
+.profile-rewards-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 20px;
+}
+
+.profile-rewards-hero h3,
+.profile-wallet-action h3 {
+    margin: 0 0 12px;
+    color: #253225;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: clamp(1.18rem, 2vw, 1.55rem);
+    font-weight: 850;
+}
+
+.profile-rewards-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.profile-rewards-progress-labels,
+.profile-wallet-rules {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.profile-rewards-progress-labels {
+    margin-top: 8px;
+    color: #687462;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.profile-rewards-metrics,
+.profile-wallet-rules {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.profile-rewards-metrics article,
+.profile-wallet-rules span {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 10px;
+    background: #fff;
+}
+
+.profile-rewards-metrics span,
+.profile-wallet-rules span {
+    color: #657060;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.profile-rewards-metrics article span {
+    display: block;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.profile-rewards-metrics strong,
+.profile-wallet-rules strong {
+    display: block;
+    color: #243124;
+    font-size: clamp(1.2rem, 2vw, 1.7rem);
+    line-height: 1;
+}
+
+.profile-reward-notice {
+    padding: 14px 16px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(47, 74, 50, 0.14);
+    border-radius: 10px;
+    background: #eef4e9;
+    color: #2f4a32;
+}
+
+.profile-reward-notice.is-active {
+    border-color: rgba(184, 77, 63, 0.20);
+    background: #fff3ee;
+    color: #7d3a30;
+}
+
+.profile-reward-notice strong {
+    font-size: 0.96rem;
+}
+
+.profile-reward-notice span {
+    color: inherit;
+    line-height: 1.55;
+}
+
+.profile-rewards-grid,
+.profile-wallet-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.profile-rewards-block,
+.profile-wallet-block {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.profile-voucher-list,
+.profile-wallet-list {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-voucher-row,
+.profile-wallet-row {
+    min-width: 0;
+    padding: 13px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid rgba(44, 55, 42, 0.08);
+    border-radius: 10px;
+    background: #fbfcf8;
+    color: inherit;
+    text-decoration: none;
+}
+
+.profile-voucher-row.is-muted {
+    opacity: 0.72;
+}
+
+.profile-voucher-row > div,
+.profile-wallet-row > div {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.profile-voucher-row > div:last-child,
+.profile-wallet-row > div:last-child {
+    justify-items: end;
+    text-align: right;
+}
+
+.profile-voucher-row span,
+.profile-wallet-row span {
+    color: #687462;
+    font-size: 0.74rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.profile-voucher-row strong,
+.profile-wallet-row strong {
+    color: #253225;
+    overflow-wrap: anywhere;
+}
+
+.profile-voucher-row small,
+.profile-wallet-row small {
+    color: #687462;
+    font-weight: 750;
+}
+
+.profile-referral-compact {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-referral-compact > span {
+    color: #687462;
+    font-size: 0.74rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.profile-referral-compact > strong {
+    color: #253225;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    line-height: 1;
+}
+
+.profile-rewards-history {
+    padding: 0;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 12px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.profile-rewards-history summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    color: #253225;
+    font-weight: 850;
+}
+
+.profile-rewards-history .profile-voucher-list {
+    padding: 0 16px 16px;
+}
+
+.profile-wallet-hero {
+    grid-template-columns: minmax(220px, 0.75fr) minmax(280px, 1fr) minmax(240px, 0.8fr);
+    padding: 0;
+    overflow: hidden;
+}
+
+.profile-wallet-balance,
+.profile-wallet-action,
+.profile-wallet-cashback {
+    min-width: 0;
+    padding: 20px;
+}
+
+.profile-wallet-balance {
+    display: grid;
+    align-content: center;
+    background: #2f4a32;
+    color: #fff;
+}
+
+.profile-wallet-balance .eyebrow {
+    color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.profile-wallet-balance strong,
+.profile-wallet-cashback strong {
+    display: block;
+    color: inherit;
+    font-size: clamp(2.3rem, 5vw, 4.4rem);
+    line-height: 0.95;
+}
+
+.profile-wallet-balance span,
+.profile-wallet-cashback span {
+    margin-top: 8px;
+    color: inherit;
+    opacity: 0.82;
+    font-weight: 750;
+}
+
+.profile-wallet-action {
+    display: grid;
+    gap: 14px;
+    background: #fff;
+}
+
+.profile-wallet-action label {
+    display: grid;
+    gap: 7px;
+    color: #253225;
+    font-weight: 850;
+}
+
+.profile-wallet-action input {
+    max-width: 220px;
+}
+
+.profile-wallet-cashback {
+    display: grid;
+    align-content: center;
+    gap: 10px;
+    background: #eef4e9;
+    color: #263126;
+}
+
+.profile-wallet-cashback form {
+    margin: 4px 0 0;
+}
+
+.profile-wallet-row .positive {
+    color: #2f6b3c;
+}
+
+.profile-wallet-row .negative {
+    color: #8d3f34;
+}
+
+@media (max-width: 980px) {
+    .profile-rewards-hero,
+    .profile-wallet-hero,
+    .profile-rewards-grid,
+    .profile-wallet-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-rewards-actions {
+        justify-content: flex-start;
+    }
+
+    .profile-rewards-metrics,
+    .profile-wallet-rules {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 620px) {
+    .profile-rewards-metrics,
+    .profile-wallet-rules,
+    .profile-voucher-row,
+    .profile-wallet-row {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-voucher-row > div:last-child,
+    .profile-wallet-row > div:last-child {
+        justify-items: start;
+        text-align: left;
+    }
+
+    .profile-rewards-actions .button,
+    .profile-wallet-cashback .button,
+    .profile-wallet-action .button {
+        width: 100%;
+    }
+}
+
+/* Professional account navigation refresh */
+body:not(.flappy-page) .site-header {
+    position: sticky;
+    top: 12px;
+    z-index: 1000;
+    width: min(100% - 32px, 1360px) !important;
+    margin: 12px auto 0 !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: 0 18px 50px rgba(35, 42, 32, 0.10) !important;
+    backdrop-filter: blur(18px);
+}
+
+body:not(.flappy-page) .nav {
+    min-height: 72px !important;
+    padding: 10px 14px !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 20px !important;
+}
+
+body:not(.flappy-page) .brand {
+    min-width: max-content;
+    gap: 10px;
+    color: #263126 !important;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+body:not(.flappy-page) .brand-mark,
+body:not(.flappy-page) .nav-avatar {
+    width: 40px;
+    height: 40px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #2f4a32;
+    color: #fff;
+    font-weight: 900;
+}
+
+body:not(.flappy-page) .nav-links {
+    min-width: 0;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    overflow: visible !important;
+}
+
+body:not(.flappy-page) .nav-tools,
+body:not(.flappy-page) .nav-account-links {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+}
+
+body:not(.flappy-page) .nav-links > a,
+body:not(.flappy-page) .nav-dropdown-trigger,
+body:not(.flappy-page) .notification-link,
+body:not(.flappy-page) .nav-bag-link,
+body:not(.flappy-page) .nav-login-link,
+body:not(.flappy-page) .nav-signup-link {
+    min-height: 42px !important;
+    padding: 10px 14px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    border: 1px solid transparent !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    color: #344032 !important;
+    box-shadow: none !important;
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    white-space: nowrap !important;
+}
+
+body:not(.flappy-page) .nav-links > a:hover,
+body:not(.flappy-page) .nav-links > a:focus-visible,
+body:not(.flappy-page) .nav-dropdown-trigger:hover,
+body:not(.flappy-page) .nav-dropdown-trigger:focus-visible,
+body:not(.flappy-page) .notification-link:hover,
+body:not(.flappy-page) .nav-bag-link:hover,
+body:not(.flappy-page) .nav-login-link:hover {
+    border-color: rgba(47, 74, 50, 0.16) !important;
+    background: #f3f6ef !important;
+    color: #20301f !important;
+}
+
+body:not(.flappy-page) .nav-signup-link,
+body:not(.flappy-page) .nav-account-trigger {
+    border-color: rgba(47, 74, 50, 0.16) !important;
+    background: #2f4a32 !important;
+    color: #fff !important;
+}
+
+body:not(.flappy-page) .nav-signup-link:hover,
+body:not(.flappy-page) .nav-signup-link:focus-visible,
+body:not(.flappy-page) .nav-account-trigger:hover,
+body:not(.flappy-page) .nav-account-trigger:focus-visible {
+    background: #243a27 !important;
+    color: #fff !important;
+}
+
+body:not(.flappy-page) .nav-dropdown {
+    position: relative !important;
+    display: inline-flex !important;
+}
+
+body:not(.flappy-page) .nav-dropdown-caret {
+    font-size: 0.66rem;
+    line-height: 1;
+    transform: translateY(1px);
+    transition: transform 0.16s ease;
+}
+
+body:not(.flappy-page) .nav-dropdown.is-open .nav-dropdown-caret,
+body:not(.flappy-page) .nav-dropdown:focus-within .nav-dropdown-caret {
+    transform: translateY(1px) rotate(180deg);
+}
+
+body:not(.flappy-page) .nav-dropdown-menu {
+    position: absolute !important;
+    top: calc(100% + 10px) !important;
+    left: 0 !important;
+    z-index: 1002 !important;
+    min-width: 230px !important;
+    padding: 8px !important;
+    display: grid !important;
+    gap: 3px !important;
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    box-shadow: 0 24px 70px rgba(35, 42, 32, 0.16) !important;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+body:not(.flappy-page) .nav-dropdown.is-open .nav-dropdown-menu,
+body:not(.flappy-page) .nav-dropdown:hover .nav-dropdown-menu,
+body:not(.flappy-page) .nav-dropdown:focus-within .nav-dropdown-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+body:not(.flappy-page) .nav-dropdown-menu a,
+body:not(.flappy-page) .nav-dropdown-menu button {
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #2f392d !important;
+    font: inherit;
+    font-size: 0.9rem !important;
+    font-weight: 750 !important;
+    text-align: left;
+    text-decoration: none;
+}
+
+body:not(.flappy-page) .nav-dropdown-menu a:hover,
+body:not(.flappy-page) .nav-dropdown-menu a:focus-visible,
+body:not(.flappy-page) .nav-dropdown-menu button:hover,
+body:not(.flappy-page) .nav-dropdown-menu button:focus-visible {
+    background: #f3f6ef !important;
+    color: #1f2f1f !important;
+}
+
+body:not(.flappy-page) .nav-account-menu .nav-dropdown-menu {
+    right: 0 !important;
+    left: auto !important;
+}
+
+body:not(.flappy-page) .nav-account-trigger {
+    min-height: 48px !important;
+    padding: 4px 8px 4px 5px !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+body:not(.flappy-page) .nav-account-copy {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+    text-align: left;
+}
+
+body:not(.flappy-page) .nav-account-copy strong,
+body:not(.flappy-page) .nav-account-copy small {
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body:not(.flappy-page) .nav-account-copy strong {
+    color: inherit;
+    font-size: 0.86rem;
+}
+
+body:not(.flappy-page) .nav-account-copy small {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+body:not(.flappy-page) .nav-account-dropdown form {
+    margin: 4px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid rgba(44, 55, 42, 0.10);
+}
+
+body:not(.flappy-page) .notification-link {
+    position: relative;
+    width: 42px;
+    padding: 0 !important;
+}
+
+body:not(.flappy-page) .notification-link-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+body:not(.flappy-page) .notification-bell,
+body:not(.flappy-page) .bag-icon {
+    position: relative;
+    width: 20px;
+    height: 20px;
+}
+
+body:not(.flappy-page) .notification-bell::before {
+    content: "";
+    position: absolute;
+    inset: 2px 4px 5px;
+    border: 2px solid currentColor;
+    border-bottom: 0;
+    border-radius: 10px 10px 4px 4px;
+}
+
+body:not(.flappy-page) .notification-bell::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    bottom: 2px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+body:not(.flappy-page) .nav-bag-link {
+    width: 42px;
+    padding: 0 !important;
+}
+
+body:not(.flappy-page) .bag-count,
+body:not(.flappy-page) .notification-count {
+    position: absolute;
+    top: -7px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #b84d3f;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 900;
+}
+
+/* Profile page cleanup */
+.profile-redesign-page {
+    width: min(100%, 1180px);
+}
+
+.profile-page-heading,
+.profile-heading-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.profile-heading-actions {
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.profile-redesign-page .profile-page-heading h1 {
+    margin: 0;
+    color: #243124;
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: clamp(2.4rem, 5vw, 4.6rem);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 0.98;
+}
+
+.profile-redesign-page .profile-page-heading p {
+    max-width: 640px;
+    color: #64705f;
+}
+
+.profile-redesign-page .profile-hero-card {
+    margin-top: 22px;
+    padding: clamp(22px, 3vw, 32px);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(250px, 0.75fr) auto;
+    align-items: center;
+    gap: 20px;
+    border: 1px solid rgba(44, 55, 42, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ffffff 0%, #f6f8f3 100%);
+    box-shadow: 0 20px 55px rgba(35, 42, 32, 0.08);
+}
+
+.profile-redesign-page .profile-hero-avatar {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    background: #2f4a32;
+    color: #fff;
+    font-size: 2rem;
+}
+
+.profile-redesign-page .profile-hero-details {
+    min-width: 0;
+}
+
+.profile-redesign-page .profile-hero-details h2 {
+    margin: 7px 0 4px;
+    color: #253225;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: clamp(1.45rem, 2vw, 2.1rem);
+    font-weight: 850;
+}
+
+.profile-redesign-page .profile-hero-details p {
+    margin: 0;
+    color: #657060;
+    overflow-wrap: anywhere;
+}
+
+.profile-hero-meta,
+.profile-hero-stats {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-hero-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 16px;
+}
+
+.profile-hero-meta span,
+.profile-hero-stats article {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.profile-hero-meta strong,
+.profile-hero-stats span {
+    display: block;
+    margin-bottom: 4px;
+    color: #687462;
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.profile-hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-hero-stats strong {
+    color: #243124;
+    font-size: clamp(1.25rem, 2vw, 1.8rem);
+    line-height: 1;
+}
+
+.profile-redesign-page .profile-hero-actions {
+    display: grid;
+    gap: 10px;
+    min-width: 150px;
+}
+
+.profile-redesign-page .profile-tab-nav {
+    position: sticky;
+    top: 100px;
+    z-index: 20;
+    margin: 18px 0;
+    padding: 7px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    border: 1px solid rgba(44, 55, 42, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 36px rgba(35, 42, 32, 0.07);
+    backdrop-filter: blur(14px);
+}
+
+.profile-redesign-page .profile-tab-nav a {
+    min-height: 40px;
+    padding: 10px 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #40503c;
+    font-size: 0.88rem;
+    font-weight: 850;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.profile-redesign-page .profile-tab-nav a.is-active,
+.profile-redesign-page .profile-tab-nav a[aria-current="page"] {
+    background: #2f4a32;
+    color: #fff;
+}
+
+.profile-redesign-page .account-layout {
+    display: block !important;
+}
+
+.profile-redesign-page .account-main-stack {
+    display: grid;
+    gap: 18px;
+}
+
+.profile-redesign-page .account-panel {
+    border: 1px solid rgba(44, 55, 42, 0.12) !important;
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    box-shadow: 0 18px 48px rgba(35, 42, 32, 0.07) !important;
+}
+
+.profile-redesign-page .account-panel-header {
+    align-items: center;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(44, 55, 42, 0.10);
+}
+
+.profile-redesign-page .account-panel-header h2,
+.profile-redesign-page .wallet-section-heading h3 {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: clamp(1.25rem, 2vw, 1.7rem);
+    font-weight: 850;
+    letter-spacing: 0;
+}
+
+.profile-redesign-page .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.profile-redesign-page input,
+.profile-redesign-page select,
+.profile-redesign-page textarea {
+    border-radius: 10px !important;
+    background: #fbfcf8 !important;
+}
+
+.wallet-cashback-actions {
+    margin-top: 14px;
+    justify-content: flex-start !important;
+}
+
+.wallet-cashback-actions form {
+    margin: 0;
+}
+
+@media (max-width: 1100px) {
+    body:not(.flappy-page) .nav {
+        grid-template-columns: auto auto !important;
+    }
+
+    body:not(.flappy-page) .nav-links {
+        grid-column: 1 / -1;
+        justify-content: flex-start !important;
+        overflow-x: auto !important;
+        padding-bottom: 2px;
+    }
+
+    body:not(.flappy-page) .nav-tools {
+        justify-self: end;
+    }
+
+    .profile-redesign-page .profile-hero-card {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .profile-hero-stats,
+    .profile-redesign-page .profile-hero-actions {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 760px) {
+    body:not(.flappy-page) .site-header {
+        width: calc(100% - 18px) !important;
+        top: 8px;
+        border-radius: 12px !important;
+    }
+
+    body:not(.flappy-page) .nav {
+        gap: 10px !important;
+        padding: 9px !important;
+    }
+
+    body:not(.flappy-page) .brand span:last-child,
+    body:not(.flappy-page) .nav-account-copy {
+        display: none;
+    }
+
+    body:not(.flappy-page) .nav-links > a,
+    body:not(.flappy-page) .nav-dropdown-trigger {
+        min-height: 38px !important;
+        padding: 9px 11px !important;
+        font-size: 0.82rem !important;
+    }
+
+    body:not(.flappy-page) .nav-dropdown-menu {
+        min-width: 210px !important;
+    }
+
+    body:not(.flappy-page) .nav-account-menu .nav-dropdown-menu {
+        right: -6px !important;
+    }
+
+    .profile-page-heading,
+    .profile-heading-actions {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .profile-heading-actions,
+    .profile-heading-actions .button {
+        width: 100%;
+    }
+
+    .profile-redesign-page .profile-hero-card,
+    .profile-hero-meta,
+    .profile-hero-stats,
+    .profile-redesign-page .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-redesign-page .profile-hero-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+    }
+
+    .profile-redesign-page .profile-tab-nav {
+        top: 126px;
+    }
+}
+
 @media (max-width: 640px) {
     .home-notice,
     .home-search-band,

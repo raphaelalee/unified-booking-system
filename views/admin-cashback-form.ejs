@@ -1,77 +1,84 @@
 <%- include('partials/header', { title }) %>
-<%- include('partials/admin-sidebar') %>
 
-<section class="page-title">
-    <p class="eyebrow">Cashback Campaign</p>
-    <h1><%= campaign ? 'Edit campaign' : 'New campaign' %></h1>
-    <p>Admin campaigns can be assigned to any merchant storefront.</p>
-</section>
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <%- include('partials/admin-marketplace-tabs') %>
 
-<section class="section compact">
-    <% if (errors && errors.length) { %>
-        <div class="notice error">
-            <% errors.forEach((error) => { %><p><%= error %></p><% }) %>
-        </div>
-    <% } %>
+        <header class="admin-dashboard-header marketplace-admin-header">
+            <div>
+                <p class="eyebrow">Cashback Campaign</p>
+                <h1><%= campaign ? 'Edit campaign' : 'New campaign' %></h1>
+                <p>This creates a merchant-scoped cashback boost. Use Admin Loyalty for the platform-wide cashback rate.</p>
+            </div>
+            <a class="button secondary" href="/admin/cashback">Back to campaigns</a>
+        </header>
 
-    <form class="account-panel account-form" action="<%= campaign ? `/admin/cashback/${campaign.id}` : '/admin/cashback' %>" method="POST">
-        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <% if (errors && errors.length) { %>
+            <div class="notice error">
+                <% errors.forEach((error) => { %><p><%= error %></p><% }) %>
+            </div>
+        <% } %>
 
-        <label>Merchant
-            <select name="salonId" required>
-                <option value="">Select merchant</option>
-                <% salons.forEach((salon) => { %>
-                    <option value="<%= salon.salon_id %>" <%= String(form.salonId || '') === String(salon.salon_id) ? 'selected' : '' %>>
-                        <%= salon.salon_name %> - <%= salon.owner_email %>
-                    </option>
-                <% }) %>
-            </select>
-        </label>
+        <form class="admin-panel account-form marketplace-admin-form" action="<%= campaign ? `/admin/cashback/${campaign.id}` : '/admin/cashback' %>" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
-        <label>Title
-            <input type="text" name="title" maxlength="120" required value="<%= form.title || '' %>">
-        </label>
-
-        <div class="form-row">
-            <label>Cashback percent
-                <input type="number" name="cashbackPercent" min="0.01" max="100" step="0.01" required value="<%= form.cashbackPercent || '' %>">
-            </label>
-            <label>Minimum spend
-                <input type="number" name="minimumSpend" min="0" step="0.01" required value="<%= form.minimumSpend || '0.00' %>">
-            </label>
-        </div>
-
-        <div class="form-row">
-            <label>Start
-                <input type="datetime-local" name="startAt" required value="<%= form.startAt || '' %>">
-            </label>
-            <label>End
-                <input type="datetime-local" name="endAt" required value="<%= form.endAt || '' %>">
-            </label>
-        </div>
-
-        <div class="form-row">
-            <label>Status
-                <select name="status">
-                    <% statuses.forEach((status) => { %>
-                        <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+            <label>Merchant
+                <select name="salonId" required>
+                    <option value="">Select merchant</option>
+                    <% salons.forEach((salon) => { %>
+                        <option value="<%= salon.salon_id %>" <%= String(form.salonId || '') === String(salon.salon_id) ? 'selected' : '' %>>
+                            <%= salon.salon_name %> - <%= salon.owner_email %>
+                        </option>
                     <% }) %>
                 </select>
             </label>
-            <label>Applies to
-                <select name="applicableType">
-                    <% applicableTypes.forEach((type) => { %>
-                        <option value="<%= type %>" <%= form.applicableType === type ? 'selected' : '' %>><%= type %></option>
-                    <% }) %>
-                </select>
-            </label>
-        </div>
 
-        <div class="hero-actions">
-            <button class="button primary" type="submit">Save campaign</button>
-            <a class="button secondary" href="/admin/cashback">Cancel</a>
-        </div>
-    </form>
+            <label>Title
+                <input type="text" name="title" maxlength="120" required value="<%= form.title || '' %>">
+            </label>
+
+            <div class="form-row">
+                <label>Cashback percent
+                    <input type="number" name="cashbackPercent" min="0.01" max="100" step="0.01" required value="<%= form.cashbackPercent || '' %>">
+                </label>
+                <label>Minimum spend
+                    <input type="number" name="minimumSpend" min="0" step="0.01" required value="<%= form.minimumSpend || '0.00' %>">
+                </label>
+            </div>
+
+            <div class="form-row">
+                <label>Start
+                    <input type="datetime-local" name="startAt" required value="<%= form.startAt || '' %>">
+                </label>
+                <label>End
+                    <input type="datetime-local" name="endAt" required value="<%= form.endAt || '' %>">
+                </label>
+            </div>
+
+            <div class="form-row">
+                <label>Status
+                    <select name="status">
+                        <% statuses.forEach((status) => { %>
+                            <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                        <% }) %>
+                    </select>
+                </label>
+                <label>Applies to
+                    <select name="applicableType">
+                        <% applicableTypes.forEach((type) => { %>
+                            <option value="<%= type %>" <%= form.applicableType === type ? 'selected' : '' %>><%= type %></option>
+                        <% }) %>
+                    </select>
+                </label>
+            </div>
+
+            <div class="hero-actions">
+                <button class="button primary" type="submit">Save campaign</button>
+                <a class="button secondary" href="/admin/cashback">Cancel</a>
+            </div>
+        </form>
+    </div>
 </section>
 
 <%- include('partials/footer') %>

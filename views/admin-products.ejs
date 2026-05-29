@@ -1,15 +1,11 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const campaignList = Array.isArray(campaigns) ? campaigns : [];
-    const merchantOptions = [...new Set(campaignList.map((campaign) => campaign.salonName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
-    const activeCount = campaignList.filter((campaign) => campaign.status === 'active').length;
-    const highestCashback = campaignList.reduce((max, campaign) => Math.max(max, Number(campaign.cashbackPercent || 0)), 0);
-    const formatCampaignDate = (value) => {
-        const date = value instanceof Date ? value : new Date(value);
-        if (Number.isNaN(date.getTime())) return '';
-        return date.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' });
-    };
+    const productList = Array.isArray(products) ? products : [];
+    const totalStock = productList.reduce((sum, product) => sum + Number(product.stockQuantity || 0), 0);
+    const lowStockCount = productList.filter((product) => Number(product.stockQuantity || 0) > 0 && Number(product.stockQuantity || 0) <= 5).length;
+    const outOfStockCount = productList.filter((product) => Number(product.stockQuantity || 0) <= 0).length;
+    const merchantOptions = [...new Set(productList.map((product) => product.salonName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
 %>
 
 <section class="admin-dashboard-v2">
@@ -20,10 +16,13 @@
         <header class="admin-dashboard-header marketplace-admin-header">
             <div>
                 <p class="eyebrow">Admin Marketplace</p>
-                <h1>Cashback campaigns</h1>
-                <p>Manage merchant-scoped cashback campaigns. These boosts apply only to the selected merchant, while platform-wide cashback stays in Loyalty Settings.</p>
+                <h1>Products</h1>
+                <p>Manage the same product catalogue merchants update from their portal. Admin edits appear in merchant inventory and the customer shop.</p>
             </div>
-            <a class="button primary" href="/admin/cashback/new">Add campaign</a>
+            <div class="admin-topbar-utilities">
+                <a class="button secondary" href="/products">Customer shop</a>
+                <a class="button primary" href="/admin/products/new">Add product</a>
+            </div>
         </header>
 
         <% if (success) { %><div class="notice success"><p><%= success %></p></div><% } %>
@@ -31,21 +30,21 @@
 
         <section class="marketplace-admin-panel">
             <div class="marketplace-stat-grid">
-                <article><span>Campaigns</span><strong><%= campaignList.length %></strong></article>
-                <article><span>Active</span><strong><%= activeCount %></strong></article>
-                <article><span>Merchants</span><strong><%= merchantOptions.length %></strong></article>
-                <article><span>Highest Earn</span><strong><%= highestCashback.toFixed(2) %>%</strong></article>
+                <article><span>Products</span><strong><%= productList.length %></strong></article>
+                <article><span>Total Stock</span><strong><%= totalStock %></strong></article>
+                <article><span>Low Stock</span><strong><%= lowStockCount %></strong></article>
+                <article><span>Out Of Stock</span><strong><%= outOfStockCount %></strong></article>
             </div>
 
             <div class="marketplace-admin-toolbar">
                 <div>
-                    <p class="eyebrow">Campaign Records</p>
-                    <h2>Merchant cashback</h2>
+                    <p class="eyebrow">Product Records</p>
+                    <h2>Live merchant catalogue</h2>
                 </div>
                 <div class="marketplace-filter-row">
                     <label>
-                        <span class="sr-only">Search campaigns</span>
-                        <input class="js-marketplace-search" type="search" placeholder="Search campaign or merchant">
+                        <span class="sr-only">Search products</span>
+                        <input class="js-marketplace-search" type="search" placeholder="Search product or merchant">
                     </label>
                     <label>
                         <span class="sr-only">Filter by merchant</span>
@@ -59,44 +58,48 @@
                 </div>
             </div>
 
-            <% if (campaignList.length === 0) { %>
+            <% if (productList.length === 0) { %>
                 <div class="empty-state marketplace-empty-state">
-                    <h2>No cashback campaigns yet</h2>
-                    <p class="muted">Create a campaign for a selected merchant or let merchants create their own.</p>
-                    <a class="button primary" href="/admin/cashback/new">Add campaign</a>
+                    <h2>No merchant products yet</h2>
+                    <p class="muted">Products will appear here when merchants add them, or when admin creates one for a merchant.</p>
+                    <a class="button primary" href="/admin/products/new">Add product</a>
                 </div>
             <% } else { %>
                 <div class="admin-table-wrap marketplace-table-wrap">
                     <table class="admin-table marketplace-admin-table">
                         <thead>
                             <tr>
-                                <th>Campaign</th>
+                                <th>Product</th>
                                 <th>Merchant</th>
-                                <th>Earn</th>
-                                <th>Minimum</th>
-                                <th>Applies To</th>
-                                <th>Dates</th>
+                                <th>Price</th>
+                                <th>Stock</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <% campaignList.forEach((campaign) => { %>
-                                <tr class="js-marketplace-row" data-merchant="<%= campaign.salonName || '' %>" data-search="<%= `${campaign.title || ''} ${campaign.salonName || ''} ${campaign.applicableType || ''}` %>">
-                                    <td><strong><%= campaign.title %></strong></td>
-                                    <td><%= campaign.salonName %></td>
-                                    <td><%= Number(campaign.cashbackPercent || 0).toFixed(2) %>%</td>
-                                    <td>$<%= Number(campaign.minimumSpend || 0).toFixed(2) %></td>
-                                    <td><span class="sync-pill"><%= campaign.applicableType %></span></td>
+                            <% productList.forEach((product) => { %>
+                                <%
+                                    const stock = Number(product.stockQuantity || 0);
+                                    const stockStatus = stock <= 0 ? 'Out of stock' : stock <= 5 ? 'Low stock' : 'Available';
+                                %>
+                                <tr class="js-marketplace-row" data-merchant="<%= product.salonName || '' %>" data-search="<%= `${product.name || ''} ${product.salonName || ''} ${product.description || ''}` %>">
                                     <td>
-                                        <%= formatCampaignDate(campaign.startAt) %>
-                                        <small>to <%= formatCampaignDate(campaign.endAt) %></small>
+                                        <strong><%= product.name %></strong>
+                                        <small><%= product.description || 'No description set.' %></small>
                                     </td>
-                                    <td><span class="sync-pill"><%= campaign.status %></span></td>
+                                    <td>
+                                        <strong><%= product.salonName || 'Unassigned merchant' %></strong>
+                                        <small>Salon #<%= product.salonId || '-' %></small>
+                                    </td>
+                                    <td>$<%= Number(product.price || 0).toFixed(2) %></td>
+                                    <td><%= stock %></td>
+                                    <td><span class="sync-pill"><%= stockStatus %></span></td>
                                     <td>
                                         <div class="marketplace-action-row">
-                                            <a class="button secondary compact" href="/admin/cashback/<%= campaign.id %>/edit">Edit</a>
-                                            <form action="/admin/cashback/<%= campaign.id %>/delete" method="POST">
+                                            <a class="button secondary compact" href="/products/<%= product.id %>">Open</a>
+                                            <a class="button secondary compact" href="/admin/products/<%= product.id %>/edit">Edit</a>
+                                            <form action="/admin/products/<%= product.id %>/delete" method="POST">
                                                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <button class="button secondary compact danger-button" type="submit">Delete</button>
                                             </form>

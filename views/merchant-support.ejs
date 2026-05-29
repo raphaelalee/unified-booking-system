@@ -2,44 +2,62 @@
 
 <%
     const supportSteps = [
-        'Customer submits a refund request from Help Center.',
-        'Vaniday admin reviews the case and forwards eligible requests.',
-        'Merchant approves or declines with a clear reason.',
-        'Admin issues the final refund decision and the customer is notified.'
+        { label: 'Customer request', copy: 'Customer submits a refund request from Help Center.' },
+        { label: 'Admin triage', copy: 'Vaniday admin reviews the case and forwards eligible requests.' },
+        { label: 'Merchant response', copy: 'Merchant approves or declines with a clear reason.' },
+        { label: 'Final decision', copy: 'Admin issues the final refund decision and the customer is notified.' }
     ];
 %>
 
-<section class="section compact merchant-analytics-page">
-    <div class="merchant-analytics-shell">
-        <header class="merchant-dashboard-hero">
-            <div>
-                <p class="eyebrow">Support</p>
-                <h1>Merchant support center</h1>
-                <span>Handle merchant-facing refund work and open the shared Help Center queue for <%= merchant.name %>.</span>
-            </div>
-            <div class="merchant-hero-actions">
-                <a class="button primary" href="/help-center">Open refund requests</a>
-            </div>
-        </header>
+<section class="section compact merchant-portal-page merchant-support-page">
+    <header class="merchant-dashboard-hero merchant-portal-hero">
+        <div>
+            <p class="eyebrow">Support</p>
+            <h1>Refund requests</h1>
+            <span>Handle merchant-facing refund work through the shared Help Center queue for <%= merchant.name %>.</span>
+        </div>
+        <div class="merchant-hero-actions">
+            <a class="button secondary" href="/notifications">Notifications</a>
+            <a class="button primary" href="/help-center">Open refund queue</a>
+        </div>
+    </header>
 
-        <section class="merchant-dashboard-lower-grid">
-            <article class="merchant-alert-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Refund Workflow</p><h2>How requests move</h2></div></div>
-                <div class="merchant-alert-list">
-                    <% supportSteps.forEach((step) => { %>
-                        <p><%= step %></p>
-                    <% }) %>
-                </div>
-            </article>
-            <article class="merchant-actions-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Support Tools</p><h2>Merchant queue</h2></div></div>
-                <p class="muted">Refund requests themselves live in Help Center so every reply, note, and final decision stays in one auditable place.</p>
-                <div class="merchant-quick-actions">
-                    <a class="button secondary" href="/notifications">View notifications</a>
-                </div>
-            </article>
-        </section>
-    </div>
+    <section class="marketplace-stat-grid merchant-portal-stats">
+        <article><span>Queue</span><strong>Help Center</strong></article>
+        <article><span>Merchant Role</span><strong>Respond</strong></article>
+        <article><span>Admin Role</span><strong>Resolve</strong></article>
+        <article><span>Audit Trail</span><strong>Shared</strong></article>
+    </section>
+
+    <section class="merchant-dashboard-lower-grid merchant-support-grid">
+        <article class="merchant-card">
+            <div class="merchant-card-heading">
+                <div><p class="eyebrow">Refund Workflow</p><h2>How requests move</h2></div>
+            </div>
+            <div class="merchant-process-list">
+                <% supportSteps.forEach((step, index) => { %>
+                    <article>
+                        <span><%= index + 1 %></span>
+                        <div>
+                            <strong><%= step.label %></strong>
+                            <p><%= step.copy %></p>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+        </article>
+
+        <article class="merchant-card">
+            <div class="merchant-card-heading">
+                <div><p class="eyebrow">Work Queue</p><h2>Use one support record</h2></div>
+            </div>
+            <p class="muted">Refund requests live in Help Center so every customer message, merchant response, admin note, and final decision stays together.</p>
+            <div class="merchant-quick-actions">
+                <a class="button primary" href="/help-center">Open Help Center</a>
+                <a class="button secondary" href="/merchant/bookings">Review bookings</a>
+            </div>
+        </article>
+    </section>
 </section>
 
 <%- include('partials/footer') %>

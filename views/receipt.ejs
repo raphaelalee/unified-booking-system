@@ -56,6 +56,10 @@
                     <p>
                         You earned <strong><%= Number(lastPaymentHighlight.loyaltyAward.points || 0) %> loyalty points</strong>
                         from this payment.
+                        <% if (Number(lastPaymentHighlight.loyaltyAward.platformCashback || lastPaymentHighlight.loyaltyAward.cashback || 0) > 0) { %>
+                            Platform cashback earned:
+                            <strong>$<%= Number(lastPaymentHighlight.loyaltyAward.platformCashback || lastPaymentHighlight.loyaltyAward.cashback || 0).toFixed(2) %></strong>.
+                        <% } %>
                         <% if (lastPaymentHighlight.loyaltyAward.birthdayApplied) { %>
                             Birthday month bonus applied:
                             <strong><%= Number(lastPaymentHighlight.loyaltyAward.basePoints || 0) %> base points</strong>

@@ -44,6 +44,14 @@
                 { label: 'Support Overview', href: '/merchant/support' },
                 { label: 'Refund Requests', href: '/help-center' }
             ]
+        },
+        {
+            label: 'Insights',
+            active: isActive(['/merchant/customers', '/merchant/analytics']),
+            items: [
+                { label: 'Customers', href: '/merchant/customers' },
+                { label: 'Analytics', href: '/merchant/analytics' }
+            ]
         }
     ];
 %>
@@ -68,9 +76,6 @@
             </ul>
         </div>
     <% }) %>
-    <a class="<%= activePath === '/merchant/customers' ? 'active' : '' %>" href="/merchant/customers">Customers</a>
-    <a class="<%= activePath === '/merchant/analytics' ? 'active' : '' %>" href="/merchant/analytics">Analytics</a>
-    <a class="<%= activePath === '/merchant/profile' ? 'active' : '' %>" href="/merchant/profile">Profile</a>
 </nav>
 
 <div class="offcanvas offcanvas-start merchant-nav-drawer" tabindex="-1" id="merchantNavDrawer" aria-labelledby="merchantNavDrawerLabel">
@@ -98,8 +103,5 @@
                 </div>
             <% }) %>
         </div>
-        <a class="merchant-drawer-link <%= activePath === '/merchant/customers' ? 'active' : '' %>" href="/merchant/customers">Customers</a>
-        <a class="merchant-drawer-link <%= activePath === '/merchant/analytics' ? 'active' : '' %>" href="/merchant/analytics">Analytics</a>
-        <a class="merchant-drawer-link <%= activePath === '/merchant/profile' ? 'active' : '' %>" href="/merchant/profile">Profile</a>
     </div>
 </div>

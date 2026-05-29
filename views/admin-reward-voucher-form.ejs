@@ -1,77 +1,76 @@
 <%- include('partials/header', { title }) %>
+
 <section class="admin-dashboard-v2">
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
+        <%- include('partials/admin-rewards-tabs') %>
 
-<section class="page-title">
-    <p class="eyebrow">Admin Portal</p>
-    <h1><%= voucher ? 'Edit reward voucher' : 'Add reward voucher' %>.</h1>
-    <p>Reward shop vouchers are platform-level tiers customers can unlock with VaniGlints.</p>
-</section>
-
-<section class="section compact">
-    <% if (errors && errors.length > 0) { %>
-        <div class="notice error">
-            <% errors.forEach((message) => { %>
-                <p><%= message %></p>
-            <% }) %>
-        </div>
-    <% } %>
-
-    <form class="account-panel account-form service-admin-form" action="<%= voucher ? `/admin/reward-shop/${voucher.id}` : '/admin/reward-shop' %>" method="POST">
-        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-        <div class="account-panel-header">
+        <header class="admin-dashboard-header marketplace-admin-header">
             <div>
-                <p class="eyebrow">Voucher Details</p>
-                <h2>Reward shop setup</h2>
+                <p class="eyebrow">Admin Rewards</p>
+                <h1><%= voucher ? 'Edit voucher' : 'Add voucher' %></h1>
+                <p>Reward shop vouchers are platform tiers customers unlock with VaniGlints.</p>
             </div>
-        </div>
+            <a class="button secondary" href="/admin/reward-shop">Back to reward shop</a>
+        </header>
 
-        <div class="form-grid">
-            <label>
-                Voucher title
-                <input type="text" name="title" value="<%= form.title || '' %>" maxlength="120" placeholder="$5 Off Booking" required>
-            </label>
+        <% if (errors && errors.length > 0) { %>
+            <div class="notice error">
+                <% errors.forEach((message) => { %>
+                    <p><%= message %></p>
+                <% }) %>
+            </div>
+        <% } %>
 
-            <label>
-                Glints cost
-                <input type="number" name="glintsCost" min="1" step="1" value="<%= form.glintsCost || '' %>" placeholder="5000" required>
-            </label>
+        <section class="admin-panel marketplace-crud-panel">
+            <form class="marketplace-admin-form" action="<%= voucher ? `/admin/reward-shop/${voucher.id}` : '/admin/reward-shop' %>" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
-            <label>
-                Voucher value
-                <input type="number" name="voucherValue" min="0.01" step="0.01" value="<%= form.voucherValue || '' %>" placeholder="5" required>
-            </label>
+                <div class="marketplace-form-grid">
+                    <label>
+                        <span>Voucher title</span>
+                        <input type="text" name="title" value="<%= form.title || '' %>" maxlength="120" placeholder="$5 Off Booking" required>
+                    </label>
 
-            <label>
-                Sort order
-                <input type="number" name="sortOrder" min="0" step="1" value="<%= form.sortOrder || '0' %>" placeholder="20" required>
-            </label>
+                    <label>
+                        <span>Status</span>
+                        <select name="status" required>
+                            <% statuses.forEach((status) => { %>
+                                <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>>
+                                    <%= status %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </label>
 
-            <label>
-                Status
-                <select name="status" required>
-                    <% statuses.forEach((status) => { %>
-                        <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>>
-                            <%= status %>
-                        </option>
-                    <% }) %>
-                </select>
-            </label>
+                    <label>
+                        <span>Glints cost</span>
+                        <input type="number" name="glintsCost" min="1" step="1" value="<%= form.glintsCost || '' %>" placeholder="5000" required>
+                    </label>
 
-            <label class="full-width-field">
-                Details
-                <textarea name="detail" rows="4" maxlength="255" placeholder="Short explanation customers see on the reward shop card." required><%= form.detail || '' %></textarea>
-            </label>
-        </div>
+                    <label>
+                        <span>Voucher value</span>
+                        <input type="number" name="voucherValue" min="0.01" step="0.01" value="<%= form.voucherValue || '' %>" placeholder="5" required>
+                    </label>
 
-        <div class="form-actions">
-            <button class="button primary" type="submit"><%= voucher ? 'Update voucher' : 'Create voucher' %></button>
-            <a class="button secondary" href="/admin/reward-shop">Cancel</a>
-        </div>
-    </form>
-</section>
+                    <label>
+                        <span>Sort order</span>
+                        <input type="number" name="sortOrder" min="0" step="1" value="<%= form.sortOrder || '0' %>" placeholder="20" required>
+                    </label>
+                </div>
 
+                <label>
+                    <span>Details</span>
+                    <textarea name="detail" rows="4" maxlength="255" placeholder="Short explanation customers see on the reward shop card." required><%= form.detail || '' %></textarea>
+                </label>
+
+                <div class="form-actions">
+                    <button class="button primary" type="submit"><%= voucher ? 'Update voucher' : 'Create voucher' %></button>
+                    <a class="button secondary" href="/admin/reward-shop">Cancel</a>
+                </div>
+            </form>
+        </section>
     </div>
 </section>
+
 <%- include('partials/footer') %>

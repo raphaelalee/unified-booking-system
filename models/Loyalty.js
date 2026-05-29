@@ -873,13 +873,15 @@ function awardForReceipt(receipt, callback) {
             }
 
             const basePoints = Math.floor(totalAmount * rules.pointsPerDollar);
+            const platformCashback = roundMoney(totalAmount * (Number(rules.cashbackPercent || 0) / 100));
             const multiplier = Number(birthdayReward?.multiplier || 1);
             const points = basePoints * multiplier;
             const birthdayApplied = Boolean(birthdayReward?.birthdayApplied);
             const bonusPoints = Math.max(0, points - basePoints);
+            const rewardLabel = platformCashback > 0 ? 'points and platform cashback' : 'points';
             const description = birthdayApplied
-                ? `Earned from receipt ${receipt.displayId || receipt.id} with birthday month 2X points`
-                : `Earned from receipt ${receipt.displayId || receipt.id}`;
+                ? `Earned ${rewardLabel} from receipt ${receipt.displayId || receipt.id} with birthday month 2X points`
+                : `Earned ${rewardLabel} from receipt ${receipt.displayId || receipt.id}`;
             const sourceReceiptId = String(receipt.id);
 
             db.getConnection((connectionError, connection) => {
@@ -920,13 +922,14 @@ function awardForReceipt(receipt, callback) {
                             const insertSql = `
                                 INSERT IGNORE INTO loyalty_transactions
                                     (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, expires_at, booking_reference, merchant_name)
-                                VALUES (?, ?, 'EARNED', ?, 0, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY), ?, ?)
+                                VALUES (?, ?, 'EARNED', ?, ?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY), ?, ?)
                             `;
 
                             connection.query(insertSql, [
                                 receipt.userId,
                                 sourceReceiptId,
                                 points,
+                                platformCashback,
                                 description,
                                 Math.max(1, Number(rules.pointsExpiryDays || DEFAULT_RULES.pointsExpiryDays)),
                                 receipt.displayId || receipt.id || sourceReceiptId,
@@ -948,15 +951,17 @@ function awardForReceipt(receipt, callback) {
 
                                 const updateSql = `
                                     INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
-                                    VALUES (?, ?, 0, ?)
+                                    VALUES (?, ?, ?, ?)
                                     ON DUPLICATE KEY UPDATE
                                         points_balance = points_balance + VALUES(points_balance),
+                                        cashback_balance = cashback_balance + VALUES(cashback_balance),
                                         lifetime_points = lifetime_points + VALUES(lifetime_points)
                                 `;
 
                                 connection.query(updateSql, [
                                     receipt.userId,
                                     points,
+                                    platformCashback,
                                     points
                                 ], (updateError) => {
                                     if (updateError) {
@@ -971,7 +976,9 @@ function awardForReceipt(receipt, callback) {
                                         callback(commitError, {
                                             awarded: !commitError,
                                             points,
-                                            cashback: 0,
+                                            cashback: platformCashback,
+                                            platformCashback,
+                                            platformCashbackPercent: Number(rules.cashbackPercent || 0),
                                             basePoints,
                                             bonusPoints,
                                             multiplier,

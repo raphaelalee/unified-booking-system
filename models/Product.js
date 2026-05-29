@@ -131,23 +131,57 @@ function getAll(callback) {
         return getFallbackAll();
     }
 
-    const sql = `
-        SELECT products.product_id, products.salon_id, products.name, products.price,
-            products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, salons.salon_name
-        FROM products
-        LEFT JOIN salons ON salons.salon_id = products.salon_id
-        ORDER BY products.product_id DESC
-    `;
-
-    db.query(sql, (error, rows) => {
-        if (error) {
-            callback(error);
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        const databaseProducts = rows.map(mapRow);
-        callback(null, databaseProducts.length > 0 ? databaseProducts : getFallbackAll());
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, salons.salon_name
+            FROM products
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            ORDER BY products.product_id DESC
+        `;
+
+        db.query(sql, (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const databaseProducts = rows.map(mapRow);
+            callback(null, databaseProducts.length > 0 ? databaseProducts : getFallbackAll());
+        });
+    });
+}
+
+function getAllMerchantProducts(callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, salons.salon_name
+            FROM products
+            INNER JOIN salons ON salons.salon_id = products.salon_id
+            ORDER BY salons.salon_name, products.product_id DESC
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapRow));
+        });
     });
 }
 
@@ -161,23 +195,65 @@ function findById(id, callback) {
         return;
     }
 
-    const sql = `
-        SELECT products.product_id, products.salon_id, products.name, products.price,
-            products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, salons.salon_name
-        FROM products
-        LEFT JOIN salons ON salons.salon_id = products.salon_id
-        WHERE products.product_id = ?
-        LIMIT 1
-    `;
-
-    db.query(sql, [id], (error, rows) => {
-        if (error) {
-            callback(error);
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
             return;
         }
 
-        callback(null, rows[0] ? mapRow(rows[0]) : findById(id));
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, salons.salon_name
+            FROM products
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE products.product_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [id], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows[0] ? mapRow(rows[0]) : findById(id));
+        });
+    });
+}
+
+function findMerchantProductById(id, callback) {
+    const productId = Number(id);
+
+    if (!Number.isInteger(productId) || productId < 1) {
+        callback(null, null);
+        return;
+    }
+
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, salons.salon_name
+            FROM products
+            INNER JOIN salons ON salons.salon_id = products.salon_id
+            WHERE products.product_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [productId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows[0] ? mapRow(rows[0]) : null);
+        });
     });
 }
 
@@ -252,6 +328,31 @@ function createForMerchant(userId, product, callback) {
     });
 }
 
+function createAsAdmin(product, callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [
+            product.salonId,
+            product.name,
+            product.price,
+            product.stockQuantity,
+            product.imageUrl || null,
+            product.description,
+            product.ingredients,
+            product.howToUse
+        ], callback);
+    });
+}
+
 function updateForMerchant(userId, productId, product, callback) {
     return ensureProductSchema((schemaError) => {
         if (schemaError) {
@@ -283,6 +384,40 @@ function updateForMerchant(userId, productId, product, callback) {
             product.howToUse,
             productId,
             userId
+        ], callback);
+    });
+}
+
+function updateAsAdmin(productId, product, callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE products
+            SET salon_id = ?,
+                name = ?,
+                price = ?,
+                stock_quantity = ?,
+                image_url = ?,
+                description = ?,
+                ingredients = ?,
+                how_to_use = ?
+            WHERE product_id = ?
+        `;
+
+        db.query(sql, [
+            product.salonId,
+            product.name,
+            product.price,
+            product.stockQuantity,
+            product.imageUrl || null,
+            product.description,
+            product.ingredients,
+            product.howToUse,
+            productId
         ], callback);
     });
 }
@@ -319,13 +454,29 @@ function deleteForMerchant(userId, productId, callback) {
     });
 }
 
+function deleteAsAdmin(productId, callback) {
+    db.query('DELETE FROM products WHERE product_id = ?', [productId], (error, result) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, result.affectedRows > 0);
+    });
+}
+
 module.exports = {
     getAll,
+    getAllMerchantProducts,
     findById,
+    findMerchantProductById,
     getByMerchantUserId,
     findForMerchant,
+    createAsAdmin,
     createForMerchant,
+    updateAsAdmin,
     updateForMerchant,
     restockForMerchant,
+    deleteAsAdmin,
     deleteForMerchant
 };

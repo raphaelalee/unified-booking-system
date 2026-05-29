@@ -19,13 +19,21 @@
         },
         {
             label: 'Marketplace',
-            active: isActive(['/admin/services', '/admin/promotions', '/admin/cashback', '/admin/reward-shop', '/admin/rewards-game']),
+            active: isActive(['/admin/services', '/admin/products', '/admin/promotions', '/admin/cashback']),
             items: [
                 { label: 'Services', href: '/admin/services' },
+                { label: 'Products', href: '/admin/products' },
                 { label: 'Promotions', href: '/admin/promotions' },
-                { label: 'Cashback', href: '/admin/cashback' },
+                { label: 'Cashback Campaigns', href: '/admin/cashback' }
+            ]
+        },
+        {
+            label: 'Rewards',
+            active: isActive(['/admin/reward-shop', '/admin/rewards-game', '/admin/loyalty']),
+            items: [
                 { label: 'Reward Shop', href: '/admin/reward-shop' },
-                { label: 'Game Rewards', href: '/admin/rewards-game' }
+                { label: 'Game Rewards', href: '/admin/rewards-game' },
+                { label: 'Loyalty Settings', href: '/admin/loyalty' }
             ]
         },
         {
@@ -45,10 +53,9 @@
         },
         {
             label: 'System',
-            active: isActive(['/admin/audit-trail', '/admin/loyalty']),
+            active: isActive(['/admin/audit-trail']),
             items: [
-                { label: 'Audit Trail', href: '/admin/audit-trail' },
-                { label: 'Loyalty Settings', href: '/admin/loyalty' }
+                { label: 'Audit Trail', href: '/admin/audit-trail' }
             ]
         }
     ];

@@ -18,13 +18,13 @@
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
 
-    <header class="merchant-services-header">
+    <header class="merchant-dashboard-hero merchant-portal-hero">
         <div>
             <p class="eyebrow">Merchant Portal</p>
             <h1>Service menu</h1>
-            <p>Manage services, prices, duration, and bookable times for <%= merchant.name %>.</p>
+            <span>Manage services, prices, duration, and bookable times for <%= merchant.name %>.</span>
         </div>
-        <div class="merchant-services-header-actions">
+        <div class="merchant-hero-actions">
             <a class="button primary" href="/merchant/services/new">Add service</a>
         </div>
     </header>
@@ -54,6 +54,10 @@
             <p class="muted">Filter by category, review each service, and edit its booking slots.</p>
         </div>
         <div class="inline-button-group">
+            <label>
+                <span class="sr-only">Search services</span>
+                <input class="js-merchant-service-search" type="search" placeholder="Search service">
+            </label>
             <% if (categoryOptions.length > 1) { %>
                 <label>
                     <span class="sr-only">Filter by category</span>
@@ -138,20 +142,26 @@
 <script>
     (() => {
         const categoryFilter = document.querySelector('.js-merchant-service-category-filter');
+        const searchInput = document.querySelector('.js-merchant-service-search');
         const serviceCards = Array.from(document.querySelectorAll('.js-merchant-service-card'));
 
-        if (!categoryFilter || serviceCards.length === 0) {
+        if (serviceCards.length === 0) {
             return;
         }
 
-        categoryFilter.addEventListener('change', () => {
-            const selectedCategory = categoryFilter.value.trim().toLowerCase();
+        const applyFilters = () => {
+            const selectedCategory = (categoryFilter?.value || '').trim().toLowerCase();
+            const query = (searchInput?.value || '').trim().toLowerCase();
 
             serviceCards.forEach((card) => {
                 const category = (card.dataset.category || '').trim().toLowerCase();
-                card.style.display = !selectedCategory || category === selectedCategory ? '' : 'none';
+                const text = card.textContent.trim().toLowerCase();
+                card.style.display = (!selectedCategory || category === selectedCategory) && (!query || text.includes(query)) ? '' : 'none';
             });
-        });
+        };
+
+        categoryFilter?.addEventListener('change', applyFilters);
+        searchInput?.addEventListener('input', applyFilters);
     })();
 </script>
 

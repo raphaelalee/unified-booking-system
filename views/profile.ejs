@@ -82,10 +82,17 @@
     <div class="profile-page-heading">
         <div>
             <p class="eyebrow"><%= roleLabel %> Profile</p>
-            <h1>Account settings.</h1>
-            <p>Keep your contact details and password up to date.</p>
+            <h1>My account</h1>
+            <p>Manage your bookings, rewards wallet, saved details, and security settings.</p>
         </div>
-        <a class="button secondary" href="<%= isCustomer ? '/services' : dashboardPath %>">&larr; Back</a>
+        <div class="profile-heading-actions">
+            <% if (isCustomer) { %>
+                <a class="button primary" href="/services">Book services</a>
+                <a class="button secondary" href="/profile/history">Purchase history</a>
+            <% } else { %>
+                <a class="button primary" href="<%= dashboardPath %>">Dashboard</a>
+            <% } %>
+        </div>
     </div>
 
     <section class="profile-hero-card">
@@ -96,27 +103,41 @@
         <div class="profile-hero-details">
             <span class="account-role-chip"><%= roleLabel %></span>
             <h2><%= profile.name %></h2>
-            <p><%= profile.email %></p>
-            <p><%= profile.phone || 'Phone not set' %></p>
-            <p>
-                Age: <strong><%= profile.age || 'Not set' %></strong>
-                &middot; Birthday: <strong><%= profile.birthday || 'Not set' %></strong>
-                &middot; Gender: <strong><%= profileGenderLabel %></strong>
-            </p>
-            <p>
-                Postal code: <strong><%= profile.postalCode || 'Not set' %></strong>
-                &middot; Preferred contact: <strong><%= profileContactMethodLabel %></strong>
-            </p>
+            <p><%= profile.email %> &middot; <%= profile.phone || 'Phone not set' %></p>
+            <div class="profile-hero-meta">
+                <span><strong>Birthday</strong><%= profile.birthday || 'Not set' %></span>
+                <span><strong>Gender</strong><%= profileGenderLabel %></span>
+                <span><strong>Postal code</strong><%= profile.postalCode || 'Not set' %></span>
+                <span><strong>Contact</strong><%= profileContactMethodLabel %></span>
+            </div>
+        </div>
+
+        <div class="profile-hero-stats">
             <% if (isCustomer) { %>
-                <p>VaniGlints: <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</strong></p>
-                <p>Membership: <strong><%= member.tier %></strong></p>
+                <article>
+                    <span>Membership</span>
+                    <strong><%= member.tier %></strong>
+                </article>
+                <article>
+                    <span>VaniGlints</span>
+                    <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %></strong>
+                </article>
+                <article>
+                    <span>Cashback</span>
+                    <strong>$<%= cashbackBalance %></strong>
+                </article>
+            <% } else { %>
+                <article>
+                    <span>Role</span>
+                    <strong><%= roleLabel %></strong>
+                </article>
             <% } %>
         </div>
 
         <div class="profile-hero-actions">
             <% if (isCustomer) { %>
-                <a class="button primary full" href="/services">Book services</a>
-                <a class="button secondary full" href="#wallet">Rewards wallet</a>
+                <a class="button secondary full" href="#wallet">Wallet</a>
+                <a class="button secondary full" href="#membership">Rewards</a>
             <% } else { %>
                 <a class="button primary full" href="<%= dashboardPath %>">Back to dashboard</a>
             <% } %>
@@ -138,84 +159,6 @@
     </nav>
 
     <div class="account-layout">
-        <aside class="account-summary-panel profile-side-summary">
-            <div class="account-avatar" aria-hidden="true">
-                <%= (profile.name || roleLabel || 'V').charAt(0).toUpperCase() %>
-            </div>
-
-            <div class="account-name-block">
-                <span class="account-role-chip"><%= roleLabel %></span>
-                <h2><%= profile.name %></h2>
-                <p><%= profile.email %></p>
-            </div>
-
-            <dl class="account-summary-list">
-                <div>
-                    <dt>Phone</dt>
-                    <dd><%= profile.phone || 'Not set' %></dd>
-                </div>
-                <div>
-                    <dt>Age</dt>
-                    <dd><%= profile.age || 'Not set' %></dd>
-                </div>
-                <div>
-                    <dt>Birthday</dt>
-                    <dd><%= profile.birthday || 'Not set' %></dd>
-                </div>
-                <div>
-                    <dt>Gender</dt>
-                    <dd><%= profileGenderLabel %></dd>
-                </div>
-                <div>
-                    <dt>Postal code</dt>
-                    <dd><%= profile.postalCode || 'Not set' %></dd>
-                </div>
-                <div>
-                    <dt>Preferred contact</dt>
-                    <dd><%= profileContactMethodLabel %></dd>
-                </div>
-                <% if (isCustomer) { %>
-                    <div>
-                        <dt>Membership</dt>
-                        <dd><%= member.tier %></dd>
-                    </div>
-                    <div>
-                        <dt>VaniGlints</dt>
-                        <dd><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %> pts</dd>
-                    </div>
-                    <div>
-                        <dt>Cashback</dt>
-                        <dd>$<%= cashbackBalance %></dd>
-                    </div>
-                    <% if (referral) { %>
-                        <div>
-                            <dt>Referral code</dt>
-                            <dd><%= referral.code %></dd>
-                        </div>
-                    <% } %>
-                <% } else { %>
-                    <div>
-                        <dt>Dashboard</dt>
-                        <dd><a href="<%= dashboardPath %>">Open dashboard</a></dd>
-                    </div>
-                <% } %>
-            </dl>
-
-            <div class="account-actions">
-                <% if (isCustomer) { %>
-                    <a class="button primary full" href="/services">Book services</a>
-                    <a class="button secondary full" href="/profile/history">Purchase history</a>
-                    <a class="button secondary full" href="/rewards-game">Rewards game</a>
-                    <a class="button secondary full" href="#wallet">Rewards wallet</a>
-                <% } else { %>
-                    <a class="button primary full" href="<%= dashboardPath %>">Back to dashboard</a>
-                <% } %>
-                <form action="/logout" method="POST">
-                    <button class="text-button full" type="submit">Log out</button>
-                </form>
-            </div>
-        </aside>
-
         <div class="account-main-stack">
             <form id="profile-details" class="account-panel account-form profile-tab-panel" data-profile-panel="profile-details" action="/profile" method="POST">
                 <div class="account-panel-header">
@@ -719,11 +662,19 @@
                         };
                         const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
                         const usedProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
+                        const voucherSourceLabel = (voucher) => voucher.sourceType === 'referral'
+                            ? 'Referral'
+                            : voucher.sourceType === 'birthday'
+                                ? 'Birthday'
+                                : 'Reward shop';
+                        const voucherValueLabel = (voucher) => voucher.discountType === 'percentage'
+                            ? `${Number(voucher.discountPercent || 0)}% OFF`
+                            : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}`;
                     %>
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Membership</p>
-                            <h2>Rewards summary</h2>
+                            <h2>Rewards</h2>
                         </div>
                         <span class="membership-tier-badge <%= member.tier.toLowerCase() %>">
                             <span><%= member.tier %></span>
@@ -731,127 +682,137 @@
                         </span>
                     </div>
 
-                    <div class="account-membership-strip">
-                        <div>
-                            <strong><%= member.points %></strong>
-                            <span>Points</span>
-                        </div>
-                        <div>
-                            <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %></strong>
-                            <span>VaniGlints</span>
-                        </div>
-                        <div>
-                            <strong>$<%= cashbackBalance %></strong>
-                            <span>Cashback</span>
-                        </div>
-                        <div>
-                            <strong><%= favourites.length %></strong>
-                            <span>Saved merchants</span>
-                        </div>
-                        <div>
-                            <strong><%= cartCount %></strong>
-                            <span>Cart items</span>
-                        </div>
-                    </div>
-
-                    <div class="account-progress">
-                        <div>
-                            <span>Bronze</span>
-                            <span>Platinum</span>
-                        </div>
-                        <div class="membership-progress" aria-label="Membership progress">
-                            <span style="width:<%= member.progress %>%"></span>
-                        </div>
-                        <p class="muted">
-                            <%= member.next > 0
-                                ? member.next + " points to Platinum"
-                                : "Maximum tier reached" %>
-                        </p>
-                    </div>
-
-                    <% if (profileBirthdayPromotion.hasBirthday) { %>
-                        <div class="notice birthday-celebration-card <%= profileBirthdayPromotion.isBirthdayMonth ? 'success is-active' : '' %>" style="margin-top: 1rem;">
-                            <% if (profileBirthdayPromotion.isBirthdayMonth) { %>
-                                <div class="birthday-balloons" aria-hidden="true">
-                                    <span class="birthday-balloon balloon-peach"></span>
-                                    <span class="birthday-balloon balloon-rose"></span>
-                                    <span class="birthday-balloon balloon-gold"></span>
-                                    <span class="birthday-balloon balloon-sky"></span>
-                                    <span class="birthday-balloon balloon-mint"></span>
+                    <div class="profile-rewards-dashboard">
+                        <div class="profile-rewards-hero">
+                            <div>
+                                <p class="eyebrow">Tier progress</p>
+                                <h3><%= member.next > 0 ? `${member.next} points to Platinum` : 'Maximum tier reached' %></h3>
+                                <div class="membership-progress" aria-label="Membership progress">
+                                    <span style="width:<%= member.progress %>%"></span>
                                 </div>
-                            <% } %>
-                            <% if (profileBirthdayPromotion.isBirthdayMonth) { %>
-                                <p>
-                                    Birthday month perks are live for <strong><%= profileBirthdayPromotion.monthName %></strong>.
-                                    Use your <strong>20% OFF Birthday Month Voucher</strong> before
-                                    <strong><%= profileBirthdayPromotion.monthEndLabel %></strong>,
-                                    and eligible booking payments earn <strong>2X loyalty points</strong>.
-                                </p>
-                            <% } else { %>
-                                <p>Your birthday rewards unlock automatically during your birthday month.</p>
-                            <% } %>
-                        </div>
-                    <% } %>
-
-                    <div class="account-panel-header" style="margin-top: 2rem;">
-                        <div>
-                            <p class="eyebrow">Vouchers</p>
-                            <h2>My rewards vouchers</h2>
-                        </div>
-                        <a class="button secondary" href="/reward-shop">Open reward shop</a>
-                    </div>
-
-                    <% if (!profileVouchers.length) { %>
-                        <p class="muted">No vouchers yet. Redeem one from the reward shop or use a referral code at sign up.</p>
-                    <% } else { %>
-                        <% if (activeProfileVouchers.length) { %>
-                            <div class="wallet-overview-grid">
-                                <% activeProfileVouchers.forEach((voucher) => { %>
-                                    <article class="wallet-balance-card">
-                                        <span><%= voucher.sourceType === 'referral' ? 'Referral voucher' : voucher.sourceType === 'birthday' ? 'Birthday voucher' : 'Reward shop voucher' %></span>
-                                        <strong><%= voucher.discountType === 'percentage' ? `${Number(voucher.discountPercent || 0)}% OFF` : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %></strong>
-                                        <small><%= voucher.title %> - <%= voucher.code %></small>
-                                        <small>
-                                            <%= voucher.sourceType === 'birthday'
-                                                ? `Use once on an eligible booking payment before ${voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : profileBirthdayPromotion.monthEndLabel}.`
-                                                : voucher.firstBookingOnly
-                                                    ? 'First paid booking only'
-                                                    : 'Use on eligible booking payment' %>
-                                        </small>
-                                    </article>
-                                <% }) %>
+                                <div class="profile-rewards-progress-labels">
+                                    <span>Bronze</span>
+                                    <span>Platinum</span>
+                                </div>
                             </div>
-                        <% } else { %>
-                            <p class="muted">No active vouchers available right now.</p>
+                            <div class="profile-rewards-actions">
+                                <a class="button primary" href="/reward-shop">Reward shop</a>
+                                <a class="button secondary" href="/rewards-game">Play rewards game</a>
+                            </div>
+                        </div>
+
+                        <div class="profile-rewards-metrics">
+                            <article>
+                                <span>Membership points</span>
+                                <strong><%= member.points %></strong>
+                            </article>
+                            <article>
+                                <span>VaniGlints</span>
+                                <strong><%= Number.isFinite(profile.glintsBalance) ? profile.glintsBalance : 0 %></strong>
+                            </article>
+                            <article>
+                                <span>Active vouchers</span>
+                                <strong><%= activeProfileVouchers.length %></strong>
+                            </article>
+                            <article>
+                                <span>Cashback</span>
+                                <strong>$<%= cashbackBalance %></strong>
+                            </article>
+                        </div>
+
+                        <% if (profileBirthdayPromotion.hasBirthday) { %>
+                            <div class="profile-reward-notice <%= profileBirthdayPromotion.isBirthdayMonth ? 'is-active' : '' %>">
+                                <strong><%= profileBirthdayPromotion.isBirthdayMonth ? 'Birthday perks are active' : 'Birthday rewards' %></strong>
+                                <span>
+                                    <% if (profileBirthdayPromotion.isBirthdayMonth) { %>
+                                        20% OFF birthday voucher until <%= profileBirthdayPromotion.monthEndLabel %>, plus 2X points on eligible booking payments.
+                                    <% } else { %>
+                                        Birthday rewards unlock automatically during your birthday month.
+                                    <% } %>
+                                </span>
+                            </div>
                         <% } %>
 
-                        <% if (usedProfileVouchers.length) { %>
-                            <div class="wallet-activity-panel" style="margin-top: 1.5rem;">
+                        <div class="profile-rewards-grid">
+                            <section class="profile-rewards-block">
                                 <div class="wallet-section-heading">
                                     <div>
-                                        <p class="eyebrow">History</p>
-                                        <h3>Used or inactive vouchers</h3>
+                                        <p class="eyebrow">Vouchers</p>
+                                        <h3>Active vouchers</h3>
                                     </div>
-                                    <span><%= usedProfileVouchers.length %> item<%= usedProfileVouchers.length === 1 ? '' : 's' %></span>
+                                    <span><%= activeProfileVouchers.length %> ready</span>
                                 </div>
-                                <div class="wallet-activity-list">
+
+                                <% if (!activeProfileVouchers.length) { %>
+                                    <p class="muted">No active vouchers right now. Redeem one from the reward shop.</p>
+                                <% } else { %>
+                                    <div class="profile-voucher-list">
+                                        <% activeProfileVouchers.forEach((voucher) => { %>
+                                            <article class="profile-voucher-row">
+                                                <div>
+                                                    <span><%= voucherSourceLabel(voucher) %></span>
+                                                    <strong><%= voucher.title %></strong>
+                                                    <small><%= voucher.code %></small>
+                                                </div>
+                                                <div>
+                                                    <strong><%= voucherValueLabel(voucher) %></strong>
+                                                    <small>
+                                                        <%= voucher.sourceType === 'birthday'
+                                                            ? `Expires ${voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : profileBirthdayPromotion.monthEndLabel}`
+                                                            : voucher.firstBookingOnly
+                                                                ? 'First booking only'
+                                                                : 'Eligible booking payment' %>
+                                                    </small>
+                                                </div>
+                                            </article>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
+                            </section>
+
+                            <% if (referral) { %>
+                                <section class="profile-rewards-block">
+                                    <div class="wallet-section-heading">
+                                        <div>
+                                            <p class="eyebrow">Referral</p>
+                                            <h3>Invite friends</h3>
+                                        </div>
+                                        <span><%= referral.successfulReferrals || 0 %> successful</span>
+                                    </div>
+                                    <div class="profile-referral-compact">
+                                        <span>Your code</span>
+                                        <strong><%= referral.code %></strong>
+                                        <div class="referral-link-row">
+                                            <input type="text" value="<%= referral.link %>" readonly aria-label="Referral link" data-referral-link>
+                                            <button class="button secondary" type="button" data-copy-referral data-copy-default="Copy link" data-copy-success="Copied">Copy</button>
+                                        </div>
+                                        <p class="muted">Friend gets $<%= referral.discount %> off. You earn <%= referral.reward %> Glints after a successful referral.</p>
+                                    </div>
+                                </section>
+                            <% } %>
+                        </div>
+
+                        <% if (usedProfileVouchers.length) { %>
+                            <details class="profile-rewards-history">
+                                <summary>Used or inactive vouchers (<%= usedProfileVouchers.length %>)</summary>
+                                <div class="profile-voucher-list">
                                     <% usedProfileVouchers.forEach((voucher) => { %>
-                                        <article class="wallet-activity-row">
+                                        <article class="profile-voucher-row is-muted">
                                             <div>
-                                                <span class="wallet-activity-date"><%= voucher.redeemedAt ? new Date(voucher.redeemedAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : new Date(voucher.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                <span><%= voucher.redeemedAt ? new Date(voucher.redeemedAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : new Date(voucher.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
                                                 <strong><%= voucher.title %></strong>
                                                 <small><%= voucher.code %></small>
                                             </div>
-                                            <div class="wallet-activity-values">
-                                                <span>$<%= Number(voucher.voucherValue || 0).toFixed(2) %></span>
-                                                <span><%= voucher.status %></span>
+                                            <div>
+                                                <strong><%= voucher.discountType === 'percentage' ? `${Number(voucher.discountPercent || 0)}% OFF` : `$${Number(voucher.voucherValue || 0).toFixed(2)}` %></strong>
+                                                <small><%= voucher.status %></small>
                                             </div>
                                         </article>
                                     <% }) %>
                                 </div>
-                            </div>
+                            </details>
                         <% } %>
-                    <% } %>
+                    </div>
                 </section>
 
                 <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
@@ -877,6 +838,8 @@
                         const cashbackUsedTotal = Math.abs(cashbackTransactions
                             .filter((entry) => Number(entry.cashbackDelta || 0) < 0)
                             .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
+                        const recentWalletTransactions = walletTransactions.slice(0, 6);
+                        const recentWalletReceipts = walletReceipts.slice(0, 4);
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -887,224 +850,115 @@
                     </div>
 
                     <% if (loyalty) { %>
-                        <div class="wallet-overview-grid">
-                            <article class="wallet-balance-card wallet-balance-card-primary">
-                                <span>Available points</span>
-                                <strong><%= loyalty.wallet.pointsBalance %></strong>
-                                <small><%= loyalty.rules.pointsPerDollar %> pts earned per $1 spent</small>
-                            </article>
-                            <article class="wallet-balance-card">
-                                <span>Cashback balance</span>
-                                <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
-                                <small>Usable during cart checkout</small>
-                            </article>
-                            <article class="wallet-balance-card">
-                                <span>Lifetime points</span>
-                                <strong><%= loyalty.wallet.lifetimePoints %></strong>
-                                <small>Total rewards earned from paid receipts</small>
-                            </article>
-                        </div>
+                        <div class="profile-wallet-dashboard">
+                            <div class="profile-wallet-hero">
+                                <section class="profile-wallet-balance">
+                                    <p class="eyebrow">Available points</p>
+                                    <strong><%= loyalty.wallet.pointsBalance %></strong>
+                                    <span><%= loyalty.rules.pointsPerDollar %> pts earned per $1 spent</span>
+                                </section>
 
-                        <div class="wallet-rules-grid">
-                            <div>
-                                <span>Cashback rate</span>
-                                <strong><%= loyalty.rules.cashbackPercent %>%</strong>
-                            </div>
-                            <div>
-                                <span>Minimum redeem</span>
-                                <strong><%= loyalty.rules.minPointsToRedeem %> pts</strong>
-                            </div>
-                            <div>
-                                <span>Points value</span>
-                                <strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %> / pt</strong>
-                            </div>
-                        </div>
-
-                        <div class="wallet-activity-panel">
-                            <div class="wallet-section-heading">
-                                <div>
-                                    <p class="eyebrow">Cashback</p>
-                                    <h3>Use cashback from this wallet</h3>
-                                </div>
-                                <span><%= cashbackTransactions.length %> cashback entr<%= cashbackTransactions.length === 1 ? 'y' : 'ies' %></span>
-                            </div>
-                            <p class="muted">
-                                Cashback from point conversions and merchant campaigns is stored here, then can be applied during checkout.
-                                Refunded campaign cashback is reversed automatically.
-                            </p>
-                            <div class="wallet-rules-grid">
-                                <div>
-                                    <span>Available now</span>
-                                    <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
-                                </div>
-                                <div>
-                                    <span>Total earned</span>
-                                    <strong>$<%= cashbackEarnedTotal.toFixed(2) %></strong>
-                                </div>
-                                <div>
-                                    <span>Total used or reversed</span>
-                                    <strong>$<%= cashbackUsedTotal.toFixed(2) %></strong>
-                                </div>
-                            </div>
-                            <div class="hero-actions wallet-cashback-actions">
-                                <form action="/customer/checkout/apply-cashback" method="POST">
+                                <form class="profile-wallet-action" action="/customer/wallet/redeem" method="POST">
                                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <button class="button primary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use cashback in cart</button>
-                                </form>
-                                <a class="button secondary" href="/services">Book an appointment</a>
-                            </div>
-                        </div>
-
-                        <div class="wallet-content-grid">
-                            <form class="wallet-redeem-card" action="/customer/wallet/redeem" method="POST">
-                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                <div>
-                                    <p class="eyebrow">Redeem</p>
-                                    <h3>Convert points into cashback</h3>
-                                    <p class="muted">Cashback will be added to your wallet and can be applied at checkout.</p>
-                                </div>
-                                <label>
-                                    Points to convert
-                                    <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
-                                </label>
-                                <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem</button>
-                            </form>
-
-                            <div class="wallet-receipt-card">
-                                <div class="wallet-section-heading">
                                     <div>
-                                        <p class="eyebrow">Receipts</p>
-                                        <h3>Recent linked receipts</h3>
+                                        <p class="eyebrow">Convert</p>
+                                        <h3>Points to cashback</h3>
+                                        <p class="muted">Minimum <%= loyalty.rules.minPointsToRedeem %> points. Cashback appears in this wallet immediately.</p>
                                     </div>
-                                    <a class="text-button" href="/profile/history">View all</a>
-                                </div>
+                                    <label>
+                                        Points
+                                        <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                    </label>
+                                    <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Convert points</button>
+                                </form>
 
-                                <% if (!walletReceipts.length) { %>
-                                    <p class="muted">No past paid receipts yet.</p>
-                                <% } else { %>
-                                    <div class="wallet-receipt-list">
-                                        <% walletReceipts.slice(0, 5).forEach((receipt) => { %>
-                                            <a class="wallet-receipt-row" href="/receipt/<%= receipt.receiptId %>">
-                                                <span>
-                                                    <strong>Receipt <%= receipt.id %></strong>
-                                                    <small><%= receipt.itemNames %></small>
-                                                </span>
-                                                <span>
-                                                    <strong>$<%= receipt.totalAmount.toFixed(2) %></strong>
-                                                    <small><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></small>
-                                                </span>
-                                            </a>
-                                        <% }) %>
-                                    </div>
-                                <% } %>
-                            </div>
-                        </div>
-
-                        <div class="wallet-activity-panel">
-                            <div class="wallet-section-heading">
-                                <div>
-                                    <p class="eyebrow">Activity</p>
-                                    <h3>Past wallet activity</h3>
-                                </div>
-                                <span><%= walletTransactions.length %> entr<%= walletTransactions.length === 1 ? 'y' : 'ies' %></span>
+                                <section class="profile-wallet-cashback">
+                                    <p class="eyebrow">Cashback</p>
+                                    <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
+                                    <span>$<%= cashbackEarnedTotal.toFixed(2) %> earned · $<%= cashbackUsedTotal.toFixed(2) %> used or reversed</span>
+                                    <form action="/customer/checkout/apply-cashback" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use in cart</button>
+                                    </form>
+                                </section>
                             </div>
 
-                            <% if (!walletTransactions.length) { %>
-                                <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
-                            <% } else { %>
-                                <div class="wallet-activity-list">
-                                    <% walletTransactions.forEach((entry) => { %>
-                                        <% const linkedReceipt = entry.sourceReceiptId ? walletReceiptMap[String(entry.sourceReceiptId)] : null; %>
-                                        <article class="wallet-activity-row">
-                                            <div>
-                                                <span class="wallet-activity-date"><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
-                                                <strong><%= entry.description %></strong>
-                                                <% if (linkedReceipt) { %>
-                                                    <small><%= linkedReceipt.itemNames %></small>
-                                                <% } %>
-                                            </div>
-                                            <div class="wallet-activity-values">
-                                                <span class="<%= entry.pointsDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts</span>
-                                                <span class="<%= entry.cashbackDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %></span>
-                                                <% if (entry.sourceReceiptId) { %>
-                                                    <a class="button secondary" href="/receipt/<%= entry.sourceReceiptId %>">Receipt</a>
-                                                <% } %>
-                                            </div>
-                                        </article>
-                                    <% }) %>
-                                </div>
-                            <% } %>
+                            <div class="profile-wallet-rules">
+                                <span><strong><%= loyalty.rules.cashbackPercent %>%</strong> cashback rate</span>
+                                <span><strong><%= loyalty.rules.minPointsToRedeem %></strong> min points</span>
+                                <span><strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %></strong> per point</span>
+                                <span><strong><%= loyalty.wallet.lifetimePoints %></strong> lifetime points</span>
+                            </div>
+
+                            <div class="profile-wallet-grid">
+                                <section class="profile-wallet-block">
+                                    <div class="wallet-section-heading">
+                                        <div>
+                                            <p class="eyebrow">Activity</p>
+                                            <h3>Recent wallet activity</h3>
+                                        </div>
+                                        <span><%= walletTransactions.length %> total</span>
+                                    </div>
+
+                                    <% if (!recentWalletTransactions.length) { %>
+                                        <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
+                                    <% } else { %>
+                                        <div class="profile-wallet-list">
+                                            <% recentWalletTransactions.forEach((entry) => { %>
+                                                <% const linkedReceipt = entry.sourceReceiptId ? walletReceiptMap[String(entry.sourceReceiptId)] : null; %>
+                                                <article class="profile-wallet-row">
+                                                    <div>
+                                                        <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                        <strong><%= entry.description %></strong>
+                                                        <% if (linkedReceipt) { %>
+                                                            <small><%= linkedReceipt.itemNames %></small>
+                                                        <% } %>
+                                                    </div>
+                                                    <div>
+                                                        <strong class="<%= entry.pointsDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts</strong>
+                                                        <small class="<%= entry.cashbackDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %></small>
+                                                    </div>
+                                                </article>
+                                            <% }) %>
+                                        </div>
+                                    <% } %>
+                                </section>
+
+                                <section class="profile-wallet-block">
+                                    <div class="wallet-section-heading">
+                                        <div>
+                                            <p class="eyebrow">Receipts</p>
+                                            <h3>Recent paid receipts</h3>
+                                        </div>
+                                        <a class="text-button" href="/profile/history">View all</a>
+                                    </div>
+
+                                    <% if (!recentWalletReceipts.length) { %>
+                                        <p class="muted">No paid receipts linked to this wallet yet.</p>
+                                    <% } else { %>
+                                        <div class="profile-wallet-list">
+                                            <% recentWalletReceipts.forEach((receipt) => { %>
+                                                <a class="profile-wallet-row" href="/receipt/<%= receipt.receiptId %>">
+                                                    <div>
+                                                        <span><%= receipt.type %></span>
+                                                        <strong>Receipt <%= receipt.id %></strong>
+                                                        <small><%= receipt.itemNames %></small>
+                                                    </div>
+                                                    <div>
+                                                        <strong>$<%= receipt.totalAmount.toFixed(2) %></strong>
+                                                        <small><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></small>
+                                                    </div>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+                                    <% } %>
+                                </section>
+                            </div>
                         </div>
                     <% } else { %>
                         <p class="muted">Wallet details could not be loaded right now.</p>
                     <% } %>
                 </section>
-
-                <% if (referral) { %>
-                    <section id="referral" class="account-panel account-referral-panel profile-tab-panel" data-profile-panel="membership">
-                        <div class="account-panel-header">
-                            <div>
-                                <p class="eyebrow">Referral</p>
-                                <h2>Your referral code</h2>
-                            </div>
-                        </div>
-
-                        <div class="referral-code-card">
-                            <span>Share this code with friends</span>
-                            <strong><%= referral.code %></strong>
-                            <div class="referral-link-row">
-                                <input
-                                    type="text"
-                                    value="<%= referral.link %>"
-                                    readonly
-                                    aria-label="Referral link"
-                                    data-referral-link
-                                >
-                                <button
-                                    class="button secondary"
-                                    type="button"
-                                    data-copy-referral
-                                    data-copy-default="Copy link"
-                                    data-copy-success="Copied"
-                                >
-                                    Copy link
-                                </button>
-                            </div>
-                        </div>
-
-                        <% if (typeof referralVoucherStatus !== 'undefined' && referralVoucherStatus && referralVoucherStatus.message) { %>
-                            <p class="muted" style="margin: 1rem 0 0;">
-                                <strong>Referral voucher status:</strong> <%= referralVoucherStatus.message %>
-                            </p>
-                        <% } %>
-
-                        <div class="referral-metrics">
-                            <div>
-                                <strong>$<%= referral.discount %></strong>
-                                <span>Friend discount</span>
-                            </div>
-                            <div>
-                                <strong><%= referral.reward %></strong>
-                                <span>Glints per successful referral</span>
-                            </div>
-                        </div>
-
-                        <div class="referral-mini-tracker">
-                            <div>
-                                <span>Successful referrals</span>
-                                <strong><%= referral.successfulReferrals || 0 %></strong>
-                            </div>
-                            <div>
-                                <span>VaniGlints earned</span>
-                                <strong><%= referral.earnedGlints || 0 %></strong>
-                            </div>
-                            <div>
-                                <span>Next referral reward</span>
-                                <strong>+<%= referral.nextReward || referral.reward %></strong>
-                            </div>
-                        </div>
-                    </section>
-                <% } %>
 
                 <% if (favourites.length > 0) { %>
                     <section class="account-panel saved-merchants-panel profile-tab-panel" data-profile-panel="profile-details">

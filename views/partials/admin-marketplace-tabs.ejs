@@ -1,0 +1,15 @@
+<%
+    const marketplacePath = typeof currentPath !== 'undefined' ? currentPath : '';
+    const marketplaceItems = [
+        { label: 'Services', href: '/admin/services' },
+        { label: 'Products', href: '/admin/products' },
+        { label: 'Promotions', href: '/admin/promotions' },
+        { label: 'Cashback', href: '/admin/cashback' }
+    ];
+%>
+
+<nav class="admin-marketplace-tabs" aria-label="Marketplace sections">
+    <% marketplaceItems.forEach((item) => { %>
+        <a class="<%= marketplacePath === item.href || marketplacePath.startsWith(`${item.href}/`) ? 'active' : '' %>" href="<%= item.href %>"><%= item.label %></a>
+    <% }) %>
+</nav>

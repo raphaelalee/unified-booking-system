@@ -1983,6 +1983,14 @@ function updateService(req, res) {
                             linkUrl: '/merchant/services',
                             dedupeKey: `merchant-service-updated-${service.id}-${Date.now()}`
                         });
+                        notifyAdmins({
+                            actorUserId: req.session.user.id,
+                            type: 'merchant_update',
+                            title: 'Merchant updated a service',
+                            message: `${merchant.name} updated ${form.name}.`,
+                            linkUrl: '/admin/services',
+                            dedupeKey: `admin-merchant-service-updated-${service.id}-${Date.now()}`
+                        });
                         return res.redirect('/merchant/services');
                     });
                 });
@@ -2127,7 +2135,7 @@ function createProduct(req, res) {
                 type: 'product_update',
                 title: 'Merchant listed a product',
                 message: `${merchant.name} listed ${form.name}.`,
-                linkUrl: '/admin',
+                linkUrl: '/admin/products',
                 dedupeKey: `admin-product-created-${result?.insertId || Date.now()}`
             });
             return res.redirect('/merchant/products');
@@ -2265,6 +2273,14 @@ function updateProduct(req, res) {
                         linkUrl: '/merchant/products',
                         dedupeKey: `merchant-product-updated-${product.id}-${Date.now()}`
                     });
+                    notifyAdmins({
+                        actorUserId: req.session.user.id,
+                        type: 'product_update',
+                        title: 'Merchant updated a product',
+                        message: `${merchant.name} updated ${form.name}.`,
+                        linkUrl: '/admin/products',
+                        dedupeKey: `admin-product-updated-${product.id}-${Date.now()}`
+                    });
                 } else {
                     deleteProductImageFile(uploadedImagePath);
                 }
@@ -2296,6 +2312,14 @@ function restockProduct(req, res) {
                 message: `Product stock increased by ${Math.max(1, Math.min(Math.floor(quantity || 1), 999))}.`,
                 linkUrl: '/merchant/products',
                 dedupeKey: `merchant-stock-updated-${req.params.productId}-${Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'stock_update',
+                title: 'Merchant restocked a product',
+                message: `Merchant product #${req.params.productId} stock increased by ${Math.max(1, Math.min(Math.floor(quantity || 1), 999))}.`,
+                linkUrl: '/admin/products',
+                dedupeKey: `admin-stock-updated-${req.params.productId}-${Date.now()}`
             });
         }
 
@@ -2575,6 +2599,14 @@ function updatePromotion(req, res) {
                         linkUrl: '/promotions',
                         dedupeKey: `customer-merchant-promotion-updated-${promotion.id}-${Date.now()}`
                     });
+                    notifyAdmins({
+                        actorUserId: req.session.user.id,
+                        type: 'offer_update',
+                        title: 'Merchant promotion updated',
+                        message: `${merchant.name} updated ${form.title}.`,
+                        linkUrl: '/admin/promotions',
+                        dedupeKey: `admin-merchant-promotion-updated-${promotion.id}-${Date.now()}`
+                    });
                 }
                 return res.redirect('/merchant/promotions');
             });
@@ -2702,6 +2734,16 @@ function createCashbackCampaign(req, res) {
 
             req.session.merchantSuccess = result?.affectedRows ? 'Cashback campaign created.' : null;
             req.session.merchantError = result?.affectedRows ? null : 'Cashback campaign could not be created for this merchant.';
+            if (result?.affectedRows) {
+                notifyAdmins({
+                    actorUserId: req.session.user.id,
+                    type: 'cashback_update',
+                    title: 'Merchant cashback campaign created',
+                    message: `${merchant.name} created ${payload.title}.`,
+                    linkUrl: '/admin/cashback',
+                    dedupeKey: `admin-merchant-cashback-created-${result?.insertId || Date.now()}`
+                });
+            }
             return res.redirect('/merchant/cashback');
         });
     });
@@ -2803,6 +2845,16 @@ function updateCashbackCampaign(req, res) {
 
                 req.session.merchantSuccess = result?.affectedRows ? 'Cashback campaign updated.' : null;
                 req.session.merchantError = result?.affectedRows ? null : 'Cashback campaign could not be updated.';
+                if (result?.affectedRows) {
+                    notifyAdmins({
+                        actorUserId: req.session.user.id,
+                        type: 'cashback_update',
+                        title: 'Merchant cashback campaign updated',
+                        message: `${merchant.name} updated ${payload.title}.`,
+                        linkUrl: '/admin/cashback',
+                        dedupeKey: `admin-merchant-cashback-updated-${campaign.id}-${Date.now()}`
+                    });
+                }
                 return res.redirect('/merchant/cashback');
             });
         });

@@ -15,11 +15,11 @@
 %>
 
 <section class="section compact merchant-service-form-page">
-    <header class="merchant-services-header merchant-service-form-header">
+    <header class="merchant-dashboard-hero merchant-portal-hero merchant-service-form-header">
         <div>
             <p class="eyebrow">Merchant Portal</p>
             <h1><%= service ? 'Edit service' : 'Add service' %></h1>
-            <p><%= merchant.name %> can only manage services under this merchant profile.</p>
+            <span><%= merchant.name %> can only manage services under this merchant profile.</span>
         </div>
         <a class="button secondary" href="/merchant/services">Back to services</a>
     </header>

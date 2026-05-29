@@ -1,0 +1,14 @@
+<%
+    const rewardsPath = typeof currentPath !== 'undefined' ? currentPath : '';
+    const rewardsItems = [
+        { label: 'Reward Shop', href: '/admin/reward-shop' },
+        { label: 'Game Rewards', href: '/admin/rewards-game' },
+        { label: 'Loyalty Settings', href: '/admin/loyalty' }
+    ];
+%>
+
+<nav class="admin-marketplace-tabs admin-rewards-tabs" aria-label="Rewards sections">
+    <% rewardsItems.forEach((item) => { %>
+        <a class="<%= rewardsPath === item.href || rewardsPath.startsWith(`${item.href}/`) ? 'active' : '' %>" href="<%= item.href %>"><%= item.label %></a>
+    <% }) %>
+</nav>

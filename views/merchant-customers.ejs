@@ -26,6 +26,8 @@
             hourValues: [0]
         }
     };
+    customerInsights.topCustomers = Array.isArray(customerInsights.topCustomers) ? customerInsights.topCustomers : [];
+    customerInsights.chartPayload = customerInsights.chartPayload || {};
     const customerChartPayload = {
         ageLabels: customerInsights.chartPayload?.ageLabels || ['Not set'],
         ageValues: customerInsights.chartPayload?.ageValues || [0],

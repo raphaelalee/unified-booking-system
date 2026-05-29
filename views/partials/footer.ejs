@@ -81,42 +81,58 @@
     <% } %>
     <script>
         (() => {
-            const dropdown = document.querySelector('.nav-dropdown');
-            const trigger = dropdown?.querySelector('.nav-dropdown-trigger');
+            const dropdowns = Array.from(document.querySelectorAll('.nav-dropdown'));
 
-            if (!dropdown || !trigger) {
+            if (!dropdowns.length) {
                 return;
             }
 
-            const setOpen = (isOpen) => {
+            const setOpen = (dropdown, isOpen) => {
+                const trigger = dropdown.querySelector('.nav-dropdown-trigger, .nav-account-trigger');
                 dropdown.classList.toggle('is-open', isOpen);
-                trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                trigger?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             };
 
-            trigger.addEventListener('click', (event) => {
-                event.preventDefault();
-                setOpen(!dropdown.classList.contains('is-open'));
+            dropdowns.forEach((dropdown) => {
+                const trigger = dropdown.querySelector('.nav-dropdown-trigger, .nav-account-trigger');
+
+                if (!trigger) {
+                    return;
+                }
+
+                trigger.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    dropdowns.forEach((item) => {
+                        if (item !== dropdown) {
+                            setOpen(item, false);
+                        }
+                    });
+                    setOpen(dropdown, !dropdown.classList.contains('is-open'));
+                });
+
+                dropdown.addEventListener('focusout', () => {
+                    window.setTimeout(() => {
+                        if (!dropdown.contains(document.activeElement)) {
+                            setOpen(dropdown, false);
+                        }
+                    }, 0);
+                });
             });
 
             document.addEventListener('click', (event) => {
-                if (!dropdown.contains(event.target)) {
-                    setOpen(false);
-                }
+                dropdowns.forEach((dropdown) => {
+                    if (!dropdown.contains(event.target)) {
+                        setOpen(dropdown, false);
+                    }
+                });
             });
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
-                    setOpen(false);
-                    trigger.focus();
+                    const activeTrigger = document.querySelector('.nav-dropdown-trigger[aria-expanded="true"], .nav-account-trigger[aria-expanded="true"]');
+                    dropdowns.forEach((dropdown) => setOpen(dropdown, false));
+                    activeTrigger?.focus();
                 }
-            });
-
-            dropdown.addEventListener('focusout', () => {
-                window.setTimeout(() => {
-                    if (!dropdown.contains(document.activeElement)) {
-                        setOpen(false);
-                    }
-                }, 0);
             });
         })();
     </script>
