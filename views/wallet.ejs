@@ -3,7 +3,7 @@
 <section class="page-title">
     <p class="eyebrow">Rewards wallet</p>
     <h1>Your loyalty balance.</h1>
-    <p>Earn points from paid receipts, convert points into cashback, and apply cashback at checkout.</p>
+    <p>Track points, point-to-cashback conversions, merchant campaign cashback, and wallet cashback used at checkout.</p>
 </section>
 
 <section class="section compact loyalty-page">
@@ -79,12 +79,12 @@
         <div class="account-panel-header">
             <div>
                 <p class="eyebrow">Rules</p>
-                <h2>How rewards are earned</h2>
+            <h2>How wallet activity is separated</h2>
             </div>
             <a class="button secondary" href="/services">Book services</a>
         </div>
         <div class="loyalty-rule-strip">
-            <p><span>Points</span><strong><%= rules.pointsPerDollar %> / $1</strong></p>
+            <p><span>Receipt points</span><strong><%= rules.pointsPerDollar %> / $1</strong></p>
             <p><span>Minimum redeem</span><strong><%= rules.minPointsToRedeem %> pts</strong></p>
             <p><span>Points value</span><strong>$<%= Number(rules.pointsToCashRate || 0).toFixed(4) %> / pt</strong></p>
             <p><span>Max booking discount</span><strong><%= Number(rules.maxDiscountPercent || 0) %>%</strong></p>
@@ -154,7 +154,7 @@
                     <% transactions.forEach((entry) => { %>
                         <tr>
                             <td><%= new Date(entry.createdAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></td>
-                            <td><span class="sync-pill"><%= entry.type.replace('_', ' ') %></span></td>
+                            <td><span class="sync-pill"><%= entry.type.replace(/_/g, ' ') %></span></td>
                             <td><%= entry.description %></td>
                             <td><%= entry.bookingReference || '-' %></td>
                             <td><%= entry.merchantName || '-' %></td>

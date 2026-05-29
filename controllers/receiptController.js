@@ -6,6 +6,7 @@ const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const MerchantService = require('../models/MerchantService');
+const Loyalty = require('../models/Loyalty');
 const {
     getBookingCheckInUrl,
     getPublicBaseUrl,
@@ -561,6 +562,17 @@ async function buildReceiptViewModel(req, id) {
         return null;
     }
 
+    const campaignCashback = await new Promise((resolve) => {
+        Loyalty.getCampaignCashbackForReceipt(loadedReceipt.id, (error, result) => {
+            if (error) {
+                console.error(error);
+                resolve({ earned: Number(loadedReceipt.campaignCashbackEarned || 0), reversed: 0, net: Number(loadedReceipt.campaignCashbackEarned || 0), transactions: [] });
+                return;
+            }
+
+            resolve(result || { earned: 0, reversed: 0, net: 0, transactions: [] });
+        });
+    });
     const receiptMode = getReceiptMode(loadedReceipt);
     const appointmentLabel = receiptMode.isBooking
         ? formatAppointmentDateTime(loadedReceipt.bookingDate, loadedReceipt.bookingTime)
@@ -569,13 +581,21 @@ async function buildReceiptViewModel(req, id) {
         ? {
             ...loadedReceipt,
             statusLabel: formatStatusLabel(loadedReceipt.status || 'confirmed'),
+            campaignCashback,
+            campaignCashbackEarned: campaignCashback.earned,
+            campaignCashbackReversed: campaignCashback.reversed,
             appointmentLabel,
             items: (loadedReceipt.items || []).map((item) => ({
                 ...item,
                 detail: appointmentLabel || item.detail
             }))
         }
-        : loadedReceipt;
+        : {
+            ...loadedReceipt,
+            campaignCashback,
+            campaignCashbackEarned: campaignCashback.earned,
+            campaignCashbackReversed: campaignCashback.reversed
+        };
     const token = receiptMode.isBooking ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
     const verificationUrl = receiptMode.isBooking
         ? getBookingCheckInUrl(req, receipt.id)

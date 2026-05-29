@@ -1,4 +1,5 @@
 const db = require('../db');
+const Loyalty = require('./Loyalty');
 
 let fulfilmentSchemaReady = false;
 const DEFAULT_COMMISSION_RATE = 15;
@@ -795,7 +796,21 @@ function recordRefund(transactionId, amount, callback) {
             WHERE transaction_id = ?
         `;
 
-        db.query(sql, [Number(amount || 0), transactionId], callback);
+        db.query(sql, [Number(amount || 0), transactionId], (error, result) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
+                if (reverseError) {
+                    callback(reverseError);
+                    return;
+                }
+
+                callback(null, result);
+            });
+        });
     });
 }
 

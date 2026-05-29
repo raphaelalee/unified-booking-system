@@ -35,6 +35,8 @@
             const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
                 ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate, 0))
                 : 0;
+            const campaignCashbackView = typeof campaignCashback !== 'undefined' && campaignCashback ? campaignCashback : { total: 0, breakdown: [] };
+            const campaignCashbackTotal = Number(campaignCashbackView.total || 0);
             const paymentAmountDue = Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate - paymentCashbackEstimate, 0);
             const fulfilmentLabel = fulfilment === 'delivery'
                 ? 'Delivery'
@@ -178,6 +180,16 @@
                 </div>
             <% } %>
 
+            <% if (campaignCashbackTotal > 0) { %>
+                <div class="notice success">
+                    <p>
+                        Estimated merchant campaign cashback:
+                        <strong>$<%= campaignCashbackTotal.toFixed(2) %></strong>.
+                        It is added to your wallet after successful payment.
+                    </p>
+                </div>
+            <% } %>
+
             <fieldset class="payment-methods">
                 <legend class="eyebrow">Choose payment</legend>
                 <label class="payment-method-select-card">
@@ -260,7 +272,10 @@
                 <% } %>
                 <p id="payment-points-row" style="<%= paymentPointEstimate > 0 ? '' : 'display:none;' %>"><span>Points</span><strong id="payment-points-value">-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                 <% if (paymentCashbackEstimate > 0) { %>
-                    <p><span>Cashback</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
+                    <p><span>Wallet cashback used</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
+                <% } %>
+                <% if (campaignCashbackTotal > 0) { %>
+                    <p><span>Campaign cashback earned</span><strong>+$<%= campaignCashbackTotal.toFixed(2) %></strong></p>
                 <% } %>
                 <p class="cart-total-line"><span>Total due</span><strong id="payment-summary-total">$<%= paymentAmountDue.toFixed(2) %></strong></p>
             </div>

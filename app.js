@@ -36,6 +36,7 @@ const {
 const Product = require('./models/Product');
 const Review = require('./models/Review');
 const Notification = require('./models/Notification');
+const Loyalty = require('./models/Loyalty');
 const { getCartItemCount } = require('./utils/cart');
 
 const app = express();
@@ -317,6 +318,12 @@ app.get('/merchant/profile', requireRole('merchant'), merchantDashboardControlle
 app.post('/merchant/profile', requireRole('merchant'), merchantDashboardController.updateProfile);
 app.get('/merchant/loyalty', requireRole('merchant'), merchantDashboardController.showLoyaltySettings);
 app.post('/merchant/loyalty', requireRole('merchant'), merchantDashboardController.updateLoyaltySettings);
+app.get('/merchant/cashback', requireRole('merchant'), merchantDashboardController.listCashbackCampaigns);
+app.get('/merchant/cashback/new', requireRole('merchant'), merchantDashboardController.showNewCashbackCampaign);
+app.post('/merchant/cashback', requireRole('merchant'), merchantDashboardController.createCashbackCampaign);
+app.get('/merchant/cashback/:campaignId/edit', requireRole('merchant'), merchantDashboardController.showEditCashbackCampaign);
+app.post('/merchant/cashback/:campaignId', requireRole('merchant'), merchantDashboardController.updateCashbackCampaign);
+app.post('/merchant/cashback/:campaignId/delete', requireRole('merchant'), merchantDashboardController.deleteCashbackCampaign);
 app.get('/merchant/schedule', requireRole('merchant'), merchantDashboardController.showSchedule);
 app.get('/merchant/check-in/:token', requireRole('merchant'), merchantController.showBookingCheckIn);
 app.post('/merchant/check-in/:token', requireRole('merchant'), merchantController.confirmBookingCheckIn);
@@ -396,6 +403,12 @@ app.post('/admin/services/:serviceId/delete', requireRole('admin'), adminControl
 app.get('/admin/promotions/:promotionId/edit', requireRole('admin'), adminController.showEditPromotion);
 app.post('/admin/promotions/:promotionId', requireRole('admin'), adminController.updatePromotion);
 app.post('/admin/promotions/:promotionId/delete', requireRole('admin'), adminController.deletePromotion);
+app.get('/admin/cashback', requireRole('admin'), adminController.listCashbackCampaigns);
+app.get('/admin/cashback/new', requireRole('admin'), adminController.showNewCashbackCampaign);
+app.post('/admin/cashback', requireRole('admin'), adminController.createCashbackCampaign);
+app.get('/admin/cashback/:campaignId/edit', requireRole('admin'), adminController.showEditCashbackCampaign);
+app.post('/admin/cashback/:campaignId', requireRole('admin'), adminController.updateCashbackCampaign);
+app.post('/admin/cashback/:campaignId/delete', requireRole('admin'), adminController.deleteCashbackCampaign);
 app.get('/admin/reward-shop', requireRole('admin'), adminController.listRewardVouchers);
 app.get('/admin/reward-shop/new', requireRole('admin'), adminController.showNewRewardVoucher);
 app.post('/admin/reward-shop', requireRole('admin'), adminController.createRewardVoucher);
@@ -447,15 +460,45 @@ app.get('/privacy', allowGuestOrCustomer, (req, res) => {
     });
 });
 
+function estimateProductCampaign(product) {
+    return new Promise((resolve) => {
+        Loyalty.estimateCampaignCashback({
+            id: 'product-estimate',
+            type: 'order',
+            userId: 0,
+            paymentStatus: 'paid',
+            items: [{
+                type: 'Product',
+                merchantId: product.salonId,
+                merchantName: product.salonName,
+                lineTotal: Number(product.price || 0)
+            }]
+        }, (error, estimate) => {
+            if (error) {
+                console.error(error);
+                resolve({ total: 0, breakdown: [] });
+                return;
+            }
+
+            resolve(estimate || { total: 0, breakdown: [] });
+        });
+    });
+}
+
 app.get('/products', allowGuestOrCustomer, (req, res) => {
-    Product.getAll((error, products) => {
+    Product.getAll(async (error, products = []) => {
         if (error) {
             console.error(error);
         }
 
+        const enrichedProducts = await Promise.all((error ? [] : products).map(async (product) => ({
+            ...product,
+            campaignCashback: Number(product.stockQuantity || 0) > 0 ? await estimateProductCampaign(product) : { total: 0, breakdown: [] }
+        })));
+
         res.render('products', {
             title: 'Products',
-            products: error ? [] : products,
+            products: enrichedProducts,
             showChatbot: true
         });
     });
@@ -488,12 +531,12 @@ app.get('/products/:productId', allowGuestOrCustomer, (req, res) => {
                     console.error(reviewsError);
                 }
 
-                return res.render('product-detail', {
+                return estimateProductCampaign(product).then((campaignCashback) => res.render('product-detail', {
                     title: product.name,
-                    product,
+                    product: { ...product, campaignCashback },
                     reviews: reviewsError ? [] : reviews,
                     reviewSummary: reviewSummary || { averageRating: null, reviewCount: 0 }
-                });
+                }));
             });
         });
     });

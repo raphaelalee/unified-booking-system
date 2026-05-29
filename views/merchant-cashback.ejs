@@ -1,0 +1,67 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">Merchant Rewards</p>
+    <h1>Cashback campaigns</h1>
+    <p>Create merchant-funded cashback campaigns for products, services, or both.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %><div class="notice success"><%= success %></div><% } %>
+    <% if (error) { %><div class="notice error"><%= error %></div><% } %>
+
+    <div class="account-panel-header">
+        <div>
+            <p class="eyebrow"><%= merchant.name %></p>
+            <h2>Campaigns</h2>
+        </div>
+        <a class="button primary" href="/merchant/cashback/new">New campaign</a>
+    </div>
+
+    <% if (!campaigns.length) { %>
+        <div class="empty-state">
+            <h2>No cashback campaigns yet.</h2>
+            <p class="muted">Create a draft campaign and activate it when ready.</p>
+        </div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Earn</th>
+                        <th>Minimum</th>
+                        <th>Applies To</th>
+                        <th>Dates</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% campaigns.forEach((campaign) => { %>
+                        <tr>
+                            <td><strong><%= campaign.title %></strong></td>
+                            <td><%= Number(campaign.cashbackPercent || 0).toFixed(2) %>%</td>
+                            <td>$<%= Number(campaign.minimumSpend || 0).toFixed(2) %></td>
+                            <td><span class="sync-pill"><%= campaign.applicableType %></span></td>
+                            <td>
+                                <%= new Date(campaign.startAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %><br>
+                                <small>to <%= new Date(campaign.endAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }) %></small>
+                            </td>
+                            <td><span class="sync-pill"><%= campaign.status %></span></td>
+                            <td>
+                                <a class="button secondary compact" href="/merchant/cashback/<%= campaign.id %>/edit">Edit</a>
+                                <form action="/merchant/cashback/<%= campaign.id %>/delete" method="POST" style="display:inline;">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <button class="button secondary compact" type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

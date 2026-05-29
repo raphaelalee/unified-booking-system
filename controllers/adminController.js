@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
+const CashbackCampaign = require('../models/CashbackCampaign');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
 const User = require('../models/User');
@@ -260,6 +261,20 @@ function formatDateInputValue(value) {
     return date.toISOString().slice(0, 10);
 }
 
+function formatDateTimeInputValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 16);
+}
+
 function validateServiceForm(form) {
     const errors = [];
     const salonId = Number(form.salonId);
@@ -460,6 +475,19 @@ function validateRewardVoucherForm(form) {
     }
 
     return errors;
+}
+
+function getCashbackCampaignForm(body = {}) {
+    return CashbackCampaign.buildCampaignPayload({
+        salonId: body.salonId,
+        title: body.title,
+        cashbackPercent: body.cashbackPercent,
+        minimumSpend: body.minimumSpend,
+        startAt: body.startAt,
+        endAt: body.endAt,
+        status: body.status || 'draft',
+        applicableType: body.applicableType || 'both'
+    });
 }
 
 function buildRewardVoucherPayload(form) {
@@ -1462,6 +1490,189 @@ function updateDailyRewards(req, res) {
     });
 }
 
+function renderAdminCashbackForm(res, status, viewModel) {
+    return res.status(status).render('admin-cashback-form', {
+        statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+        applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+        ...viewModel
+    });
+}
+
+function listCashbackCampaigns(req, res) {
+    return CashbackCampaign.getAll((campaignError, campaigns = []) => {
+        if (campaignError) {
+            console.error(campaignError);
+            return res.status(500).render('error', {
+                title: 'Admin Cashback Error',
+                message: 'Cashback campaigns could not be loaded.'
+            });
+        }
+
+        const success = req.session.adminSuccess;
+        const error = req.session.adminError;
+        req.session.adminSuccess = null;
+        req.session.adminError = null;
+
+        return res.render('admin-cashback', {
+            title: 'Admin Cashback Campaigns',
+            campaigns,
+            success,
+            error
+        });
+    });
+}
+
+function showNewCashbackCampaign(req, res) {
+    return MerchantService.getSalons((salonError, salons = []) => {
+        if (salonError) {
+            console.error(salonError);
+        }
+
+        return renderAdminCashbackForm(res, 200, {
+            title: 'New Cashback Campaign',
+            salons: salonError ? [] : salons,
+            campaign: null,
+            form: {
+                salonId: '',
+                title: '',
+                cashbackPercent: '',
+                minimumSpend: '0.00',
+                startAt: '',
+                endAt: '',
+                status: 'draft',
+                applicableType: 'both'
+            },
+            errors: []
+        });
+    });
+}
+
+function createCashbackCampaign(req, res) {
+    return MerchantService.getSalons((salonError, salons = []) => {
+        if (salonError) {
+            console.error(salonError);
+        }
+
+        const form = {
+            ...getCashbackCampaignForm(req.body),
+            createdByUserId: req.session.user.id
+        };
+        const errors = CashbackCampaign.validateCampaign(form);
+
+        if (errors.length) {
+            return renderAdminCashbackForm(res, 400, {
+                title: 'New Cashback Campaign',
+                salons: salonError ? [] : salons,
+                campaign: null,
+                form,
+                errors
+            });
+        }
+
+        return CashbackCampaign.createAsAdmin(form, (createError) => {
+            if (createError) {
+                console.error(createError);
+                return renderAdminCashbackForm(res, 500, {
+                    title: 'New Cashback Campaign',
+                    salons: salonError ? [] : salons,
+                    campaign: null,
+                    form,
+                    errors: ['Cashback campaign could not be created.']
+                });
+            }
+
+            req.session.adminSuccess = 'Cashback campaign created.';
+            return res.redirect('/admin/cashback');
+        });
+    });
+}
+
+function showEditCashbackCampaign(req, res) {
+    return CashbackCampaign.findById(req.params.campaignId, (campaignError, campaign) => {
+        if (campaignError || !campaign) {
+            return res.status(campaignError ? 500 : 404).render('error', {
+                title: 'Cashback Campaign Not Found',
+                message: campaignError ? 'Cashback campaign could not be loaded.' : 'Cashback campaign was not found.'
+            });
+        }
+
+        return MerchantService.getSalons((salonError, salons = []) => {
+            if (salonError) {
+                console.error(salonError);
+            }
+
+            return renderAdminCashbackForm(res, 200, {
+                title: 'Edit Cashback Campaign',
+                salons: salonError ? [] : salons,
+                campaign,
+                form: {
+                    salonId: campaign.salonId,
+                    title: campaign.title,
+                    cashbackPercent: String(campaign.cashbackPercent),
+                    minimumSpend: Number(campaign.minimumSpend || 0).toFixed(2),
+                    startAt: formatDateTimeInputValue(campaign.startAt),
+                    endAt: formatDateTimeInputValue(campaign.endAt),
+                    status: campaign.status,
+                    applicableType: campaign.applicableType
+                },
+                errors: []
+            });
+        });
+    });
+}
+
+function updateCashbackCampaign(req, res) {
+    return MerchantService.getSalons((salonError, salons = []) => {
+        if (salonError) {
+            console.error(salonError);
+        }
+
+        const form = getCashbackCampaignForm(req.body);
+        const errors = CashbackCampaign.validateCampaign(form);
+
+        if (errors.length) {
+            return renderAdminCashbackForm(res, 400, {
+                title: 'Edit Cashback Campaign',
+                salons: salonError ? [] : salons,
+                campaign: { id: req.params.campaignId },
+                form,
+                errors
+            });
+        }
+
+        return CashbackCampaign.updateAsAdmin(req.params.campaignId, form, (updateError, result) => {
+            if (updateError) {
+                console.error(updateError);
+                return renderAdminCashbackForm(res, 500, {
+                    title: 'Edit Cashback Campaign',
+                    salons: salonError ? [] : salons,
+                    campaign: { id: req.params.campaignId },
+                    form,
+                    errors: ['Cashback campaign could not be updated.']
+                });
+            }
+
+            req.session.adminSuccess = result?.affectedRows ? 'Cashback campaign updated.' : null;
+            req.session.adminError = result?.affectedRows ? null : 'Cashback campaign could not be updated.';
+            return res.redirect('/admin/cashback');
+        });
+    });
+}
+
+function deleteCashbackCampaign(req, res) {
+    return CashbackCampaign.deleteAsAdmin(req.params.campaignId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = 'Cashback campaign could not be deleted.';
+            return res.redirect('/admin/cashback');
+        }
+
+        req.session.adminSuccess = result?.affectedRows ? 'Cashback campaign deleted.' : null;
+        req.session.adminError = result?.affectedRows ? null : 'Cashback campaign could not be deleted.';
+        return res.redirect('/admin/cashback');
+    });
+}
+
 module.exports = {
     showDashboard,
     showOverview,
@@ -1492,5 +1703,11 @@ module.exports = {
     showEditRewardVoucher,
     updateRewardVoucher,
     deleteRewardVoucher,
-    updateDailyRewards
+    updateDailyRewards,
+    listCashbackCampaigns,
+    showNewCashbackCampaign,
+    createCashbackCampaign,
+    showEditCashbackCampaign,
+    updateCashbackCampaign,
+    deleteCashbackCampaign
 };

@@ -244,6 +244,7 @@
                                 <% const priceText = getServicePriceText(service); %>
                                 <% const durationText = bookableItem.duration || service.duration || ''; %>
                                 <% const labelName = activeOption ? `${displayName} - ${activeOption.name}` : displayName; %>
+                                <% const campaignCashbackTotal = Number(service.campaignCashback?.total || 0); %>
                                 <button
                                     class="booking-service-card booking-service-row booking-service-option <%= isSelectedServiceCard ? 'is-selected' : '' %>"
                                     type="button"
@@ -264,6 +265,9 @@
                                                 <span class="service-row-description"><%= serviceDescription %></span>
                                             <% } %>
                                             <span class="service-row-meta"><%= durationText %> &middot; <%= priceText %><% if (packageIsSelected) { %> &middot; <%= service.packageSessions %> sessions<% } %></span>
+                                            <% if (campaignCashbackTotal > 0) { %>
+                                                <span class="service-row-meta">Earn $<%= campaignCashbackTotal.toFixed(2) %> campaign cashback after payment</span>
+                                            <% } %>
                                         </span>
                                     </span>
                                     <span class="service-row-right">

@@ -3,6 +3,7 @@ const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
 const Promotion = require('../models/Promotion');
+const CashbackCampaign = require('../models/CashbackCampaign');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const Review = require('../models/Review');
@@ -98,6 +99,20 @@ function formatDateInputValue(value) {
     }
 
     return date.toISOString().slice(0, 10);
+}
+
+function formatDateTimeInputValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 16);
 }
 
 function isTruthyFormValue(value) {
@@ -362,6 +377,19 @@ function validateProductForm(form) {
     }
 
     return errors;
+}
+
+function getCashbackCampaignForm(body = {}) {
+    return CashbackCampaign.buildCampaignPayload({
+        salonId: body.salonId || body.salon_id || '',
+        title: body.title,
+        cashbackPercent: body.cashbackPercent,
+        minimumSpend: body.minimumSpend,
+        startAt: body.startAt,
+        endAt: body.endAt,
+        status: body.status || 'draft',
+        applicableType: body.applicableType || 'both'
+    });
 }
 
 function buildProductPayload(form) {
@@ -2569,6 +2597,232 @@ function deletePromotion(req, res) {
     });
 }
 
+function listCashbackCampaigns(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return CashbackCampaign.getByMerchantUserId(req.session.user.id, (campaignError, campaigns = []) => {
+            if (campaignError) {
+                console.error(campaignError);
+                return res.status(500).render('error', {
+                    title: 'Cashback Campaigns Error',
+                    message: 'Cashback campaigns could not be loaded.'
+                });
+            }
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-cashback', {
+                title: 'Merchant Cashback',
+                merchant,
+                campaigns,
+                success,
+                error
+            });
+        });
+    });
+}
+
+function showNewCashbackCampaign(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return res.render('merchant-cashback-form', {
+            title: 'New Cashback Campaign',
+            merchant,
+            campaign: null,
+            form: {
+                salonId: merchant.id,
+                title: '',
+                cashbackPercent: '',
+                minimumSpend: '0.00',
+                startAt: '',
+                endAt: '',
+                status: 'draft',
+                applicableType: 'both'
+            },
+            statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+            applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+            errors: []
+        });
+    });
+}
+
+function createCashbackCampaign(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        const payload = {
+            ...getCashbackCampaignForm(req.body),
+            salonId: merchant.id,
+            createdByUserId: req.session.user.id
+        };
+        const errors = CashbackCampaign.validateCampaign(payload);
+
+        if (errors.length) {
+            return res.status(400).render('merchant-cashback-form', {
+                title: 'New Cashback Campaign',
+                merchant,
+                campaign: null,
+                form: payload,
+                statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+                applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+                errors
+            });
+        }
+
+        return CashbackCampaign.createForMerchant(req.session.user.id, payload, (createError, result) => {
+            if (createError) {
+                console.error(createError);
+                return res.status(500).render('merchant-cashback-form', {
+                    title: 'New Cashback Campaign',
+                    merchant,
+                    campaign: null,
+                    form: payload,
+                    statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+                    applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+                    errors: ['Cashback campaign could not be created.']
+                });
+            }
+
+            req.session.merchantSuccess = result?.affectedRows ? 'Cashback campaign created.' : null;
+            req.session.merchantError = result?.affectedRows ? null : 'Cashback campaign could not be created for this merchant.';
+            return res.redirect('/merchant/cashback');
+        });
+    });
+}
+
+function showEditCashbackCampaign(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return CashbackCampaign.findForMerchant(req.session.user.id, req.params.campaignId, (campaignError, campaign) => {
+            if (campaignError) {
+                console.error(campaignError);
+                return res.status(500).render('error', {
+                    title: 'Cashback Campaign Error',
+                    message: 'Cashback campaign could not be loaded.'
+                });
+            }
+
+            if (!campaign) {
+                return res.status(404).render('error', {
+                    title: 'Cashback Campaign Not Found',
+                    message: 'This cashback campaign does not belong to your merchant account.'
+                });
+            }
+
+            return res.render('merchant-cashback-form', {
+                title: 'Edit Cashback Campaign',
+                merchant,
+                campaign,
+                form: {
+                    salonId: campaign.salonId,
+                    title: campaign.title,
+                    cashbackPercent: String(campaign.cashbackPercent),
+                    minimumSpend: Number(campaign.minimumSpend || 0).toFixed(2),
+                    startAt: formatDateTimeInputValue(campaign.startAt),
+                    endAt: formatDateTimeInputValue(campaign.endAt),
+                    status: campaign.status,
+                    applicableType: campaign.applicableType
+                },
+                statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+                applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+                errors: []
+            });
+        });
+    });
+}
+
+function updateCashbackCampaign(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return CashbackCampaign.findForMerchant(req.session.user.id, req.params.campaignId, (campaignError, campaign) => {
+            if (campaignError || !campaign) {
+                return res.status(campaignError ? 500 : 404).render('error', {
+                    title: 'Cashback Campaign Not Found',
+                    message: campaignError ? 'Cashback campaign could not be loaded.' : 'This cashback campaign does not belong to your merchant account.'
+                });
+            }
+
+            const payload = {
+                ...getCashbackCampaignForm(req.body),
+                salonId: merchant.id
+            };
+            const errors = CashbackCampaign.validateCampaign(payload);
+
+            if (errors.length) {
+                return res.status(400).render('merchant-cashback-form', {
+                    title: 'Edit Cashback Campaign',
+                    merchant,
+                    campaign,
+                    form: payload,
+                    statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+                    applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+                    errors
+                });
+            }
+
+            return CashbackCampaign.updateForMerchant(req.session.user.id, campaign.id, payload, (updateError, result) => {
+                if (updateError) {
+                    console.error(updateError);
+                    return res.status(500).render('merchant-cashback-form', {
+                        title: 'Edit Cashback Campaign',
+                        merchant,
+                        campaign,
+                        form: payload,
+                        statuses: CashbackCampaign.CAMPAIGN_STATUSES,
+                        applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
+                        errors: ['Cashback campaign could not be updated.']
+                    });
+                }
+
+                req.session.merchantSuccess = result?.affectedRows ? 'Cashback campaign updated.' : null;
+                req.session.merchantError = result?.affectedRows ? null : 'Cashback campaign could not be updated.';
+                return res.redirect('/merchant/cashback');
+            });
+        });
+    });
+}
+
+function deleteCashbackCampaign(req, res) {
+    return CashbackCampaign.deleteForMerchant(req.session.user.id, req.params.campaignId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Cashback campaign could not be deleted.';
+            return res.redirect('/merchant/cashback');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows ? 'Cashback campaign deleted.' : null;
+        req.session.merchantError = result?.affectedRows ? null : 'Cashback campaign could not be deleted.';
+        return res.redirect('/merchant/cashback');
+    });
+}
+
 module.exports = {
     showDashboard,
     showBookings,
@@ -2604,5 +2858,11 @@ module.exports = {
     createPromotion,
     showEditPromotion,
     updatePromotion,
-    deletePromotion
+    deletePromotion,
+    listCashbackCampaigns,
+    showNewCashbackCampaign,
+    createCashbackCampaign,
+    showEditCashbackCampaign,
+    updateCashbackCampaign,
+    deleteCashbackCampaign
 };

@@ -1,4 +1,5 @@
 const db = require('../db');
+const Loyalty = require('./Loyalty');
 
 function ensureTable(callback) {
     const sql = `
@@ -323,7 +324,21 @@ function recordRefund(receiptId, amount, callback) {
              SET refund_status = 'refunded', refunded_amount = ?, refunded_at = CURRENT_TIMESTAMP
              WHERE receipt_id = ? AND purchase_type = 'product'`,
             [Number(amount || 0), receiptId],
-            callback
+            (error, result) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                Loyalty.reverseCampaignCashbackForReceipt(receiptId, (reverseError) => {
+                    if (reverseError) {
+                        callback(reverseError);
+                        return;
+                    }
+
+                    callback(null, result);
+                });
+            }
         );
     });
 }

@@ -666,6 +666,14 @@ function cancelBooking(req, res) {
                 });
             }
 
+            if (String(booking.payment_status || booking.status || '').toLowerCase() === 'paid' || booking.transaction_id) {
+                Loyalty.reverseCampaignCashbackForReceipt(String(bookingId), (reverseError) => {
+                    if (reverseError) {
+                        console.error('Campaign cashback reversal failed:', reverseError);
+                    }
+                });
+            }
+
             notifyUser(userId, 'customer', {
                 actorUserId: userId,
                 type: 'booking_cancelled',

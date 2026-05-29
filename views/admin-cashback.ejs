@@ -1,0 +1,65 @@
+<%- include('partials/header', { title }) %>
+<%- include('partials/admin-sidebar') %>
+
+<section class="page-title">
+    <p class="eyebrow">Admin Settings</p>
+    <h1>Merchant cashback campaigns</h1>
+    <p>View, create, edit, or deactivate cashback campaigns across all merchants.</p>
+</section>
+
+<section class="section compact">
+    <% if (success) { %><div class="notice success"><%= success %></div><% } %>
+    <% if (error) { %><div class="notice error"><%= error %></div><% } %>
+
+    <div class="account-panel-header">
+        <div>
+            <p class="eyebrow">Campaigns</p>
+            <h2>All merchants</h2>
+        </div>
+        <a class="button primary" href="/admin/cashback/new">New campaign</a>
+    </div>
+
+    <% if (!campaigns.length) { %>
+        <div class="empty-state">
+            <h2>No cashback campaigns yet.</h2>
+            <p class="muted">Create a campaign for any merchant.</p>
+        </div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Merchant</th>
+                        <th>Title</th>
+                        <th>Earn</th>
+                        <th>Minimum</th>
+                        <th>Applies To</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% campaigns.forEach((campaign) => { %>
+                        <tr>
+                            <td><%= campaign.salonName %></td>
+                            <td><strong><%= campaign.title %></strong></td>
+                            <td><%= Number(campaign.cashbackPercent || 0).toFixed(2) %>%</td>
+                            <td>$<%= Number(campaign.minimumSpend || 0).toFixed(2) %></td>
+                            <td><span class="sync-pill"><%= campaign.applicableType %></span></td>
+                            <td><span class="sync-pill"><%= campaign.status %></span></td>
+                            <td>
+                                <a class="button secondary compact" href="/admin/cashback/<%= campaign.id %>/edit">Edit</a>
+                                <form action="/admin/cashback/<%= campaign.id %>/delete" method="POST" style="display:inline;">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <button class="button secondary compact" type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

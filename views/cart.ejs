@@ -128,6 +128,8 @@
                     <%
                         const cashbackBalance = loyalty ? Number(loyalty.wallet.cashbackBalance || 0) : 0;
                         const cashbackApplied = Math.min(cashbackBalance, Number(total || 0));
+                        const campaignCashbackView = typeof campaignCashback !== 'undefined' && campaignCashback ? campaignCashback : { total: 0, breakdown: [] };
+                        const campaignCashbackTotal = Number(campaignCashbackView.total || 0);
                     %>
                     <div class="loyalty-redemption-card cart-cashback-card">
                         <% if (cashbackBalance > 0) { %>
@@ -150,7 +152,10 @@
                     <div class="cart-totals cart-summary-totals">
                         <p><span>Subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
                         <% if (cashbackApplied > 0) { %>
-                            <p><span>Cashback applied</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
+                            <p><span>Wallet cashback used</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
+                        <% } %>
+                        <% if (campaignCashbackTotal > 0) { %>
+                            <p><span>Campaign cashback earned</span><strong>+$<%= campaignCashbackTotal.toFixed(2) %></strong></p>
                         <% } %>
                         <p class="cart-total-line"><span>Total due</span><strong id="cart-due-value">$<%= Math.max(Number(total || 0) - cashbackApplied, 0).toFixed(2) %></strong></p>
                     </div>

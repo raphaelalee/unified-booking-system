@@ -21,7 +21,10 @@
             <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
             by <strong><%= receipt.paymentMethod %></strong>.
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
-                Cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+                Wallet cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
+            <% } %>
+            <% if (Number(receipt.campaignCashbackEarned || 0) > 0) { %>
+                Campaign cashback earned: <strong>$<%= Number(receipt.campaignCashbackEarned || 0).toFixed(2) %></strong>.
             <% } %>
             <% if (Number(receipt.pointsDiscount || 0) > 0) { %>
                 Points redeemed: <strong><%= Number(receipt.pointsRedeemed || 0) %> pts</strong>.
@@ -126,8 +129,20 @@
             </div>
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
                 <div class="receipt-total">
-                    <span>Cashback redeemed</span>
+                    <span>Wallet cashback used</span>
                     <strong>-$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (Number(receipt.campaignCashbackEarned || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Campaign cashback earned</span>
+                    <strong>+$<%= Number(receipt.campaignCashbackEarned || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (Number(receipt.campaignCashbackReversed || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Campaign cashback reversed</span>
+                    <strong>-$<%= Number(receipt.campaignCashbackReversed || 0).toFixed(2) %></strong>
                 </div>
             <% } %>
             <% if (Number(receipt.pointsDiscount || 0) > 0) { %>

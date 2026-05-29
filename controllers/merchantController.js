@@ -660,10 +660,22 @@ function renderBookingPage(req, res, merchant, options = {}) {
         }
     );
 
-    return res.status(options.status || 200).render('booking', {
+    return Promise.all(scopedServices.map(async (service) => ({
+        ...service,
+        campaignCashback: await getCampaignCashbackEstimate({
+            kind: 'booking',
+            receiptId: `booking-service-${service.id}`,
+            userId: req.session.user?.id || 0,
+            merchantId: bookingMerchant.id,
+            merchantName: bookingMerchant.name,
+            serviceId: service.id,
+            serviceName: service.name,
+            amount: Number(service.price || 0)
+        })
+    }))).then((cashbackScopedServices) => res.status(options.status || 200).render('booking', {
         title: `Book ${merchant.name}`,
         merchant: bookingMerchant,
-        scopedServices,
+        scopedServices: cashbackScopedServices,
         errors: options.errors || [],
         form: sanitizedForm,
         selectedPromotion,
@@ -676,7 +688,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         todayDate: getTodayInputValue(),
         maxBookingDate: Booking.getBookingMaxDateKey(),
         publicHolidays: getPublicHolidayDateMap()
-    });
+    }));
 }
 
 function getBookingAvailability(req, res) {
@@ -1132,25 +1144,39 @@ function showServices(req, res) {
             ...service,
             serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
         }));
+        return Promise.all(serviceCatalog.map(async (service) => ({
+            ...service,
+            campaignCashback: await getCampaignCashbackEstimate({
+                kind: 'booking',
+                receiptId: `service-${service.id}`,
+                userId: req.session.user?.id || 0,
+                merchantId: service.salonId || service.merchantId,
+                merchantName: service.merchantName,
+                serviceId: service.id,
+                serviceName: service.name,
+                amount: Number(service.price || 0)
+            })
+        }))).then((serviceCatalogWithCashback) => {
         const prices = serviceCatalog.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
-        const merchantIds = new Set(serviceCatalog.map((service) => service.merchantId).filter(Boolean));
+        const merchantIds = new Set(serviceCatalogWithCashback.map((service) => service.merchantId).filter(Boolean));
 
         return res.render('services', {
             title: 'Services',
             merchants: Merchant.getAll(search),
             favouriteIds,
-            serviceCatalog,
+            serviceCatalog: serviceCatalogWithCashback,
             portalStats: serviceError || databaseServices.length === 0
                 ? Merchant.getPortalStats(search)
                 : {
                     merchantCount: merchantIds.size,
-                    serviceCount: serviceCatalog.length,
+                    serviceCount: serviceCatalogWithCashback.length,
                     promotionCount: 0,
-                    slotCount: serviceCatalog.reduce((total, service) => total + (service.slots || []).length, 0),
+                    slotCount: serviceCatalogWithCashback.reduce((total, service) => total + (service.slots || []).length, 0),
                     startingPrice: prices.length > 0 ? Math.min(...prices) : 0
                 },
             search,
             showChatbot: true
+        });
         });
     });
 }
@@ -2513,10 +2539,18 @@ function showCart(req, res) {
     const success = req.session.success;
     req.session.success = null;
 
-    return Loyalty.getWalletView(req.session.user.id, (walletError, loyalty) => {
+    return Loyalty.getWalletView(req.session.user.id, async (walletError, loyalty) => {
         if (walletError) {
             console.error(walletError);
         }
+
+        const campaignCashback = await getCampaignCashbackEstimate({
+            kind: 'order',
+            receiptId: 'cart-estimate',
+            userId: req.session.user.id,
+            amount: total,
+            items: cart
+        });
 
         return res.render('cart', {
             title: 'Cart',
@@ -2524,7 +2558,8 @@ function showCart(req, res) {
             total,
             itemCount,
             success,
-            loyalty: walletError ? null : loyalty
+            loyalty: walletError ? null : loyalty,
+            campaignCashback
         });
     });
 }
@@ -2606,10 +2641,12 @@ function checkout(req, res) {
     };
     req.session.applyCashback = false;
 
-    return Loyalty.getWalletView(req.session.user.id, (walletError, loyalty) => {
+    return Loyalty.getWalletView(req.session.user.id, async (walletError, loyalty) => {
         if (walletError) {
             console.error(walletError);
         }
+
+        const campaignCashback = await getCampaignCashbackEstimate(req.session.pendingPayments[checkoutId]);
 
         return res.render('payment', getPaymentViewModel({
             title: 'Payment',
@@ -2632,6 +2669,7 @@ function checkout(req, res) {
             availableVouchers: [],
             birthdayPromotion: null,
             rewardRedemption: null,
+            campaignCashback,
             redeemPointsRequested: 0,
             loyalty: walletError ? null : loyalty,
             error: null
@@ -2746,6 +2784,16 @@ async function showPayment(req, res) {
             booking.service_id,
             Number(booking.service_price || 0)
         );
+        const campaignCashback = await getCampaignCashbackEstimate({
+            kind: 'booking',
+            receiptId: String(booking.id),
+            userId: booking.user_id,
+            merchantId: booking.merchant_id,
+            merchantName: booking.merchant_name,
+            serviceId: booking.service_id,
+            serviceName: booking.service_name,
+            amount: Number(booking.service_price || 0)
+        });
 
         return res.render('payment', getPaymentViewModel({
             title: 'Payment',
@@ -2769,6 +2817,7 @@ async function showPayment(req, res) {
             birthdayPromotion,
             loyalty,
             rewardRedemption,
+            campaignCashback,
             redeemPointsRequested: 0,
             error: null
         }));
@@ -3043,6 +3092,10 @@ async function buildTrustedPayment(req, payment) {
                 {
                     name: booking.service_name,
                     type: 'Service',
+                    merchantId: booking.merchant_id,
+                    salonId: booking.merchant_id,
+                    serviceId: booking.service_id,
+                    merchantName: booking.merchant_name,
                     quantity: 1,
                     price: Number(booking.service_price || 0),
                     unitPrice: Number(booking.service_price || 0),
@@ -3311,6 +3364,7 @@ async function prepareTrustedPayment(req, payment) {
     trustedPayment = await applyVoucherRedemption(req, trustedPayment);
     trustedPayment = await applyPointRedemption(req, trustedPayment);
     trustedPayment = await applyCashbackRedemption(req, trustedPayment);
+    trustedPayment.campaignCashback = await getCampaignCashbackEstimate(trustedPayment);
 
     return trustedPayment;
 }
@@ -3446,6 +3500,9 @@ function savePaidReceipt(req, payment, paymentMethod) {
         userId: payment.userId,
         userName: payment.userName || req.session.user?.name || 'Customer',
         merchantName: payment.merchantName,
+        merchantId: payment.merchantId || payment.salonId || '',
+        serviceId: payment.serviceId || '',
+        serviceName: payment.serviceName || '',
         items: payment.items || [],
         totalAmount: Number(payment.amount || 0),
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
@@ -3491,21 +3548,61 @@ function savePaidReceipt(req, payment, paymentMethod) {
                     req.session.loyaltyError = 'Points already awarded for this receipt';
                 }
 
-                if (payment.kind === 'order' && req.session.pendingPayments) {
-                    delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
-                }
+                Loyalty.awardCampaignCashbackForReceipt(receipt, (cashbackError, cashbackAward = {}) => {
+                    if (cashbackError) {
+                        reject(cashbackError);
+                        return;
+                    }
 
-                if (payment.kind === 'booking') {
-                    req.session.lastBookingId = null;
-                }
+                    receipt.campaignCashbackEarned = Number(cashbackAward.total || 0);
+                    receipt.campaignCashbackBreakdown = cashbackAward.breakdown || [];
+                    req.session.receipts[receiptId] = receipt;
 
-                req.session.lastPayment = {
-                    receiptId,
-                    loyaltyAward: awardResult
-                };
+                    if (payment.kind === 'order' && req.session.pendingPayments) {
+                        delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
+                    }
 
-                resolve({ receipt, awardResult });
+                    if (payment.kind === 'booking') {
+                        req.session.lastBookingId = null;
+                    }
+
+                    req.session.lastPayment = {
+                        receiptId,
+                        loyaltyAward: awardResult,
+                        campaignCashbackAward: cashbackAward
+                    };
+
+                    resolve({ receipt, awardResult, cashbackAward });
+                });
             });
+        });
+    });
+}
+
+function getCampaignCashbackEstimate(payment) {
+    return new Promise((resolve) => {
+        const receiptLike = {
+            id: payment.receiptId || payment.checkoutId || 'estimate',
+            type: payment.kind === 'booking' ? 'booking' : 'order',
+            userId: payment.userId,
+            merchantId: payment.merchantId || payment.salonId,
+            merchantName: payment.merchantName,
+            serviceName: payment.serviceName,
+            serviceId: payment.serviceId,
+            items: payment.items || [],
+            totalAmount: Number(payment.amount || 0),
+            originalAmount: Number(payment.originalAmount || payment.amount || 0),
+            paymentStatus: 'paid'
+        };
+
+        Loyalty.estimateCampaignCashback(receiptLike, (error, estimate) => {
+            if (error) {
+                console.error(error);
+                resolve({ total: 0, breakdown: [] });
+                return;
+            }
+
+            resolve(estimate || { total: 0, breakdown: [] });
         });
     });
 }

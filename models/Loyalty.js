@@ -1,5 +1,6 @@
 const db = require('../db');
 const User = require('./User');
+const CashbackCampaign = require('./CashbackCampaign');
 const { isBirthdayMonthForDate } = require('../utils/birthdayPromotions');
 
 const DEFAULT_RULES = {
@@ -23,7 +24,9 @@ const ACTIVITY_TYPES = {
     EARNED: 'EARNED',
     REDEEMED: 'REDEEMED',
     POINTS_USED: 'POINTS_USED',
-    CASHBACK_USED: 'CASHBACK_USED'
+    CASHBACK_USED: 'CASHBACK_USED',
+    CASHBACK_EARNED: 'CASHBACK_EARNED',
+    CASHBACK_REVERSED: 'CASHBACK_REVERSED'
 };
 
 const LEGACY_TYPE_MAP = {
@@ -146,6 +149,8 @@ function ensureTables(callback) {
         (next) => db.query(walletSql, next),
         (next) => db.query(transactionSql, next),
         (next) => ensureColumns('loyalty_transactions', {
+            campaign_id: 'campaign_id INT NULL AFTER source_receipt_id',
+            salon_id: 'salon_id INT NULL AFTER campaign_id',
             expires_at: 'expires_at DATETIME DEFAULT NULL AFTER description',
             booking_reference: 'booking_reference VARCHAR(80) DEFAULT NULL AFTER expires_at',
             merchant_name: 'merchant_name VARCHAR(120) DEFAULT NULL AFTER booking_reference',
@@ -218,6 +223,8 @@ function mapTransaction(row = {}) {
         bookingReference: row.booking_reference || row.source_receipt_id || '',
         merchantName: row.merchant_name || '',
         rewardDiscount: Number(row.reward_discount || 0),
+        campaignId: row.campaign_id || null,
+        salonId: row.salon_id || null,
         createdAt: row.created_at
     };
 }
@@ -1089,6 +1096,376 @@ function awardPointsForReceipt(userId, receiptId, callback) {
     });
 }
 
+function getReceiptCampaignGroups(receipt = {}) {
+    const type = String(receipt.type || '').toLowerCase();
+
+    if (type === 'booking') {
+        const salonId = Number(receipt.merchantId || receipt.salonId || 0);
+        const amount = roundMoney(receipt.originalAmount || receipt.totalAmount || 0);
+
+        return salonId && amount > 0
+            ? [{
+                salonId,
+                applicableType: 'services',
+                subtotal: amount,
+                merchantName: receipt.merchantName || '',
+                serviceName: receipt.serviceName || receipt.items?.[0]?.name || ''
+            }]
+            : [];
+    }
+
+    const groups = new Map();
+    (receipt.items || []).forEach((item) => {
+        const itemType = String(item.type || '').toLowerCase();
+        const salonId = Number(item.merchantId || item.salonId || 0);
+        const lineTotal = roundMoney(item.lineTotal || (Number(item.unitPrice || item.price || 0) * Number(item.quantity || 1)));
+
+        if (!salonId || lineTotal <= 0 || itemType !== 'product') {
+            return;
+        }
+
+        const existing = groups.get(salonId) || {
+            salonId,
+            applicableType: 'products',
+            subtotal: 0,
+            merchantName: item.merchantName || item.detail || '',
+            serviceName: 'Product order'
+        };
+
+        existing.subtotal = roundMoney(existing.subtotal + lineTotal);
+        groups.set(salonId, existing);
+    });
+
+    return Array.from(groups.values());
+}
+
+function estimateCampaignCashback(receipt, callback) {
+    const groups = getReceiptCampaignGroups(receipt);
+
+    if (!groups.length) {
+        callback(null, { total: 0, breakdown: [] });
+        return;
+    }
+
+    const breakdown = [];
+    let index = 0;
+
+    function next(error) {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        if (index >= groups.length) {
+            callback(null, {
+                total: roundMoney(breakdown.reduce((sum, entry) => sum + Number(entry.cashbackAmount || 0), 0)),
+                breakdown
+            });
+            return;
+        }
+
+        const group = groups[index];
+        index += 1;
+
+        CashbackCampaign.findActiveForSpend({
+            salonId: group.salonId,
+            applicableType: group.applicableType,
+            spend: group.subtotal
+        }, (campaignError, campaign) => {
+            if (campaignError) {
+                next(campaignError);
+                return;
+            }
+
+            const cashbackAmount = CashbackCampaign.calculateCashback(group.subtotal, campaign);
+
+            if (campaign && cashbackAmount > 0) {
+                breakdown.push({
+                    campaignId: campaign.id,
+                    campaignTitle: campaign.title,
+                    salonId: group.salonId,
+                    salonName: campaign.salonName || group.merchantName,
+                    applicableType: group.applicableType,
+                    subtotal: group.subtotal,
+                    cashbackPercent: campaign.cashbackPercent,
+                    cashbackAmount
+                });
+            }
+
+            next();
+        });
+    }
+
+    next();
+}
+
+function awardCampaignCashbackForReceipt(receipt, callback) {
+    const receiptId = String(receipt?.id || receipt?.receiptId || '').trim();
+    const userId = Number(receipt?.userId || 0);
+    const paymentStatus = String(receipt?.paymentStatus || '').toLowerCase();
+
+    if (!receiptId || !userId || paymentStatus !== 'paid') {
+        callback(null, { awarded: false, total: 0, breakdown: [] });
+        return;
+    }
+
+    estimateCampaignCashback(receipt, (estimateError, estimate) => {
+        if (estimateError) {
+            callback(estimateError);
+            return;
+        }
+
+        const awards = (estimate.breakdown || []).filter((entry) => Number(entry.cashbackAmount || 0) > 0);
+
+        if (!awards.length) {
+            callback(null, { awarded: false, total: 0, breakdown: [] });
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const inserted = [];
+                let awardIndex = 0;
+
+                function insertNext(error) {
+                    if (error) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(error);
+                        });
+                    }
+
+                    if (awardIndex >= awards.length) {
+                        const total = roundMoney(inserted.reduce((sum, entry) => sum + Number(entry.cashbackAmount || 0), 0));
+
+                        if (total <= 0) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(null, { awarded: false, duplicate: true, total: 0, breakdown: [] });
+                            });
+                        }
+
+                        const walletSql = `
+                            INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
+                            VALUES (?, 0, ?, 0)
+                            ON DUPLICATE KEY UPDATE cashback_balance = cashback_balance + VALUES(cashback_balance)
+                        `;
+
+                        return connection.query(walletSql, [userId, total], (walletError) => {
+                            if (walletError) {
+                                return insertNext(walletError);
+                            }
+
+                            return connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError, {
+                                    awarded: !commitError,
+                                    total,
+                                    breakdown: inserted
+                                });
+                            });
+                        });
+                    }
+
+                    const award = awards[awardIndex];
+                    awardIndex += 1;
+                    const sourceReceiptId = `campaign-${receiptId}-${award.campaignId}-${award.salonId}`;
+                    const description = `${award.campaignTitle} cashback from receipt ${receipt.displayId || receiptId}`;
+
+                    const insertSql = `
+                        INSERT IGNORE INTO loyalty_transactions
+                            (user_id, source_receipt_id, campaign_id, salon_id, transaction_type, points_delta, cashback_delta, description, booking_reference, merchant_name)
+                        VALUES (?, ?, ?, ?, 'CASHBACK_EARNED', 0, ?, ?, ?, ?)
+                    `;
+
+                    connection.query(insertSql, [
+                        userId,
+                        sourceReceiptId,
+                        award.campaignId,
+                        award.salonId,
+                        award.cashbackAmount,
+                        description,
+                        receipt.displayId || receiptId,
+                        award.salonName || receipt.merchantName || ''
+                    ], (insertError, result) => {
+                        if (insertError) {
+                            return insertNext(insertError);
+                        }
+
+                        if (result.affectedRows > 0) {
+                            inserted.push(award);
+                        }
+
+                        return insertNext();
+                    });
+                }
+
+                insertNext();
+            });
+        });
+    });
+}
+
+function reverseCampaignCashbackForReceipt(receiptId, callback) {
+    const rawReceiptId = String(receiptId || '').trim();
+    const sourcePrefix = `campaign-${rawReceiptId}-%`;
+
+    if (!rawReceiptId) {
+        callback(null, { reversed: false, total: 0 });
+        return;
+    }
+
+    db.getConnection((connectionError, connection) => {
+        if (connectionError) {
+            callback(connectionError);
+            return;
+        }
+
+        connection.beginTransaction((transactionError) => {
+            if (transactionError) {
+                connection.release();
+                callback(transactionError);
+                return;
+            }
+
+            const lookupSql = `
+                SELECT *
+                FROM loyalty_transactions earned
+                WHERE earned.source_receipt_id LIKE ?
+                    AND earned.transaction_type = 'CASHBACK_EARNED'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM loyalty_transactions reversed
+                        WHERE reversed.source_receipt_id = CONCAT('reverse-', earned.source_receipt_id)
+                            AND reversed.transaction_type = 'CASHBACK_REVERSED'
+                    )
+            `;
+
+            connection.query(lookupSql, [sourcePrefix], (lookupError, rows = []) => {
+                if (lookupError) {
+                    return connection.rollback(() => {
+                        connection.release();
+                        callback(lookupError);
+                    });
+                }
+
+                if (!rows.length) {
+                    return connection.rollback(() => {
+                        connection.release();
+                        callback(null, { reversed: false, total: 0 });
+                    });
+                }
+
+                const total = roundMoney(rows.reduce((sum, row) => sum + Number(row.cashback_delta || 0), 0));
+                let index = 0;
+
+                function insertReverse(error) {
+                    if (error) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(error);
+                        });
+                    }
+
+                    if (index >= rows.length) {
+                        const walletSql = `
+                            UPDATE loyalty_wallets
+                            SET cashback_balance = GREATEST(cashback_balance - ?, 0)
+                            WHERE user_id = ?
+                        `;
+
+                        return connection.query(walletSql, [total, rows[0].user_id], (walletError) => {
+                            if (walletError) {
+                                return insertReverse(walletError);
+                            }
+
+                            return connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError, {
+                                    reversed: !commitError,
+                                    total
+                                });
+                            });
+                        });
+                    }
+
+                    const earned = rows[index];
+                    index += 1;
+
+                    const insertSql = `
+                        INSERT IGNORE INTO loyalty_transactions
+                            (user_id, source_receipt_id, campaign_id, salon_id, transaction_type, points_delta, cashback_delta, description, booking_reference, merchant_name)
+                        VALUES (?, ?, ?, ?, 'CASHBACK_REVERSED', 0, ?, ?, ?, ?)
+                    `;
+
+                    connection.query(insertSql, [
+                        earned.user_id,
+                        `reverse-${earned.source_receipt_id}`,
+                        earned.campaign_id,
+                        earned.salon_id,
+                        -Number(earned.cashback_delta || 0),
+                        `Reversed campaign cashback for receipt ${rawReceiptId}`,
+                        earned.booking_reference || rawReceiptId,
+                        earned.merchant_name || ''
+                    ], insertReverse);
+                }
+
+                insertReverse();
+            });
+        });
+    });
+}
+
+function getCampaignCashbackForReceipt(receiptId, callback) {
+    const rawReceiptId = String(receiptId || '').trim();
+
+    if (!rawReceiptId) {
+        callback(null, { earned: 0, reversed: 0, net: 0, transactions: [] });
+        return;
+    }
+
+    const sql = `
+        SELECT *
+        FROM loyalty_transactions
+        WHERE (source_receipt_id LIKE ? OR source_receipt_id LIKE ?)
+            AND transaction_type IN ('CASHBACK_EARNED', 'CASHBACK_REVERSED')
+        ORDER BY loyalty_transaction_id
+    `;
+
+    db.query(sql, [`campaign-${rawReceiptId}-%`, `reverse-campaign-${rawReceiptId}-%`], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const transactions = rows.map(mapTransaction);
+        const earned = roundMoney(transactions
+            .filter((entry) => entry.type === 'CASHBACK_EARNED')
+            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
+        const reversed = roundMoney(Math.abs(transactions
+            .filter((entry) => entry.type === 'CASHBACK_REVERSED')
+            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0)));
+
+        callback(null, {
+            earned,
+            reversed,
+            net: roundMoney(earned - reversed),
+            transactions
+        });
+    });
+}
+
 function awardReviewBonus(userId, bookingId, options = {}, callback) {
     const basePoints = Number(options.basePoints || 0);
     const mediaPoints = Number(options.mediaPoints || 0);
@@ -1349,19 +1726,23 @@ function redeemPointsForCashback(userId, points, callback) {
 module.exports = {
     ACTIVITY_TYPES,
     awardForReceipt,
+    awardCampaignCashbackForReceipt,
     awardPointsForReceipt,
     awardReviewBonus,
     ensureWallet,
+    estimateCampaignCashback,
     calculatePointRedemption,
     getEffectiveRedemptionRules,
     getMerchantRules,
     getMerchantRewardAnalytics,
     getPlatformSummary,
     getRules,
+    getCampaignCashbackForReceipt,
     getWalletView,
     redeemCashback,
     redeemPointsForPayment,
     redeemPointsForCashback,
+    reverseCampaignCashbackForReceipt,
     updateMerchantRules,
     updateRules
 };

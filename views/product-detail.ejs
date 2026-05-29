@@ -12,6 +12,7 @@
     const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
     const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
     const productReviews = Array.isArray(reviews) ? reviews : [];
+    const campaignCashbackTotal = Number(product.campaignCashback?.total || 0);
     const averageRating = Number.isFinite(reviewSummary?.averageRating) ? reviewSummary.averageRating : null;
     const reviewCount = Number(reviewSummary?.reviewCount || 0);
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
@@ -21,6 +22,9 @@
     <p class="eyebrow"><%= product.category %></p>
     <h1><%= product.name %></h1>
     <p>$<%= Number(product.price || 0).toFixed(2) %> &middot; <%= product.description %></p>
+    <% if (campaignCashbackTotal > 0) { %>
+        <p><strong>Earn $<%= campaignCashbackTotal.toFixed(2) %> merchant campaign cashback</strong> after successful payment.</p>
+    <% } %>
 </section>
 
 <section class="section compact product-detail-page">

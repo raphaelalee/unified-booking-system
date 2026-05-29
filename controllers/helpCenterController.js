@@ -4,6 +4,7 @@ const Notification = require('../models/Notification');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const SupportRequest = require('../models/SupportRequest');
 const Transaction = require('../models/Transaction');
+const Loyalty = require('../models/Loyalty');
 const {
     sendCancellationForBooking,
     sendRescheduleForBooking
@@ -52,6 +53,7 @@ const getHistoryOrders = promisify(PurchaseHistory.getSupportOrdersByUserId);
 const getHistoryOrderForCustomer = promisify(PurchaseHistory.getSupportOrderForCustomer);
 const updateHistoryDeliveryStatus = promisify(PurchaseHistory.updateDeliveryStatus);
 const recordHistoryRefund = promisify(PurchaseHistory.recordRefund);
+const reverseCampaignCashback = promisify(Loyalty.reverseCampaignCashbackForReceipt);
 const getMerchantOrders = promisify(Transaction.getMerchantOrderReport);
 const updateDeliveryStatus = promisify(Transaction.updateDeliveryStatus);
 const createSupportRequest = promisify(SupportRequest.create);
@@ -863,17 +865,21 @@ async function adminResolve(req, res) {
                 if (transactionId) {
                     await updateDeliveryStatus(transactionId, 'cancelled', {});
                     await recordTransactionRefund(transactionId, approvedRefundAmount);
+                    await reverseCampaignCashback(`order-${transactionId}`);
 
                     if (request.receiptId) {
                         await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
                         await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                        await reverseCampaignCashback(request.receiptId);
                     }
                 } else {
                     await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
                     await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
+                    await reverseCampaignCashback(request.receiptId || request.targetId);
                 }
             } else if (request.targetType === 'booking') {
                 await markBookingCancelled(request.targetId);
+                await reverseCampaignCashback(String(request.targetId));
                 await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
                     console.error('WhatsApp cancellation notification failed:', error.message);
                 });

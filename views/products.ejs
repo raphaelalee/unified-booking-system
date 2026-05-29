@@ -110,6 +110,7 @@
                     const merchantName = product.salonName || (product.category && !categoryList.includes(product.category) ? product.category : 'Vaniday Beauty Studio');
                     const stockLabel = formatStock(product);
                     const isOutOfStock = stockLabel === 'Out of stock';
+                    const campaignCashbackTotal = Number(product.campaignCashback?.total || 0);
                 %>
                 <article
                     class="marketplace-product-card"
@@ -123,6 +124,9 @@
                     <a class="marketplace-product-image product-image <%= productImageClass %>" href="/products/<%= product.id %>" style="<%= productImageStyle %>" aria-label="View <%= product.name %>">
                         <span class="product-image-badge"><%= category %></span>
                         <span class="product-stock-badge <%= isOutOfStock ? 'is-empty' : '' %>"><%= stockLabel %></span>
+                        <% if (campaignCashbackTotal > 0) { %>
+                            <span class="product-stock-badge">+$<%= campaignCashbackTotal.toFixed(2) %> cashback</span>
+                        <% } %>
                     </a>
 
                     <div class="marketplace-product-body">
@@ -132,6 +136,9 @@
                         </div>
                         <h3><%= product.name %></h3>
                         <p><%= product.description %></p>
+                        <% if (campaignCashbackTotal > 0) { %>
+                            <p class="muted">Eligible for merchant campaign cashback after payment.</p>
+                        <% } %>
                     </div>
 
                     <div class="marketplace-product-footer">

@@ -199,6 +199,7 @@
                     const visibleOptions = serviceOptions.slice(0, 3);
                     const remainingOptions = serviceOptions.length - visibleOptions.length;
                     const serviceSlots = Array.isArray(service.slots) ? service.slots : [];
+                    const campaignCashbackTotal = Number(service.campaignCashback?.total || 0);
                 %>
                 <article
                     class="service-catalog-card unified-service-card service-shop-card"
@@ -211,6 +212,9 @@
                     <div class="service-card-image <%= serviceVisual.className %>">
                         <span class="service-image-badge"><%= serviceVisual.label %></span>
                         <span class="service-image-price">From $<%= service.price %></span>
+                        <% if (campaignCashbackTotal > 0) { %>
+                            <span class="service-image-badge">+$<%= campaignCashbackTotal.toFixed(2) %> cashback</span>
+                        <% } %>
                         <form class="service-heart-form" action="/merchants/<%= service.merchantId %>/favourite" method="POST">
                             <button
                                 class="heart-button <%= serviceFavouriteIds.includes(service.merchantId) ? 'active' : '' %>"
@@ -248,6 +252,9 @@
                             <% } %>
                             <% if (service.merchantPromotion) { %>
                                 <span><%= service.merchantPromotion %></span>
+                            <% } %>
+                            <% if (campaignCashbackTotal > 0) { %>
+                                <span>Earn $<%= campaignCashbackTotal.toFixed(2) %> cashback</span>
                             <% } %>
                         </div>
 

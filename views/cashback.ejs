@@ -12,8 +12,7 @@
             <p class="eyebrow">Current wallet</p>
             <h2>$<%= Number(wallet.cashbackBalance || 0).toFixed(2) %> cashback available</h2>
             <p>
-                Earn <%= rules.pointsPerDollar %> points per dollar and
-                <%= rules.cashbackPercent %>% cashback after completed payments.
+                Earn points from paid receipts, convert points into wallet cashback, and earn separate merchant campaign cashback when an active campaign applies.
             </p>
             <div class="hero-actions">
                 <a class="button primary" href="/services">Book an appointment</a>
@@ -21,8 +20,8 @@
             </div>
         </div>
         <div class="cashback-badge">
-            <span><%= rules.cashbackPercent %>%</span>
-            <small>cashback</small>
+            <span>$</span>
+            <small>wallet cashback</small>
         </div>
     </div>
 
@@ -33,11 +32,11 @@
         </article>
         <article>
             <h2>2. Earn</h2>
-            <p>Points and cashback are added to your wallet from the trusted receipt amount.</p>
+            <p>Points and eligible merchant campaign cashback are recorded as separate wallet transactions.</p>
         </article>
         <article>
             <h2>3. Redeem</h2>
-            <p>Use available cashback on future Vaniday payments.</p>
+            <p>Use wallet cashback on future Vaniday payments. Refunded campaign earnings are reversed.</p>
         </article>
     </div>
 </section>
