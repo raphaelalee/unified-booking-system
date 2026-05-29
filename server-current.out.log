@@ -2,3 +2,4 @@
 ◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
 ◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
 Server is running on http://localhost:3000
+Email booking confirmation skipped: SMTP is not configured or booking email is missing.
