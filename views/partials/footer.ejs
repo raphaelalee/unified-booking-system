@@ -39,8 +39,14 @@
         </div>
     </footer>
     <% if (typeof showChatbot !== 'undefined' && showChatbot) { %>
+        <% if (typeof whatsappWidgetUrl !== 'undefined' && whatsappWidgetUrl) { %>
+            <a class="whatsapp-chat-widget" href="<%= whatsappWidgetUrl %>" target="_blank" rel="noopener" aria-label="Start WhatsApp booking">
+                <span aria-hidden="true">WA</span>
+                <strong>WhatsApp</strong>
+            </a>
+        <% } %>
         <%- include('chatbot') %>
-        <script src="/js/chatbot.js?v=1"></script>
+        <script src="/js/chatbot.js?v=3"></script>
     <% } %>
     <script src="/js/customer-ux.js?v=1"></script>
     <script src="/js/services-location.js?v=2"></script>

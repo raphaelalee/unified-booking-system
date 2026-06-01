@@ -217,6 +217,23 @@ function redirectMerchantProductDetail(req, res) {
     return res.redirect(`/merchant/products/${productId}/edit`);
 }
 
+function getWhatsAppWidgetUrl() {
+    const rawPhone = process.env.WHATSAPP_BOOKING_PHONE || process.env.TWILIO_WHATSAPP_FROM || '';
+    const phone = String(rawPhone).replace(/^whatsapp:/i, '').replace(/[^\d]/g, '');
+
+    if (!phone) {
+        return '';
+    }
+
+    const message = encodeURIComponent('BOOK');
+    return `https://wa.me/${phone}?text=${message}`;
+}
+
+app.use((req, res, next) => {
+    res.locals.whatsappWidgetUrl = getWhatsAppWidgetUrl();
+    next();
+});
+
 app.get('/', allowGuestOrCustomer, merchantController.showHome);
 app.get('/portal', allowGuestOrCustomer, (req, res) => {
     const query = new URLSearchParams(req.query).toString();
@@ -304,6 +321,9 @@ app.get('/booking/:merchantId', allowBookingViewer, merchantController.showBooki
 app.post('/booking/:merchantId', allowGuestOrCustomer, merchantController.saveQrBooking);
 app.get('/merchants/:id', allowGuestOrCustomer, merchantController.showMerchant);
 app.post('/merchants/:id/book', allowGuestOrCustomer, merchantController.createBooking);
+app.get('/api/ai/booking-options', aiRateLimit, allowGuestOrCustomer, aiController.getGuidedBookingOptions);
+app.get('/api/ai/booking-slots', aiRateLimit, allowGuestOrCustomer, aiController.getGuidedBookingSlots);
+app.get('/api/ai/customer-bookings', aiRateLimit, requireCustomer, aiController.getGuidedCustomerBookings);
 app.post('/api/ai/chat', aiRateLimit, allowGuestOrCustomer, aiController.getBeautyAdvice);
 app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.generateProductCopy);
 app.get('/merchant', requireRole('merchant'), (req, res) => res.redirect('/merchant/dashboard'));

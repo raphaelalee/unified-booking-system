@@ -149,6 +149,18 @@ function respondProfileAction(req, res, payload, redirectPath = '/profile#bookin
     return res.redirect(redirectPath);
 }
 
+function respondBookingCreateError(req, res, statusCode, message, redirectPath = '/services') {
+    if (wantsJson(req)) {
+        return res.status(statusCode).json({
+            success: false,
+            message
+        });
+    }
+
+    req.session.profileError = message;
+    return res.redirect(redirectPath);
+}
+
 function notifyUser(recipientUserId, role, notification) {
     Notification.create({
         ...notification,
@@ -335,49 +347,48 @@ function createBooking(req, res) {
     const phone = (req.body.phone || req.session.user?.phone || '').trim();
 
     if (!serviceId || serviceId === 'select') {
-        req.session.profileError = 'Please select a service before confirming your booking.';
-        return res.redirect('/services');
+        return respondBookingCreateError(req, res, 400, 'Please select a service before confirming your booking.');
     }
 
     const dateErrorMessage = getBookingDateErrorMessage(bookingDate);
 
     if (dateErrorMessage) {
-        req.session.profileError = dateErrorMessage;
-        return res.redirect(req.get('Referrer') || '/services');
+        return respondBookingCreateError(req, res, 400, dateErrorMessage, req.get('Referrer') || '/services');
     }
 
     if (!bookingTime) {
-        req.session.profileError = 'Please choose a valid booking time.';
-        return res.redirect(req.get('Referrer') || '/services');
+        return respondBookingCreateError(req, res, 400, 'Please choose a valid booking time.', req.get('Referrer') || '/services');
     }
 
     if (isGuestBooking) {
         if (customerName.length < 2) {
-            req.session.profileError = 'Please enter your full name to continue as guest.';
-            return res.redirect(req.get('Referrer') || '/services');
+            return respondBookingCreateError(req, res, 400, 'Please enter your full name to continue as guest.', req.get('Referrer') || '/services');
         }
 
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            req.session.profileError = 'Please enter a valid email address to continue as guest.';
-            return res.redirect(req.get('Referrer') || '/services');
+            return respondBookingCreateError(req, res, 400, 'Please enter a valid email address to continue as guest.', req.get('Referrer') || '/services');
         }
 
         if (!/^[689]\d{7}$/.test(phone)) {
-            req.session.profileError = 'Please enter a valid 8-digit Singapore phone number to continue as guest.';
-            return res.redirect(req.get('Referrer') || '/services');
+            return respondBookingCreateError(req, res, 400, 'Please enter a valid 8-digit Singapore phone number to continue as guest.', req.get('Referrer') || '/services');
         }
     }
 
     const holidayName = getPublicHolidayName(bookingDate);
 
     if (holidayName) {
-        req.session.profileError = `Bookings are unavailable on ${holidayName}. Please choose another date.`;
-        return res.redirect(req.get('Referrer') || '/services');
+        return respondBookingCreateError(req, res, 400, `Bookings are unavailable on ${holidayName}. Please choose another date.`, req.get('Referrer') || '/services');
     }
 
     return MerchantService.findServiceById(serviceId, (serviceError, service) => {
         if (serviceError) {
             console.error(serviceError);
+            if (wantsJson(req)) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'The selected service could not be loaded.'
+                });
+            }
             return res.status(500).render('error', {
                 title: 'Booking Error',
                 message: 'The selected service could not be loaded.'
@@ -385,6 +396,12 @@ function createBooking(req, res) {
         }
 
         if (!service) {
+            if (wantsJson(req)) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'The selected service does not exist.'
+                });
+            }
             return res.status(404).render('error', {
                 title: 'Service Not Found',
                 message: 'The selected service does not exist.'
@@ -392,8 +409,7 @@ function createBooking(req, res) {
         }
 
         if (service.inventoryBlocked) {
-            req.session.profileError = 'This service is temporarily unavailable because the required inventory is out of stock.';
-            return res.redirect(req.get('Referrer') || '/services');
+            return respondBookingCreateError(req, res, 400, 'This service is temporarily unavailable because the required inventory is out of stock.', req.get('Referrer') || '/services');
         }
 
         const purchaseType = req.body.purchaseType === 'package' && service.packageEnabled ? 'package' : 'single';
@@ -417,6 +433,12 @@ function createBooking(req, res) {
         }, async (bookingError, confirmation) => {
             if (bookingError) {
                 console.error(bookingError);
+                if (wantsJson(req)) {
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Your booking could not be created.'
+                    });
+                }
                 return res.status(500).render('error', {
                     title: 'Booking Error',
                     message: 'Your booking could not be created.'
@@ -424,8 +446,7 @@ function createBooking(req, res) {
             }
 
             if (!confirmation?.created) {
-                req.session.profileError = confirmation?.message || 'That booking slot is unavailable. Please choose another time.';
-                return res.redirect(req.get('Referrer') || '/services');
+                return respondBookingCreateError(req, res, 400, confirmation?.message || 'That booking slot is unavailable. Please choose another time.', req.get('Referrer') || '/services');
             }
 
             try {
@@ -433,6 +454,25 @@ function createBooking(req, res) {
                 notifyBookingCreated(bookingId);
 
                 if (!confirmation.confirmed) {
+                    if (wantsJson(req)) {
+                        return res.json({
+                            success: true,
+                            pendingReview: true,
+                            message: 'Booking submitted and waiting for merchant approval.',
+                            booking: {
+                                id: bookingId,
+                                merchantName: service.salonName || 'Vaniday merchant',
+                                serviceName: bookedServiceName,
+                                servicePrice: bookedServicePrice,
+                                bookingDate,
+                                bookingTime,
+                                receiptPath: getGuestReceiptPath(bookingId),
+                                receiptUrl: getGuestReceiptUrl(req, bookingId),
+                                status: 'pending'
+                            }
+                        });
+                    }
+
                     return res.render('booking-success', {
                         title: 'Booking Pending',
                         merchant: { id: service.salonId, name: service.salonName || 'Vaniday merchant' },
@@ -511,6 +551,33 @@ function createBooking(req, res) {
                     console.error('WhatsApp booking confirmation failed:', whatsappError.message);
                 });
 
+                if (wantsJson(req)) {
+                    return res.json({
+                        success: true,
+                        message: emailSkipped
+                            ? 'Booking confirmed. Receipt and QR are ready, but the confirmation email was skipped.'
+                            : 'Booking confirmed. Receipt, QR, and notifications have been sent.',
+                        booking: {
+                            id: bookingId,
+                            customerName: customerName || 'Customer',
+                            email,
+                            merchantName: service.salonName || 'Vaniday merchant',
+                            serviceName: bookedServiceName,
+                            servicePrice: bookedServicePrice,
+                            purchaseType,
+                            bookingDate,
+                            bookingTime,
+                            appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
+                            checkinUrl,
+                            checkinToken,
+                            receiptPath: getGuestReceiptPath(bookingId),
+                            receiptUrl: getGuestReceiptUrl(req, bookingId),
+                            status: 'confirmed'
+                        },
+                        emailSkipped
+                    });
+                }
+
                 return res.render('booking-email-sent', {
                     title: 'Booking Confirmed',
                     booking: {
@@ -535,6 +602,12 @@ function createBooking(req, res) {
                 });
             } catch (confirmationError) {
                 console.error('Booking confirmation page failed:', confirmationError.message);
+                if (wantsJson(req)) {
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Booking was created, but the confirmation details could not be prepared.'
+                    });
+                }
                 return res.redirect('/profile');
             }
         });
