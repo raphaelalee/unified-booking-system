@@ -87,6 +87,14 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN points_discount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
             }
 
+            if (!fields.has('item_subtotal')) {
+                alters.push('ADD COLUMN item_subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
+            if (!fields.has('shipping_fee')) {
+                alters.push('ADD COLUMN shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -115,8 +123,8 @@ function save(receipt, callback) {
         const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
         const sql = `
             INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 item_names = VALUES(item_names),
                 items_json = VALUES(items_json),
@@ -131,7 +139,9 @@ function save(receipt, callback) {
                 original_amount = VALUES(original_amount),
                 cashback_used = VALUES(cashback_used),
                 points_redeemed = VALUES(points_redeemed),
-                points_discount = VALUES(points_discount)
+                points_discount = VALUES(points_discount),
+                item_subtotal = VALUES(item_subtotal),
+                shipping_fee = VALUES(shipping_fee)
         `;
 
         db.query(sql, [
@@ -152,7 +162,9 @@ function save(receipt, callback) {
             Number(receipt.originalAmount || receipt.totalAmount || 0),
             Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0),
             Number(receipt.pointsRedeemed || 0),
-            Number(receipt.pointsDiscount || 0)
+            Number(receipt.pointsDiscount || 0),
+            Number(receipt.itemSubtotal || 0),
+            Number(receipt.shippingFee || 0)
         ], callback);
     });
 }
@@ -372,6 +384,8 @@ function mapReceipt(row) {
         merchantName: row.pickup_merchant_name || merchantNames.join(', ') || 'Vaniday merchant',
         items,
         totalAmount: Number(row.total_amount || 0),
+        itemSubtotal: Number(row.item_subtotal || 0),
+        shippingFee: Number(row.shipping_fee || 0),
         originalAmount: Number(row.original_amount || row.total_amount || 0),
         cashbackRedeemed: Number(row.cashback_used || 0),
         pointsRedeemed: Number(row.points_redeemed || 0),

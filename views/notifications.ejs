@@ -40,6 +40,9 @@
             minute: '2-digit'
         });
     };
+    const readCount = notifications.length - unreadCount;
+    const categoryEntries = Object.entries(typeCounts).sort((left, right) => right[1] - left[1]);
+    const topCategories = categoryEntries.slice(0, 5);
 %>
 
 <section class="page-title notifications-hero">
@@ -53,85 +56,109 @@
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
 
-    <div class="notifications-summary">
-        <div class="portal-stat">
-            <span>Unread</span>
-            <strong><%= unreadCount %></strong>
-            <small>needs attention</small>
-        </div>
-        <div class="portal-stat">
-            <span>Total</span>
-            <strong><%= notifications.length %></strong>
-            <small>latest 80 messages</small>
-        </div>
-        <div class="portal-stat">
-            <span>Categories</span>
-            <strong><%= Object.keys(typeCounts).length %></strong>
-            <small>booking, orders, offers</small>
-        </div>
-    </div>
+    <div class="notifications-shell">
+        <aside class="notifications-overview" aria-label="Notification overview">
+            <div class="notifications-overview-card is-primary">
+                <span>Unread</span>
+                <strong><%= unreadCount %></strong>
+                <small><%= unreadCount === 1 ? 'message needs' : 'messages need' %> attention</small>
+            </div>
+            <div class="notifications-mini-grid">
+                <div class="notifications-overview-card">
+                    <span>Total</span>
+                    <strong><%= notifications.length %></strong>
+                    <small>latest messages</small>
+                </div>
+                <div class="notifications-overview-card">
+                    <span>Read</span>
+                    <strong><%= readCount %></strong>
+                    <small>already opened</small>
+                </div>
+            </div>
 
-    <div class="section-cta notifications-toolbar">
-        <div>
-            <p class="eyebrow">Notification centre</p>
-            <h2>Inbox</h2>
-            <p class="muted">Unread messages stay on top. Open a notification to mark it as read.</p>
-        </div>
-        <% if (unreadCount > 0) { %>
-            <form action="/notifications/read-all" method="POST">
-                <button class="button secondary" type="submit">Mark all read</button>
-            </form>
-        <% } %>
-        <% if (notifications.some((notification) => notification.status === 'read')) { %>
-            <form action="/notifications/clear-read" method="POST">
-                <button class="button secondary" type="submit">Delete read</button>
-            </form>
-        <% } %>
-    </div>
+            <div class="notifications-category-panel">
+                <p class="eyebrow">Categories</p>
+                <% if (topCategories.length > 0) { %>
+                    <div class="notification-category-list">
+                        <% topCategories.forEach(([type, count]) => { %>
+                            <p>
+                                <span><%= type.replace(/_/g, ' ') %></span>
+                                <strong><%= count %></strong>
+                            </p>
+                        <% }) %>
+                    </div>
+                <% } else { %>
+                    <p class="muted">No categories yet.</p>
+                <% } %>
+            </div>
+        </aside>
 
-    <% if (notifications.length === 0) { %>
-        <div class="notification-empty-state">
-            <span class="notification-empty-icon">V</span>
-            <h2>No notifications yet</h2>
-            <p class="muted">
-                Booking, order, offer, merchant, and reward updates will appear here once there is activity on your account.
-            </p>
-        </div>
-    <% } else { %>
-        <div class="notification-list">
-            <% notifications.forEach((notification) => { %>
-                <article class="notification-card <%= notification.status === 'unread' ? 'is-unread' : 'is-read' %>">
-                    <div class="notification-type-mark">
-                        <%= iconByType[notification.type] || 'V' %>
-                    </div>
-                    <div class="notification-content">
-                        <div class="notification-card-topline">
-                            <span class="tag"><%= notification.type.replace(/_/g, ' ') %></span>
-                            <time><%= formatNotificationDate(notification.createdAt) %></time>
-                        </div>
-                        <h2><%= notification.title %></h2>
-                        <p><%= notification.message %></p>
-                        <div class="notification-actions">
-                            <a class="button primary" href="/notifications/<%= notification.id %>/open">
-                                <%= notification.status === 'unread' ? 'Read update' : 'Open' %>
-                            </a>
-                            <% if (notification.status === 'unread') { %>
-                                <form action="/notifications/<%= notification.id %>/read" method="POST">
-                                    <button class="button secondary" type="submit">Mark read</button>
-                                </form>
-                            <% } %>
-                            <form action="/notifications/<%= notification.id %>/delete" method="POST">
-                                <button class="button secondary" type="submit">Delete</button>
-                            </form>
-                        </div>
-                    </div>
-                    <% if (notification.status === 'unread') { %>
-                        <span class="notification-unread-dot" aria-label="Unread"></span>
+        <section class="notifications-inbox" aria-label="Notification inbox">
+            <div class="notifications-toolbar">
+                <div>
+                    <p class="eyebrow">Notification centre</p>
+                    <h2>Inbox</h2>
+                    <p class="muted">Unread messages appear first. Open a notification to mark it as read.</p>
+                </div>
+                <div class="notifications-toolbar-actions">
+                    <% if (unreadCount > 0) { %>
+                        <form action="/notifications/read-all" method="POST">
+                            <button class="button secondary" type="submit">Mark all read</button>
+                        </form>
                     <% } %>
-                </article>
-            <% }) %>
-        </div>
-    <% } %>
+                    <% if (notifications.some((notification) => notification.status === 'read')) { %>
+                        <form action="/notifications/clear-read" method="POST">
+                            <button class="button secondary" type="submit">Delete read</button>
+                        </form>
+                    <% } %>
+                </div>
+            </div>
+
+            <% if (notifications.length === 0) { %>
+                <div class="notification-empty-state">
+                    <span class="notification-empty-icon">V</span>
+                    <h2>No notifications yet</h2>
+                    <p class="muted">
+                        Booking, order, offer, merchant, and reward updates will appear here once there is activity on your account.
+                    </p>
+                </div>
+            <% } else { %>
+                <div class="notification-list">
+                    <% notifications.forEach((notification) => { %>
+                        <article class="notification-card <%= notification.status === 'unread' ? 'is-unread' : 'is-read' %>">
+                            <div class="notification-type-mark">
+                                <%= iconByType[notification.type] || 'V' %>
+                            </div>
+                            <div class="notification-content">
+                                <div class="notification-card-topline">
+                                    <span class="tag"><%= notification.type.replace(/_/g, ' ') %></span>
+                                    <time><%= formatNotificationDate(notification.createdAt) %></time>
+                                </div>
+                                <h2><%= notification.title %></h2>
+                                <p><%= notification.message %></p>
+                            </div>
+                            <div class="notification-actions">
+                                <a class="button primary" href="/notifications/<%= notification.id %>/open">
+                                    <%= notification.status === 'unread' ? 'Read update' : 'Open' %>
+                                </a>
+                                <% if (notification.status === 'unread') { %>
+                                    <form action="/notifications/<%= notification.id %>/read" method="POST">
+                                        <button class="button secondary" type="submit">Mark read</button>
+                                    </form>
+                                <% } %>
+                                <form action="/notifications/<%= notification.id %>/delete" method="POST">
+                                    <button class="button secondary" type="submit">Delete</button>
+                                </form>
+                            </div>
+                            <% if (notification.status === 'unread') { %>
+                                <span class="notification-unread-dot" aria-label="Unread"></span>
+                            <% } %>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
+    </div>
 </section>
 
 <%- include('partials/footer') %>

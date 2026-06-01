@@ -127,10 +127,25 @@
                 </table>
             </div>
 
-            <div class="receipt-total">
-                <span>Total amount</span>
-                <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
-            </div>
+            <% if (Number(receipt.shippingFee || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Items subtotal</span>
+                    <strong>$<%= Number(receipt.itemSubtotal || 0).toFixed(2) %></strong>
+                </div>
+                <div class="receipt-total">
+                    <span>Shipping fee</span>
+                    <strong>$<%= Number(receipt.shippingFee || 0).toFixed(2) %></strong>
+                </div>
+                <div class="receipt-total">
+                    <span>Total amount</span>
+                    <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } else { %>
+                <div class="receipt-total">
+                    <span>Total amount</span>
+                    <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
                 <div class="receipt-total">
                     <span>Wallet cashback used</span>

@@ -42,6 +42,81 @@ const hitpayPendingStore = new Map();
 
 const NETS_STATUS_POLL_MS = 3000;
 const NETS_STATUS_TIMEOUT_MS = 5 * 60 * 1000;
+const CART_DELIVERY_FEE = 4.90;
+
+function normalizeFulfilment(value) {
+    return String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup';
+}
+
+function buildPickupMerchantOptions(cart = []) {
+    const optionMap = new Map();
+
+    (cart || []).forEach((item) => {
+        if (item.merchantId && item.merchantName) {
+            optionMap.set(String(item.merchantId), {
+                id: String(item.merchantId),
+                name: item.merchantName
+            });
+        }
+    });
+
+    Merchant.getAll().forEach((merchant) => {
+        if (merchant?.id && merchant?.name) {
+            optionMap.set(String(merchant.id), {
+                id: String(merchant.id),
+                name: merchant.name
+            });
+        }
+    });
+
+    return Array.from(optionMap.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function getSelectedCartIds(body = {}) {
+    if (typeof body.selectedItemIds === 'undefined') {
+        return [];
+    }
+
+    const rawIds = Array.isArray(body.selectedItemIds)
+        ? body.selectedItemIds
+        : String(body.selectedItemIds || '').split(',');
+
+    return rawIds.map((id) => String(id).trim()).filter(Boolean);
+}
+
+function validateDeliveryDetails(body = {}) {
+    const deliveryAddress = String(body.deliveryAddress || '').trim().replace(/\s+/g, ' ');
+    const deliveryUnit = String(body.deliveryUnit || '').trim().replace(/\s+/g, ' ');
+    const deliveryPostal = String(body.deliveryPostal || '').trim();
+    const normalizedPhone = String(body.deliveryPhone || '').replace(/[\s-]/g, '').replace(/^\+65/, '');
+    const errors = [];
+
+    if (deliveryAddress.length < 8) {
+        errors.push('Enter a complete delivery address.');
+    }
+
+    if (!deliveryUnit || !/^[A-Za-z0-9#\-/\s]+$/.test(deliveryUnit)) {
+        errors.push('Enter a valid unit number.');
+    }
+
+    if (!/^\d{6}$/.test(deliveryPostal)) {
+        errors.push('Enter a valid 6-digit postal code.');
+    }
+
+    if (!/^[689]\d{7}$/.test(normalizedPhone)) {
+        errors.push('Enter a valid Singapore contact number.');
+    }
+
+    return {
+        details: {
+            deliveryAddress,
+            deliveryUnit,
+            deliveryPostal,
+            deliveryPhone: normalizedPhone
+        },
+        errors
+    };
+}
 
 function getTodayInputValue() {
     return Booking.getSingaporeTodayKey();
@@ -2537,6 +2612,7 @@ function showCart(req, res) {
     const total = cart.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
     const itemCount = getCartItemCount(cart);
     const success = req.session.success;
+    const pickupMerchants = buildPickupMerchantOptions(cart);
     req.session.success = null;
 
     return Loyalty.getWalletView(req.session.user.id, async (walletError, loyalty) => {
@@ -2558,6 +2634,8 @@ function showCart(req, res) {
             total,
             itemCount,
             success,
+            pickupMerchants,
+            shippingFee: CART_DELIVERY_FEE,
             loyalty: walletError ? null : loyalty,
             campaignCashback
         });
@@ -2565,9 +2643,7 @@ function showCart(req, res) {
 }
 
 function checkout(req, res) {
-    const selectedIds = Array.isArray(req.body.selectedItemIds)
-        ? req.body.selectedItemIds
-        : (req.body.selectedItemIds || '').toString().split(',').filter(Boolean);
+    const selectedIds = getSelectedCartIds(req.body);
 
     const cart = (req.session.cart || []).map((item) => {
         const quantity = getCartQuantity(item);
@@ -2575,48 +2651,66 @@ function checkout(req, res) {
         return { ...item, quantity, lineTotal };
     });
 
-    const selectedItems = cart.filter((item) => selectedIds.length === 0 || selectedIds.includes(String(item.id)));
-    const amount = selectedItems.reduce((sum, i) => sum + Number(i.lineTotal || 0), 0);
+    const selectedItems = selectedIds.length
+        ? cart.filter((item) => selectedIds.includes(String(item.id)))
+        : [];
+    const itemSubtotal = selectedItems.reduce((sum, i) => sum + Number(i.lineTotal || 0), 0);
 
-    if (selectedItems.length === 0 || amount <= 0) {
+    if (selectedItems.length === 0 || itemSubtotal <= 0) {
         req.session.success = 'Please select at least one item before checkout.';
         return res.redirect('/cart');
     }
 
-    const fulfilment = req.body.fulfilment || 'pickup';
+    const fulfilment = normalizeFulfilment(req.body.fulfilment);
     const pickupMerchantId = req.body.pickupMerchantId || '';
-    const deliveryAddress = req.body.deliveryAddress || '';
-    const deliveryUnit = req.body.deliveryUnit || '';
-    const deliveryPostal = req.body.deliveryPostal || '';
-    const deliveryPhone = req.body.deliveryPhone || '';
+    const deliveryValidation = validateDeliveryDetails(req.body);
+    const shippingFee = fulfilment === 'delivery' ? CART_DELIVERY_FEE : 0;
+    const amount = Math.round((itemSubtotal + shippingFee) * 100) / 100;
     const useCashback = req.body.redeemCashback === 'on' || req.session.applyCashback === true;
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
-    const pickupMerchants = selectedItems
-        .filter((item) => item.merchantId && item.merchantName)
-        .reduce((options, item) => {
-            const merchantId = String(item.merchantId);
-            if (!options.has(merchantId)) {
-                options.set(merchantId, item.merchantName);
-            }
-            return options;
-        }, new Map());
+    const pickupMerchants = buildPickupMerchantOptions(selectedItems);
+    const pickupMerchantMap = new Map(pickupMerchants.map((merchant) => [String(merchant.id), merchant.name]));
+
+    if (fulfilment === 'delivery' && deliveryValidation.errors.length > 0) {
+        req.session.success = deliveryValidation.errors.join(' ');
+        return res.redirect('/cart');
+    }
+
+    if (fulfilment === 'pickup' && pickupMerchantId && pickupMerchantId !== 'any' && !pickupMerchantMap.has(String(pickupMerchantId))) {
+        req.session.success = 'Please select a valid pickup merchant.';
+        return res.redirect('/cart');
+    }
+
     const selectedPickupName = pickupMerchantId && pickupMerchantId !== 'any'
-        ? (pickupMerchants.get(String(pickupMerchantId)) || pickupMerchantId)
+        ? (pickupMerchantMap.get(String(pickupMerchantId)) || pickupMerchantId)
         : null;
     const fulfilmentMerchantName = fulfilment === 'pickup'
         ? (selectedPickupName || 'Any merchant')
         : 'Delivery';
+    const deliveryDetails = fulfilment === 'delivery'
+        ? deliveryValidation.details
+        : {
+            deliveryAddress: '',
+            deliveryUnit: '',
+            deliveryPostal: '',
+            deliveryPhone: ''
+        };
 
     req.session.pendingPayments = req.session.pendingPayments || {};
     req.session.pendingPayments[checkoutId] = {
         kind: 'order',
         receiptId: checkoutId,
+        checkoutId,
+        cartCheckout: true,
         userId: req.session.user.id,
         userName,
         merchantName: fulfilmentMerchantName,
         serviceName: 'Cart checkout',
         amount,
+        itemSubtotal,
+        shippingFee,
+        originalAmount: amount,
         items: selectedItems.map((item) => ({
             name: item.serviceName,
             type: item.type || 'Service',
@@ -2634,10 +2728,7 @@ function checkout(req, res) {
         fulfilment,
         pickupMerchantId,
         pickupMerchantName: selectedPickupName || '',
-        deliveryAddress,
-        deliveryUnit,
-        deliveryPostal,
-        deliveryPhone
+        ...deliveryDetails
     };
     req.session.applyCashback = false;
 
@@ -2651,6 +2742,8 @@ function checkout(req, res) {
         return res.render('payment', getPaymentViewModel({
             title: 'Payment',
             amount,
+            itemSubtotal,
+            shippingFee,
             merchantName: fulfilmentMerchantName,
             serviceName: 'Cart checkout',
             cartItemId: '',
@@ -2661,10 +2754,7 @@ function checkout(req, res) {
             useCashback,
             fulfilment,
             pickupMerchantId,
-            deliveryAddress,
-            deliveryUnit,
-            deliveryPostal,
-            deliveryPhone,
+            ...deliveryDetails,
             selectedVoucherId: '',
             availableVouchers: [],
             birthdayPromotion: null,
@@ -2834,6 +2924,8 @@ async function showPayment(req, res) {
 function getPaymentPayload(body = {}) {
     return {
         amount: Number(body.amount || 0),
+        itemSubtotal: Number(body.itemSubtotal || 0),
+        shippingFee: Number(body.shippingFee || 0),
         merchantName: body.merchantName || 'Vaniday',
         serviceName: body.serviceName || 'Booking',
         cartItemId: body.cartItemId || '',
@@ -3126,6 +3218,8 @@ function renderPaymentForm(res, payment, error = null) {
     return res.status(error ? 400 : 200).render('payment', getPaymentViewModel({
         title: 'Payment',
         amount: Number(payment.amount || 0),
+        itemSubtotal: Number(payment.itemSubtotal || payment.amount || 0),
+        shippingFee: Number(payment.shippingFee || 0),
         merchantName: payment.merchantName || 'Vaniday',
         serviceName: payment.serviceName || 'Payment',
         cartItemId: payment.cartItemId || '',
@@ -3505,6 +3599,8 @@ function savePaidReceipt(req, payment, paymentMethod) {
         serviceName: payment.serviceName || '',
         items: payment.items || [],
         totalAmount: Number(payment.amount || 0),
+        itemSubtotal: Number(payment.itemSubtotal || payment.amount || 0),
+        shippingFee: Number(payment.shippingFee || 0),
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
         voucherDiscount: Number(payment.voucherDiscount || 0),
         voucherCode: payment.voucherCode || '',

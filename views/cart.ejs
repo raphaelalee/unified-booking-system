@@ -22,15 +22,8 @@
         </div>
     <% } else { %>
         <%
-            const pickupMerchants = Array.from(cart.reduce((map, item) => {
-                if (item.merchantId && item.merchantName) {
-                    map.set(String(item.merchantId), {
-                        id: String(item.merchantId),
-                        name: item.merchantName
-                    });
-                }
-                return map;
-            }, new Map()).values());
+            const pickupMerchantOptions = typeof pickupMerchants !== 'undefined' && Array.isArray(pickupMerchants) ? pickupMerchants : [];
+            const deliveryFee = Number(typeof shippingFee !== 'undefined' ? shippingFee : 0);
             const productCount = cart.filter((item) => item.type === 'Product').reduce((sum, item) => sum + Number(item.quantity || 1), 0);
             const giftCardCount = cart.filter((item) => item.type === 'Gift Card').length;
             const serviceCount = cart.filter((item) => item.type !== 'Product' && item.type !== 'Gift Card').length;
@@ -117,7 +110,7 @@
             </div>
 
             <aside class="booking-panel cart-summary-card cart-checkout-panel">
-                <form id="cart-checkout-form" action="/checkout" method="POST">
+                <form id="cart-checkout-form" action="/checkout" method="POST" data-shipping-fee="<%= deliveryFee.toFixed(2) %>" novalidate>
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                     <div class="cart-summary-heading">
                         <p class="eyebrow">Checkout</p>
@@ -150,7 +143,8 @@
                     </div>
 
                     <div class="cart-totals cart-summary-totals">
-                        <p><span>Subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
+                        <p><span>Items subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
+                        <p id="cart-shipping-row" style="display:none;"><span>Shipping fee</span><strong id="cart-shipping-value">$<%= deliveryFee.toFixed(2) %></strong></p>
                         <% if (cashbackApplied > 0) { %>
                             <p><span>Wallet cashback used</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
                         <% } %>
@@ -182,31 +176,32 @@
                             Pickup merchant
                             <select id="pickup-merchant-select" name="pickupMerchantId">
                                 <option value="any">Any merchant</option>
-                                <% pickupMerchants.forEach((merchant) => { %>
+                                <% pickupMerchantOptions.forEach((merchant) => { %>
                                     <option value="<%= merchant.id %>"><%= merchant.name %></option>
                                 <% }) %>
                             </select>
                         </label>
-                        <p class="muted" id="pickup-helper">Only merchants from your selected items are shown.</p>
+                        <p class="muted" id="pickup-helper">Includes Vaniday Beauty Studio, FreshGlow Spa, Urban Groom Barbers, and other salons.</p>
                     </div>
 
                     <div id="delivery-options" class="fulfilment-panel cart-delivery-panel" style="display:none;">
                         <label class="delivery-field">
-                            Address
-                            <input type="text" name="deliveryAddress" placeholder="123 Example St">
+                            Street address
+                            <input id="delivery-address" type="text" name="deliveryAddress" placeholder="123 Orchard Road" minlength="8" autocomplete="street-address" data-delivery-required>
                         </label>
                         <label class="delivery-field">
                             Unit number
-                            <input type="text" name="deliveryUnit" placeholder="#12-34">
+                            <input id="delivery-unit" type="text" name="deliveryUnit" placeholder="#12-34" pattern="[A-Za-z0-9#\-/\s]+" autocomplete="address-line2" data-delivery-required>
                         </label>
                         <label class="delivery-field">
                             Postal code
-                            <input type="text" name="deliveryPostal" placeholder="123456">
+                            <input id="delivery-postal" type="text" name="deliveryPostal" placeholder="123456" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="postal-code" data-delivery-required>
                         </label>
                         <label class="delivery-field">
                             Contact phone
-                            <input type="text" name="deliveryPhone" placeholder="91234567">
+                            <input id="delivery-phone" type="tel" name="deliveryPhone" placeholder="91234567" inputmode="tel" pattern="(\+65\s*)?[689][0-9]{7}" autocomplete="tel" data-delivery-required>
                         </label>
+                        <p class="muted">Delivery adds a $<%= deliveryFee.toFixed(2) %> shipping fee. All address fields are required.</p>
                     </div>
 
                     <input type="hidden" name="_totalAmount" value="<%= Number(total).toFixed(2) %>">
@@ -230,12 +225,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const summaryCount = document.getElementById('cart-summary-count');
     const summaryCountPlural = document.getElementById('cart-summary-count-plural');
     const subtotalValue = document.getElementById('cart-subtotal-value');
+    const shippingRow = document.getElementById('cart-shipping-row');
+    const shippingValue = document.getElementById('cart-shipping-value');
     const cashbackValue = document.getElementById('cart-cashback-value');
     const dueValue = document.getElementById('cart-due-value');
     const cashbackCopy = document.getElementById('cart-cashback-copy');
     const cashbackToggle = document.getElementById('cart-use-cashback');
-    const pickupSelect = document.getElementById('pickup-merchant-select');
-    const pickupHelper = document.getElementById('pickup-helper');
+    const checkoutForm = document.getElementById('cart-checkout-form');
+    const shippingFee = checkoutForm ? Number(checkoutForm.dataset.shippingFee || 0) : 0;
 
     function formatMoney(value) {
         return '$' + Number(value || 0).toFixed(2);
@@ -245,53 +242,31 @@ document.addEventListener('DOMContentLoaded', function () {
         return checks.filter((check) => check.checked);
     }
 
-    function updatePickupMerchants() {
-        if (!pickupSelect) return;
-
-        const previousValue = pickupSelect.value;
-        const merchantMap = new Map();
-
-        getSelectedChecks().forEach((check) => {
-            const merchantId = check.dataset.merchantId;
-            const merchantName = check.dataset.merchantName;
-            if (merchantId && merchantName) {
-                merchantMap.set(merchantId, merchantName);
-            }
-        });
-
-        pickupSelect.innerHTML = '';
-        pickupSelect.add(new Option('Any merchant', 'any'));
-        merchantMap.forEach((name, id) => {
-            pickupSelect.add(new Option(name, id));
-        });
-
-        pickupSelect.value = merchantMap.has(previousValue) || previousValue === 'any' ? previousValue : 'any';
-
-        if (pickupHelper) {
-            pickupHelper.textContent = merchantMap.size > 0
-                ? 'Only merchants from your selected items are shown.'
-                : 'No selected item has a specific merchant, so any merchant can be used.';
-        }
+    function getFulfilmentValue() {
+        return document.querySelector('input[name="fulfilment"]:checked')?.value || 'pickup';
     }
 
     function updateSummary() {
         const selectedChecks = getSelectedChecks();
         const subtotal = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.lineTotal || 0), 0);
         const selectedQuantity = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.quantity || 1), 0);
+        const activeShippingFee = getFulfilmentValue() === 'delivery' && selectedQuantity > 0 ? shippingFee : 0;
+        const grossTotal = subtotal + activeShippingFee;
         const cashbackBalance = cashbackToggle ? Number(cashbackToggle.dataset.cashbackBalance || 0) : 0;
         const cashbackApplied = cashbackToggle && cashbackToggle.checked
-            ? Math.min(cashbackBalance, subtotal)
+            ? Math.min(cashbackBalance, grossTotal)
             : 0;
-        const due = Math.max(subtotal - cashbackApplied, 0);
+        const due = Math.max(grossTotal - cashbackApplied, 0);
 
         if (summaryTotal) summaryTotal.textContent = formatMoney(due);
         if (summaryCount) summaryCount.textContent = String(selectedQuantity);
         if (summaryCountPlural) summaryCountPlural.textContent = selectedQuantity === 1 ? '' : 's';
         if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
+        if (shippingRow) shippingRow.style.display = activeShippingFee > 0 ? '' : 'none';
+        if (shippingValue) shippingValue.textContent = formatMoney(activeShippingFee);
         if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
         if (dueValue) dueValue.textContent = formatMoney(due);
         if (cashbackCopy) cashbackCopy.textContent = formatMoney(cashbackApplied);
-        updatePickupMerchants();
     }
 
     function syncSelectAll() {
@@ -320,26 +295,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const fulfilmentRadios = Array.from(document.querySelectorAll('input[name="fulfilment"]'));
     const pickupPanel = document.getElementById('pickup-options');
     const deliveryPanel = document.getElementById('delivery-options');
+    const pickupSelect = document.getElementById('pickup-merchant-select');
+    const deliveryFields = Array.from(document.querySelectorAll('[data-delivery-required]'));
 
     function syncFulfilment() {
-        const selected = fulfilmentRadios.find((radio) => radio.checked)?.value || 'pickup';
+        const selected = getFulfilmentValue();
         fulfilmentChoices.forEach((choice) => {
             const input = choice.querySelector('input[name="fulfilment"]');
             choice.classList.toggle('active', input && input.checked);
         });
         if (pickupPanel) pickupPanel.style.display = selected === 'pickup' ? '' : 'none';
         if (deliveryPanel) deliveryPanel.style.display = selected === 'delivery' ? '' : 'none';
+        if (pickupSelect) pickupSelect.disabled = selected !== 'pickup';
+        deliveryFields.forEach((field) => {
+            const isDelivery = selected === 'delivery';
+            field.required = isDelivery;
+            field.disabled = !isDelivery;
+        });
+        updateSummary();
     }
 
     fulfilmentRadios.forEach((radio) => radio.addEventListener('change', syncFulfilment));
     syncFulfilment();
 
-    const checkoutForm = document.getElementById('cart-checkout-form');
     if (checkoutForm) {
         checkoutForm.addEventListener('submit', function (event) {
             if (getSelectedChecks().length === 0) {
                 event.preventDefault();
                 alert('Please select at least one item to checkout.');
+                return;
+            }
+
+            if (getFulfilmentValue() === 'delivery') {
+                const invalidField = deliveryFields.find((field) => !field.checkValidity());
+                if (invalidField) {
+                    event.preventDefault();
+                    invalidField.reportValidity();
+                }
             }
         });
     }
