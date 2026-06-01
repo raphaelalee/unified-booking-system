@@ -24,6 +24,12 @@ ensureMerchantProfileSchema((error) => {
     }
 });
 
+ensureMerchantFeaturedSchema((error) => {
+    if (error) {
+        console.error('Merchant featured schema could not be prepared:', error.message || error);
+    }
+});
+
 ensureServiceInventorySchema((error) => {
     if (error) {
         console.error('Service inventory schema could not be prepared:', error.message || error);
@@ -96,6 +102,22 @@ function ensureServiceSchema(callback) {
             alters.push('ADD COLUMN short_description VARCHAR(255) DEFAULT NULL');
         }
 
+        if (!fields.has('is_featured')) {
+            alters.push('ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('featured_order')) {
+            alters.push('ADD COLUMN featured_order INT NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('featured_start_date')) {
+            alters.push('ADD COLUMN featured_start_date DATE DEFAULT NULL');
+        }
+
+        if (!fields.has('featured_end_date')) {
+            alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
+        }
+
         if (alters.length === 0) {
             callback(null);
             return;
@@ -103,6 +125,97 @@ function ensureServiceSchema(callback) {
 
         db.query(`ALTER TABLE services ${alters.join(', ')}`, callback);
     });
+}
+
+function ensureMerchantFeaturedSchema(callback) {
+    db.query('SHOW COLUMNS FROM salons', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('is_featured')) alters.push('ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0');
+        if (!fields.has('featured_type')) alters.push('ADD COLUMN featured_type VARCHAR(50) DEFAULT NULL');
+        if (!fields.has('featured_order')) alters.push('ADD COLUMN featured_order INT NOT NULL DEFAULT 0');
+        if (!fields.has('featured_start_date')) alters.push('ADD COLUMN featured_start_date DATE DEFAULT NULL');
+        if (!fields.has('featured_end_date')) alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
+        if (!fields.has('featured_score')) alters.push('ADD COLUMN featured_score DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+
+        if (!alters.length) {
+            callback(null);
+            return;
+        }
+
+        db.query(`ALTER TABLE salons ${alters.join(', ')}`, callback);
+    });
+}
+
+function getFeaturedWindowCondition(tableName) {
+    return `(
+        ${tableName}.is_featured = 1
+        AND (${tableName}.featured_start_date IS NULL OR ${tableName}.featured_start_date <= CURDATE())
+        AND (${tableName}.featured_end_date IS NULL OR ${tableName}.featured_end_date >= CURDATE())
+    )`;
+}
+
+function validateFeaturedDates(startDate, endDate) {
+    const normalizedStart = String(startDate || '').trim() || null;
+    const normalizedEnd = String(endDate || '').trim() || null;
+
+    if (normalizedStart && Number.isNaN(new Date(normalizedStart).getTime())) {
+        return { error: 'Please enter a valid featured start date.' };
+    }
+
+    if (normalizedEnd && Number.isNaN(new Date(normalizedEnd).getTime())) {
+        return { error: 'Please enter a valid featured end date.' };
+    }
+
+    if (normalizedStart && normalizedEnd && normalizedStart > normalizedEnd) {
+        return { error: 'Featured end date must be on or after the featured start date.' };
+    }
+
+    return {
+        startDate: normalizedStart,
+        endDate: normalizedEnd
+    };
+}
+
+function normalizeFeaturedOrder(value) {
+    const numeric = Number(value || 0);
+    if (!Number.isFinite(numeric)) {
+        return 0;
+    }
+
+    return Math.max(0, Math.floor(numeric));
+}
+
+function normalizeFeaturedType(value) {
+    const allowed = new Set(['featured_month', 'sponsored', 'trending', 'top_rated']);
+    const normalized = String(value || '').trim().toLowerCase();
+    return allowed.has(normalized) ? normalized : null;
+}
+
+function getServiceFeaturedFields(row) {
+    return {
+        isFeatured: Boolean(row.is_featured),
+        featuredOrder: Number(row.featured_order || 0),
+        featuredStartDate: row.featured_start_date || null,
+        featuredEndDate: row.featured_end_date || null
+    };
+}
+
+function getMerchantFeaturedFields(row) {
+    return {
+        isFeatured: Boolean(row.is_featured),
+        featuredType: row.featured_type || '',
+        featuredOrder: Number(row.featured_order || 0),
+        featuredStartDate: row.featured_start_date || null,
+        featuredEndDate: row.featured_end_date || null,
+        featuredScore: Number(row.featured_score || 0)
+    };
 }
 
 function ensureCategorySchema(callback) {
@@ -307,6 +420,7 @@ function mapMerchantRows(rows) {
                 duration: `${row.duration_mins} mins`,
                 price: Number(row.price),
                 displayOrder: Number(row.display_order || 999),
+                ...getServiceFeaturedFields(row),
                 ...getPackageFields(row),
                 slots: []
             });
@@ -332,6 +446,7 @@ function mapMerchantRows(rows) {
         yearsInBusiness: first.years_in_business === null ? '' : Number(first.years_in_business),
         staffCount: first.staff_count === null ? '' : Number(first.staff_count),
         commissionRate: Number(first.commission_rate || 15),
+        ...getMerchantFeaturedFields(first),
         category: 'Merchant',
         services: Array.from(servicesById.values())
     };
@@ -350,6 +465,12 @@ function getMerchantByUserId(userId, callback) {
             salons.years_in_business,
             salons.staff_count,
             salons.commission_rate,
+            salons.is_featured,
+            salons.featured_type,
+            salons.featured_order,
+            salons.featured_start_date,
+            salons.featured_end_date,
+            salons.featured_score,
             users.name AS owner_name,
             users.email AS owner_email,
             users.phone AS owner_phone,
@@ -362,7 +483,15 @@ function getMerchantByUserId(userId, callback) {
             services.package_enabled,
             services.package_sessions,
             services.package_price,
+            services.is_featured,
+            services.featured_order,
+            services.featured_start_date,
+            services.featured_end_date,
             categories.category_name,
+            categories.display_order AS category_display_order,
+            services.gender_target,
+            services.display_order,
+            services.short_description,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM salons
         INNER JOIN users ON users.user_id = salons.merchant_id
@@ -412,6 +541,13 @@ function getMerchantBySalonId(salonId, callback) {
             salons.uen,
             salons.years_in_business,
             salons.staff_count,
+            salons.commission_rate,
+            salons.is_featured,
+            salons.featured_type,
+            salons.featured_order,
+            salons.featured_start_date,
+            salons.featured_end_date,
+            salons.featured_score,
             users.name AS owner_name,
             users.email AS owner_email,
             users.phone AS owner_phone,
@@ -424,7 +560,15 @@ function getMerchantBySalonId(salonId, callback) {
             services.package_enabled,
             services.package_sessions,
             services.package_price,
+            services.is_featured,
+            services.featured_order,
+            services.featured_start_date,
+            services.featured_end_date,
             categories.category_name,
+            categories.display_order AS category_display_order,
+            services.gender_target,
+            services.display_order,
+            services.short_description,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM salons
         INNER JOIN users ON users.user_id = salons.merchant_id
@@ -496,9 +640,16 @@ function getAllServices(callback) {
             services.package_enabled,
             services.package_sessions,
             services.package_price,
+            services.is_featured,
+            services.featured_order,
+            services.featured_start_date,
+            services.featured_end_date,
             categories.category_name,
             salons.salon_name,
             salons.address,
+            salons.is_featured AS merchant_is_featured,
+            salons.featured_type AS merchant_featured_type,
+            salons.featured_score AS merchant_featured_score,
             users.email AS owner_email,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
         FROM services
@@ -533,6 +684,10 @@ function getAllServices(callback) {
                     durationMins: row.duration_mins,
                     duration: `${row.duration_mins} mins`,
                     price: Number(row.price),
+                    ...getServiceFeaturedFields(row),
+                    merchantIsFeatured: Boolean(row.merchant_is_featured),
+                    merchantFeaturedType: row.merchant_featured_type || '',
+                    merchantFeaturedScore: Number(row.merchant_featured_score || 0),
                     ...getPackageFields(row),
                     slots: []
                 });
@@ -599,6 +754,7 @@ function findServiceForMerchant(userId, serviceId, callback) {
             durationMins: first.duration_mins,
             duration: `${first.duration_mins} mins`,
             price: Number(first.price),
+            ...getServiceFeaturedFields(first),
             ...getPackageFields(first),
             slots: rows.map((row) => formatTimeSlot(row.timeslot)).filter(Boolean)
         }], (inventoryError, services) => {
@@ -665,6 +821,7 @@ function findServiceById(serviceId, callback) {
             durationMins: first.duration_mins,
             duration: `${first.duration_mins} mins`,
             price: Number(first.price),
+            ...getServiceFeaturedFields(first),
             ...getPackageFields(first),
             slots: rows.map((row) => formatTimeSlot(row.timeslot)).filter(Boolean)
         }], (inventoryError, services) => {
@@ -1017,6 +1174,12 @@ function deleteServiceAsAdmin(serviceId, callback) {
 }
 
 function getAdminOverview(callback) {
+    ensureMerchantFeaturedSchema((featuredSchemaError) => {
+        if (featuredSchemaError) {
+            callback(featuredSchemaError);
+            return;
+        }
+
     ensureMerchantProfileSchema((profileSchemaError) => {
         if (profileSchemaError) {
             callback(profileSchemaError);
@@ -1044,15 +1207,355 @@ function getAdminOverview(callback) {
                 salons.address,
                 salons.description,
                 salons.commission_rate,
+                salons.is_featured,
+                salons.featured_type,
+                salons.featured_order,
+                salons.featured_start_date,
+                salons.featured_end_date,
+                salons.featured_score,
                 COUNT(services.service_id) AS service_count
             FROM salons
             INNER JOIN users ON users.user_id = salons.merchant_id
             LEFT JOIN services ON services.salon_id = salons.salon_id
-            GROUP BY users.user_id, users.name, users.email, users.phone, salons.salon_id, salons.salon_name, salons.business_category, salons.uen, salons.years_in_business, salons.staff_count, salons.address, salons.description, salons.commission_rate
+            GROUP BY users.user_id, users.name, users.email, users.phone, salons.salon_id, salons.salon_name, salons.business_category, salons.uen, salons.years_in_business, salons.staff_count, salons.address, salons.description, salons.commission_rate, salons.is_featured, salons.featured_type, salons.featured_order, salons.featured_start_date, salons.featured_end_date, salons.featured_score
             ORDER BY salons.salon_id
         `;
 
             db.query(sql, callback);
+        });
+    });
+    });
+}
+
+function getFeaturedMerchants(callback) {
+    ensureMerchantFeaturedSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                salons.salon_id,
+                salons.merchant_id,
+                salons.salon_name,
+                salons.address,
+                salons.description,
+                salons.business_category,
+                salons.image_url,
+                salons.is_featured,
+                salons.featured_type,
+                salons.featured_order,
+                salons.featured_start_date,
+                salons.featured_end_date,
+                salons.featured_score,
+                COALESCE(AVG(reviews.rating), 0) AS average_rating,
+                COUNT(DISTINCT reviews.review_id) AS review_count
+            FROM salons
+            LEFT JOIN reviews ON reviews.merchant_id = salons.salon_id
+            WHERE ${getFeaturedWindowCondition('salons')}
+            GROUP BY salons.salon_id, salons.merchant_id, salons.salon_name, salons.address, salons.description, salons.business_category, salons.image_url, salons.is_featured, salons.featured_type, salons.featured_order, salons.featured_start_date, salons.featured_end_date, salons.featured_score
+            ORDER BY salons.featured_order, salons.featured_score DESC, average_rating DESC, salons.salon_name
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map((row) => ({
+                id: row.salon_id,
+                salonId: row.salon_id,
+                merchantUserId: row.merchant_id,
+                name: row.salon_name,
+                location: row.address || 'Singapore',
+                description: row.description || '',
+                category: row.business_category || 'Merchant',
+                imageUrl: row.image_url || '',
+                rating: Number(row.average_rating || 0).toFixed(1),
+                reviewCount: Number(row.review_count || 0),
+                ...getMerchantFeaturedFields(row)
+            })));
+        });
+    });
+}
+
+function getFeaturedServices(callback) {
+    ensureServiceSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        getAllServices((error, services = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const today = new Date().toISOString().slice(0, 10);
+            const featuredServices = services
+                .filter((service) => service.isFeatured)
+                .filter((service) => !service.featuredStartDate || String(service.featuredStartDate).slice(0, 10) <= today)
+                .filter((service) => !service.featuredEndDate || String(service.featuredEndDate).slice(0, 10) >= today)
+                .sort((left, right) => {
+                    if (left.featuredOrder !== right.featuredOrder) {
+                        return left.featuredOrder - right.featuredOrder;
+                    }
+
+                    return Number(right.merchantFeaturedScore || 0) - Number(left.merchantFeaturedScore || 0);
+                });
+
+            callback(null, featuredServices);
+        });
+    });
+}
+
+function getFeaturedServicesByMerchant(merchantId, callback) {
+    const salonId = Number(merchantId);
+
+    if (!Number.isInteger(salonId) || salonId < 1) {
+        callback(null, []);
+        return;
+    }
+
+    getMerchantBySalonId(salonId, (error, merchant) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const services = Array.isArray(merchant?.services) ? merchant.services : [];
+        const today = new Date().toISOString().slice(0, 10);
+        callback(null, services.filter((service) => {
+            return service.isFeatured
+                && (!service.featuredStartDate || String(service.featuredStartDate).slice(0, 10) <= today)
+                && (!service.featuredEndDate || String(service.featuredEndDate).slice(0, 10) >= today);
+        }).sort((left, right) => left.featuredOrder - right.featuredOrder));
+    });
+}
+
+function countFeaturedServicesByMerchant(userId, callback) {
+    const sql = `
+        SELECT COUNT(*) AS total
+        FROM services
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        WHERE salons.merchant_id = ?
+            AND services.is_featured = 1
+    `;
+
+    db.query(sql, [userId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, Number(rows[0]?.total || 0));
+    });
+}
+
+function markServiceFeatured(userId, serviceId, payload, callback) {
+    const normalizedServiceId = Number(serviceId);
+    const { error: dateError, startDate, endDate } = validateFeaturedDates(payload?.featuredStartDate, payload?.featuredEndDate);
+
+    if (!Number.isInteger(normalizedServiceId) || normalizedServiceId < 1) {
+        callback(new Error('Invalid service selected.'));
+        return;
+    }
+
+    if (dateError) {
+        callback(new Error(dateError));
+        return;
+    }
+
+    findServiceForMerchant(userId, normalizedServiceId, (lookupError, service) => {
+        if (lookupError) {
+            callback(lookupError);
+            return;
+        }
+
+        if (!service) {
+            callback(new Error('This service does not belong to your merchant account.'));
+            return;
+        }
+
+        countFeaturedServicesByMerchant(userId, (countError, featuredCount) => {
+            if (countError) {
+                callback(countError);
+                return;
+            }
+
+            if (!service.isFeatured && featuredCount >= 3) {
+                callback(new Error('You can feature at most 3 services at a time.'));
+                return;
+            }
+
+            const sql = `
+                UPDATE services
+                INNER JOIN salons ON salons.salon_id = services.salon_id
+                SET services.is_featured = 1,
+                    services.featured_order = ?,
+                    services.featured_start_date = ?,
+                    services.featured_end_date = ?
+                WHERE services.service_id = ?
+                    AND salons.merchant_id = ?
+            `;
+
+            db.query(sql, [
+                normalizeFeaturedOrder(payload?.featuredOrder),
+                startDate,
+                endDate,
+                normalizedServiceId,
+                userId
+            ], callback);
+        });
+    });
+}
+
+function removeServiceFeatured(userId, serviceId, callback) {
+    const sql = `
+        UPDATE services
+        INNER JOIN salons ON salons.salon_id = services.salon_id
+        SET services.is_featured = 0,
+            services.featured_order = 0,
+            services.featured_start_date = NULL,
+            services.featured_end_date = NULL
+        WHERE services.service_id = ?
+            AND salons.merchant_id = ?
+    `;
+
+    db.query(sql, [serviceId, userId], callback);
+}
+
+function markMerchantFeatured(salonId, payload, callback) {
+    const normalizedSalonId = Number(salonId);
+    const { error: dateError, startDate, endDate } = validateFeaturedDates(payload?.featuredStartDate, payload?.featuredEndDate);
+
+    if (!Number.isInteger(normalizedSalonId) || normalizedSalonId < 1) {
+        callback(new Error('Invalid merchant selected.'));
+        return;
+    }
+
+    if (dateError) {
+        callback(new Error(dateError));
+        return;
+    }
+
+    db.query(
+        `
+            UPDATE salons
+            SET is_featured = 1,
+                featured_type = ?,
+                featured_order = ?,
+                featured_start_date = ?,
+                featured_end_date = ?
+            WHERE salon_id = ?
+        `,
+        [
+            normalizeFeaturedType(payload?.featuredType) || 'featured_month',
+            normalizeFeaturedOrder(payload?.featuredOrder),
+            startDate,
+            endDate,
+            normalizedSalonId
+        ],
+        callback
+    );
+}
+
+function removeMerchantFeatured(salonId, callback) {
+    db.query(
+        `
+            UPDATE salons
+            SET is_featured = 0,
+                featured_type = NULL,
+                featured_order = 0,
+                featured_start_date = NULL,
+                featured_end_date = NULL
+            WHERE salon_id = ?
+        `,
+        [salonId],
+        callback
+    );
+}
+
+function calculateFeaturedScore(callback) {
+    const sql = `
+        SELECT
+            salons.salon_id,
+            COUNT(DISTINCT bookings.booking_id) AS booking_count,
+            COALESCE(AVG(reviews.rating), 0) AS average_rating,
+            COALESCE(SUM(CASE WHEN transactions.payment_status = 'paid' THEN transactions.total_amount ELSE 0 END), 0) AS revenue,
+            COUNT(DISTINCT CASE WHEN repeat_bookings.booking_total > 1 THEN repeat_bookings.user_id END) AS repeat_customers
+        FROM salons
+        LEFT JOIN bookings ON bookings.merchant_id = salons.salon_id
+        LEFT JOIN reviews ON reviews.merchant_id = salons.salon_id
+        LEFT JOIN transactions ON transactions.booking_id = bookings.booking_id
+        LEFT JOIN (
+            SELECT merchant_id, user_id, COUNT(*) AS booking_total
+            FROM bookings
+            WHERE user_id IS NOT NULL
+            GROUP BY merchant_id, user_id
+        ) repeat_bookings ON repeat_bookings.merchant_id = salons.salon_id
+        GROUP BY salons.salon_id
+    `;
+
+    db.query(sql, (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const maxima = rows.reduce((accumulator, row) => ({
+            bookingCount: Math.max(accumulator.bookingCount, Number(row.booking_count || 0)),
+            averageRating: Math.max(accumulator.averageRating, Number(row.average_rating || 0)),
+            revenue: Math.max(accumulator.revenue, Number(row.revenue || 0)),
+            repeatCustomers: Math.max(accumulator.repeatCustomers, Number(row.repeat_customers || 0))
+        }), {
+            bookingCount: 0,
+            averageRating: 0,
+            revenue: 0,
+            repeatCustomers: 0
+        });
+
+        if (!rows.length) {
+            callback(null, []);
+            return;
+        }
+
+        const updates = rows.map((row) => {
+            const bookingScore = maxima.bookingCount ? Number(row.booking_count || 0) / maxima.bookingCount : 0;
+            const ratingScore = maxima.averageRating ? Number(row.average_rating || 0) / maxima.averageRating : 0;
+            const revenueScore = maxima.revenue ? Number(row.revenue || 0) / maxima.revenue : 0;
+            const repeatScore = maxima.repeatCustomers ? Number(row.repeat_customers || 0) / maxima.repeatCustomers : 0;
+            const weightedScore = ((bookingScore * 0.4) + (ratingScore * 0.3) + (revenueScore * 0.2) + (repeatScore * 0.1)) * 100;
+
+            return {
+                salonId: Number(row.salon_id),
+                featuredScore: Number(weightedScore.toFixed(2))
+            };
+        });
+
+        let remaining = updates.length;
+
+        updates.forEach((entry) => {
+            db.query(
+                'UPDATE salons SET featured_score = ? WHERE salon_id = ?',
+                [entry.featuredScore, entry.salonId],
+                (updateError) => {
+                    if (updateError) {
+                        callback(updateError);
+                        callback = () => {};
+                        return;
+                    }
+
+                    remaining -= 1;
+
+                    if (remaining === 0) {
+                        callback(null, updates);
+                    }
+                }
+            );
         });
     });
 }
@@ -1233,6 +1736,15 @@ module.exports = {
     getCategories,
     getSalons,
     getAllServices,
+    getFeaturedMerchants,
+    getFeaturedServices,
+    getFeaturedServicesByMerchant,
+    countFeaturedServicesByMerchant,
+    markServiceFeatured,
+    removeServiceFeatured,
+    markMerchantFeatured,
+    removeMerchantFeatured,
+    calculateFeaturedScore,
     findServiceForMerchant,
     findServiceById,
     createService,

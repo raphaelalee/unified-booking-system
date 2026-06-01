@@ -139,6 +139,80 @@ function buildBirthdayPromotion(user, vouchers = []) {
     };
 }
 
+function mergeFeaturedMerchantRows(baseMerchants = [], featuredMerchants = []) {
+    const featuredMap = new Map((featuredMerchants || []).map((merchant) => [String(merchant.id), merchant]));
+
+    const merged = baseMerchants.map((merchant) => {
+        const featured = featuredMap.get(String(merchant.id));
+
+        if (!featured) {
+            return {
+                ...merchant,
+                isFeatured: false,
+                featuredType: '',
+                featuredOrder: 999,
+                featuredScore: 0
+            };
+        }
+
+        return {
+            ...merchant,
+            ...featured,
+            qrToken: merchant.qrToken || featured.qrToken || ''
+        };
+    });
+
+    featuredMerchants.forEach((merchant) => {
+        if (!merged.some((item) => String(item.id) === String(merchant.id))) {
+            merged.push(merchant);
+        }
+    });
+
+    return merged;
+}
+
+function sortMerchantsByFeatured(merchants = []) {
+    return [...merchants].sort((left, right) => {
+        if (Boolean(left.isFeatured) !== Boolean(right.isFeatured)) {
+            return left.isFeatured ? -1 : 1;
+        }
+
+        if (Number(left.featuredOrder || 0) !== Number(right.featuredOrder || 0)) {
+            return Number(left.featuredOrder || 0) - Number(right.featuredOrder || 0);
+        }
+
+        return Number(right.featuredScore || 0) - Number(left.featuredScore || 0);
+    });
+}
+
+function sortServicesByFeatured(services = []) {
+    return [...services].sort((left, right) => {
+        if (Boolean(left.isFeatured) !== Boolean(right.isFeatured)) {
+            return left.isFeatured ? -1 : 1;
+        }
+
+        if (Number(left.featuredOrder || 0) !== Number(right.featuredOrder || 0)) {
+            return Number(left.featuredOrder || 0) - Number(right.featuredOrder || 0);
+        }
+
+        return Number(right.merchantFeaturedScore || 0) - Number(left.merchantFeaturedScore || 0);
+    });
+}
+
+function sortProductsByFeatured(products = []) {
+    return [...products].sort((left, right) => {
+        if (Boolean(left.isFeatured) !== Boolean(right.isFeatured)) {
+            return left.isFeatured ? -1 : 1;
+        }
+
+        if (Number(left.featuredOrder || 0) !== Number(right.featuredOrder || 0)) {
+            return Number(left.featuredOrder || 0) - Number(right.featuredOrder || 0);
+        }
+
+        return Number(right.id || 0) - Number(left.id || 0);
+    });
+}
+
 function calculateVoucherDiscount(voucher, amount) {
     const grossAmount = Number(amount || 0);
 
@@ -151,6 +225,96 @@ function calculateVoucherDiscount(voucher, amount) {
     }
 
     return Math.min(Number(voucher.remainingValue || 0), grossAmount);
+}
+
+function getOrderVoucherEligibleAmount(voucher, payment = {}) {
+    const items = Array.isArray(payment.items) ? payment.items : [];
+
+    return items.reduce((sum, item) => {
+        if (String(item.type || '') !== 'Product') {
+            return sum;
+        }
+
+        if (voucher.merchantId && String(voucher.merchantId) !== String(item.merchantId || item.salonId || '')) {
+            return sum;
+        }
+
+        if (voucher.linkedItemType === 'product' && voucher.linkedItemId && String(voucher.linkedItemId) !== String(item.serviceId || item.productId || '')) {
+            return sum;
+        }
+
+        return sum + Number(item.lineTotal || 0);
+    }, 0);
+}
+
+function getVoucherEligibleAmount(voucher, payment = {}) {
+    if (!voucher) {
+        return 0;
+    }
+
+    if (payment.kind === 'order') {
+        return getOrderVoucherEligibleAmount(voucher, payment);
+    }
+
+    return Number(payment.amount || 0);
+}
+
+function compareVoucherRecommendations(left, right) {
+    if (!left) {
+        return 1;
+    }
+
+    if (!right) {
+        return -1;
+    }
+
+    if (Number(left.discount || 0) !== Number(right.discount || 0)) {
+        return Number(right.discount || 0) - Number(left.discount || 0);
+    }
+
+    if (Number(left.voucher?.discountPercent || 0) !== Number(right.voucher?.discountPercent || 0)) {
+        return Number(right.voucher?.discountPercent || 0) - Number(left.voucher?.discountPercent || 0);
+    }
+
+    const leftExpiry = left.voucher?.expiresAt ? new Date(left.voucher.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const rightExpiry = right.voucher?.expiresAt ? new Date(right.voucher.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+
+    if (leftExpiry !== rightExpiry) {
+        return leftExpiry - rightExpiry;
+    }
+
+    return Number(left.voucher?.id || 0) - Number(right.voucher?.id || 0);
+}
+
+async function getVoucherRecommendation(vouchers = [], payment = {}, validator = UserVoucher.validateForBooking) {
+    if (!Array.isArray(vouchers) || !vouchers.length) {
+        return null;
+    }
+
+    const validRecommendations = await Promise.all(vouchers.map((voucher) => new Promise((resolve) => {
+        validator(voucher, payment, (error) => {
+            if (error) {
+                resolve(null);
+                return;
+            }
+
+            const eligibleAmount = getVoucherEligibleAmount(voucher, payment);
+            const discount = calculateVoucherDiscount(voucher, eligibleAmount);
+
+            if (discount <= 0) {
+                resolve(null);
+                return;
+            }
+
+            resolve({
+                voucher,
+                discount: Math.round(Number(discount || 0) * 100) / 100
+            });
+        });
+    })));
+
+    const ranked = validRecommendations.filter(Boolean).sort(compareVoucherRecommendations);
+    return ranked[0] || null;
 }
 
 function isValidEmail(email) {
@@ -735,6 +899,8 @@ function renderBookingPage(req, res, merchant, options = {}) {
         }
     );
 
+    const featuredRecommendedServices = sortServicesByFeatured((merchant.services || []).filter((service) => service.isFeatured)).slice(0, 3);
+
     return Promise.all(scopedServices.map(async (service) => ({
         ...service,
         campaignCashback: await getCampaignCashbackEstimate({
@@ -751,6 +917,7 @@ function renderBookingPage(req, res, merchant, options = {}) {
         title: `Book ${merchant.name}`,
         merchant: bookingMerchant,
         scopedServices: cashbackScopedServices,
+        featuredRecommendedServices,
         errors: options.errors || [],
         form: sanitizedForm,
         selectedPromotion,
@@ -897,14 +1064,21 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
                         averageRating: Number(merchant.rating || 0) || null,
                         reviewCount: 0
                     };
-                const merchantProducts = (productError ? [] : products).filter((product) => {
+                const merchantProducts = sortProductsByFeatured((productError ? [] : products).filter((product) => {
                     return String(product.salonId || '') === String(merchant.id || '');
-                });
+                }));
+                const featuredServices = sortServicesByFeatured((merchant.services || []).filter((service) => service.isFeatured)).slice(0, 3);
+                const featuredProducts = merchantProducts.filter((product) => product.isFeatured).slice(0, 3);
 
                 return res.status(options.status || 200).render('merchant-detail', {
                     title: merchant.name,
-                    merchant,
+                    merchant: {
+                        ...merchant,
+                        services: sortServicesByFeatured(merchant.services || [])
+                    },
                     products: merchantProducts,
+                    featuredServices,
+                    featuredProducts,
                     isFavourite: favouriteIds.includes(merchant.id),
                     canGenerateQr: Boolean(options.canGenerateQr),
                     errors: options.errors || [],
@@ -1179,17 +1353,40 @@ function showHome(req, res) {
         serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
     }));
 
-    res.render('home', {
-        title: 'Vaniday',
-        merchants: Merchant.getAll(search),
-        favouriteIds,
-        serviceCatalog,
-        portalStats: Merchant.getPortalStats(search),
-        search,
-        success: req.session.success,
-        showChatbot: true
+    return MerchantService.getFeaturedMerchants((merchantError, featuredMerchants = []) => {
+        if (merchantError) {
+            console.error(merchantError);
+        }
+
+        return MerchantService.getFeaturedServices((serviceError, featuredServices = []) => {
+            if (serviceError) {
+                console.error(serviceError);
+            }
+
+            return Product.getFeaturedProducts((productError, featuredProducts = []) => {
+                if (productError) {
+                    console.error(productError);
+                }
+
+                res.render('home', {
+                    title: 'Vaniday',
+                    merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(Merchant.getAll(search), featuredMerchants)),
+                    favouriteIds,
+                    serviceCatalog,
+                    portalStats: Merchant.getPortalStats(search),
+                    search,
+                    success: req.session.success,
+                    featuredMerchants: featuredMerchants.slice(0, 6),
+                    featuredMerchantOfMonth: featuredMerchants.find((merchant) => merchant.featuredType === 'featured_month') || featuredMerchants[0] || null,
+                    trendingMerchants: featuredMerchants.filter((merchant) => merchant.featuredType === 'trending').slice(0, 6),
+                    featuredServices: featuredServices.slice(0, 6),
+                    featuredProducts: featuredProducts.slice(0, 6),
+                    showChatbot: true
+                });
+                req.session.success = null;
+            });
+        });
     });
-    req.session.success = null;
 }
 
 function showServices(req, res) {
@@ -1213,12 +1410,12 @@ function showServices(req, res) {
                 merchantRating: 'New',
                 serviceBookingPath: `/booking/${service.salonId}?serviceId=${service.id}`
             }));
-        const serviceCatalog = sourceServices
+        const serviceCatalog = sortServicesByFeatured(sourceServices
             .filter((service) => !service.inventoryBlocked)
             .map((service) => ({
             ...service,
             serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
-        }));
+        })));
         return Promise.all(serviceCatalog.map(async (service) => ({
             ...service,
             campaignCashback: await getCampaignCashbackEstimate({
@@ -1730,11 +1927,18 @@ function listMerchants(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
 
-    res.render('merchants', {
-        title: 'Merchants',
-        merchants: Merchant.getAll(search),
-        favouriteIds,
-        search
+    return MerchantService.getFeaturedMerchants((error, featuredMerchants = []) => {
+        if (error) {
+            console.error(error);
+        }
+
+        res.render('merchants', {
+            title: 'Merchants',
+            merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(Merchant.getAll(search), featuredMerchants)),
+            featuredMerchants,
+            favouriteIds,
+            search
+        });
     });
 }
 
@@ -2613,12 +2817,25 @@ function showCart(req, res) {
     const itemCount = getCartItemCount(cart);
     const success = req.session.success;
     const pickupMerchants = buildPickupMerchantOptions(cart);
+    const hasServiceItems = cart.some((item) => item.type !== 'Product' && item.type !== 'Gift Card');
+    const hasProductItems = cart.some((item) => item.type === 'Product');
     req.session.success = null;
 
     return Loyalty.getWalletView(req.session.user.id, async (walletError, loyalty) => {
         if (walletError) {
             console.error(walletError);
         }
+
+        const availableVouchers = hasProductItems
+            ? await getEligibleProductVouchers(req.session.user.id, {
+                kind: 'order',
+                items: cart,
+                amount: total,
+                itemSubtotal: total
+            })
+            : hasServiceItems
+                ? await getActiveBookingVouchers(req.session.user.id)
+                : [];
 
         const campaignCashback = await getCampaignCashbackEstimate({
             kind: 'order',
@@ -2637,7 +2854,10 @@ function showCart(req, res) {
             pickupMerchants,
             shippingFee: CART_DELIVERY_FEE,
             loyalty: walletError ? null : loyalty,
-            campaignCashback
+            campaignCashback,
+            availableVouchers,
+            hasServiceItems,
+            hasProductItems
         });
     });
 }
@@ -2724,6 +2944,7 @@ function checkout(req, res) {
             detail: item.merchantName || ''
         })),
         selectedItemIds: selectedItems.map((item) => String(item.id)).join(','),
+        selectedVoucherId: '',
         useCashback,
         fulfilment,
         pickupMerchantId,
@@ -2736,6 +2957,13 @@ function checkout(req, res) {
         if (walletError) {
             console.error(walletError);
         }
+
+        const availableVouchers = selectedItems.some((item) => item.type === 'Product')
+            ? await getEligibleProductVouchers(req.session.user.id, req.session.pendingPayments[checkoutId])
+            : [];
+        const voucherRecommendation = availableVouchers.length > 0
+            ? await getVoucherRecommendation(availableVouchers, req.session.pendingPayments[checkoutId], UserVoucher.validateForOrder)
+            : null;
 
         const campaignCashback = await getCampaignCashbackEstimate(req.session.pendingPayments[checkoutId]);
 
@@ -2756,7 +2984,8 @@ function checkout(req, res) {
             pickupMerchantId,
             ...deliveryDetails,
             selectedVoucherId: '',
-            availableVouchers: [],
+            availableVouchers,
+            voucherRecommendation,
             birthdayPromotion: null,
             rewardRedemption: null,
             campaignCashback,
@@ -2884,6 +3113,22 @@ async function showPayment(req, res) {
             serviceName: booking.service_name,
             amount: Number(booking.service_price || 0)
         });
+        const featuredProductsUpsell = await new Promise((resolve) => {
+            Product.getFeaturedProductsByMerchant(booking.merchant_id, (featuredError, items = []) => {
+                if (featuredError) {
+                    console.error(featuredError);
+                    resolve([]);
+                    return;
+                }
+
+                resolve(items.slice(0, 3));
+            });
+        });
+        const voucherRecommendation = await getVoucherRecommendation(availableVouchers, {
+            amount: Number(booking.service_price || 0),
+            merchantId: booking.merchant_id,
+            bookingId: booking.id
+        });
 
         return res.render('payment', getPaymentViewModel({
             title: 'Payment',
@@ -2904,10 +3149,12 @@ async function showPayment(req, res) {
             deliveryPhone: '',
             selectedVoucherId: '',
             availableVouchers,
+            voucherRecommendation,
             birthdayPromotion,
             loyalty,
             rewardRedemption,
             campaignCashback,
+            featuredProductsUpsell,
             redeemPointsRequested: 0,
             error: null
         }));
@@ -2955,6 +3202,15 @@ function getPaymentViewModel(payment) {
     return {
         paypalClientId: paypal.getClientId(),
         paypalEnabled: paypal.isConfigured(),
+        availableVouchers: [],
+        voucherMode: '',
+        voucherRecommendation: null,
+        featuredProductsUpsell: [],
+        birthdayPromotion: null,
+        rewardRedemption: null,
+        campaignCashback: null,
+        loyalty: null,
+        error: null,
         ...payment
     };
 }
@@ -3236,6 +3492,7 @@ function renderPaymentForm(res, payment, error = null) {
         useCashback: payment.useCashback === true,
         selectedVoucherId: payment.selectedVoucherId || '',
         availableVouchers: payment.availableVouchers || [],
+        voucherRecommendation: payment.voucherRecommendation || null,
         birthdayPromotion: payment.birthdayPromotion || null,
         loyalty: null,
         ...payment,
@@ -3329,6 +3586,41 @@ function getActiveBookingVouchers(userId) {
     });
 }
 
+function getActiveProductVouchers(userId) {
+    return new Promise((resolve) => {
+        UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
+            if (error) {
+                console.error(error);
+                resolve([]);
+                return;
+            }
+
+            resolve(vouchers.filter((voucher) => voucher.bookingOnly === false));
+        });
+    });
+}
+
+async function getEligibleProductVouchers(userId, payment) {
+    const vouchers = await getActiveProductVouchers(userId);
+
+    if (!vouchers.length) {
+        return [];
+    }
+
+    const eligibleVouchers = await Promise.all(vouchers.map((voucher) => new Promise((resolve) => {
+        UserVoucher.validateForOrder(voucher, payment, (error, validatedVoucher) => {
+            if (error) {
+                resolve(null);
+                return;
+            }
+
+            resolve(validatedVoucher || voucher);
+        });
+    })));
+
+    return eligibleVouchers.filter(Boolean);
+}
+
 async function applyVoucherRedemption(req, payment) {
     const selectedVoucherId = Number(req.body.selectedVoucherId || payment.selectedVoucherId || 0);
 
@@ -3347,18 +3639,23 @@ async function applyVoucherRedemption(req, payment) {
         });
     });
 
-    await new Promise((resolve, reject) => {
-        UserVoucher.validateForBooking(voucher, payment, (error) => {
+    const validator = payment.kind === 'order'
+        ? UserVoucher.validateForOrder
+        : UserVoucher.validateForBooking;
+
+    const validatedVoucher = await new Promise((resolve, reject) => {
+        validator(voucher, payment, (error, row) => {
             if (error) {
                 reject(error);
                 return;
             }
 
-            resolve();
+            resolve(row || voucher);
         });
     });
 
-    const voucherDiscount = calculateVoucherDiscount(voucher, payment.amount);
+    const voucherEligibleAmount = getVoucherEligibleAmount(validatedVoucher, payment);
+    const voucherDiscount = calculateVoucherDiscount(validatedVoucher, voucherEligibleAmount);
 
     if (voucherDiscount <= 0) {
         return payment;
@@ -3367,11 +3664,12 @@ async function applyVoucherRedemption(req, payment) {
     return {
         ...payment,
         selectedVoucherId,
-        voucherId: voucher.id,
-        voucherCode: voucher.code,
-        voucherTitle: voucher.title,
-        voucherDiscountType: voucher.discountType || 'fixed',
-        voucherDiscountPercent: Number(voucher.discountPercent || 0),
+        voucherId: validatedVoucher.id,
+        voucherCode: validatedVoucher.code,
+        voucherTitle: validatedVoucher.title,
+        voucherDiscountType: validatedVoucher.discountType || 'fixed',
+        voucherDiscountPercent: Number(validatedVoucher.discountPercent || 0),
+        voucherEligibleAmount,
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
         voucherDiscount,
         amount: Math.max(0, Math.round((Number(payment.amount || 0) - voucherDiscount) * 100) / 100)
@@ -3446,6 +3744,10 @@ async function prepareTrustedPayment(req, payment) {
         trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
         trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
         trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
+        trustedPayment.voucherRecommendation = await getVoucherRecommendation(
+            trustedPayment.availableVouchers,
+            trustedPayment
+        );
         trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
         trustedPayment.rewardRedemption = await getRewardRedemptionView(
             req.session.user.id,
@@ -3453,6 +3755,16 @@ async function prepareTrustedPayment(req, payment) {
             trustedPayment.serviceId,
             trustedPayment.amount
         );
+        trustedPayment.voucherMode = 'booking';
+    } else if (trustedPayment.kind === 'order') {
+        trustedPayment.availableVouchers = await getEligibleProductVouchers(req.session.user.id, trustedPayment);
+        trustedPayment.selectedVoucherId = payment.selectedVoucherId || trustedPayment.selectedVoucherId || '';
+        trustedPayment.voucherRecommendation = await getVoucherRecommendation(
+            trustedPayment.availableVouchers,
+            trustedPayment,
+            UserVoucher.validateForOrder
+        );
+        trustedPayment.voucherMode = trustedPayment.availableVouchers.length > 0 ? 'product' : '';
     }
 
     trustedPayment = await applyVoucherRedemption(req, trustedPayment);
@@ -3767,7 +4079,10 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
 
     if (Number(paidPayment.voucherId || 0) > 0) {
         await new Promise((resolve, reject) => {
-            UserVoucher.markRedeemed(paidPayment.voucherId, (error) => error ? reject(error) : resolve());
+            UserVoucher.markRedeemed(paidPayment.voucherId, {
+                bookingId: paidPayment.kind === 'booking' ? paidPayment.bookingId || null : null,
+                transactionId: paidPayment.transactionId || null
+            }, (error) => error ? reject(error) : resolve());
         });
     }
 
@@ -3908,6 +4223,10 @@ async function confirmPayment(req, res) {
         trustedPayment = await prepareTrustedPayment(req, payment);
     } catch (error) {
         const fallbackVouchers = payment.bookingId ? await getActiveBookingVouchers(req.session.user.id) : [];
+        const fallbackPaymentBase = trustedPayment || await buildTrustedPayment(req, payment).catch(() => null);
+        const fallbackProductVouchers = payment.cartCheckout && fallbackPaymentBase
+            ? await getEligibleProductVouchers(req.session.user.id, fallbackPaymentBase)
+            : [];
         const fallbackRewardRedemption = trustedPayment?.kind === 'booking'
             ? await getRewardRedemptionView(req.session.user.id, trustedPayment.merchantId, trustedPayment.serviceId, trustedPayment.amount)
             : null;
@@ -3917,7 +4236,8 @@ async function confirmPayment(req, res) {
             redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
         } : {
             ...payment,
-            availableVouchers: fallbackVouchers,
+            availableVouchers: payment.cartCheckout ? fallbackProductVouchers : fallbackVouchers,
+            voucherMode: payment.cartCheckout ? 'product' : 'booking',
             birthdayPromotion: payment.bookingId ? buildBirthdayPromotion(req.session.user, fallbackVouchers) : null,
             loyalty: payment.bookingId ? await getLoyaltyView(req.session.user.id) : null,
             rewardRedemption: fallbackRewardRedemption,

@@ -1,0 +1,96 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const formatVoucherDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+
+        if (!value || Number.isNaN(date.getTime())) {
+            return 'Not set';
+        }
+
+        return date.toLocaleString('en-SG', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+%>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Vouchers</p>
+                <h1>Merchant vouchers</h1>
+                <span>Create reward-shop vouchers only from services or products already listed under <%= merchant.name %>.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button primary" href="/merchant/vouchers/new">Add voucher</a>
+            </div>
+        </header>
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
+        <div class="section-cta">
+            <div>
+                <h2>Reward shop vouchers</h2>
+                <p class="muted"><%= vouchers.length %> vouchers currently linked to this merchant.</p>
+            </div>
+        </div>
+
+        <% if (vouchers.length === 0) { %>
+            <div class="notice">
+                No vouchers have been created yet. Add one and link it to an existing listed service or product.
+            </div>
+        <% } else { %>
+            <div class="service-catalog-grid unified-service-grid">
+                <% vouchers.forEach((voucher) => { %>
+                    <article class="service-catalog-card unified-service-card">
+                        <div class="portal-card-header">
+                            <span class="tag"><%= voucher.linkedItemType || 'merchant' %></span>
+                            <span class="service-price slim"><%= voucher.status %></span>
+                        </div>
+                        <div>
+                            <h3><%= voucher.title %></h3>
+                            <p class="muted">
+                                <%= voucher.linkedItemName || 'Linked item unavailable' %> &middot;
+                                <%= voucher.discountType === 'percentage'
+                                    ? `${Number(voucher.discountValue || 0)}% OFF`
+                                    : `$${Number(voucher.discountValue || 0).toFixed(2)} OFF` %>
+                            </p>
+                            <p class="muted">
+                                Redeem cost <strong><%= Number(voucher.pointsRequired || voucher.glintsCost || 0) %> VaniGlints</strong>
+                                &middot; Min spend $<%= Number(voucher.minimumSpend || 0).toFixed(2) %>
+                            </p>
+                            <p class="muted">
+                                Per-user limit <%= voucher.usageLimitPerUser === null ? 'No limit' : voucher.usageLimitPerUser %>
+                                &middot; Total limit <%= voucher.usageLimitTotal === null ? 'No limit' : voucher.usageLimitTotal %>
+                            </p>
+                            <% if (voucher.detail) { %>
+                                <p><%= voucher.detail %></p>
+                            <% } %>
+                        </div>
+                        <div class="availability-strip">
+                            <span>Starts <%= formatVoucherDate(voucher.startDate) %></span>
+                            <span>Ends <%= formatVoucherDate(voucher.expiryDate) %></span>
+                        </div>
+                        <div class="service-card-actions">
+                            <a class="button secondary full" href="/merchant/vouchers/<%= voucher.id %>/edit">Edit</a>
+                            <form action="/merchant/vouchers/<%= voucher.id %>/delete" method="POST">
+                                <button class="button secondary full danger-button" type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+        <% } %>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

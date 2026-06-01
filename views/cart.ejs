@@ -142,6 +142,48 @@
                         <% } %>
                     </div>
 
+                    <%
+                        const cartVoucherList = typeof availableVouchers !== 'undefined' && Array.isArray(availableVouchers)
+                            ? availableVouchers
+                            : [];
+                        const cartHasServiceItems = typeof hasServiceItems !== 'undefined' ? hasServiceItems : false;
+                        const cartHasProductItems = typeof hasProductItems !== 'undefined' ? hasProductItems : false;
+                    %>
+                    <div class="loyalty-redemption-card cart-cashback-card">
+                        <% if (cartHasServiceItems && cartVoucherList.length > 0) { %>
+                            <span>
+                                <strong>Booking vouchers</strong>
+                                <small>
+                                    <%= cartVoucherList.length %> eligible voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
+                                    Choose the best one on the payment page after you click checkout.
+                                </small>
+                            </span>
+                        <% } else if (cartHasServiceItems) { %>
+                            <span>
+                                <strong>Booking vouchers</strong>
+                                <small>No active booking vouchers available for this account right now.</small>
+                            </span>
+                        <% } else if (cartHasProductItems && cartVoucherList.length > 0) { %>
+                            <span>
+                                <strong>Product vouchers</strong>
+                                <small>
+                                    <%= cartVoucherList.length %> active product voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
+                                    Choose the best one on the payment page after you click checkout.
+                                </small>
+                            </span>
+                        <% } else if (cartHasProductItems) { %>
+                            <span>
+                                <strong>Product vouchers</strong>
+                                <small>No active product vouchers available for this account right now.</small>
+                            </span>
+                        <% } else { %>
+                            <span>
+                                <strong>Vouchers</strong>
+                                <small>Voucher options appear here when the selected checkout supports them.</small>
+                            </span>
+                        <% } %>
+                    </div>
+
                     <div class="cart-totals cart-summary-totals">
                         <p><span>Items subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
                         <p id="cart-shipping-row" style="display:none;"><span>Shipping fee</span><strong id="cart-shipping-value">$<%= deliveryFee.toFixed(2) %></strong></p>

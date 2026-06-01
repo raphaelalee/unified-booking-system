@@ -1,0 +1,239 @@
+<%- include('partials/header', { title }) %>
+
+<section class="section compact merchant-analytics-page">
+    <div class="merchant-analytics-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Vouchers</p>
+                <h1><%= voucher ? 'Edit voucher' : 'Add voucher' %></h1>
+                <span>Reward-shop vouchers must be tied to one of your existing listed services or products.</span>
+            </div>
+            <div class="merchant-hero-actions">
+                <a class="button secondary" href="/merchant/vouchers">Back to vouchers</a>
+            </div>
+        </header>
+
+        <form class="login-form service-admin-form" action="<%= voucher ? `/merchant/vouchers/${voucher.id}` : '/merchant/vouchers' %>" method="POST">
+            <% if (errors.length > 0) { %>
+                <div class="notice error">
+                    <% errors.forEach((error) => { %>
+                        <p><%= error %></p>
+                    <% }) %>
+                </div>
+            <% } %>
+
+            <label>
+                Voucher title
+                <input type="text" name="title" class="js-voucher-title-input" value="<%= form.title %>" placeholder="20% OFF Hydrating Facial" required>
+            </label>
+
+            <label>
+                Voucher description
+                <textarea name="detail" class="js-voucher-detail-input" placeholder="Explain the offer, minimum spend, and redemption rules." required><%= form.detail %></textarea>
+            </label>
+
+            <label>
+                Linked listing type
+                <select name="linkedItemType" class="js-linked-item-type" required>
+                    <% linkedItemTypes.forEach((type) => { %>
+                        <option value="<%= type %>" <%= form.linkedItemType === type ? 'selected' : '' %>><%= type %></option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label class="js-linked-service-group">
+                Linked service
+                <select name="linkedItemId" class="js-linked-service-select">
+                    <option value="">Select a service</option>
+                    <% services.forEach((service) => { %>
+                        <option value="<%= service.id %>" data-item-name="<%= service.name %>" <%= form.linkedItemType === 'service' && String(form.linkedItemId) === String(service.id) ? 'selected' : '' %>>
+                            <%= service.name %>
+                        </option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label class="js-linked-product-group" style="display:none;">
+                Linked product
+                <select class="js-linked-product-select">
+                    <option value="">Select a product</option>
+                    <% products.forEach((product) => { %>
+                        <option value="<%= product.id %>" data-item-name="<%= product.name %>" <%= form.linkedItemType === 'product' && String(form.linkedItemId) === String(product.id) ? 'selected' : '' %>>
+                            <%= product.name %>
+                        </option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label>
+                Discount type
+                <select name="discountType" required>
+                    <% discountTypes.forEach((type) => { %>
+                        <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type %></option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <label>
+                Discount value
+                <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20" required>
+            </label>
+
+            <label>
+                Minimum spend
+                <input type="number" name="minimumSpend" value="<%= form.minimumSpend %>" min="0" step="0.01" placeholder="50">
+            </label>
+
+            <label>
+                Redeem cost in VaniGlints
+                <input type="number" name="pointsRequired" value="<%= form.pointsRequired %>" min="1" step="1" placeholder="500" required>
+            </label>
+
+            <label>
+                Start date
+                <input type="datetime-local" name="startDate" value="<%= form.startDate %>">
+            </label>
+
+            <label>
+                Expiry date
+                <input type="datetime-local" name="expiryDate" value="<%= form.expiryDate %>">
+            </label>
+
+            <label>
+                Per-user usage limit
+                <input type="number" name="usageLimitPerUser" value="<%= form.usageLimitPerUser %>" min="1" step="1" placeholder="1">
+            </label>
+
+            <label>
+                Total usage limit
+                <input type="number" name="usageLimitTotal" value="<%= form.usageLimitTotal %>" min="1" step="1" placeholder="100">
+            </label>
+
+            <label>
+                Status
+                <select name="status" required>
+                    <% statuses.forEach((status) => { %>
+                        <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                    <% }) %>
+                </select>
+            </label>
+
+            <div class="form-actions">
+                <button class="button primary" type="submit"><%= voucher ? 'Update voucher' : 'Create voucher' %></button>
+                <a class="button secondary" href="/merchant/vouchers">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const linkedTypeField = document.querySelector('.js-linked-item-type');
+        const serviceGroup = document.querySelector('.js-linked-service-group');
+        const productGroup = document.querySelector('.js-linked-product-group');
+        const serviceSelect = document.querySelector('.js-linked-service-select');
+        const productSelect = document.querySelector('.js-linked-product-select');
+        const titleInput = document.querySelector('.js-voucher-title-input');
+        const detailInput = document.querySelector('.js-voucher-detail-input');
+        const discountTypeField = document.querySelector('select[name="discountType"]');
+        const discountValueField = document.querySelector('input[name="discountValue"]');
+        const minimumSpendField = document.querySelector('input[name="minimumSpend"]');
+        const pointsRequiredField = document.querySelector('input[name="pointsRequired"]');
+
+        if (!linkedTypeField || !serviceGroup || !productGroup || !serviceSelect || !productSelect || !titleInput || !detailInput || !discountTypeField || !discountValueField || !minimumSpendField || !pointsRequiredField) {
+            return;
+        }
+
+        let lastAutoTitle = '';
+        let lastAutoDetail = '';
+
+        const getActiveSelect = () => linkedTypeField.value === 'product' ? productSelect : serviceSelect;
+        const getVoucherStyleTitle = (itemName) => {
+            const discountType = discountTypeField.value;
+            const discountValue = String(discountValueField.value || '').trim();
+
+            if (!itemName) {
+                return '';
+            }
+
+            if (!discountValue) {
+                return itemName;
+            }
+
+            if (discountType === 'percentage') {
+                return `${discountValue}% OFF ${itemName}`;
+            }
+
+            return `$${discountValue} OFF ${itemName}`;
+        };
+
+        const getVoucherStyleDescription = (itemName) => {
+            const discountType = discountTypeField.value;
+            const discountValue = String(discountValueField.value || '').trim();
+            const minimumSpend = String(minimumSpendField.value || '').trim();
+            const pointsRequired = String(pointsRequiredField.value || '').trim();
+            const itemTypeLabel = linkedTypeField.value === 'product' ? 'product' : 'service';
+            const discountLabel = discountType === 'percentage'
+                ? `${discountValue || '0'}% off`
+                : `$${discountValue || '0'} off`;
+            const minimumSpendLabel = minimumSpend ? ` Minimum spend $${minimumSpend}.` : '';
+            const pointsLabel = pointsRequired ? ` Redeem with ${pointsRequired} VaniGlints.` : '';
+
+            return `${discountLabel} ${itemTypeLabel} voucher for ${itemName}.${minimumSpendLabel}${pointsLabel}`.trim();
+        };
+
+        const syncVoucherFields = () => {
+            const activeSelect = getActiveSelect();
+            const selectedOption = activeSelect.options[activeSelect.selectedIndex];
+            const itemName = selectedOption ? String(selectedOption.dataset.itemName || '').trim() : '';
+            const itemDescription = itemName ? getVoucherStyleDescription(itemName) : '';
+            const voucherTitle = itemName ? getVoucherStyleTitle(itemName) : '';
+
+            if (voucherTitle) {
+                if (titleInput.value.trim() === '' || titleInput.value === lastAutoTitle) {
+                    titleInput.value = voucherTitle;
+                    lastAutoTitle = voucherTitle;
+                }
+            }
+
+            if (itemDescription) {
+                if (detailInput.value.trim() === '' || detailInput.value === lastAutoDetail) {
+                    detailInput.value = itemDescription;
+                    lastAutoDetail = itemDescription;
+                }
+            }
+        };
+
+        const syncLinkedType = () => {
+            const isProduct = linkedTypeField.value === 'product';
+            serviceGroup.style.display = isProduct ? 'none' : '';
+            productGroup.style.display = isProduct ? '' : 'none';
+            serviceSelect.disabled = isProduct;
+            productSelect.disabled = !isProduct;
+            serviceSelect.name = isProduct ? '' : 'linkedItemId';
+            productSelect.name = isProduct ? 'linkedItemId' : '';
+            syncVoucherFields();
+        };
+
+        titleInput.addEventListener('input', () => {
+            if (titleInput.value !== lastAutoTitle) {
+                lastAutoTitle = '';
+            }
+        });
+        detailInput.addEventListener('input', () => {
+            if (detailInput.value !== lastAutoDetail) {
+                lastAutoDetail = '';
+            }
+        });
+        discountTypeField.addEventListener('change', syncVoucherFields);
+        discountValueField.addEventListener('input', syncVoucherFields);
+        minimumSpendField.addEventListener('input', syncVoucherFields);
+        pointsRequiredField.addEventListener('input', syncVoucherFields);
+        serviceSelect.addEventListener('change', syncVoucherFields);
+        productSelect.addEventListener('change', syncVoucherFields);
+        linkedTypeField.addEventListener('change', syncLinkedType);
+        syncLinkedType();
+    })();
+</script>
+
+<%- include('partials/footer') %>

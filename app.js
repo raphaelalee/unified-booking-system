@@ -359,6 +359,8 @@ app.post('/merchant/services', requireRole('merchant'), merchantDashboardControl
 app.get('/merchant/services/:serviceId/edit', requireRole('merchant'), merchantDashboardController.showEditService);
 app.post('/merchant/services/:serviceId', requireRole('merchant'), merchantDashboardController.updateService);
 app.post('/merchant/services/:serviceId/delete', requireRole('merchant'), merchantDashboardController.deleteService);
+app.post('/merchant/services/:serviceId/feature', requireRole('merchant'), merchantDashboardController.featureService);
+app.post('/merchant/services/:serviceId/unfeature', requireRole('merchant'), merchantDashboardController.unfeatureService);
 app.get('/merchant/products', requireRole('merchant'), merchantDashboardController.listProducts);
 app.get('/merchant/products/new', requireRole('merchant'), merchantDashboardController.showNewProduct);
 app.post('/merchant/products', requireRole('merchant'), handleProductImageUpload, merchantDashboardController.createProduct);
@@ -367,12 +369,20 @@ app.get('/merchant/products/:productId', requireRole('merchant'), redirectMercha
 app.post('/merchant/products/:productId', requireRole('merchant'), handleProductImageUpload, merchantDashboardController.updateProduct);
 app.post('/merchant/products/:productId/restock', requireRole('merchant'), merchantDashboardController.restockProduct);
 app.post('/merchant/products/:productId/delete', requireRole('merchant'), merchantDashboardController.deleteProduct);
+app.post('/merchant/products/:productId/feature', requireRole('merchant'), merchantDashboardController.featureProduct);
+app.post('/merchant/products/:productId/unfeature', requireRole('merchant'), merchantDashboardController.unfeatureProduct);
 app.get('/merchant/promotions', requireRole('merchant'), merchantDashboardController.listPromotions);
 app.get('/merchant/promotions/new', requireRole('merchant'), merchantDashboardController.showNewPromotion);
 app.post('/merchant/promotions', requireRole('merchant'), merchantDashboardController.createPromotion);
 app.get('/merchant/promotions/:promotionId/edit', requireRole('merchant'), merchantDashboardController.showEditPromotion);
 app.post('/merchant/promotions/:promotionId', requireRole('merchant'), merchantDashboardController.updatePromotion);
 app.post('/merchant/promotions/:promotionId/delete', requireRole('merchant'), merchantDashboardController.deletePromotion);
+app.get('/merchant/vouchers', requireRole('merchant'), merchantDashboardController.listVouchers);
+app.get('/merchant/vouchers/new', requireRole('merchant'), merchantDashboardController.showNewVoucher);
+app.post('/merchant/vouchers', requireRole('merchant'), merchantDashboardController.createVoucher);
+app.get('/merchant/vouchers/:voucherId/edit', requireRole('merchant'), merchantDashboardController.showEditVoucher);
+app.post('/merchant/vouchers/:voucherId', requireRole('merchant'), merchantDashboardController.updateVoucher);
+app.post('/merchant/vouchers/:voucherId/delete', requireRole('merchant'), merchantDashboardController.deleteVoucher);
 app.get('/merchant/rewards-game', requireRole('merchant'), gameController.showMerchantGame);
 app.get('/merchant/rewards-game/prizes/new', requireRole('merchant'), gameController.showNewMerchantPrize);
 app.post('/merchant/rewards-game/prizes', requireRole('merchant'), gameController.createMerchantPrize);
@@ -412,6 +422,8 @@ app.get('/admin/game-control', requireRole('admin'), (req, res) => res.redirect(
 app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMerchant);
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
 app.post('/admin/merchants/:salonId/commission', requireRole('admin'), adminController.updateMerchantCommission);
+app.post('/admin/merchants/:salonId/feature', requireRole('admin'), adminController.featureMerchant);
+app.post('/admin/merchants/:salonId/unfeature', requireRole('admin'), adminController.unfeatureMerchant);
 app.get('/admin/services', requireRole('admin'), adminController.listServices);
 app.get('/admin/products', requireRole('admin'), adminController.listProducts);
 app.get('/admin/products/new', requireRole('admin'), adminController.showNewProduct);

@@ -135,8 +135,11 @@
             { title: 'Happy Hour Wellness', merchantName: 'Selected spas', discount: '15%', expiry: 'Weekdays', href: '/promotions' },
             { title: 'Beauty Rewards Boost', merchantName: 'Vaniday', discount: '2x points', expiry: 'Ongoing', href: '/reward-shop' }
         ];
-    const recommendedMerchants = serviceMerchants.slice(0, 6);
-    const featuredServices = filteredServices.slice(0, 5);
+    const recommendedMerchants = (Array.isArray(featuredMerchants) && featuredMerchants.length > 0 ? featuredMerchants : serviceMerchants).slice(0, 6);
+    const featuredServiceItems = (Array.isArray(featuredServices) && featuredServices.length > 0 ? featuredServices : filteredServices.slice(0, 5));
+    const featuredProductItems = Array.isArray(featuredProducts) ? featuredProducts : [];
+    const featuredMonthMerchant = typeof featuredMerchantOfMonth !== 'undefined' ? featuredMerchantOfMonth : null;
+    const trendingMerchantItems = Array.isArray(trendingMerchants) ? trendingMerchants : [];
     const heroSlides = [
         {
             kicker: 'Hair salon',
@@ -170,7 +173,7 @@
             cta: 'View',
             imageClass: `home-merchant-${(index % 3) + 1}`
         })),
-        ...featuredServices.slice(0, 2).map((service, index) => ({
+        ...featuredServiceItems.slice(0, 2).map((service, index) => ({
             type: 'Service',
             title: service.name,
             copy: `${service.merchantName || 'Vaniday merchant'} - ${service.duration || 'Flexible timing'}`,
@@ -301,6 +304,88 @@
         </div>
     </div>
 </section>
+
+<% if (featuredMonthMerchant) { %>
+    <section class="home-section">
+        <div class="home-section-heading">
+            <div>
+                <p class="eyebrow">Featured Salon of the Month</p>
+                <h2>🏆 <%= featuredMonthMerchant.name %></h2>
+            </div>
+            <a class="button secondary" href="/merchants/<%= featuredMonthMerchant.id %>?from=home">View merchant</a>
+        </div>
+        <p><%= featuredMonthMerchant.description || `${featuredMonthMerchant.category || 'Beauty'} merchant in ${featuredMonthMerchant.location || 'Singapore'}.` %></p>
+    </section>
+<% } %>
+
+<% if (featuredServiceItems.length > 0) { %>
+    <section class="home-section">
+        <div class="home-section-heading">
+            <div>
+                <p class="eyebrow">Featured Services</p>
+                <h2>Services getting extra marketplace visibility.</h2>
+            </div>
+            <a class="button secondary" href="/services">View all services</a>
+        </div>
+        <div class="storefront-product-strip">
+            <% featuredServiceItems.slice(0, 4).forEach((service) => { %>
+                <article>
+                    <span class="tag">⭐ Featured Service</span>
+                    <h3><%= service.name %></h3>
+                    <p class="muted"><%= service.merchantName %> · <%= service.duration %></p>
+                    <a class="button secondary" href="<%= getBookingHref(service) %>">Book</a>
+                </article>
+            <% }) %>
+        </div>
+    </section>
+<% } %>
+
+<% if (featuredProductItems.length > 0) { %>
+    <section class="home-section">
+        <div class="home-section-heading">
+            <div>
+                <p class="eyebrow">Featured Products</p>
+                <h2>Merchant aftercare picks.</h2>
+            </div>
+            <a class="button secondary" href="/products">Shop products</a>
+        </div>
+        <div class="storefront-product-strip">
+            <% featuredProductItems.slice(0, 4).forEach((product) => { %>
+                <article>
+                    <span class="tag">⭐ Featured Product</span>
+                    <h3><%= product.name %></h3>
+                    <p class="muted"><%= product.salonName || 'Vaniday merchant' %></p>
+                    <div>
+                        <strong>$<%= Number(product.price || 0).toFixed(2) %></strong>
+                        <a class="button secondary" href="/products/<%= product.id %>">View</a>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    </section>
+<% } %>
+
+<% if (trendingMerchantItems.length > 0) { %>
+    <section class="home-section">
+        <div class="home-section-heading">
+            <div>
+                <p class="eyebrow">Trending Merchants</p>
+                <h2>🔥 Merchants with current featured momentum.</h2>
+            </div>
+            <a class="button secondary" href="/merchants">View merchants</a>
+        </div>
+        <div class="storefront-product-strip">
+            <% trendingMerchantItems.slice(0, 4).forEach((merchant) => { %>
+                <article>
+                    <span class="tag">🔥 Trending Merchant</span>
+                    <h3><%= merchant.name %></h3>
+                    <p class="muted"><%= merchant.location || 'Singapore' %></p>
+                    <a class="button secondary" href="/merchants/<%= merchant.id %>?from=home">View</a>
+                </article>
+            <% }) %>
+        </div>
+    </section>
+<% } %>
 
 <section class="home-section">
     <div class="home-section-heading">

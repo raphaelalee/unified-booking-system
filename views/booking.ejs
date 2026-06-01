@@ -24,6 +24,7 @@
         : null;
     const lockPromotionOption = Boolean(selectedPromotion && requestedOptionId);
     const bookingMaxDate = typeof maxBookingDate !== 'undefined' && maxBookingDate ? maxBookingDate : '';
+    const featuredBookingServices = Array.isArray(featuredRecommendedServices) ? featuredRecommendedServices : [];
 
     const normalizeText = (text) => String(text || '').toLowerCase();
     const hasPattern = (text, patterns = []) =>
@@ -217,6 +218,18 @@
                 <p class="eyebrow">Services</p>
                 <h2>Choose an appointment</h2>
             </div>
+
+            <% if (featuredBookingServices.length > 0) { %>
+                <div class="storefront-product-strip">
+                    <% featuredBookingServices.forEach((service) => { %>
+                        <article>
+                            <span class="tag">⭐ Featured Service</span>
+                            <h3><%= service.name %></h3>
+                            <p class="muted"><%= service.duration %> · $<%= Number(service.price || 0).toFixed(2) %></p>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
 
             <div class="service-list booking-service-options booking-service-groups">
                 <% visibleServiceGroups.forEach((group, groupIndex) => { %>

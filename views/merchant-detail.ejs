@@ -17,6 +17,8 @@
     const statusCopy = 'Open today';
     const hoursCopy = '9:00 AM - 9:00 PM';
     const renderStars = (rating) => '&#9733;'.repeat(Math.round(Number(rating || 0))) + '&#9734;'.repeat(Math.max(0, 5 - Math.round(Number(rating || 0))));
+    const highlightedServices = Array.isArray(featuredServices) ? featuredServices : [];
+    const highlightedProducts = Array.isArray(featuredProducts) ? featuredProducts : [];
 %>
 
 <section class="merchant-storefront">
@@ -31,6 +33,19 @@
             <p class="eyebrow"><%= merchant.category || 'Beauty studio' %></p>
             <h1><%= merchant.name %></h1>
             <p><%= merchant.description %></p>
+            <% if (merchant.isFeatured) { %>
+                <div class="merchant-storefront-pills">
+                    <span>
+                        <%= merchant.featuredType === 'featured_month'
+                            ? '🏆 Featured Merchant of the Month'
+                            : merchant.featuredType === 'trending'
+                                ? '🔥 Trending Merchant'
+                                : merchant.featuredType === 'top_rated'
+                                    ? '⭐ Top Rated Merchant'
+                                    : '⭐ Featured Merchant' %>
+                    </span>
+                </div>
+            <% } %>
             <div class="merchant-storefront-pills" aria-label="Merchant highlights">
                 <span><strong><%= ratingCopy %></strong> rating<%= reviewCount > 0 ? ` / ${reviewCount} review${reviewCount === 1 ? '' : 's'}` : '' %></span>
                 <span><%= merchant.location || 'Singapore' %></span>
@@ -63,6 +78,19 @@
                     </div>
                     <span><%= detailServices.length %> service<%= detailServices.length === 1 ? '' : 's' %></span>
                 </div>
+
+                <% if (highlightedServices.length > 0) { %>
+                    <div class="storefront-product-strip">
+                        <% highlightedServices.forEach((service) => { %>
+                            <article>
+                                <span class="tag">⭐ Featured Service</span>
+                                <h3><%= service.name %></h3>
+                                <p class="muted"><%= service.duration %> · $<%= Number(service.price || 0).toFixed(2) %></p>
+                                <a class="button secondary" href="<%= bookPath(service) %>">Book featured</a>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
 
                 <% if (detailServices.length === 0) { %>
                     <div class="notice">
@@ -106,6 +134,22 @@
                     </div>
                     <span><%= merchantProducts.length %> product<%= merchantProducts.length === 1 ? '' : 's' %></span>
                 </div>
+
+                <% if (highlightedProducts.length > 0) { %>
+                    <div class="storefront-product-strip">
+                        <% highlightedProducts.forEach((product) => { %>
+                            <article>
+                                <span class="tag">⭐ Featured Product</span>
+                                <h3><%= product.name %></h3>
+                                <p class="muted"><%= product.description %></p>
+                                <div>
+                                    <strong>$<%= Number(product.price || 0).toFixed(2) %></strong>
+                                    <a class="button secondary" href="/products/<%= product.id %>">View</a>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
 
                 <% if (merchantProducts.length === 0) { %>
                     <div class="notice">

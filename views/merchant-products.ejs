@@ -3,6 +3,7 @@
 <%
     const totalStock = products.reduce((sum, product) => sum + Number(product.stockQuantity || 0), 0);
     const lowStockCount = products.filter((product) => Number(product.stockQuantity || 0) <= 5).length;
+    const featuredCount = products.filter((product) => product.isFeatured).length;
 %>
 
 <section class="section compact merchant-products-page">
@@ -37,6 +38,10 @@
             <span>Low stock</span>
             <strong><%= lowStockCount %></strong>
         </article>
+        <article>
+            <span>Featured</span>
+            <strong><%= featuredCount %>/3</strong>
+        </article>
     </div>
 
     <% if (products.length === 0) { %>
@@ -51,6 +56,7 @@
             <span>Product</span>
             <span>Price</span>
             <span>Stock</span>
+            <span>Featured</span>
             <span>Restock</span>
             <span>Actions</span>
         </div>
@@ -73,12 +79,33 @@
                         <strong><%= product.stockQuantity %></strong>
                         <span>in stock</span>
                     </div>
+                    <div class="merchant-product-stock">
+                        <% if (product.isFeatured) { %>
+                            <strong>Featured</strong>
+                            <span>#<%= Number(product.featuredOrder || 0) %></span>
+                            <span><%= product.featuredStartDate || 'No start' %> to <%= product.featuredEndDate || 'No end' %></span>
+                        <% } else { %>
+                            <strong>Not featured</strong>
+                        <% } %>
+                    </div>
                     <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
                         <input type="number" name="quantity" min="1" max="999" step="1" value="1" aria-label="Restock quantity">
                         <button class="restock-icon-button" type="submit" title="Restock <%= product.name %>" aria-label="Restock <%= product.name %>">+</button>
                     </form>
                     <div class="merchant-product-actions">
                         <a class="button secondary" href="/merchant/products/<%= product.id %>/edit">Edit</a>
+                        <% if (product.isFeatured) { %>
+                            <form action="/merchant/products/<%= product.id %>/unfeature" method="POST">
+                                <button class="button secondary" type="submit">Remove Featured</button>
+                            </form>
+                        <% } else { %>
+                            <form action="/merchant/products/<%= product.id %>/feature" method="POST">
+                                <input type="number" name="featuredOrder" min="0" max="99" value="0" placeholder="Order" aria-label="Featured order">
+                                <input type="date" name="featuredStartDate" aria-label="Featured start date">
+                                <input type="date" name="featuredEndDate" aria-label="Featured end date">
+                                <button class="button secondary" type="submit">Mark as Featured</button>
+                            </form>
+                        <% } %>
                         <form action="/merchant/products/<%= product.id %>/delete" method="POST">
                             <button class="button secondary danger-button" type="submit">Delete</button>
                         </form>

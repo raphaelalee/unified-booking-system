@@ -5,6 +5,7 @@
     const categoryOptions = [...new Set(services.map((service) => service.category || merchant.category).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const slotCount = services.reduce((total, service) => total + (Array.isArray(service.slots) ? service.slots.length : 0), 0);
     const packageCount = services.filter((service) => service.packageEnabled).length;
+    const featuredCount = services.filter((service) => service.isFeatured).length;
     const averagePrice = services.length > 0
         ? services.reduce((total, service) => total + Number(service.price || 0), 0) / services.length
         : 0;
@@ -44,6 +45,11 @@
             <span>Packages</span>
             <strong><%= packageCount %></strong>
             <small><%= averagePrice > 0 ? `$${averagePrice.toFixed(2)} avg single session` : 'none listed yet' %></small>
+        </article>
+        <article>
+            <span>Featured</span>
+            <strong><%= featuredCount %>/3</strong>
+            <small>homepage and marketplace priority</small>
         </article>
     </div>
 
@@ -86,6 +92,7 @@
             <span>Duration</span>
             <span>Price</span>
             <span>Package</span>
+            <span>Featured</span>
             <span>Slots</span>
             <span>Actions</span>
         </div>
@@ -118,6 +125,15 @@
                             <span>No package</span>
                         <% } %>
                     </div>
+                    <div class="merchant-service-package">
+                        <% if (service.isFeatured) { %>
+                            <strong>Featured</strong>
+                            <span>#<%= Number(service.featuredOrder || 0) %></span>
+                            <span><%= service.featuredStartDate || 'No start' %> to <%= service.featuredEndDate || 'No end' %></span>
+                        <% } else { %>
+                            <span>Not featured</span>
+                        <% } %>
+                    </div>
                     <% if (Array.isArray(service.slots) && service.slots.length > 0) { %>
                         <div class="merchant-service-slots">
                             <% service.slots.forEach((slot) => { %>
@@ -129,6 +145,18 @@
                     <% } %>
                     <div class="merchant-service-actions">
                         <a class="button secondary" href="/merchant/services/<%= service.id %>/edit">Edit</a>
+                        <% if (service.isFeatured) { %>
+                            <form action="/merchant/services/<%= service.id %>/unfeature" method="POST">
+                                <button class="button secondary" type="submit">Remove Featured</button>
+                            </form>
+                        <% } else { %>
+                            <form action="/merchant/services/<%= service.id %>/feature" method="POST">
+                                <input type="number" name="featuredOrder" min="0" max="99" value="0" placeholder="Order" aria-label="Featured order">
+                                <input type="date" name="featuredStartDate" aria-label="Featured start date">
+                                <input type="date" name="featuredEndDate" aria-label="Featured end date">
+                                <button class="button secondary" type="submit">Mark as Featured</button>
+                            </form>
+                        <% } %>
                         <form action="/merchant/services/<%= service.id %>/delete" method="POST">
                             <button class="button secondary danger-button" type="submit">Delete</button>
                         </form>

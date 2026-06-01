@@ -276,6 +276,15 @@ function formatDateTimeInputValue(value) {
     return date.toISOString().slice(0, 16);
 }
 
+function getMerchantFeaturedForm(body = {}) {
+    return {
+        featuredType: String(body.featuredType || body.featured_type || '').trim(),
+        featuredOrder: String(body.featuredOrder || body.featured_order || '').trim(),
+        featuredStartDate: String(body.featuredStartDate || body.featured_start_date || '').trim(),
+        featuredEndDate: String(body.featuredEndDate || body.featured_end_date || '').trim()
+    };
+}
+
 function validateServiceForm(form) {
     const errors = [];
     const salonId = Number(form.salonId);
@@ -836,6 +845,41 @@ function updateMerchantCommission(req, res) {
             ? `Merchant commission updated to ${commissionRate.toFixed(2)}%.`
             : 'Merchant commission could not be updated.';
         req.session.adminError = updated ? null : 'Merchant commission could not be updated.';
+        return res.redirect('/admin/merchants');
+    });
+}
+
+function featureMerchant(req, res) {
+    const salonId = Number(req.params.salonId || req.params.id);
+    const form = getMerchantFeaturedForm(req.body);
+
+    return MerchantService.markMerchantFeatured(salonId, form, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = error.message || 'Merchant could not be featured.';
+            return res.redirect('/admin/merchants');
+        }
+
+        req.session.adminSuccess = result?.affectedRows
+            ? 'Merchant featured successfully.'
+            : 'Merchant could not be featured.';
+        return res.redirect('/admin/merchants');
+    });
+}
+
+function unfeatureMerchant(req, res) {
+    const salonId = Number(req.params.salonId || req.params.id);
+
+    return MerchantService.removeMerchantFeatured(salonId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = 'Merchant could not be removed from featured.';
+            return res.redirect('/admin/merchants');
+        }
+
+        req.session.adminSuccess = result?.affectedRows
+            ? 'Merchant removed from featured.'
+            : 'Merchant could not be updated.';
         return res.redirect('/admin/merchants');
     });
 }
@@ -1965,6 +2009,8 @@ module.exports = {
     showNewMerchant,
     createMerchant,
     updateMerchantCommission,
+    featureMerchant,
+    unfeatureMerchant,
     listServices,
     showNewPromotion,
     createPromotion,

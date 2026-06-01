@@ -2961,6 +2961,43 @@ body:has(.admin-nav-toggle) .nav {
     gap: 10px;
 }
 
+.profile-voucher-list-scroll {
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.profile-voucher-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 14px 0;
+    flex-wrap: wrap;
+}
+
+.profile-voucher-tab {
+    border: 1px solid rgba(44, 55, 42, 0.14);
+    background: #f5f7f0;
+    color: #52614d;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.profile-voucher-tab.is-active {
+    background: #5c754b;
+    border-color: #5c754b;
+    color: #fff;
+}
+
+.profile-voucher-tab-panel {
+    display: none;
+}
+
+.profile-voucher-tab-panel.is-active {
+    display: block;
+}
+
 .profile-voucher-row,
 .profile-wallet-row {
     min-width: 0;

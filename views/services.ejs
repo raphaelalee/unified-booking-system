@@ -230,6 +230,14 @@
                     <div class="service-card-body">
                         <div class="service-card-topline">
                             <span class="tag"><%= service.merchantCategory %></span>
+                            <% if (service.isFeatured) { %>
+                                <span class="tag">⭐ Featured Service</span>
+                            <% } %>
+                            <% if (service.merchantIsFeatured) { %>
+                                <span class="tag">
+                                    <%= service.merchantFeaturedType === 'trending' ? '🔥 Trending Merchant' : '⭐ Featured Merchant' %>
+                                </span>
+                            <% } %>
                             <span class="service-rating-pill"><%= service.merchantRating %> rating</span>
                         </div>
 

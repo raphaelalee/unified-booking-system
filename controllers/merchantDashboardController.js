@@ -3,6 +3,7 @@ const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
 const Promotion = require('../models/Promotion');
+const RewardVoucher = require('../models/RewardVoucher');
 const CashbackCampaign = require('../models/CashbackCampaign');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
@@ -121,6 +122,14 @@ function isTruthyFormValue(value) {
     }
 
     return ['1', 'on', 'true', 'yes'].includes(String(value || '').trim().toLowerCase());
+}
+
+function getFeaturedConfigForm(body = {}) {
+    return {
+        featuredOrder: String(body.featuredOrder || body.featured_order || '').trim(),
+        featuredStartDate: String(body.featuredStartDate || body.featured_start_date || '').trim(),
+        featuredEndDate: String(body.featuredEndDate || body.featured_end_date || '').trim()
+    };
 }
 
 function getServiceForm(body = {}) {
@@ -2014,6 +2023,160 @@ function deleteService(req, res) {
     });
 }
 
+function getVoucherForm(body = {}) {
+    return {
+        title: String(body.title || '').trim(),
+        detail: String(body.detail || '').trim(),
+        linkedItemType: String(body.linkedItemType || '').trim(),
+        linkedItemId: String(body.linkedItemId || '').trim(),
+        discountType: String(body.discountType || '').trim(),
+        discountValue: String(body.discountValue || '').trim(),
+        minimumSpend: String(body.minimumSpend || '').trim(),
+        pointsRequired: String(body.pointsRequired || '').trim(),
+        startDate: String(body.startDate || '').trim(),
+        expiryDate: String(body.expiryDate || '').trim(),
+        usageLimitPerUser: String(body.usageLimitPerUser || '').trim(),
+        usageLimitTotal: String(body.usageLimitTotal || '').trim(),
+        status: String(body.status || '').trim()
+    };
+}
+
+function validateVoucherForm(form, merchant, products = []) {
+    const errors = [];
+    const linkedItemId = Number(form.linkedItemId);
+    const discountValue = Number(form.discountValue);
+    const minimumSpend = form.minimumSpend === '' ? 0 : Number(form.minimumSpend);
+    const pointsRequired = Number(form.pointsRequired);
+    const usageLimitPerUser = form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser);
+    const usageLimitTotal = form.usageLimitTotal === '' ? null : Number(form.usageLimitTotal);
+    const startDate = form.startDate ? new Date(form.startDate) : null;
+    const expiryDate = form.expiryDate ? new Date(form.expiryDate) : null;
+    const merchantServiceIds = new Set((merchant.services || []).map((service) => Number(service.id)));
+    const merchantProductIds = new Set((products || []).map((product) => Number(product.id)));
+
+    if (form.title.length < 2) {
+        errors.push('Voucher title must be at least 2 characters.');
+    }
+
+    if (form.detail.length < 10) {
+        errors.push('Voucher description must be at least 10 characters.');
+    }
+
+    if (!RewardVoucher.LINKED_ITEM_TYPES.includes(form.linkedItemType)) {
+        errors.push('Please choose whether this voucher is for an existing service or product.');
+    }
+
+    if (!Number.isInteger(linkedItemId) || linkedItemId < 1) {
+        errors.push('Please choose a valid listed service or product.');
+    } else if (form.linkedItemType === 'service' && !merchantServiceIds.has(linkedItemId)) {
+        errors.push('The selected service does not belong to your merchant listing.');
+    } else if (form.linkedItemType === 'product' && !merchantProductIds.has(linkedItemId)) {
+        errors.push('The selected product does not belong to your merchant listing.');
+    }
+
+    if (!RewardVoucher.DISCOUNT_TYPES.includes(form.discountType)) {
+        errors.push('Please choose a valid discount type.');
+    }
+
+    if (!Number.isFinite(discountValue) || discountValue <= 0) {
+        errors.push('Please enter a valid discount value.');
+    } else if (form.discountType === 'percentage' && discountValue > 100) {
+        errors.push('Percentage discount cannot exceed 100%.');
+    }
+
+    if (!Number.isFinite(minimumSpend) || minimumSpend < 0) {
+        errors.push('Please enter a valid minimum spend.');
+    }
+
+    if (!Number.isInteger(pointsRequired) || pointsRequired < 1) {
+        errors.push('Please enter a valid VaniGlints redemption cost.');
+    }
+
+    if (form.startDate && (!(startDate instanceof Date) || Number.isNaN(startDate?.getTime()))) {
+        errors.push('Please enter a valid voucher start date.');
+    }
+
+    if (form.expiryDate && (!(expiryDate instanceof Date) || Number.isNaN(expiryDate?.getTime()))) {
+        errors.push('Please enter a valid voucher expiry date.');
+    }
+
+    if (startDate && expiryDate && startDate > expiryDate) {
+        errors.push('Voucher expiry date must be after the start date.');
+    }
+
+    if (usageLimitPerUser !== null && (!Number.isInteger(usageLimitPerUser) || usageLimitPerUser < 1)) {
+        errors.push('Per-user usage limit must be at least 1.');
+    }
+
+    if (usageLimitTotal !== null && (!Number.isInteger(usageLimitTotal) || usageLimitTotal < 1)) {
+        errors.push('Total usage limit must be at least 1.');
+    }
+
+    if (!RewardVoucher.STATUSES.includes(form.status)) {
+        errors.push('Please choose a valid voucher status.');
+    }
+
+    return errors;
+}
+
+function buildVoucherPayload(form, merchant) {
+    const discountType = form.discountType;
+    const discountValue = Number(form.discountValue);
+
+    return {
+        title: form.title,
+        detail: form.detail,
+        merchantId: merchant.id,
+        voucherSource: 'merchant',
+        discountType,
+        discountValue,
+        voucherValue: discountType === 'fixed' ? discountValue : 0,
+        minimumSpend: Number(form.minimumSpend || 0),
+        pointsRequired: Number(form.pointsRequired),
+        glintsCost: Number(form.pointsRequired),
+        startDate: form.startDate ? form.startDate.replace('T', ' ') : null,
+        expiryDate: form.expiryDate ? form.expiryDate.replace('T', ' ') : null,
+        usageLimitPerUser: form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser),
+        usageLimitTotal: form.usageLimitTotal === '' ? null : Number(form.usageLimitTotal),
+        status: form.status,
+        sortOrder: 0,
+        linkedItemType: form.linkedItemType,
+        linkedItemId: Number(form.linkedItemId)
+    };
+}
+
+function featureService(req, res) {
+    const form = getFeaturedConfigForm(req.body);
+
+    return MerchantService.markServiceFeatured(req.session.user.id, req.params.serviceId, form, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = error.message || 'Service could not be marked as featured.';
+            return res.redirect('/merchant/services');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows
+            ? 'Service marked as featured.'
+            : 'Service could not be marked as featured.';
+        return res.redirect('/merchant/services');
+    });
+}
+
+function unfeatureService(req, res) {
+    return MerchantService.removeServiceFeatured(req.session.user.id, req.params.serviceId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Service could not be removed from featured.';
+            return res.redirect('/merchant/services');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows
+            ? 'Service removed from featured.'
+            : 'Service could not be updated.';
+        return res.redirect('/merchant/services');
+    });
+}
+
 function listProducts(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
@@ -2044,6 +2207,38 @@ function listProducts(req, res) {
                 error
             });
         });
+    });
+}
+
+function featureProduct(req, res) {
+    const form = getFeaturedConfigForm(req.body);
+
+    return Product.markProductFeatured(req.session.user.id, req.params.productId, form, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = error.message || 'Product could not be marked as featured.';
+            return res.redirect('/merchant/products');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows
+            ? 'Product marked as featured.'
+            : 'Product could not be marked as featured.';
+        return res.redirect('/merchant/products');
+    });
+}
+
+function unfeatureProduct(req, res) {
+    return Product.removeProductFeatured(req.session.user.id, req.params.productId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Product could not be removed from featured.';
+            return res.redirect('/merchant/products');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows
+            ? 'Product removed from featured.'
+            : 'Product could not be updated.';
+        return res.redirect('/merchant/products');
     });
 }
 
@@ -2629,6 +2824,295 @@ function deletePromotion(req, res) {
     });
 }
 
+function listVouchers(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return RewardVoucher.getByMerchantUserId(req.session.user.id, (voucherError, vouchers = []) => {
+            if (voucherError) {
+                console.error(voucherError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Vouchers Error',
+                    message: 'Vouchers could not be loaded from the database.'
+                });
+            }
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-vouchers', {
+                title: 'Merchant Vouchers',
+                merchant,
+                vouchers,
+                success,
+                error
+            });
+        });
+    });
+}
+
+function showNewVoucher(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Voucher Error',
+                    message: 'Products could not be loaded for voucher creation.'
+                });
+            }
+
+            return res.render('merchant-voucher-form', {
+                title: 'Add Voucher',
+                merchant,
+                voucher: null,
+                form: getVoucherForm({
+                    status: 'active',
+                    discountType: 'percentage',
+                    linkedItemType: 'service'
+                }),
+                services: merchant.services || [],
+                products,
+                statuses: RewardVoucher.STATUSES,
+                discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                errors: []
+            });
+        });
+    });
+}
+
+function createVoucher(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Voucher Error',
+                    message: 'Products could not be loaded for voucher creation.'
+                });
+            }
+
+            const form = getVoucherForm(req.body);
+            const errors = validateVoucherForm(form, merchant, products);
+
+            if (errors.length > 0) {
+                return res.status(400).render('merchant-voucher-form', {
+                    title: 'Add Voucher',
+                    merchant,
+                    voucher: null,
+                    form,
+                    services: merchant.services || [],
+                    products,
+                    statuses: RewardVoucher.STATUSES,
+                    discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                    linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                    errors
+                });
+            }
+
+            return RewardVoucher.createForMerchant(req.session.user.id, buildVoucherPayload(form, merchant), (createError, result) => {
+                if (createError) {
+                    console.error(createError);
+                    return res.status(500).render('merchant-voucher-form', {
+                        title: 'Add Voucher',
+                        merchant,
+                        voucher: null,
+                        form,
+                        services: merchant.services || [],
+                        products,
+                        statuses: RewardVoucher.STATUSES,
+                        discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                        linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                        errors: ['Voucher could not be created. Please try again.']
+                    });
+                }
+
+                req.session.merchantSuccess = result?.affectedRows === 0
+                    ? null
+                    : 'Voucher created successfully.';
+                req.session.merchantError = result?.affectedRows === 0
+                    ? 'Voucher could not be created.'
+                    : null;
+                return res.redirect('/merchant/vouchers');
+            });
+        });
+    });
+}
+
+function showEditVoucher(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Voucher Error',
+                    message: 'Products could not be loaded for voucher editing.'
+                });
+            }
+
+            return RewardVoucher.findForMerchant(req.session.user.id, req.params.voucherId, (voucherError, voucher) => {
+                if (voucherError) {
+                    console.error(voucherError);
+                    return res.status(500).render('error', {
+                        title: 'Voucher Not Found',
+                        message: 'Voucher data could not be loaded.'
+                    });
+                }
+
+                if (!voucher) {
+                    return res.status(404).render('error', {
+                        title: 'Voucher Not Found',
+                        message: 'This voucher does not belong to your merchant account.'
+                    });
+                }
+
+                return res.render('merchant-voucher-form', {
+                    title: 'Edit Voucher',
+                    merchant,
+                    voucher,
+                    form: {
+                        title: voucher.title,
+                        detail: voucher.detail,
+                        linkedItemType: voucher.linkedItemType || 'service',
+                        linkedItemId: voucher.linkedItemId ? String(voucher.linkedItemId) : '',
+                        discountType: voucher.discountType,
+                        discountValue: String(voucher.discountValue),
+                        minimumSpend: String(voucher.minimumSpend || 0),
+                        pointsRequired: String(voucher.pointsRequired || 0),
+                        startDate: formatDateTimeInputValue(voucher.startDate),
+                        expiryDate: formatDateTimeInputValue(voucher.expiryDate),
+                        usageLimitPerUser: voucher.usageLimitPerUser === null ? '' : String(voucher.usageLimitPerUser),
+                        usageLimitTotal: voucher.usageLimitTotal === null ? '' : String(voucher.usageLimitTotal),
+                        status: voucher.status
+                    },
+                    services: merchant.services || [],
+                    products,
+                    statuses: RewardVoucher.STATUSES,
+                    discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                    linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                    errors: []
+                });
+            });
+        });
+    });
+}
+
+function updateVoucher(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+                return res.status(500).render('error', {
+                    title: 'Merchant Voucher Error',
+                    message: 'Products could not be loaded for voucher editing.'
+                });
+            }
+
+            return RewardVoucher.findForMerchant(req.session.user.id, req.params.voucherId, (voucherError, voucher) => {
+                if (voucherError) {
+                    console.error(voucherError);
+                    return res.status(500).render('error', {
+                        title: 'Voucher Not Found',
+                        message: 'Voucher data could not be loaded.'
+                    });
+                }
+
+                if (!voucher) {
+                    return res.status(404).render('error', {
+                        title: 'Voucher Not Found',
+                        message: 'This voucher does not belong to your merchant account.'
+                    });
+                }
+
+                const form = getVoucherForm(req.body);
+                const errors = validateVoucherForm(form, merchant, products);
+
+                if (errors.length > 0) {
+                    return res.status(400).render('merchant-voucher-form', {
+                        title: 'Edit Voucher',
+                        merchant,
+                        voucher,
+                        form,
+                        services: merchant.services || [],
+                        products,
+                        statuses: RewardVoucher.STATUSES,
+                        discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                        linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                        errors
+                    });
+                }
+
+                return RewardVoucher.updateForMerchant(req.session.user.id, voucher.id, buildVoucherPayload(form, merchant), (updateError, result) => {
+                    if (updateError) {
+                        console.error(updateError);
+                        return res.status(500).render('merchant-voucher-form', {
+                            title: 'Edit Voucher',
+                            merchant,
+                            voucher,
+                            form,
+                            services: merchant.services || [],
+                            products,
+                            statuses: RewardVoucher.STATUSES,
+                            discountTypes: RewardVoucher.DISCOUNT_TYPES,
+                            linkedItemTypes: RewardVoucher.LINKED_ITEM_TYPES,
+                            errors: ['Voucher could not be updated. Please try again.']
+                        });
+                    }
+
+                    req.session.merchantSuccess = result?.affectedRows > 0 ? 'Voucher updated successfully.' : null;
+                    req.session.merchantError = result?.affectedRows > 0 ? null : 'Voucher could not be updated.';
+                    return res.redirect('/merchant/vouchers');
+                });
+            });
+        });
+    });
+}
+
+function deleteVoucher(req, res) {
+    return RewardVoucher.deleteForMerchant(req.session.user.id, req.params.voucherId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Voucher could not be deleted.';
+            return res.redirect('/merchant/vouchers');
+        }
+
+        req.session.merchantSuccess = result?.affectedRows ? 'Voucher deleted successfully.' : null;
+        req.session.merchantError = result?.affectedRows ? null : 'Voucher could not be deleted.';
+        return res.redirect('/merchant/vouchers');
+    });
+}
+
 function listCashbackCampaigns(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
@@ -2898,6 +3382,8 @@ module.exports = {
     showEditService,
     updateService,
     deleteService,
+    featureService,
+    unfeatureService,
     listProducts,
     showNewProduct,
     createProduct,
@@ -2905,12 +3391,20 @@ module.exports = {
     updateProduct,
     restockProduct,
     deleteProduct,
+    featureProduct,
+    unfeatureProduct,
     listPromotions,
     showNewPromotion,
     createPromotion,
     showEditPromotion,
     updatePromotion,
     deletePromotion,
+    listVouchers,
+    showNewVoucher,
+    createVoucher,
+    showEditVoucher,
+    updateVoucher,
+    deleteVoucher,
     listCashbackCampaigns,
     showNewCashbackCampaign,
     createCashbackCampaign,

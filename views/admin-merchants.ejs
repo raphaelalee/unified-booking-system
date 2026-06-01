@@ -35,12 +35,33 @@
                         <div class="admin-merchant-metrics">
                             <p><span>Owner phone</span><strong><%= merchant.owner_phone || 'Not set' %></strong></p>
                             <p><span>UEN</span><strong><%= merchant.uen || 'Not set' %></strong></p>
+                            <p><span>Featured</span><strong><%= merchant.is_featured ? 'Yes' : 'No' %></strong></p>
+                            <p><span>Type</span><strong><%= merchant.featured_type || 'None' %></strong></p>
+                            <p><span>Score</span><strong><%= Number(merchant.featured_score || 0).toFixed(2) %></strong></p>
                         </div>
                         <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/commission" method="POST">
                             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <input type="number" name="commissionRate" min="0" max="80" step="0.1" value="<%= Number(merchant.commission_rate || 15).toFixed(1) %>">
                             <button class="button secondary" type="submit">Save</button>
                         </form>
+                        <% if (merchant.is_featured) { %>
+                            <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/unfeature" method="POST">
+                                <button class="button secondary" type="submit">Unfeature merchant</button>
+                            </form>
+                        <% } else { %>
+                            <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/feature" method="POST">
+                                <select name="featuredType">
+                                    <option value="featured_month">Featured Merchant of the Month</option>
+                                    <option value="sponsored">Sponsored</option>
+                                    <option value="trending">Trending</option>
+                                    <option value="top_rated">Top Rated</option>
+                                </select>
+                                <input type="number" name="featuredOrder" min="0" max="99" step="1" value="<%= Number(merchant.featured_order || 0) %>">
+                                <input type="date" name="featuredStartDate" value="<%= merchant.featured_start_date ? new Date(merchant.featured_start_date).toISOString().slice(0, 10) : '' %>">
+                                <input type="date" name="featuredEndDate" value="<%= merchant.featured_end_date ? new Date(merchant.featured_end_date).toISOString().slice(0, 10) : '' %>">
+                                <button class="button secondary" type="submit">Feature merchant</button>
+                            </form>
+                        <% } %>
                     </article>
                 <% }) %>
             </div>

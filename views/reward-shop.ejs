@@ -3,6 +3,10 @@
 <% const showClaimPop = Boolean(success && success.startsWith('Claimed ')); %>
 
 <section class="section compact reward-shop-page">
+    <%
+        const platformOffers = (offers || []).filter((offer) => (offer.voucherSource || 'platform') !== 'merchant');
+        const merchantOffers = (offers || []).filter((offer) => (offer.voucherSource || '') === 'merchant');
+    %>
     <% if (success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
@@ -80,33 +84,64 @@
                 <a class="button secondary" href="/profile#membership">My vouchers<% if (typeof ownedVoucherCount !== 'undefined') { %> (<%= ownedVoucherCount %>)<% } %></a>
             </div>
 
-            <div class="reward-shop-grid">
-                <% offers.forEach((offer) => { %>
-                    <article class="reward-voucher-card <%= offer.canRedeem ? 'is-available' : 'is-locked' %>">
-                        <div class="reward-voucher-topline">
-                            <span class="reward-voucher-cost"><%= offer.glintsCost.toLocaleString('en-SG') %> Glints</span>
-                            <span class="reward-voucher-value">$<%= offer.voucherValue %></span>
-                        </div>
+            <div class="profile-voucher-tabs" data-reward-shop-tabs>
+                <button class="profile-voucher-tab is-active" type="button" data-reward-shop-tab="vaniday">
+                    Vani vouchers (<%= platformOffers.length %>)
+                </button>
+                <button class="profile-voucher-tab" type="button" data-reward-shop-tab="merchant">
+                    Merchant vouchers (<%= merchantOffers.length %>)
+                </button>
+            </div>
 
-                        <h3><%= offer.title %></h3>
-                        <p><%= offer.detail %></p>
-
-                        <div class="reward-voucher-meta">
-                            <% if (offer.canRedeem) { %>
-                                <span class="reward-status reward-status-ready">Ready to redeem</span>
-                                <form action="/reward-shop/vouchers/<%= encodeURIComponent(offer.voucherId || offer.id) %>/redeem" method="POST">
-                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <button class="button primary full" type="submit">Redeem now</button>
-                                </form>
-                            <% } else { %>
-                                <span class="reward-status reward-status-locked">
-                                    Need <%= offer.remaining.toLocaleString('en-SG') %> more Glints
+            <% const renderOfferGrid = (offerList = []) => { %>
+                <div class="reward-shop-grid">
+                    <% offerList.forEach((offer) => { %>
+                        <article class="reward-voucher-card <%= offer.canRedeem ? 'is-available' : 'is-locked' %>">
+                            <div class="reward-voucher-topline">
+                                <span class="reward-voucher-cost"><%= offer.glintsCost.toLocaleString('en-SG') %> Glints</span>
+                                <span class="reward-voucher-value">
+                                    <%= offer.discountType === 'percentage'
+                                        ? `${Number(offer.discountValue || 0)}%`
+                                        : `$${Number(offer.voucherValue || offer.discountValue || 0).toFixed(0)}` %>
                                 </span>
-                                <button class="button secondary full" type="button" disabled>Locked</button>
+                            </div>
+
+                            <% if (offer.merchantName) { %>
+                                <p class="tag"><%= offer.merchantName %></p>
                             <% } %>
+                            <h3><%= offer.title %></h3>
+                            <p><%= offer.detail %></p>
+
+                            <div class="reward-voucher-meta">
+                                <% if (offer.canRedeem) { %>
+                                    <span class="reward-status reward-status-ready">Ready to redeem</span>
+                                    <form action="/reward-shop/vouchers/<%= encodeURIComponent(offer.voucherId || offer.id) %>/redeem" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <button class="button primary full" type="submit">Redeem now</button>
+                                    </form>
+                                <% } else { %>
+                                    <span class="reward-status reward-status-locked">
+                                        Need <%= offer.remaining.toLocaleString('en-SG') %> more Glints
+                                    </span>
+                                    <button class="button secondary full" type="button" disabled>Locked</button>
+                                <% } %>
+                            </div>
+                        </article>
+                    <% }) %>
+                    <% if (offerList.length === 0) { %>
+                        <div class="notice">
+                            No vouchers in this tab right now.
                         </div>
-                    </article>
-                <% }) %>
+                    <% } %>
+                </div>
+            <% }; %>
+
+            <div class="profile-voucher-tab-panel is-active" data-reward-shop-panel="vaniday">
+                <% renderOfferGrid(platformOffers); %>
+            </div>
+
+            <div class="profile-voucher-tab-panel" data-reward-shop-panel="merchant" hidden>
+                <% renderOfferGrid(merchantOffers); %>
             </div>
 
             <div class="reward-shop-note">
@@ -117,5 +152,33 @@
         </section>
     </div>
 </section>
+
+<script>
+    (() => {
+        const tabGroups = document.querySelectorAll('[data-reward-shop-tabs]');
+
+        tabGroups.forEach((group) => {
+            const tabs = Array.from(group.querySelectorAll('[data-reward-shop-tab]'));
+            const panels = Array.from(group.parentElement.querySelectorAll('[data-reward-shop-panel]'));
+
+            const activateTab = (target) => {
+                tabs.forEach((tab) => {
+                    const isActive = tab.dataset.rewardShopTab === target;
+                    tab.classList.toggle('is-active', isActive);
+                });
+
+                panels.forEach((panel) => {
+                    const isActive = panel.dataset.rewardShopPanel === target;
+                    panel.classList.toggle('is-active', isActive);
+                    panel.hidden = !isActive;
+                });
+            };
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => activateTab(tab.dataset.rewardShopTab));
+            });
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

@@ -27,6 +27,17 @@
                 <div>
                     <div class="merchant-title-row">
                         <p class="tag"><%= merchant.category %></p>
+                        <% if (merchant.isFeatured) { %>
+                            <p class="tag">
+                                <%= merchant.featuredType === 'featured_month'
+                                    ? '🏆 Featured Merchant of the Month'
+                                    : merchant.featuredType === 'trending'
+                                        ? '🔥 Trending Merchant'
+                                        : merchant.featuredType === 'top_rated'
+                                            ? '⭐ Top Rated Merchant'
+                                            : '⭐ Featured Merchant' %>
+                            </p>
+                        <% } %>
                         <form action="/merchants/<%= merchant.id %>/favourite" method="POST">
                             <button class="heart-button <%= favouriteIds.includes(merchant.id) ? 'active' : '' %>" type="submit" aria-label="Favourite <%= merchant.name %>">
                                 <%- favouriteIds.includes(merchant.id) ? '&hearts;' : '&#9825;' %>

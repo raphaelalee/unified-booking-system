@@ -36,6 +36,41 @@ const fallbackProducts = [
     { id: 'room-mist', name: 'Botanical Room Mist', category: 'Wellness', price: 22, description: 'Calm spa scent for home', ...productDetails['room-mist'] }
 ];
 
+function getFeaturedWindowCondition(tableName) {
+    return `(
+        ${tableName}.is_featured = 1
+        AND (${tableName}.featured_start_date IS NULL OR ${tableName}.featured_start_date <= CURDATE())
+        AND (${tableName}.featured_end_date IS NULL OR ${tableName}.featured_end_date >= CURDATE())
+    )`;
+}
+
+function validateFeaturedDates(startDate, endDate) {
+    const normalizedStart = String(startDate || '').trim() || null;
+    const normalizedEnd = String(endDate || '').trim() || null;
+
+    if (normalizedStart && Number.isNaN(new Date(normalizedStart).getTime())) {
+        return { error: 'Please enter a valid featured start date.' };
+    }
+
+    if (normalizedEnd && Number.isNaN(new Date(normalizedEnd).getTime())) {
+        return { error: 'Please enter a valid featured end date.' };
+    }
+
+    if (normalizedStart && normalizedEnd && normalizedStart > normalizedEnd) {
+        return { error: 'Featured end date must be on or after the featured start date.' };
+    }
+
+    return {
+        startDate: normalizedStart,
+        endDate: normalizedEnd
+    };
+}
+
+function normalizeFeaturedOrder(value) {
+    const numeric = Number(value || 0);
+    return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+}
+
 function ensureProductSchema(callback) {
     db.query('SHOW COLUMNS FROM products', (columnError, columns = []) => {
         if (columnError) {
@@ -72,6 +107,22 @@ function ensureProductSchema(callback) {
             alters.push('ADD COLUMN image_url TEXT');
         } else if (!String(imageUrlColumn.Type || '').toLowerCase().includes('text')) {
             alters.push('MODIFY COLUMN image_url TEXT');
+        }
+
+        if (!fields.has('is_featured')) {
+            alters.push('ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('featured_order')) {
+            alters.push('ADD COLUMN featured_order INT NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('featured_start_date')) {
+            alters.push('ADD COLUMN featured_start_date DATE DEFAULT NULL');
+        }
+
+        if (!fields.has('featured_end_date')) {
+            alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
         }
 
         if (alters.length === 0) {
@@ -118,7 +169,11 @@ function mapRow(row) {
             ? `Available from ${row.salon_name}`
             : `Stock: ${Number(row.stock_quantity || 0)}`),
         ingredients: row.ingredients || '',
-        howToUse: row.how_to_use || ''
+        howToUse: row.how_to_use || '',
+        isFeatured: Boolean(row.is_featured),
+        featuredOrder: Number(row.featured_order || 0),
+        featuredStartDate: row.featured_start_date || null,
+        featuredEndDate: row.featured_end_date || null
     });
 }
 
@@ -140,10 +195,12 @@ function getAll(callback) {
         const sql = `
             SELECT products.product_id, products.salon_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, salons.salon_name
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
-            ORDER BY products.product_id DESC
+            ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
         db.query(sql, (error, rows) => {
@@ -168,10 +225,12 @@ function getAllMerchantProducts(callback) {
         const sql = `
             SELECT products.product_id, products.salon_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, salons.salon_name
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
             FROM products
             INNER JOIN salons ON salons.salon_id = products.salon_id
-            ORDER BY salons.salon_name, products.product_id DESC
+            ORDER BY salons.salon_name, products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
         db.query(sql, (error, rows = []) => {
@@ -204,7 +263,9 @@ function findById(id, callback) {
         const sql = `
             SELECT products.product_id, products.salon_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, salons.salon_name
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             WHERE products.product_id = ?
@@ -239,7 +300,9 @@ function findMerchantProductById(id, callback) {
         const sql = `
             SELECT products.product_id, products.salon_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, salons.salon_name
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
             FROM products
             INNER JOIN salons ON salons.salon_id = products.salon_id
             WHERE products.product_id = ?
@@ -261,11 +324,13 @@ function getByMerchantUserId(userId, callback) {
     const sql = `
         SELECT products.product_id, products.salon_id, products.name, products.price,
             products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, salons.salon_name
+            products.ingredients, products.how_to_use, products.is_featured,
+            products.featured_order, products.featured_start_date, products.featured_end_date,
+            salons.salon_name
         FROM products
         INNER JOIN salons ON salons.salon_id = products.salon_id
         WHERE salons.merchant_id = ?
-        ORDER BY products.product_id DESC
+        ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
     `;
 
     db.query(sql, [userId], (error, rows) => {
@@ -282,7 +347,9 @@ function findForMerchant(userId, productId, callback) {
     const sql = `
         SELECT products.product_id, products.salon_id, products.name, products.price,
             products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, salons.salon_name
+            products.ingredients, products.how_to_use, products.is_featured,
+            products.featured_order, products.featured_start_date, products.featured_end_date,
+            salons.salon_name
         FROM products
         INNER JOIN salons ON salons.salon_id = products.salon_id
         WHERE salons.merchant_id = ?
@@ -465,9 +532,174 @@ function deleteAsAdmin(productId, callback) {
     });
 }
 
+function getFeaturedProducts(callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
+            FROM products
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE ${getFeaturedWindowCondition('products')}
+            ORDER BY products.featured_order, products.product_id DESC
+        `;
+
+        db.query(sql, (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapRow));
+        });
+    });
+}
+
+function getFeaturedProductsByMerchant(merchantId, callback) {
+    const salonId = Number(merchantId);
+
+    if (!Number.isInteger(salonId) || salonId < 1) {
+        callback(null, []);
+        return;
+    }
+
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.name, products.price,
+                products.stock_quantity, products.image_url, products.description,
+                products.ingredients, products.how_to_use, products.is_featured,
+                products.featured_order, products.featured_start_date, products.featured_end_date,
+                salons.salon_name
+            FROM products
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            WHERE products.salon_id = ?
+                AND ${getFeaturedWindowCondition('products')}
+            ORDER BY products.featured_order, products.product_id DESC
+        `;
+
+        db.query(sql, [salonId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapRow));
+        });
+    });
+}
+
+function countFeaturedProductsByMerchant(userId, callback) {
+    const sql = `
+        SELECT COUNT(*) AS total
+        FROM products
+        INNER JOIN salons ON salons.salon_id = products.salon_id
+        WHERE salons.merchant_id = ?
+            AND products.is_featured = 1
+    `;
+
+    db.query(sql, [userId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, Number(rows[0]?.total || 0));
+    });
+}
+
+function markProductFeatured(userId, productId, payload, callback) {
+    const normalizedProductId = Number(productId);
+    const { error: dateError, startDate, endDate } = validateFeaturedDates(payload?.featuredStartDate, payload?.featuredEndDate);
+
+    if (!Number.isInteger(normalizedProductId) || normalizedProductId < 1) {
+        callback(new Error('Invalid product selected.'));
+        return;
+    }
+
+    if (dateError) {
+        callback(new Error(dateError));
+        return;
+    }
+
+    findForMerchant(userId, normalizedProductId, (lookupError, product) => {
+        if (lookupError) {
+            callback(lookupError);
+            return;
+        }
+
+        if (!product) {
+            callback(new Error('This product does not belong to your merchant account.'));
+            return;
+        }
+
+        countFeaturedProductsByMerchant(userId, (countError, featuredCount) => {
+            if (countError) {
+                callback(countError);
+                return;
+            }
+
+            if (!product.isFeatured && featuredCount >= 3) {
+                callback(new Error('You can feature at most 3 products at a time.'));
+                return;
+            }
+
+            const sql = `
+                UPDATE products
+                INNER JOIN salons ON salons.salon_id = products.salon_id
+                SET products.is_featured = 1,
+                    products.featured_order = ?,
+                    products.featured_start_date = ?,
+                    products.featured_end_date = ?
+                WHERE products.product_id = ?
+                    AND salons.merchant_id = ?
+            `;
+
+            db.query(sql, [
+                normalizeFeaturedOrder(payload?.featuredOrder),
+                startDate,
+                endDate,
+                normalizedProductId,
+                userId
+            ], callback);
+        });
+    });
+}
+
+function removeProductFeatured(userId, productId, callback) {
+    const sql = `
+        UPDATE products
+        INNER JOIN salons ON salons.salon_id = products.salon_id
+        SET products.is_featured = 0,
+            products.featured_order = 0,
+            products.featured_start_date = NULL,
+            products.featured_end_date = NULL
+        WHERE products.product_id = ?
+            AND salons.merchant_id = ?
+    `;
+
+    db.query(sql, [productId, userId], callback);
+}
+
 module.exports = {
     getAll,
     getAllMerchantProducts,
+    getFeaturedProducts,
+    getFeaturedProductsByMerchant,
+    countFeaturedProductsByMerchant,
+    markProductFeatured,
+    removeProductFeatured,
     findById,
     findMerchantProductById,
     getByMerchantUserId,
