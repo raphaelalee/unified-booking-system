@@ -17,6 +17,8 @@
         value: category,
         count: offers.filter((offer) => offer.serviceCategory === category).length
     }));
+    const promotionPrices = offers.map((offer) => Number(offer.price || 0)).filter((price) => Number.isFinite(price));
+    const maxPromotionPrice = promotionPrices.length ? Math.ceil(Math.max(...promotionPrices)) : 120;
 %>
 
 <section class="page-title promotions-page-title">
@@ -73,15 +75,15 @@
 
             <div class="filter-group">
                 <h3>Price Range</h3>
-                <div class="filter-range-labels">
-                    <span>SGD 20</span>
-                    <span>SGD 120</span>
-                </div>
-                <div class="filter-range-track" aria-hidden="true">
-                    <span class="filter-range-fill"></span>
-                    <span class="filter-range-thumb left"></span>
-                    <span class="filter-range-thumb right"></span>
-                </div>
+                <label class="marketplace-price-filter promotions-price-filter">
+                    <span>Max price <strong data-promotion-price-output>$<%= Number(maxPromotionPrice || 0).toFixed(0) %></strong></span>
+                    <input
+                        type="range"
+                        min="0"
+                        max="<%= maxPromotionPrice %>"
+                        value="<%= maxPromotionPrice %>"
+                        data-promotion-price>
+                </label>
             </div>
         </div>
     </aside>
@@ -95,6 +97,7 @@
             <% offers.forEach((offer) => { %>
                 <article
                     class="promotion-offer-card"
+                    data-amount="<%= Number(offer.price || 0).toFixed(2) %>"
                     data-price="<%= offer.priceTier %>"
                     data-region="<%= offer.merchantLocation %>"
                     data-campaign="<%= offer.campaignLabel %>"

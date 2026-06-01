@@ -24,6 +24,7 @@
             <div class="admin-panel-heading"><div><p class="eyebrow">Directory</p><h2>Merchant accounts</h2></div></div>
             <div class="admin-merchant-grid">
                 <% safeMerchants.forEach((merchant) => { %>
+                    <% const recommendation = merchant.featuredRecommendation || {}; %>
                     <article class="admin-merchant-card">
                         <div><strong><%= merchant.salon_name %></strong><span><%= merchant.owner_name || merchant.owner_email || 'Owner not set' %></span></div>
                         <div class="admin-merchant-metrics">
@@ -50,15 +51,19 @@
                             </form>
                         <% } else { %>
                             <form class="admin-merchant-commission-form" action="/admin/merchants/<%= merchant.salon_id %>/feature" method="POST">
+                                <div class="muted" style="font-size:.9rem;">
+                                    Recommended: <strong><%= recommendation.featuredType || 'trending' %></strong>
+                                    <% if (recommendation.reason) { %> · <%= recommendation.reason %><% } %>
+                                </div>
                                 <select name="featuredType">
-                                    <option value="featured_month">Featured Merchant of the Month</option>
-                                    <option value="sponsored">Sponsored</option>
-                                    <option value="trending">Trending</option>
-                                    <option value="top_rated">Top Rated</option>
+                                    <option value="featured_month" <%= recommendation.featuredType === 'featured_month' ? 'selected' : '' %>>Featured Merchant of the Month</option>
+                                    <option value="sponsored" <%= recommendation.featuredType === 'sponsored' ? 'selected' : '' %>>Sponsored</option>
+                                    <option value="trending" <%= recommendation.featuredType === 'trending' ? 'selected' : '' %>>Trending</option>
+                                    <option value="top_rated" <%= recommendation.featuredType === 'top_rated' ? 'selected' : '' %>>Top Rated</option>
                                 </select>
-                                <input type="number" name="featuredOrder" min="0" max="99" step="1" value="<%= Number(merchant.featured_order || 0) %>">
-                                <input type="date" name="featuredStartDate" value="<%= merchant.featured_start_date ? new Date(merchant.featured_start_date).toISOString().slice(0, 10) : '' %>">
-                                <input type="date" name="featuredEndDate" value="<%= merchant.featured_end_date ? new Date(merchant.featured_end_date).toISOString().slice(0, 10) : '' %>">
+                                <input type="number" name="featuredOrder" min="0" max="99" step="1" value="<%= recommendation.featuredOrder || Number(merchant.featured_order || 0) %>">
+                                <input type="date" name="featuredStartDate" value="<%= recommendation.featuredStartDate || '' %>">
+                                <input type="date" name="featuredEndDate" value="<%= recommendation.featuredEndDate || '' %>">
                                 <button class="button secondary" type="submit">Feature merchant</button>
                             </form>
                         <% } %>

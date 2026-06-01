@@ -276,6 +276,91 @@ function formatDateTimeInputValue(value) {
     return date.toISOString().slice(0, 16);
 }
 
+function formatDateInputValue(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+}
+
+function buildMerchantFeaturedRecommendations(merchants = []) {
+    const today = new Date();
+    const activeFeaturedCount = merchants.filter((merchant) => Boolean(merchant.is_featured)).length;
+    const candidates = merchants
+        .filter((merchant) => !merchant.is_featured)
+        .map((merchant) => {
+            const score = Number(merchant.featured_score || 0);
+            const serviceCount = Number(merchant.service_count || 0);
+            const staffCount = Number(merchant.staff_count || 0);
+            const readiness = Number(Boolean(merchant.business_category))
+                + Number(Boolean(merchant.uen))
+                + Number(Boolean(merchant.owner_phone))
+                + Number(Boolean(merchant.address))
+                + Number(Boolean(merchant.description));
+
+            return {
+                ...merchant,
+                recommendationScore: (score * 10) + (serviceCount * 6) + (staffCount * 2) + (readiness * 8)
+            };
+        })
+        .sort((left, right) => {
+            if (Number(right.recommendationScore || 0) !== Number(left.recommendationScore || 0)) {
+                return Number(right.recommendationScore || 0) - Number(left.recommendationScore || 0);
+            }
+
+            if (Number(right.featured_score || 0) !== Number(left.featured_score || 0)) {
+                return Number(right.featured_score || 0) - Number(left.featured_score || 0);
+            }
+
+            return Number(right.service_count || 0) - Number(left.service_count || 0);
+        });
+
+    const recommendationMap = new Map();
+
+    candidates.forEach((merchant, index) => {
+        const rank = index + 1;
+        let featuredType = 'trending';
+        let reason = 'Strong marketplace activity and merchant profile readiness.';
+
+        if (rank === 1) {
+            featuredType = 'featured_month';
+            reason = 'Highest combined score across bookings, reviews, revenue, and repeat customers.';
+        } else if (Number(merchant.featured_score || 0) >= 80 || Number(merchant.service_count || 0) >= 4) {
+            featuredType = 'trending';
+            reason = 'High marketplace momentum based on featured score and listed services.';
+        } else {
+            featuredType = 'top_rated';
+            reason = 'Solid merchant quality and readiness for discovery placement.';
+        }
+
+        recommendationMap.set(String(merchant.salon_id), {
+            featuredType,
+            featuredOrder: String(activeFeaturedCount + rank),
+            featuredStartDate: formatDateInputValue(today),
+            featuredEndDate: formatDateInputValue(addDays(today, 30)),
+            reason
+        });
+    });
+
+    return merchants.map((merchant) => ({
+        ...merchant,
+        featuredRecommendation: recommendationMap.get(String(merchant.salon_id)) || {
+            featuredType: merchant.featured_type || 'trending',
+            featuredOrder: String(Number(merchant.featured_order || 0)),
+            featuredStartDate: merchant.featured_start_date ? formatDateInputValue(new Date(merchant.featured_start_date)) : formatDateInputValue(today),
+            featuredEndDate: merchant.featured_end_date ? formatDateInputValue(new Date(merchant.featured_end_date)) : formatDateInputValue(addDays(today, 30)),
+            reason: 'Already featured.'
+        }
+    }));
+}
+
 function getMerchantFeaturedForm(body = {}) {
     return {
         featuredType: String(body.featuredType || body.featured_type || '').trim(),
@@ -645,7 +730,12 @@ function renderServiceForm(res, options) {
 }
 
 function showDashboard(req, res, options = {}) {
-    return MerchantService.getAdminOverview((merchantError, merchants) => {
+    return MerchantService.calculateFeaturedScore((scoreError) => {
+        if (scoreError) {
+            console.error(scoreError);
+        }
+
+        return MerchantService.getAdminOverview((merchantError, merchants) => {
         if (merchantError) {
             console.error(merchantError);
             return res.status(500).render('error', {
@@ -653,6 +743,8 @@ function showDashboard(req, res, options = {}) {
                 message: 'Merchant data could not be loaded from the database.'
             });
         }
+
+        const recommendedMerchants = buildMerchantFeaturedRecommendations(merchants);
 
         return Booking.getAllInDatabase((bookingError, bookings) => {
             if (bookingError) {
@@ -691,7 +783,7 @@ function showDashboard(req, res, options = {}) {
 
                                     const dashboardBookings = bookingError ? Booking.getAll() : bookings;
                                     const reports = buildAdminReports(
-                                        merchants,
+                                        recommendedMerchants,
                                         dashboardBookings,
                                         userError ? { roleCounts: {}, totalGlints: 0, recentCustomers: [] } : userSummary,
                                         Boolean(bookingError),
@@ -704,7 +796,7 @@ function showDashboard(req, res, options = {}) {
 
                                     return res.render(options.viewName || 'admin-overview', {
                                         title: options.title || 'Admin Overview',
-                                        merchants,
+                                        merchants: recommendedMerchants,
                                         bookings: dashboardBookings,
                                         reviews,
                                         reviewSummary: reviewSummaryError ? { reviewCount: 0, averageRating: null, mediaReviewCount: 0, merchantCount: 0 } : reviewSummary,
@@ -723,6 +815,7 @@ function showDashboard(req, res, options = {}) {
                     });
                 });
             });
+        });
         });
     });
 }

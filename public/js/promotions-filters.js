@@ -7,8 +7,10 @@
         const emptyState = document.querySelector('[data-promotions-empty]');
         const clearButton = document.querySelector('.filter-clear-button');
         const filterInputs = [...document.querySelectorAll('[data-filter-group]')];
+        const priceInput = document.querySelector('[data-promotion-price]');
+        const priceOutput = document.querySelector('[data-promotion-price-output]');
 
-        if (!list || !count || filterInputs.length === 0) {
+        if (!list || !count) {
             return;
         }
 
@@ -36,10 +38,12 @@
 
         const applyFilters = () => {
             const activeFilters = getActiveFilters();
+            const maxPrice = priceInput ? Number(priceInput.value || priceInput.max || 0) : Number.POSITIVE_INFINITY;
             let visibleCount = 0;
 
             cards.forEach((card) => {
-                const isVisible = matchesCard(card, activeFilters);
+                const cardAmount = Number(card.dataset.amount || 0);
+                const isVisible = matchesCard(card, activeFilters) && cardAmount <= maxPrice;
                 card.hidden = !isVisible;
                 card.style.display = isVisible ? '' : 'none';
 
@@ -56,19 +60,39 @@
             }
         };
 
+        const syncPriceLabel = () => {
+            if (!priceInput || !priceOutput) {
+                return;
+            }
+
+            priceOutput.textContent = `$${Number(priceInput.value || 0).toFixed(0)}`;
+        };
+
         document.addEventListener('change', (event) => {
             if (event.target && event.target.matches('[data-filter-group]')) {
                 applyFilters();
             }
         });
 
+        priceInput?.addEventListener('input', () => {
+            syncPriceLabel();
+            applyFilters();
+        });
+
         clearButton?.addEventListener('click', () => {
             filterInputs.forEach((input) => {
                 input.checked = false;
             });
+
+            if (priceInput) {
+                priceInput.value = priceInput.max;
+            }
+
+            syncPriceLabel();
             applyFilters();
         });
 
+        syncPriceLabel();
         applyFilters();
     };
 

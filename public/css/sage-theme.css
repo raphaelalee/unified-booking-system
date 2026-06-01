@@ -4919,6 +4919,14 @@ body:not(.flappy-page) .notification-count {
     right: 14px;
 }
 
+.marketplace-product-image .product-stock-badge + .product-stock-badge {
+    top: 48px;
+}
+
+.marketplace-product-image .product-stock-badge + .product-stock-badge + .product-stock-badge {
+    top: 82px;
+}
+
 .product-stock-badge.is-empty {
     background: rgba(166, 64, 50, 0.86);
     color: #fffdf7;
@@ -4992,6 +5000,11 @@ body:not(.flappy-page) .notification-count {
 
 .marketplace-empty-state[hidden],
 .marketplace-product-card[hidden] {
+    display: none !important;
+}
+
+.promotion-offer-card[hidden],
+.promotions-empty-state[hidden] {
     display: none !important;
 }
 
@@ -6028,6 +6041,89 @@ body:not(.flappy-page) .page-container > .about-hero::after {
     grid-template-columns: minmax(260px, 330px) minmax(0, 1fr) !important;
     gap: 28px !important;
     align-items: start !important;
+}
+
+.filter-range-labels {
+    margin: 10px 0 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.promotions-price-filter {
+    display: grid;
+    gap: 10px;
+}
+
+.promotions-price-filter > span {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.promotions-price-filter input[type="range"] {
+    width: 100%;
+}
+
+.filter-range-labels span {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff8b7a, #ff6f7f);
+    color: #fffdf7;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 10px 20px rgba(255, 111, 127, 0.18);
+}
+
+.filter-range-track {
+    position: relative;
+    height: 28px;
+}
+
+.filter-range-track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 143, 128, 0.2);
+    transform: translateY(-50%);
+}
+
+.filter-range-fill {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 50%;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff9c88, #ff7b73);
+    transform: translateY(-50%);
+}
+
+.filter-range-thumb {
+    position: absolute;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fffdf7;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    box-shadow: 0 8px 18px rgba(43, 62, 38, 0.16);
+    transform: translate(-50%, -50%);
+}
+
+.filter-range-thumb.left {
+    left: 10%;
+}
+
+.filter-range-thumb.right {
+    left: 90%;
 }
 
 .promotions-filters,
