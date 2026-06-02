@@ -558,6 +558,11 @@
         });
 
         serviceSelect.addEventListener('change', () => {
+            const serviceOptionField = form.querySelector('[name="serviceOptionId"]');
+            if (serviceOptionField) {
+                serviceOptionField.value = '';
+            }
+
             form.action = baseAction;
             syncPurchaseType(form);
             syncServiceCards(form);

@@ -31,11 +31,11 @@ body:has(.admin-nav-toggle) .nav {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 4px !important;
+    gap: 6px !important;
     overflow: visible !important;
     border: 1px solid rgba(44, 55, 42, 0.10) !important;
-    border-radius: 999px !important;
-    background: #f6f8f3 !important;
+    border-radius: 16px !important;
+    background: #f8f8f2 !important;
 }
 
 .merchant-primary-nav > a,
@@ -51,7 +51,7 @@ body:has(.admin-nav-toggle) .nav {
     justify-content: center !important;
     gap: 7px !important;
     border: 1px solid transparent !important;
-    border-radius: 999px !important;
+    border-radius: 14px !important;
     background: transparent !important;
     color: #344032 !important;
     box-shadow: none !important;
@@ -80,8 +80,45 @@ body:has(.admin-nav-toggle) .nav {
 .admin-nav-toggle:hover,
 .merchant-nav-toggle:hover {
     border-color: rgba(47, 74, 50, 0.16) !important;
-    background: #2f4a32 !important;
-    color: #fff !important;
+    background: rgba(127, 150, 112, 0.14) !important;
+    color: #20301f !important;
+}
+
+.merchant-primary-nav > a.active,
+.merchant-primary-nav .merchant-nav-link.active,
+.admin-primary-nav > a.active,
+.admin-primary-nav .admin-nav-link.active {
+    background: rgba(127, 150, 112, 0.18) !important;
+    color: #1f2f1f !important;
+}
+
+.merchant-primary-nav .dropdown-toggle::after,
+.admin-primary-nav .dropdown-toggle::after {
+    display: none !important;
+}
+
+.merchant-primary-nav .dropdown-toggle,
+.admin-primary-nav .dropdown-toggle {
+    position: relative !important;
+    padding-right: 28px !important;
+}
+
+.merchant-primary-nav .dropdown-toggle::before,
+.admin-primary-nav .dropdown-toggle::before {
+    content: "▾";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(47, 74, 50, 0.75) !important;
+    font-size: 0.82rem !important;
+}
+
+.merchant-primary-nav .dropdown:hover .dropdown-menu,
+.admin-primary-nav .dropdown:hover .dropdown-menu,
+.merchant-primary-nav .dropdown:focus-within .dropdown-menu,
+.admin-primary-nav .dropdown:focus-within .dropdown-menu {
+    display: block !important;
 }
 
 .merchant-primary-nav .dropdown-menu,
@@ -92,23 +129,29 @@ body:has(.admin-nav-toggle) .nav {
     border-radius: 12px !important;
     background: #fff !important;
     box-shadow: 0 24px 70px rgba(35, 42, 32, 0.16) !important;
+    padding: 10px 12px !important;
 }
 
 .merchant-primary-nav .dropdown-item,
 .admin-primary-nav .dropdown-item {
+    display: block !important;
+    width: 100% !important;
     min-height: 40px;
-    padding: 10px 12px !important;
-    border-radius: 8px;
+    padding: 10px 14px !important;
+    margin: 4px 0 !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.92) !important;
     color: #2f392d !important;
-    font-size: 0.9rem;
-    font-weight: 760;
+    font-size: 0.92rem;
+    font-weight: 700;
+    transition: background 180ms ease, color 180ms ease !important;
 }
 
 .merchant-primary-nav .dropdown-item:hover,
 .merchant-primary-nav .dropdown-item:focus,
 .admin-primary-nav .dropdown-item:hover,
 .admin-primary-nav .dropdown-item:focus {
-    background: #f3f6ef !important;
+    background: rgba(127, 150, 112, 0.12) !important;
     color: #1f2f1f !important;
 }
 

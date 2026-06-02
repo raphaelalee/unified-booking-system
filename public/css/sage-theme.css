@@ -1986,6 +1986,15 @@ body:not(.flappy-page) .vaniday-home-visual::before {
     min-height: 190px;
     background-position: center;
     background-size: cover;
+    background-color: rgba(239, 241, 233, 0.65);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.home-product-image {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)),
+        var(--product-img);
 }
 
 .home-service-facial,
@@ -2006,6 +2015,12 @@ body:not(.flappy-page) .vaniday-home-visual::before {
     background-image:
         linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(79, 104, 71, 0.22)),
         var(--spa-img);
+}
+
+.home-product-image {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)),
+        var(--product-img);
 }
 
 .home-service-nails {
@@ -12974,6 +12989,9 @@ body:not(.flappy-page) .vaniday-home-visual {
 .home-card-image {
     min-height: 240px;
     filter: saturate(0.82) contrast(1.02);
+    background-color: rgba(239, 241, 233, 0.65);
+    border-radius: 16px;
+    overflow: hidden;
 }
 
 .home-card-body,
@@ -13146,4 +13164,40 @@ body:not(.flappy-page) .vaniday-home-visual {
         align-items: flex-start;
         flex-direction: column;
     }
+}
+
+/* Custom homepage sage refinements */
+body:not(.flappy-page) .home-hero .hero-actions .button.primary {
+    background: var(--sage-strong) !important;
+    color: var(--paper) !important;
+    border-color: transparent !important;
+}
+
+body:not(.flappy-page) .home-hero .hero-actions .button.secondary {
+    background: rgba(127, 150, 112, 0.12) !important;
+    color: #20301f !important;
+    border-color: rgba(127, 150, 112, 0.18) !important;
+}
+
+body:not(.flappy-page) .home-search-band {
+    border-bottom-color: rgba(127, 150, 112, 0.18) !important;
+    background: rgba(238, 244, 233, 0.72) !important;
+}
+
+body:not(.flappy-page) .home-search-form input,
+body:not(.flappy-page) .home-search-form select {
+    background: rgba(255, 255, 247, 0.92) !important;
+    border-bottom-color: rgba(127, 150, 112, 0.16) !important;
+}
+
+body:not(.flappy-page) .home-card-kicker {
+    color: var(--sage-strong) !important;
+}
+
+body:not(.flappy-page) .home-promo-card {
+    border: 1px solid rgba(127, 150, 112, 0.14) !important;
+}
+
+body:not(.flappy-page) .home-step-grid span {
+    color: var(--sage-strong) !important;
 }

@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt');
 const db = require('../db');
 
 let customerDetailsSchemaReady = false;
@@ -52,6 +53,10 @@ function ensureCustomerDetailsSchema(callback) {
 
         if (!fields.has('preferred_contact_method')) {
             alters.push("ADD COLUMN preferred_contact_method ENUM('email','phone','whatsapp') DEFAULT NULL AFTER postal_code");
+        }
+
+        if (!fields.has('account_status')) {
+            alters.push("ADD COLUMN account_status ENUM('active','terminated') DEFAULT 'active' AFTER role");
         }
 
         if (alters.length === 0) {
@@ -123,7 +128,7 @@ function findByEmail(email, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE email = ?
             LIMIT 1
@@ -148,7 +153,7 @@ function findById(userId, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE user_id = ?
             LIMIT 1
@@ -177,7 +182,7 @@ function findCustomerByPhone(phone, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE role = 'customer'
                 AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
@@ -340,6 +345,54 @@ function getDashboardSummary(callback) {
     });
 }
 
+function getAllUsers(callback) {
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, role, glints_balance, account_status, created_at
+            FROM users
+            ORDER BY created_at DESC, user_id DESC
+        `;
+
+        db.query(sql, (error, results) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, results || []);
+        });
+    });
+}
+
+function terminateById(userId, callback) {
+    const terminatedEmail = `terminated+${userId}@vaniday.disabled`;
+    const terminatedPassword = bcrypt.hashSync(`${Date.now()}-${Math.random()}`, 10);
+    const sql = `
+        UPDATE users
+        SET account_status = 'terminated', email = ?, password = ?, phone = NULL, preferred_contact_method = NULL
+        WHERE user_id = ? AND role != 'admin'
+    `;
+
+    return ensureCustomerDetailsSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(sql, [terminatedEmail, terminatedPassword, userId], callback);
+    });
+}
+
+function deleteById(userId, callback) {
+    const sql = `DELETE FROM users WHERE user_id = ? AND role != 'admin'`;
+    db.query(sql, [userId], callback);
+}
+
 ensureCustomerDetailsSchema((error) => {
     if (error) {
         console.error('Customer details schema could not be prepared:', error.message || error);
@@ -354,6 +407,9 @@ module.exports = {
     findCustomerByPhone,
     findById,
     findByRole,
+    getAllUsers,
+    terminateById,
+    deleteById,
     updateProfile,
     updatePassword,
     updateReferralCode,

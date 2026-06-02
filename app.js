@@ -394,6 +394,7 @@ app.get('/admin', requireRole('admin'), (req, res) => res.redirect('/admin/overv
 app.get('/admin/overview', requireRole('admin'), adminController.showOverview);
 app.get('/admin/bookings', requireRole('admin'), adminController.showBookings);
 app.get('/admin/merchants', requireRole('admin'), adminController.showMerchants);
+app.get('/admin/users', requireRole('admin'), adminController.showUsers);
 app.get('/admin/reviews', requireRole('admin'), adminController.showReviews);
 app.get('/admin/analytics', requireRole('admin'), adminController.showAnalytics);
 app.get('/admin/audit-trail', requireRole('admin'), adminController.showAuditTrail);
@@ -423,6 +424,8 @@ app.get('/admin/merchants/new', requireRole('admin'), adminController.showNewMer
 app.post('/admin/merchants', requireRole('admin'), adminController.createMerchant);
 app.post('/admin/merchants/:salonId/commission', requireRole('admin'), adminController.updateMerchantCommission);
 app.post('/admin/merchants/:salonId/feature', requireRole('admin'), adminController.featureMerchant);
+app.post('/admin/users/:userId/terminate', requireRole('admin'), adminController.terminateUser);
+app.post('/admin/users/:userId/delete', requireRole('admin'), adminController.deleteUser);
 app.post('/admin/merchants/:salonId/unfeature', requireRole('admin'), adminController.unfeatureMerchant);
 app.get('/admin/services', requireRole('admin'), adminController.listServices);
 app.get('/admin/products', requireRole('admin'), adminController.listProducts);

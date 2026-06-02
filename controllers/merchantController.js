@@ -2881,10 +2881,11 @@ function checkout(req, res) {
         return res.redirect('/cart');
     }
 
-    const fulfilment = normalizeFulfilment(req.body.fulfilment);
+    const hasProductItems = selectedItems.some((item) => item.type === 'Product');
+    const fulfilment = hasProductItems ? normalizeFulfilment(req.body.fulfilment) : 'pickup';
     const pickupMerchantId = req.body.pickupMerchantId || '';
     const deliveryValidation = validateDeliveryDetails(req.body);
-    const shippingFee = fulfilment === 'delivery' ? CART_DELIVERY_FEE : 0;
+    const shippingFee = fulfilment === 'delivery' && hasProductItems ? CART_DELIVERY_FEE : 0;
     const amount = Math.round((itemSubtotal + shippingFee) * 100) / 100;
     const useCashback = req.body.redeemCashback === 'on' || req.session.applyCashback === true;
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;

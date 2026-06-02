@@ -4,9 +4,10 @@
     const adminGroups = [
         {
             label: 'Users',
-            active: isActive(['/admin/merchants']),
+            active: isActive(['/admin/merchants', '/admin/users']),
             items: [
                 { label: 'Merchant Directory', href: '/admin/merchants' },
+                { label: 'User Accounts', href: '/admin/users' },
                 { label: 'Platform Health', href: '/admin/platform-health' }
             ]
         },

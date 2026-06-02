@@ -75,6 +75,14 @@
         : allServices;
     const formatPrice = (value) => `$${Number(value || 0).toFixed(0)}`;
     const getBookingHref = (service) => service.serviceBookingPath || `/merchants/${service.merchantId || ''}`;
+    const getFeaturedServiceImageClass = (service) => {
+        const label = String(service.category || service.name || '').toLowerCase();
+        if (/hair/.test(label)) return 'home-service-hair';
+        if (/nail/.test(label)) return 'home-service-nails';
+        if (/(spa|massage|body)/.test(label)) return 'home-service-spa';
+        if (/(groom|barber)/.test(label)) return 'home-service-grooming';
+        return 'home-service-facial';
+    };
     const popularServices = [
         {
             title: 'Facial Treatment',
@@ -185,23 +193,23 @@
     ].slice(0, 5);
 %>
 
-<section class="hero vaniday-home-hero">
+<section class="hero home-hero vaniday-home-hero">
     <div class="hero-content vaniday-home-hero-copy">
-        <p class="eyebrow">Beauty, wellness, and rewards</p>
+        <p class="eyebrow">Calm booking for beauty and wellness</p>
         <h1>Vaniday</h1>
-        <p class="home-hero-tagline">Book salons, spas, grooming services, promotions and rewards in one place.</p>
+        <p class="home-hero-tagline">Your salon, spa, and grooming bookings in a reassuring sage-green experience.</p>
         <p class="hero-text">
-            Find merchants, compare services, book appointments, earn rewards, and receive QR check-in with digital receipts.
+            Discover trusted merchants, compare services with transparent pricing, book with ease, and get digital confirmations for every appointment.
         </p>
         <div class="hero-actions">
             <a class="button primary" href="/services">Explore Services</a>
-            <a class="button secondary" href="/merchants">View Merchants</a>
-            <a class="button secondary" href="/services#service-catalog">Book Now</a>
+            <a class="button secondary" href="/merchants">Find Merchants</a>
+            <a class="button secondary" href="/services#service-catalog">Start Booking</a>
         </div>
         <div class="home-hero-stats" aria-label="Vaniday platform summary">
             <span><strong><%= stats.merchantCount %></strong> merchants</span>
-            <span><strong><%= stats.serviceCount || filteredServices.length %></strong> services</span>
-            <span><strong><%= stats.slotCount %></strong> open slots</span>
+            <span><strong><%= filteredServices.length %></strong> services</span>
+            <span><strong><%= safePromotions.length %></strong> offers</span>
         </div>
     </div>
     <div class="hero-visual vaniday-home-visual" data-home-hero-carousel aria-label="Salon and wellness highlights">
@@ -329,7 +337,8 @@
         </div>
         <div class="storefront-product-strip">
             <% featuredServiceItems.slice(0, 4).forEach((service) => { %>
-                <article>
+                <article class="storefront-service-card">
+                    <div class="home-card-image <%= getFeaturedServiceImageClass(service) %>"<% if (service.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.05), rgba(79, 104, 71, 0.18)), url('<%= service.imageUrl %>');"<% } %>></div>
                     <span class="tag">⭐ Featured Service</span>
                     <h3><%= service.name %></h3>
                     <p class="muted"><%= service.merchantName %> · <%= service.duration %></p>
@@ -351,7 +360,8 @@
         </div>
         <div class="storefront-product-strip">
             <% featuredProductItems.slice(0, 4).forEach((product) => { %>
-                <article>
+                <article class="storefront-product-card">
+                    <div class="home-card-image home-product-image"<% if (product.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= product.imageUrl %>');"<% } %>></div>
                     <span class="tag">⭐ Featured Product</span>
                     <h3><%= product.name %></h3>
                     <p class="muted"><%= product.salonName || 'Vaniday merchant' %></p>

@@ -859,6 +859,12 @@ function loginUser(req, res) {
                 return res.redirect('/login');
             }
 
+            if (user.account_status === 'terminated') {
+                req.session.loginError = 'This account has been terminated. Please contact support if you believe this is a mistake.';
+                req.session.loginForm = { email };
+                return res.redirect('/login');
+            }
+
             return completeLogin(req, res, user);
         });
     });

@@ -1,0 +1,103 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const allUsers = Array.isArray(users) ? users : [];
+    const formatDateTime = (value) => {
+        if (!value) {
+            return 'N/A';
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+
+        return date.toLocaleString('en-SG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+%>
+
+<section class="admin-dashboard-v2">
+    <%- include('partials/admin-sidebar') %>
+    <div class="admin-main-panel">
+        <header class="admin-dashboard-header">
+            <div>
+                <p class="eyebrow">Users</p>
+                <h1>User Account Control</h1>
+                <p>Review all registered accounts across the platform and terminate or delete accounts as needed.</p>
+            </div>
+        </header>
+
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
+        <section class="admin-panel admin-users-panel">
+            <div class="admin-panel-heading">
+                <div>
+                    <p class="eyebrow">User Directory</p>
+                    <h2>All accounts</h2>
+                </div>
+                <div class="admin-panel-hint">
+                    <p><strong>Note:</strong> Admin accounts cannot be terminated or deleted from this page.</p>
+                </div>
+            </div>
+
+            <div class="admin-user-table-wrap">
+                <table class="admin-table admin-user-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (allUsers.length === 0) { %>
+                            <tr><td colspan="8">No user accounts found.</td></tr>
+                        <% } %>
+                        <% allUsers.forEach((user) => { %>
+                            <tr>
+                                <td><%= user.name || 'Unknown' %></td>
+                                <td><%= user.email || 'N/A' %></td>
+                                <td><%= user.phone || 'N/A' %></td>
+                                <td><%= user.role || 'N/A' %></td>
+                                <td><%= user.account_status || 'active' %></td>
+                                <td><%= formatDateTime(user.created_at) %></td>
+                                <td>
+                                    <div class="admin-user-meta">
+                                        <p>Age: <strong><%= user.age || 'N/A' %></strong></p>
+                                        <p>Birthday: <strong><%= user.birthday || 'N/A' %></strong></p>
+                                        <p>Gender: <strong><%= user.gender || 'N/A' %></strong></p>
+                                        <p>Postal: <strong><%= user.postal_code || 'N/A' %></strong></p>
+                                        <p>Contact: <strong><%= user.preferred_contact_method || 'N/A' %></strong></p>
+                                        <p>Glints: <strong><%= Number(user.glints_balance || 0) %></strong></p>
+                                    </div>
+                                </td>
+                                <td class="admin-user-actions">
+                                    <form action="/admin/users/<%= user.user_id %>/terminate" method="POST" class="admin-user-action-form">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <button class="button secondary" type="submit" <%= user.role === 'admin' || user.account_status === 'terminated' ? 'disabled' : '' %>>Terminate</button>
+                                    </form>
+                                    <form action="/admin/users/<%= user.user_id %>/delete" method="POST" class="admin-user-action-form">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <button class="button danger" type="submit" <%= user.role === 'admin' ? 'disabled' : '' %>>Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

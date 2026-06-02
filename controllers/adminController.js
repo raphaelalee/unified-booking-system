@@ -842,6 +842,83 @@ function showAuditTrail(req, res) {
         });
     });
 }
+
+function showUsers(req, res) {
+    return User.getAllUsers((error, users = []) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Admin User Management Error',
+                message: 'User accounts could not be loaded.'
+            });
+        }
+
+        const success = req.session.adminSuccess;
+        const errorMessage = req.session.adminError;
+        req.session.adminSuccess = null;
+        req.session.adminError = null;
+
+        return res.render('admin-users', {
+            title: 'Admin User Management',
+            users,
+            success,
+            error: errorMessage
+        });
+    });
+}
+
+function terminateUser(req, res) {
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || userId < 1) {
+        req.session.adminError = 'Invalid user selected.';
+        return res.redirect('/admin/users');
+    }
+
+    if (userId === Number(req.session.user.id)) {
+        req.session.adminError = 'You cannot terminate your own admin account.';
+        return res.redirect('/admin/users');
+    }
+
+    return User.terminateById(userId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = 'User account could not be terminated.';
+            return res.redirect('/admin/users');
+        }
+
+        req.session.adminSuccess = result?.affectedRows ? 'User account terminated.' : null;
+        req.session.adminError = result?.affectedRows ? null : 'User account could not be terminated.';
+        return res.redirect('/admin/users');
+    });
+}
+
+function deleteUser(req, res) {
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || userId < 1) {
+        req.session.adminError = 'Invalid user selected.';
+        return res.redirect('/admin/users');
+    }
+
+    if (userId === Number(req.session.user.id)) {
+        req.session.adminError = 'You cannot delete your own admin account.';
+        return res.redirect('/admin/users');
+    }
+
+    return User.deleteById(userId, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = 'User account could not be deleted.';
+            return res.redirect('/admin/users');
+        }
+
+        req.session.adminSuccess = result?.affectedRows ? 'User account deleted.' : null;
+        req.session.adminError = result?.affectedRows ? null : 'User account could not be deleted.';
+        return res.redirect('/admin/users');
+    });
+}
+
 const showPlatformHealth = renderAdminView('admin-platform-health', 'Platform Health');
 
 function showNewMerchant(req, res) {
@@ -2104,6 +2181,9 @@ module.exports = {
     updateMerchantCommission,
     featureMerchant,
     unfeatureMerchant,
+    showUsers,
+    terminateUser,
+    deleteUser,
     listServices,
     showNewPromotion,
     createPromotion,
