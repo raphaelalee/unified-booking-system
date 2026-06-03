@@ -593,5 +593,6 @@ module.exports = {
     listByProductId,
     getPlatformSummary,
     getMerchantLeaderboard,
-    listAll
+    listAll,
+    ensureReviewSchema
 };

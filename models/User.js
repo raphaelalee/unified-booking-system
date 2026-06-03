@@ -55,6 +55,14 @@ function ensureCustomerDetailsSchema(callback) {
             alters.push("ADD COLUMN preferred_contact_method ENUM('email','phone','whatsapp') DEFAULT NULL AFTER postal_code");
         }
 
+        if (!fields.has('referral_code')) {
+            alters.push('ADD COLUMN referral_code VARCHAR(50) DEFAULT NULL AFTER preferred_contact_method');
+        }
+
+        if (!fields.has('referred_by_code')) {
+            alters.push('ADD COLUMN referred_by_code VARCHAR(50) DEFAULT NULL AFTER referral_code');
+        }
+
         if (!fields.has('account_status')) {
             alters.push("ADD COLUMN account_status ENUM('active','terminated') DEFAULT 'active' AFTER role");
         }

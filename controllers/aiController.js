@@ -150,6 +150,26 @@ function scoreService(service, query) {
     return terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
 }
 
+function buildGuestDetailPrompt(guestDetails) {
+    const missing = [];
+
+    if (!guestDetails.customerName) {
+        missing.push('your full name');
+    }
+    if (!guestDetails.email) {
+        missing.push('your email address');
+    }
+    if (!guestDetails.phone) {
+        missing.push('your Singapore phone number');
+    }
+
+    if (!missing.length) {
+        return '';
+    }
+
+    return `To complete the booking, I need ${missing.join(' and ')}. Please reply with your name, email, and phone number.`;
+}
+
 async function handleBookingCreate(req, prompt) {
     const serviceIdMatch = prompt.match(/\bservice\s*#?\s*(\d+)\b/i);
     const bookingDate = extractDate(prompt);
@@ -203,6 +223,29 @@ async function handleBookingCreate(req, prompt) {
     }
 
     const guestDetails = req.session.user ? {} : extractGuestDetails(prompt);
+
+    if (!req.session.user) {
+        const missingGuestPrompt = buildGuestDetailPrompt(guestDetails);
+
+        if (missingGuestPrompt) {
+            return {
+                success: false,
+                answer: missingGuestPrompt,
+                missingDetails: {
+                    name: !guestDetails.customerName,
+                    email: !guestDetails.email,
+                    phone: !guestDetails.phone
+                },
+                pendingBooking: {
+                    command: `book service ${matches[0].id} on ${bookingDate} at ${bookingTime}`,
+                    serviceId: matches[0].id,
+                    bookingDate,
+                    bookingTime
+                }
+            };
+        }
+    }
+
     const result = await sendThroughHandler(bookingController.createBooking, req, { serviceId: matches[0].id }, {
         serviceId: matches[0].id,
         bookingDate,

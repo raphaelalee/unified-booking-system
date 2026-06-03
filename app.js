@@ -17,6 +17,9 @@ const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
+const Booking = require('./models/Booking');
+const Review = require('./models/Review');
+const CashbackCampaign = require('./models/CashbackCampaign');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
 const { uploadProductImage } = require('./utils/productUpload');
@@ -34,7 +37,6 @@ const {
     verifyCsrfToken
 } = require('./middleware');
 const Product = require('./models/Product');
-const Review = require('./models/Review');
 const Notification = require('./models/Notification');
 const Loyalty = require('./models/Loyalty');
 const { getCartItemCount } = require('./utils/cart');
@@ -641,10 +643,38 @@ app.use((err, req, res, next) => {
     });
 });
 
+function initializeDatabaseSchemas(callback) {
+    Booking.ensureBookingManagementSchema((bookingError) => {
+        if (bookingError) {
+            callback(bookingError);
+            return;
+        }
+
+        Review.ensureReviewSchema((reviewError) => {
+            if (reviewError) {
+                callback(reviewError);
+                return;
+            }
+
+            CashbackCampaign.ensureSchema((cashbackError) => {
+                callback(cashbackError);
+            });
+        });
+    });
+}
+
 // Start Server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    startWhatsAppReminderScheduler();
-    startSmsReminderScheduler();
+initializeDatabaseSchemas((schemaError) => {
+    if (schemaError) {
+        console.error('Database schema initialization failed:', schemaError);
+        process.exit(1);
+        return;
+    }
+
+    app.listen(PORT, () => {
+        console.log(`Server is running on http://localhost:${PORT}`);
+        startWhatsAppReminderScheduler();
+        startSmsReminderScheduler();
+    });
 });

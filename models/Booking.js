@@ -1852,48 +1852,55 @@ function mapNotificationBooking(row) {
 }
 
 function getWhatsAppReminderCandidates(startAt, endAt, reminderType, callback) {
-    ensureWhatsAppReminderSchema((schemaError) => {
+    ensureBookingManagementSchema((schemaError) => {
         if (schemaError) {
             callback(schemaError);
             return;
         }
 
-        const sql = `
-            SELECT
-                bookings.booking_id AS id,
-                bookings.user_id,
-                bookings.booking_date,
-                TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
-                bookings.status,
-                COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
-                COALESCE(users.email, bookings.guest_email) AS email,
-                COALESCE(users.phone, bookings.guest_phone) AS phone,
-                salons.salon_name AS merchant_name,
-                salons.merchant_id AS merchant_user_id,
-                services.service_name,
-                services.price AS service_price
-            FROM bookings
-            LEFT JOIN users ON users.user_id = bookings.user_id
-            INNER JOIN services ON services.service_id = bookings.service_id
-            INNER JOIN salons ON salons.salon_id = services.salon_id
-            LEFT JOIN whatsapp_reminder_logs ON whatsapp_reminder_logs.booking_id = bookings.booking_id
-                AND whatsapp_reminder_logs.reminder_type = ?
-            WHERE COALESCE(users.phone, bookings.guest_phone) IS NOT NULL
-                AND COALESCE(users.phone, bookings.guest_phone) <> ''
-                AND bookings.status NOT IN ('cancelled', 'completed', 'checked_in')
-                AND TIMESTAMP(bookings.booking_date, bookings.timeslot) BETWEEN ? AND ?
-                AND whatsapp_reminder_logs.log_id IS NULL
-            ORDER BY bookings.booking_date ASC, bookings.timeslot ASC
-            LIMIT 50
-        `;
-
-        db.query(sql, [reminderType, startAt, endAt], (error, rows = []) => {
-            if (error) {
-                callback(error);
+        ensureWhatsAppReminderSchema((schemaError) => {
+            if (schemaError) {
+                callback(schemaError);
                 return;
             }
 
-            callback(null, rows.map(mapNotificationBooking).filter(Boolean));
+            const sql = `
+                SELECT
+                    bookings.booking_id AS id,
+                    bookings.user_id,
+                    bookings.booking_date,
+                    TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+                    bookings.status,
+                    COALESCE(users.name, bookings.guest_customer_name) AS customer_name,
+                    COALESCE(users.email, bookings.guest_email) AS email,
+                    COALESCE(users.phone, bookings.guest_phone) AS phone,
+                    salons.salon_name AS merchant_name,
+                    salons.merchant_id AS merchant_user_id,
+                    services.service_name,
+                    services.price AS service_price
+                FROM bookings
+                LEFT JOIN users ON users.user_id = bookings.user_id
+                INNER JOIN services ON services.service_id = bookings.service_id
+                INNER JOIN salons ON salons.salon_id = services.salon_id
+                LEFT JOIN whatsapp_reminder_logs ON whatsapp_reminder_logs.booking_id = bookings.booking_id
+                    AND whatsapp_reminder_logs.reminder_type = ?
+                WHERE COALESCE(users.phone, bookings.guest_phone) IS NOT NULL
+                    AND COALESCE(users.phone, bookings.guest_phone) <> ''
+                    AND bookings.status NOT IN ('cancelled', 'completed', 'checked_in')
+                    AND TIMESTAMP(bookings.booking_date, bookings.timeslot) BETWEEN ? AND ?
+                    AND whatsapp_reminder_logs.log_id IS NULL
+                ORDER BY bookings.booking_date ASC, bookings.timeslot ASC
+                LIMIT 50
+            `;
+
+            db.query(sql, [reminderType, startAt, endAt], (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, rows.map(mapNotificationBooking).filter(Boolean));
+            });
         });
     });
 }
@@ -2111,6 +2118,7 @@ module.exports = {
     getUpcomingByUserId,
     filterSlotsForBookingDate,
     getWhatsAppReminderCandidates,
+    ensureBookingManagementSchema,
     hasExistingBooking,
     hasExistingBookingInDatabase,
     hasBookingClash,

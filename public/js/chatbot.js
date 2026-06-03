@@ -17,7 +17,8 @@
         merchant: null,
         service: null,
         date: null,
-        booking: null
+        booking: null,
+        pendingBooking: null
     };
 
     const scrollMessages = () => {
@@ -106,6 +107,16 @@
     };
 
     const submitChatMessage = async (message, displayText = message) => {
+        const isNewBookingCommand = /^\s*(book|reschedule|cancel)\b/i.test(message);
+        const shouldReusePendingBooking = state.pendingBooking && !isNewBookingCommand;
+        const outgoingMessage = shouldReusePendingBooking
+            ? `${state.pendingBooking.command} ${message}`
+            : message;
+
+        if (isNewBookingCommand) {
+            state.pendingBooking = null;
+        }
+
         addMessage(displayText, 'user');
         input.disabled = true;
         const loadingMessage = addMessage('Working on it...', 'bot');
@@ -117,8 +128,14 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': csrfToken
                 },
-                body: JSON.stringify({ userQuery: message })
+                body: JSON.stringify({ userQuery: outgoingMessage })
             });
+
+            if (result.pendingBooking) {
+                state.pendingBooking = result.pendingBooking;
+            } else if (result.success) {
+                state.pendingBooking = null;
+            }
 
             loadingMessage.textContent = formatResult(result);
             showStartActions();
