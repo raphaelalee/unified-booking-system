@@ -13,17 +13,18 @@
             const paymentVoucherMode = typeof voucherMode !== 'undefined' && voucherMode ? voucherMode : (cartCheckout ? 'product' : 'booking');
             const paymentSelectedVoucherId = String(typeof selectedVoucherId !== 'undefined' ? selectedVoucherId || '' : '');
             const voucherRecommendationView = typeof voucherRecommendation !== 'undefined' && voucherRecommendation ? voucherRecommendation : null;
-            const paymentEffectiveVoucherId = paymentSelectedVoucherId || String(voucherRecommendationView?.voucher?.id || '');
+            const smartVoucherMessageView = typeof smartVoucherMessage !== 'undefined' ? String(smartVoucherMessage || '').trim() : '';
             const paymentBirthdayPromotion = typeof birthdayPromotion !== 'undefined' ? birthdayPromotion : null;
-            const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentEffectiveVoucherId) || null;
+            const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentSelectedVoucherId) || null;
+            const paymentAppliedVoucher = paymentSelectedVoucher || voucherRecommendationView?.voucher || null;
             const paymentVoucherBaseAmount = paymentVoucherMode === 'product'
-                ? Number(paymentSelectedVoucher?.eligibleSubtotal || voucherRecommendationView?.voucher?.eligibleSubtotal || itemSubtotal || 0)
+                ? Number(paymentAppliedVoucher?.eligibleSubtotal || itemSubtotal || 0)
                 : Number(amount || 0);
-            const paymentVoucherEstimate = paymentSelectedVoucher
+            const paymentVoucherEstimate = paymentAppliedVoucher
                 ? (
-                    paymentSelectedVoucher.discountType === 'percentage'
-                        ? (paymentVoucherBaseAmount * (Number(paymentSelectedVoucher.discountPercent || 0) / 100))
-                        : Math.min(Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0), paymentVoucherBaseAmount)
+                    paymentAppliedVoucher.discountType === 'percentage'
+                        ? (paymentVoucherBaseAmount * (Number(paymentAppliedVoucher.discountPercent || 0) / 100))
+                        : Math.min(Number(paymentAppliedVoucher.remainingValue || paymentAppliedVoucher.voucherValue || 0), paymentVoucherBaseAmount)
                 )
                 : 0;
             const rewardRedemptionView = typeof rewardRedemption !== 'undefined' && rewardRedemption ? rewardRedemption : null;
@@ -94,35 +95,54 @@
                 </div>
             <% } %>
 
-            <% if (paymentVoucherList.length > 0) { %>
+            <% if (paymentVoucherList.length > 0 || (voucherRecommendationView && voucherRecommendationView.voucher) || smartVoucherMessageView) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
-                    <label>
+                    <% if (paymentVoucherList.length > 0) { %>
+                        <label>
+                            <span>
+                                <strong>Platform vouchers</strong>
+                                <small>
+                                    Choose your platform voucher here.
+                                    <%= paymentVoucherMode === 'product'
+                                        ? ' Product smart vouchers are checked automatically.'
+                                        : ' Service smart vouchers are checked automatically.' %>
+                                </small>
+                            </span>
+                            <select name="selectedVoucherId" style="display:block; width:100%; margin-top:0.65rem;">
+                                <option value="">Select voucher</option>
+                                <% paymentVoucherList.forEach((voucher) => { %>
+                                    <option value="<%= voucher.id %>" <%= String(voucher.id) === paymentSelectedVoucherId ? 'selected' : '' %>>
+                                        <%= voucher.title %> (<%= voucher.code %>) -
+                                        <%= voucher.discountType === 'percentage'
+                                            ? `${Number(voucher.discountPercent || 0)}% OFF`
+                                            : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </label>
+                    <% } else { %>
                         <span>
-                            <strong>Use <%= paymentVoucherMode === 'product' ? 'product' : 'booking' %> voucher</strong>
+                            <strong>No platform vouchers to choose</strong>
                             <small>
                                 <%= paymentVoucherMode === 'product'
-                                    ? 'Reward-shop product vouchers appear here for eligible products in this checkout.'
-                                    : 'Referral and reward-shop vouchers appear here for eligible bookings.' %>
+                                    ? 'Product smart vouchers are still checked automatically for this checkout.'
+                                    : 'Service smart vouchers are still checked automatically for this checkout.' %>
                             </small>
                         </span>
-                        <select name="selectedVoucherId">
-                            <option value="">No voucher</option>
-                            <% paymentVoucherList.forEach((voucher) => { %>
-                                <option value="<%= voucher.id %>" <%= String(voucher.id) === paymentEffectiveVoucherId ? 'selected' : '' %>>
-                                    <%= voucher.title %> (<%= voucher.code %>) -
-                                    <%= voucher.discountType === 'percentage'
-                                        ? `${Number(voucher.discountPercent || 0)}% OFF`
-                                        : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
-                                </option>
-                            <% }) %>
-                        </select>
-                    </label>
+                    <% } %>
                     <% if (voucherRecommendationView && voucherRecommendationView.voucher) { %>
                         <div class="notice success">
                             <p>
-                                <strong>Smart voucher recommendation:</strong>
-                                <%= voucherRecommendationView.voucher.title %> is the best match for this checkout.
+                                <strong>Smart voucher selected:</strong>
+                                <%= voucherRecommendationView.voucher.title %> was selected automatically for this checkout.
                                 You save <strong>$<%= Number(voucherRecommendationView.discount || 0).toFixed(2) %></strong> with this voucher<%= paymentVoucherMode === 'product' ? ' on eligible products' : '' %>.
+                            </p>
+                        </div>
+                    <% } else if (smartVoucherMessageView) { %>
+                        <div class="notice error">
+                            <p>
+                                <strong>Smart voucher check:</strong>
+                                <%= smartVoucherMessageView %>
                             </p>
                         </div>
                     <% } %>

@@ -2875,6 +2875,14 @@ function showCart(req, res) {
             : hasServiceItems
                 ? await getActiveBookingVouchers(req.session.user.id)
                 : [];
+        const smartVoucher = (hasProductItems || hasServiceItems)
+            ? await getSmartVoucherRecommendationDetails(req.session.user.id, {
+                kind: hasProductItems ? 'order' : 'booking',
+                items: cart,
+                amount: total,
+                itemSubtotal: total
+            })
+            : { recommendation: null, message: '' };
 
         const campaignCashback = await getCampaignCashbackEstimate({
             kind: 'order',
@@ -2895,6 +2903,8 @@ function showCart(req, res) {
             loyalty: walletError ? null : loyalty,
             campaignCashback,
             availableVouchers,
+            smartVoucherRecommendation: smartVoucher.recommendation,
+            smartVoucherMessage: smartVoucher.message,
             hasServiceItems,
             hasProductItems
         });
@@ -2984,7 +2994,7 @@ function checkout(req, res) {
             detail: item.merchantName || ''
         })),
         selectedItemIds: selectedItems.map((item) => String(item.id)).join(','),
-        selectedVoucherId: '',
+        selectedVoucherId: String(req.body.selectedVoucherId || '').trim(),
         useCashback,
         fulfilment,
         pickupMerchantId,
@@ -3001,9 +3011,7 @@ function checkout(req, res) {
         const availableVouchers = selectedItems.some((item) => item.type === 'Product')
             ? await getEligibleProductVouchers(req.session.user.id, req.session.pendingPayments[checkoutId])
             : [];
-        const voucherRecommendation = availableVouchers.length > 0
-            ? await getVoucherRecommendation(availableVouchers, req.session.pendingPayments[checkoutId], UserVoucher.validateForOrder)
-            : null;
+        const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, req.session.pendingPayments[checkoutId]);
 
         const campaignCashback = await getCampaignCashbackEstimate(req.session.pendingPayments[checkoutId]);
 
@@ -3023,9 +3031,10 @@ function checkout(req, res) {
             fulfilment,
             pickupMerchantId,
             ...deliveryDetails,
-            selectedVoucherId: '',
+            selectedVoucherId: String(req.body.selectedVoucherId || '').trim(),
             availableVouchers,
-            voucherRecommendation,
+            voucherRecommendation: smartVoucher.recommendation,
+            smartVoucherMessage: smartVoucher.message,
             birthdayPromotion: null,
             rewardRedemption: null,
             campaignCashback,
@@ -3164,10 +3173,11 @@ async function showPayment(req, res) {
                 resolve(items.slice(0, 3));
             });
         });
-        const voucherRecommendation = await getVoucherRecommendation(availableVouchers, {
+        const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, {
             amount: Number(booking.service_price || 0),
             merchantId: booking.merchant_id,
-            bookingId: booking.id
+            bookingId: booking.id,
+            kind: 'booking'
         });
 
         return res.render('payment', getPaymentViewModel({
@@ -3189,7 +3199,8 @@ async function showPayment(req, res) {
             deliveryPhone: '',
             selectedVoucherId: '',
             availableVouchers,
-            voucherRecommendation,
+            voucherRecommendation: smartVoucher.recommendation,
+            smartVoucherMessage: smartVoucher.message,
             birthdayPromotion,
             loyalty,
             rewardRedemption,
@@ -3245,6 +3256,7 @@ function getPaymentViewModel(payment) {
         availableVouchers: [],
         voucherMode: '',
         voucherRecommendation: null,
+        smartVoucherMessage: '',
         featuredProductsUpsell: [],
         birthdayPromotion: null,
         rewardRedemption: null,
@@ -3606,7 +3618,7 @@ function getActiveBookingVouchers(userId) {
                     return;
                 }
 
-                resolve(vouchers.filter((voucher) => voucher.bookingOnly));
+                resolve(vouchers.filter((voucher) => voucher.bookingOnly && voucher.sourceType !== 'reward_shop_merchant'));
             });
 
             if (!user) {
@@ -3615,6 +3627,39 @@ function getActiveBookingVouchers(userId) {
             }
 
             // Birthday vouchers are prepared on demand so existing users do not need a batch job.
+            UserVoucher.ensureBirthdayVoucherForUser(user, (birthdayVoucherError) => {
+                if (birthdayVoucherError) {
+                    console.error(birthdayVoucherError);
+                }
+
+                loadVouchers();
+            });
+        });
+    });
+}
+
+function getSmartBookingVouchers(userId) {
+    return new Promise((resolve) => {
+        User.findById(userId, (userError, user) => {
+            if (userError) {
+                console.error(userError);
+            }
+
+            const loadVouchers = () => UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
+                if (error) {
+                    console.error(error);
+                    resolve([]);
+                    return;
+                }
+
+                resolve(vouchers.filter((voucher) => voucher.bookingOnly && voucher.sourceType === 'reward_shop_merchant'));
+            });
+
+            if (!user) {
+                loadVouchers();
+                return;
+            }
+
             UserVoucher.ensureBirthdayVoucherForUser(user, (birthdayVoucherError) => {
                 if (birthdayVoucherError) {
                     console.error(birthdayVoucherError);
@@ -3635,20 +3680,32 @@ function getActiveProductVouchers(userId) {
                 return;
             }
 
-            resolve(vouchers.filter((voucher) => voucher.bookingOnly === false));
+            resolve(vouchers.filter((voucher) => voucher.bookingOnly === false && voucher.sourceType !== 'reward_shop_merchant'));
         });
     });
 }
 
-async function getEligibleProductVouchers(userId, payment) {
-    const vouchers = await getActiveProductVouchers(userId);
+function getSmartProductVouchers(userId) {
+    return new Promise((resolve) => {
+        UserVoucher.getActiveForUser(userId, (error, vouchers = []) => {
+            if (error) {
+                console.error(error);
+                resolve([]);
+                return;
+            }
 
+            resolve(vouchers.filter((voucher) => voucher.bookingOnly === false && voucher.sourceType === 'reward_shop_merchant'));
+        });
+    });
+}
+
+async function getEligibleValidatedVouchers(vouchers, payment, validator) {
     if (!vouchers.length) {
         return [];
     }
 
     const eligibleVouchers = await Promise.all(vouchers.map((voucher) => new Promise((resolve) => {
-        UserVoucher.validateForOrder(voucher, payment, (error, validatedVoucher) => {
+        validator(voucher, payment, (error, validatedVoucher) => {
             if (error) {
                 resolve(null);
                 return;
@@ -3661,15 +3718,88 @@ async function getEligibleProductVouchers(userId, payment) {
     return eligibleVouchers.filter(Boolean);
 }
 
+async function getValidatedVoucherOutcomes(vouchers, payment, validator) {
+    if (!Array.isArray(vouchers) || vouchers.length === 0) {
+        return [];
+    }
+
+    return Promise.all(vouchers.map((voucher) => new Promise((resolve) => {
+        validator(voucher, payment, (error, validatedVoucher) => {
+            resolve({
+                voucher,
+                validatedVoucher: error ? null : (validatedVoucher || voucher),
+                error: error || null
+            });
+        });
+    })));
+}
+
+function buildSmartVoucherMessage(outcomes = [], payment = {}) {
+    if (!outcomes.length) {
+        return payment.kind === 'order'
+            ? 'No merchant product smart vouchers are available for this checkout.'
+            : 'No merchant service smart vouchers are available for this checkout.';
+    }
+
+    const firstFailure = outcomes.find((entry) => entry?.error?.message);
+
+    if (firstFailure) {
+        return firstFailure.error.message;
+    }
+
+    return payment.kind === 'order'
+        ? 'No merchant product smart voucher matched this checkout.'
+        : 'No merchant service smart voucher matched this checkout.';
+}
+
+async function getEligibleProductVouchers(userId, payment) {
+    const vouchers = await getActiveProductVouchers(userId);
+    return getEligibleValidatedVouchers(vouchers, payment, UserVoucher.validateForOrder);
+}
+
+async function getSmartVoucherRecommendationDetails(userId, payment) {
+    if (payment.kind === 'booking') {
+        const vouchers = await getSmartBookingVouchers(userId);
+        const outcomes = await getValidatedVoucherOutcomes(vouchers, payment, UserVoucher.validateForBooking);
+        const eligibleVouchers = outcomes.map((entry) => entry.validatedVoucher).filter(Boolean);
+        const recommendation = eligibleVouchers.length
+            ? await getVoucherRecommendation(eligibleVouchers, payment, UserVoucher.validateForBooking)
+            : null;
+
+        return {
+            recommendation,
+            message: recommendation ? '' : buildSmartVoucherMessage(outcomes, payment)
+        };
+    }
+
+    if (payment.kind === 'order') {
+        const vouchers = await getSmartProductVouchers(userId);
+        const outcomes = await getValidatedVoucherOutcomes(vouchers, payment, UserVoucher.validateForOrder);
+        const eligibleVouchers = outcomes.map((entry) => entry.validatedVoucher).filter(Boolean);
+        const recommendation = eligibleVouchers.length
+            ? await getVoucherRecommendation(eligibleVouchers, payment, UserVoucher.validateForOrder)
+            : null;
+
+        return {
+            recommendation,
+            message: recommendation ? '' : buildSmartVoucherMessage(outcomes, payment)
+        };
+    }
+
+    return { recommendation: null, message: '' };
+}
+
 async function applyVoucherRedemption(req, payment) {
     const selectedVoucherId = Number(req.body.selectedVoucherId || payment.selectedVoucherId || 0);
+    const fallbackVoucherId = Number(payment.voucherRecommendation?.voucher?.id || 0);
+    const effectiveVoucherId = selectedVoucherId || fallbackVoucherId;
 
-    if (!selectedVoucherId) {
+    if (!effectiveVoucherId) {
         return payment;
     }
 
     const voucher = await new Promise((resolve, reject) => {
-        UserVoucher.findByIdForUser(selectedVoucherId, req.session.user.id, (error, row) => {
+        UserVoucher.findByIdForUser(effectiveVoucherId, req.session.user.id, (error, row) => {
             if (error) {
                 reject(error);
                 return;
@@ -3682,6 +3812,14 @@ async function applyVoucherRedemption(req, payment) {
     const validator = payment.kind === 'order'
         ? UserVoucher.validateForOrder
         : UserVoucher.validateForBooking;
+
+    if (payment.kind === 'booking' && selectedVoucherId && voucher?.sourceType === 'reward_shop_merchant') {
+        throw new Error('Only platform vouchers can be used at this checkout.');
+    }
+
+    if (payment.kind === 'order' && selectedVoucherId && voucher?.sourceType === 'reward_shop_merchant') {
+        throw new Error('Only platform vouchers can be used at this checkout.');
+    }
 
     const validatedVoucher = await new Promise((resolve, reject) => {
         validator(voucher, payment, (error, row) => {
@@ -3703,7 +3841,7 @@ async function applyVoucherRedemption(req, payment) {
 
     return {
         ...payment,
-        selectedVoucherId,
+        selectedVoucherId: selectedVoucherId ? String(selectedVoucherId) : '',
         voucherId: validatedVoucher.id,
         voucherCode: validatedVoucher.code,
         voucherTitle: validatedVoucher.title,
@@ -3784,10 +3922,11 @@ async function prepareTrustedPayment(req, payment) {
         trustedPayment.availableVouchers = await getActiveBookingVouchers(req.session.user.id);
         trustedPayment.birthdayPromotion = buildBirthdayPromotion(req.session.user, trustedPayment.availableVouchers);
         trustedPayment.selectedVoucherId = payment.selectedVoucherId || '';
-        trustedPayment.voucherRecommendation = await getVoucherRecommendation(
-            trustedPayment.availableVouchers,
-            trustedPayment
-        );
+        {
+            const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, trustedPayment);
+            trustedPayment.voucherRecommendation = smartVoucher.recommendation;
+            trustedPayment.smartVoucherMessage = smartVoucher.message;
+        }
         trustedPayment.loyalty = await getLoyaltyView(req.session.user.id);
         trustedPayment.rewardRedemption = await getRewardRedemptionView(
             req.session.user.id,
@@ -3799,11 +3938,11 @@ async function prepareTrustedPayment(req, payment) {
     } else if (trustedPayment.kind === 'order') {
         trustedPayment.availableVouchers = await getEligibleProductVouchers(req.session.user.id, trustedPayment);
         trustedPayment.selectedVoucherId = payment.selectedVoucherId || trustedPayment.selectedVoucherId || '';
-        trustedPayment.voucherRecommendation = await getVoucherRecommendation(
-            trustedPayment.availableVouchers,
-            trustedPayment,
-            UserVoucher.validateForOrder
-        );
+        {
+            const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, trustedPayment);
+            trustedPayment.voucherRecommendation = smartVoucher.recommendation;
+            trustedPayment.smartVoucherMessage = smartVoucher.message;
+        }
         trustedPayment.voucherMode = trustedPayment.availableVouchers.length > 0 ? 'product' : '';
     }
 

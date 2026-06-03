@@ -585,13 +585,25 @@ function buildPromotionPayload(form) {
 }
 
 function getRewardVoucherForm(body = {}) {
+    const rawApplicableTypes = Array.isArray(body.applicableTypes)
+        ? body.applicableTypes
+        : (body.applicableTypes
+            ? [body.applicableTypes]
+            : (body.applicableType ? [body.applicableType] : []));
+    const applicableTypes = rawApplicableTypes
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter((value, index, values) => value && values.indexOf(value) === index);
+
     return {
         title: String(body.title || '').trim(),
         detail: String(body.detail || '').trim(),
         glintsCost: String(body.glintsCost || '').trim(),
         voucherValue: String(body.voucherValue || '').trim(),
         status: String(body.status || 'active').trim(),
-        sortOrder: String(body.sortOrder || '0').trim()
+        sortOrder: String(body.sortOrder || '0').trim(),
+        applicableTypes,
+        linkedServiceId: String(body.linkedServiceId || '').trim(),
+        linkedProductId: String(body.linkedProductId || '').trim()
     };
 }
 
@@ -625,6 +637,20 @@ function validateRewardVoucherForm(form) {
         errors.push('Sort order must be 0 or higher.');
     }
 
+    const allowedTypes = ['booking', 'service', 'product'];
+
+    if (!form.applicableTypes.length || form.applicableTypes.some((type) => !allowedTypes.includes(type))) {
+        errors.push('Please choose at least one applicable checkout type.');
+    }
+
+    if (form.applicableTypes.includes('service') && (!Number.isInteger(Number(form.linkedServiceId)) || Number(form.linkedServiceId) < 1)) {
+        errors.push('Please choose a linked service.');
+    }
+
+    if (form.applicableTypes.includes('product') && (!Number.isInteger(Number(form.linkedProductId)) || Number(form.linkedProductId) < 1)) {
+        errors.push('Please choose a linked product.');
+    }
+
     return errors;
 }
 
@@ -641,24 +667,103 @@ function getCashbackCampaignForm(body = {}) {
     });
 }
 
-function buildRewardVoucherPayload(form) {
+function buildRewardVoucherPayload(form, linkedTargets = {}) {
+    const appliesToBooking = form.applicableTypes.includes('booking');
+    const linkedService = linkedTargets.service || null;
+    const linkedProduct = linkedTargets.product || null;
+    const hasLegacySingleLinkedTarget = !appliesToBooking && Boolean(linkedService) !== Boolean(linkedProduct);
+    const legacyLinkedType = linkedService ? 'service' : (linkedProduct ? 'product' : '');
+    const legacyLinkedTarget = linkedService || linkedProduct || null;
+
     return {
         title: form.title,
         detail: form.detail,
         glintsCost: Number(form.glintsCost),
         voucherValue: Number(form.voucherValue),
         status: form.status,
-        sortOrder: Number(form.sortOrder)
+        sortOrder: Number(form.sortOrder),
+        voucherSource: 'platform',
+        merchantId: null,
+        linkedItemType: hasLegacySingleLinkedTarget ? legacyLinkedType : '',
+        linkedItemId: hasLegacySingleLinkedTarget ? (Number(legacyLinkedTarget?.id || 0) || null) : null,
+        appliesToBooking,
+        linkedServiceId: Number(linkedService?.id || 0) || null,
+        linkedProductId: Number(linkedProduct?.id || 0) || null
     };
 }
 
+function loadRewardVoucherLinkOptions(callback) {
+    return MerchantService.getAllServices((serviceError, services = []) => {
+        if (serviceError) {
+            callback(serviceError);
+            return;
+        }
+
+        return Product.getAllMerchantProducts((productError, products = []) => {
+            if (productError) {
+                callback(productError);
+                return;
+            }
+
+            callback(null, {
+                services,
+                products
+            });
+        });
+    });
+}
+
+function findRewardVoucherLinkedTargets(form, linkOptions) {
+    const linkedTargets = {
+        service: null,
+        product: null
+    };
+
+    if (form.applicableTypes.includes('service')) {
+        linkedTargets.service = linkOptions.services.find((entry) => String(entry.id) === String(form.linkedServiceId)) || null;
+
+        if (!linkedTargets.service) {
+            return {
+                linkedTargets,
+                error: 'The selected service could not be found.'
+            };
+        }
+    }
+
+    if (form.applicableTypes.includes('product')) {
+        linkedTargets.product = linkOptions.products.find((entry) => String(entry.id) === String(form.linkedProductId)) || null;
+
+        if (!linkedTargets.product) {
+            return {
+                linkedTargets,
+                error: 'The selected product could not be found.'
+            };
+        }
+    }
+
+    return { linkedTargets, error: null };
+}
+
 function renderRewardVoucherForm(res, options) {
-    return res.status(options.status || 200).render('admin-reward-voucher-form', {
-        title: options.title,
-        voucher: options.voucher || null,
-        form: options.form,
-        statuses: RewardVoucher.STATUSES,
-        errors: options.errors || []
+    return loadRewardVoucherLinkOptions((linkError, linkOptions) => {
+        if (linkError) {
+            console.error(linkError);
+            return res.status(500).render('error', {
+                title: 'Reward Shop Error',
+                message: 'Voucher products and services could not be loaded from the database.'
+            });
+        }
+
+        return res.status(options.status || 200).render('admin-reward-voucher-form', {
+            title: options.title,
+            voucher: options.voucher || null,
+            form: options.form,
+            statuses: RewardVoucher.STATUSES,
+            availableApplicableTypes: ['booking', 'service', 'product'],
+            services: linkOptions.services,
+            products: linkOptions.products,
+            errors: options.errors || []
+        });
     });
 }
 
@@ -1800,7 +1905,8 @@ function showNewRewardVoucher(req, res) {
         title: 'Add Reward Shop Voucher',
         form: getRewardVoucherForm({
             status: 'active',
-            sortOrder: '0'
+            sortOrder: '0',
+            applicableType: 'booking'
         })
     });
 }
@@ -1818,35 +1924,58 @@ function createRewardVoucher(req, res) {
         });
     }
 
-    return RewardVoucher.create(buildRewardVoucherPayload(form), (createError) => {
-        if (createError) {
-            console.error(createError);
+    return loadRewardVoucherLinkOptions((linkError, linkOptions) => {
+        if (linkError) {
+            console.error(linkError);
             return renderRewardVoucherForm(res, {
                 status: 500,
                 title: 'Add Reward Shop Voucher',
                 form,
-                errors: [getRewardVoucherPersistenceError(createError)]
+                errors: ['Voucher products and services could not be loaded from the database.']
             });
         }
 
-        req.session.adminSuccess = 'Reward shop voucher created successfully.';
-        notifyCustomers({
-            actorUserId: req.session.user.id,
-            type: 'reward_update',
-            title: 'New reward voucher',
-            message: `${form.title} is now available in the Vaniday reward shop.`,
-            linkUrl: '/reward-shop',
-            dedupeKey: `customer-reward-voucher-created-${Date.now()}`
+        const { linkedTargets, error: targetError } = findRewardVoucherLinkedTargets(form, linkOptions);
+
+        if (targetError) {
+            return renderRewardVoucherForm(res, {
+                status: 400,
+                title: 'Add Reward Shop Voucher',
+                form,
+                errors: [targetError]
+            });
+        }
+
+        return RewardVoucher.create(buildRewardVoucherPayload(form, linkedTargets), (createError) => {
+            if (createError) {
+                console.error(createError);
+                return renderRewardVoucherForm(res, {
+                    status: 500,
+                    title: 'Add Reward Shop Voucher',
+                    form,
+                    errors: [getRewardVoucherPersistenceError(createError)]
+                });
+            }
+
+            req.session.adminSuccess = 'Reward shop voucher created successfully.';
+            notifyCustomers({
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'New reward voucher',
+                message: `${form.title} is now available in the Vaniday reward shop.`,
+                linkUrl: '/reward-shop',
+                dedupeKey: `customer-reward-voucher-created-${Date.now()}`
+            });
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'reward_update',
+                title: 'Reward voucher created',
+                message: `${form.title} was added to the reward shop.`,
+                linkUrl: '/admin/reward-shop',
+                dedupeKey: `admin-reward-voucher-created-${Date.now()}`
+            });
+            return res.redirect('/admin/reward-shop');
         });
-        notifyAdmins({
-            actorUserId: req.session.user.id,
-            type: 'reward_update',
-            title: 'Reward voucher created',
-            message: `${form.title} was added to the reward shop.`,
-            linkUrl: '/admin/reward-shop',
-            dedupeKey: `admin-reward-voucher-created-${Date.now()}`
-        });
-        return res.redirect('/admin/reward-shop');
     });
 }
 
@@ -1876,7 +2005,14 @@ function showEditRewardVoucher(req, res) {
                 glintsCost: String(voucher.glintsCost),
                 voucherValue: String(voucher.voucherValue),
                 status: voucher.status,
-                sortOrder: String(voucher.sortOrder)
+                sortOrder: String(voucher.sortOrder),
+                applicableTypes: [
+                    voucher.appliesToBooking ? 'booking' : null,
+                    voucher.linkedServiceId ? 'service' : null,
+                    voucher.linkedProductId ? 'product' : null
+                ].filter(Boolean),
+                linkedServiceId: voucher.linkedServiceId ? String(voucher.linkedServiceId) : '',
+                linkedProductId: voucher.linkedProductId ? String(voucher.linkedProductId) : ''
             }
         });
     });
@@ -1912,20 +2048,45 @@ function updateRewardVoucher(req, res) {
             });
         }
 
-        return RewardVoucher.update(voucher.id, buildRewardVoucherPayload(form), (updateError) => {
-            if (updateError) {
-                console.error(updateError);
+        return loadRewardVoucherLinkOptions((linkError, linkOptions) => {
+            if (linkError) {
+                console.error(linkError);
                 return renderRewardVoucherForm(res, {
                     status: 500,
                     title: 'Edit Reward Shop Voucher',
                     voucher,
                     form,
-                    errors: [getRewardVoucherPersistenceError(updateError)]
+                    errors: ['Voucher products and services could not be loaded from the database.']
                 });
             }
 
-            req.session.adminSuccess = 'Reward shop voucher updated successfully.';
-            return res.redirect('/admin/reward-shop');
+            const { linkedTargets, error: targetError } = findRewardVoucherLinkedTargets(form, linkOptions);
+
+            if (targetError) {
+                return renderRewardVoucherForm(res, {
+                    status: 400,
+                    title: 'Edit Reward Shop Voucher',
+                    voucher,
+                    form,
+                    errors: [targetError]
+                });
+            }
+
+            return RewardVoucher.update(voucher.id, buildRewardVoucherPayload(form, linkedTargets), (updateError) => {
+                if (updateError) {
+                    console.error(updateError);
+                    return renderRewardVoucherForm(res, {
+                        status: 500,
+                        title: 'Edit Reward Shop Voucher',
+                        voucher,
+                        form,
+                        errors: [getRewardVoucherPersistenceError(updateError)]
+                    });
+                }
+
+                req.session.adminSuccess = 'Reward shop voucher updated successfully.';
+                return res.redirect('/admin/reward-shop');
+            });
         });
     });
 }

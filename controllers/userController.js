@@ -1309,7 +1309,10 @@ function redeemRewardShopVoucher(req, res) {
             }
 
             req.session.user.glintsBalance = Math.max(0, Number(req.session.user.glintsBalance || 0) - Number(offer.glintsCost || 0));
-            req.session.rewardShopSuccess = `${voucher.title} redeemed successfully. It is now stored under Rewards on your profile.`;
+            const issuedLabel = Number(voucher.issuedCount || 1) > 1
+                ? `${voucher.issuedCount} vouchers were added under Rewards on your profile.`
+                : 'It is now stored under Rewards on your profile.';
+            req.session.rewardShopSuccess = `${voucher.title} redeemed successfully. ${issuedLabel}`;
             Notification.create({
                 recipientUserId: req.session.user.id,
                 recipientRole: 'customer',

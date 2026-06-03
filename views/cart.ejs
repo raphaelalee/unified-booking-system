@@ -146,39 +146,82 @@
                         const cartVoucherList = typeof availableVouchers !== 'undefined' && Array.isArray(availableVouchers)
                             ? availableVouchers
                             : [];
+                        const cartSelectedVoucherId = typeof selectedVoucherId !== 'undefined'
+                            ? String(selectedVoucherId || '').trim()
+                            : '';
+                        const cartSmartVoucher = typeof smartVoucherRecommendation !== 'undefined' && smartVoucherRecommendation
+                            ? smartVoucherRecommendation
+                            : null;
+                        const cartSmartVoucherMessage = typeof smartVoucherMessage !== 'undefined'
+                            ? String(smartVoucherMessage || '').trim()
+                            : '';
                     %>
                     <div class="loyalty-redemption-card cart-cashback-card">
                         <% if (cartHasServiceItems && cartVoucherList.length > 0) { %>
                             <span>
-                                <strong>Booking vouchers</strong>
+                                <strong>Platform vouchers</strong>
                                 <small>
-                                    <%= cartVoucherList.length %> eligible voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
-                                    Choose the best one on the payment page after you click checkout.
+                                    <%= cartVoucherList.length %> active platform voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
+                                    Service smart vouchers are checked automatically on the payment page.
                                 </small>
                             </span>
                         <% } else if (cartHasServiceItems) { %>
                             <span>
-                                <strong>Booking vouchers</strong>
-                                <small>No active booking vouchers available for this account right now.</small>
+                                <strong>Platform vouchers</strong>
+                                <small>No active platform vouchers available. Service smart vouchers are still checked automatically on the payment page.</small>
                             </span>
                         <% } else if (cartHasProductItems && cartVoucherList.length > 0) { %>
                             <span>
-                                <strong>Product vouchers</strong>
+                                <strong>Platform vouchers</strong>
                                 <small>
-                                    <%= cartVoucherList.length %> active product voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
-                                    Choose the best one on the payment page after you click checkout.
+                                    <%= cartVoucherList.length %> active platform voucher<%= cartVoucherList.length === 1 ? '' : 's' %> found.
+                                    Product smart vouchers are checked automatically on the payment page.
                                 </small>
                             </span>
                         <% } else if (cartHasProductItems) { %>
                             <span>
-                                <strong>Product vouchers</strong>
-                                <small>No active product vouchers available for this account right now.</small>
+                                <strong>Platform vouchers</strong>
+                                <small>No active platform vouchers available. Product smart vouchers are still checked automatically on the payment page.</small>
                             </span>
                         <% } else { %>
                             <span>
                                 <strong>Vouchers</strong>
                                 <small>Voucher options appear here when the selected checkout supports them.</small>
                             </span>
+                        <% } %>
+                        <% if (cartVoucherList.length > 0) { %>
+                            <label>
+                                <span>
+                                    <small>Choose an active platform voucher now. You can still review it again on the payment page.</small>
+                                </span>
+                                <select name="selectedVoucherId" style="display:block; width:100%; margin-top:0.65rem;">
+                                    <option value="">Select voucher</option>
+                                    <% cartVoucherList.forEach((voucher) => { %>
+                                        <option value="<%= voucher.id %>" <%= String(voucher.id) === cartSelectedVoucherId ? 'selected' : '' %>>
+                                            <%= voucher.title %> (<%= voucher.code %>) -
+                                            <%= voucher.discountType === 'percentage'
+                                                ? `${Number(voucher.discountPercent || 0)}% OFF`
+                                                : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </label>
+                        <% } %>
+                        <% if (cartSmartVoucher && cartSmartVoucher.voucher) { %>
+                            <div class="notice success">
+                                <p>
+                                    <strong>Smart voucher selected:</strong>
+                                    <%= cartSmartVoucher.voucher.title %> was selected automatically for this checkout.
+                                    Estimated savings <strong>$<%= Number(cartSmartVoucher.discount || 0).toFixed(2) %></strong>.
+                                </p>
+                            </div>
+                        <% } else if (cartSmartVoucherMessage) { %>
+                            <div class="notice error">
+                                <p>
+                                    <strong>Smart voucher check:</strong>
+                                    <%= cartSmartVoucherMessage %>
+                                </p>
+                            </div>
                         <% } %>
                     </div>
 

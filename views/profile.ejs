@@ -662,7 +662,14 @@
                         };
                         const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
                         const usedProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
-                        const activeBookingVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly !== false);
+                        const activePlatformVouchers = activeProfileVouchers.filter((voucher) =>
+                            voucher.bookingOnly !== false
+                            && voucher.sourceType !== 'reward_shop_merchant'
+                        );
+                        const activeServiceVouchers = activeProfileVouchers.filter((voucher) =>
+                            voucher.bookingOnly !== false
+                            && voucher.sourceType === 'reward_shop_merchant'
+                        );
                         const activeProductVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly === false);
                         const voucherSourceLabel = (voucher) => voucher.sourceType === 'referral'
                             ? 'Referral'
@@ -748,23 +755,26 @@
                                 </div>
 
                                 <div class="profile-voucher-tabs" data-voucher-tabs>
-                                    <button class="profile-voucher-tab is-active" type="button" data-voucher-tab="booking">
-                                        Booking vouchers (<%= activeBookingVouchers.length %>)
+                                    <button class="profile-voucher-tab is-active" type="button" data-voucher-tab="platform">
+                                        Platform (<%= activePlatformVouchers.length %>)
+                                    </button>
+                                    <button class="profile-voucher-tab" type="button" data-voucher-tab="service">
+                                        Services (<%= activeServiceVouchers.length %>)
                                     </button>
                                     <button class="profile-voucher-tab" type="button" data-voucher-tab="product">
-                                        Product vouchers (<%= activeProductVouchers.length %>)
+                                        Product (<%= activeProductVouchers.length %>)
                                     </button>
                                 </div>
 
                                 <% if (!activeProfileVouchers.length) { %>
                                     <p class="muted">No active vouchers right now. Redeem one from the reward shop.</p>
                                 <% } else { %>
-                                    <div class="profile-voucher-tab-panel is-active" data-voucher-panel="booking">
-                                        <% if (!activeBookingVouchers.length) { %>
-                                            <p class="muted">No active booking vouchers right now. Redeem one from the reward shop.</p>
+                                    <div class="profile-voucher-tab-panel is-active" data-voucher-panel="platform">
+                                        <% if (!activePlatformVouchers.length) { %>
+                                            <p class="muted">No active platform vouchers right now. Redeem one from the reward shop.</p>
                                         <% } else { %>
                                             <div class="profile-voucher-list profile-voucher-list-scroll">
-                                                <% activeBookingVouchers.forEach((voucher) => { %>
+                                                <% activePlatformVouchers.forEach((voucher) => { %>
                                                     <article class="profile-voucher-row">
                                                         <div>
                                                             <span><%= voucherSourceLabel(voucher) %></span>
@@ -785,7 +795,37 @@
                                                                             ? `Use at ${voucher.merchantName}`
                                                                         : voucher.firstBookingOnly
                                                                             ? 'First booking only'
-                                                                            : 'Eligible booking payment' %>
+                                                                        : 'Eligible booking payment' %>
+                                                            </small>
+                                                        </div>
+                                                    </article>
+                                                <% }) %>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                    <div class="profile-voucher-tab-panel" data-voucher-panel="service" hidden>
+                                        <% if (!activeServiceVouchers.length) { %>
+                                            <p class="muted">No active service vouchers right now. Redeem one from the reward shop.</p>
+                                        <% } else { %>
+                                            <div class="profile-voucher-list profile-voucher-list-scroll">
+                                                <% activeServiceVouchers.forEach((voucher) => { %>
+                                                    <article class="profile-voucher-row">
+                                                        <div>
+                                                            <span><%= voucherSourceLabel(voucher) %></span>
+                                                            <strong><%= voucher.title %></strong>
+                                                            <% if (voucher.merchantName) { %>
+                                                                <small><%= voucher.merchantName %></small>
+                                                            <% } %>
+                                                            <small><%= voucher.code %></small>
+                                                        </div>
+                                                        <div>
+                                                            <strong><%= voucherValueLabel(voucher) %></strong>
+                                                            <small>
+                                                                <%= voucher.expiresAt
+                                                                    ? `Expires ${new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' })}${voucher.merchantName ? ` · Use at ${voucher.merchantName}` : ''}`
+                                                                    : voucher.merchantName
+                                                                        ? `Use at ${voucher.merchantName}`
+                                                                        : 'Eligible service booking' %>
                                                             </small>
                                                         </div>
                                                     </article>

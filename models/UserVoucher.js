@@ -47,6 +47,8 @@ function ensureSchema(callback) {
             first_booking_only TINYINT(1) NOT NULL DEFAULT 0,
             voucher_definition_id INT DEFAULT NULL,
             merchant_id INT DEFAULT NULL,
+            linked_item_type VARCHAR(20) DEFAULT NULL,
+            linked_item_id INT DEFAULT NULL,
             minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             code VARCHAR(40) NOT NULL,
             expires_at DATETIME DEFAULT NULL,
@@ -96,8 +98,16 @@ function ensureSchema(callback) {
                 alters.push('ADD COLUMN merchant_id INT DEFAULT NULL AFTER voucher_definition_id');
             }
 
+            if (!fields.has('linked_item_type')) {
+                alters.push('ADD COLUMN linked_item_type VARCHAR(20) DEFAULT NULL AFTER merchant_id');
+            }
+
+            if (!fields.has('linked_item_id')) {
+                alters.push('ADD COLUMN linked_item_id INT DEFAULT NULL AFTER linked_item_type');
+            }
+
             if (!fields.has('minimum_spend')) {
-                alters.push('ADD COLUMN minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER merchant_id');
+                alters.push('ADD COLUMN minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER linked_item_id');
             }
 
             if (!fields.has('used_booking_id')) {
@@ -147,8 +157,8 @@ function mapRow(row = {}) {
         voucherDefinitionId: row.voucher_definition_id ? Number(row.voucher_definition_id) : null,
         merchantId: row.merchant_id ? Number(row.merchant_id) : null,
         merchantName: row.merchant_name || '',
-        linkedItemType: row.linked_item_type || '',
-        linkedItemId: row.linked_item_id ? Number(row.linked_item_id) : null,
+        linkedItemType: row.user_linked_item_type || row.linked_item_type || '',
+        linkedItemId: row.user_linked_item_id ? Number(row.user_linked_item_id) : (row.linked_item_id ? Number(row.linked_item_id) : null),
         linkedItemName: row.linked_item_name || '',
         minimumSpend: Number(row.minimum_spend || 0),
         code: row.code || '',
@@ -177,8 +187,8 @@ function issueVoucher(data, callback) {
             `
                 INSERT INTO user_vouchers
                     (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, discount_type, discount_percent, status,
-                        booking_only, first_booking_only, voucher_definition_id, merchant_id, minimum_spend, code, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+                        booking_only, first_booking_only, voucher_definition_id, merchant_id, linked_item_type, linked_item_id, minimum_spend, code, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             [
                 data.userId,
@@ -194,6 +204,8 @@ function issueVoucher(data, callback) {
                 data.firstBookingOnly ? 1 : 0,
                 data.voucherDefinitionId || null,
                 data.merchantId || null,
+                data.linkedItemType || null,
+                data.linkedItemId || null,
                 Number(data.minimumSpend || 0),
                 code,
                 data.expiresAt || null
@@ -409,96 +421,156 @@ function redeemRewardShopVoucher(userId, offer, callback) {
                                         });
                                     }
 
-                                    const code = generateCode('RWD');
                                     const discountType = offer.discountType === 'percentage' ? 'percentage' : 'fixed';
                                     const discountValue = Number(offer.discountValue || offer.voucherValue || 0);
                                     const voucherValue = discountType === 'fixed' ? discountValue : 0;
                                     const remainingValue = discountType === 'fixed' ? discountValue : 0;
-                                    const bookingOnly = offer.linkedItemType === 'product' ? 0 : 1;
+                                    const sourceType = offer.voucherSource === 'merchant' ? 'reward_shop_merchant' : 'reward_shop';
+                                    const issuedVouchers = [];
+                                    const voucherScopes = [];
 
-                                    connection.query(
-                                        `
-                                            INSERT INTO user_vouchers
-                                                (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, discount_type, discount_percent,
-                                                    status, booking_only, first_booking_only, voucher_definition_id, merchant_id, minimum_spend, code, expires_at)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, 0, ?, ?, ?, ?, ?)
-                                        `,
-                                        [
-                                            userId,
-                                            offer.voucherSource === 'merchant' ? 'reward_shop_merchant' : 'reward_shop',
-                                            String(offer.voucherId || offer.id || ''),
-                                            offer.title,
-                                            offer.detail || null,
-                                            voucherValue,
-                                            remainingValue,
-                                            discountType,
-                                            discountType === 'percentage' ? discountValue : 0,
-                                            bookingOnly,
-                                            Number(offer.voucherId || offer.id || 0) || null,
-                                            offer.merchantId || null,
-                                            Number(offer.minimumSpend || 0),
-                                            code,
-                                            offer.expiryDate || null
-                                        ],
-                                        (insertError, result) => {
-                                            if (insertError) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    callback(insertError);
-                                                });
-                                            }
+                                    if (offer.appliesToBooking || (!offer.linkedServiceId && !offer.linkedProductId && offer.linkedItemType !== 'product')) {
+                                        voucherScopes.push({
+                                            bookingOnly: 1,
+                                            merchantId: null,
+                                            linkedItemType: null,
+                                            linkedItemId: null
+                                        });
+                                    }
 
-                                            const incrementSql = Number(offer.voucherId || offer.id || 0) > 0
-                                                ? 'UPDATE reward_shop_vouchers SET redemption_count = COALESCE(redemption_count, 0) + 1 WHERE voucher_id = ?'
-                                                : null;
+                                    if (offer.linkedServiceId || offer.linkedItemType === 'service') {
+                                        voucherScopes.push({
+                                            bookingOnly: 1,
+                                            merchantId: offer.linkedServiceSalonId || offer.merchantId || null,
+                                            linkedItemType: 'service',
+                                            linkedItemId: offer.linkedServiceId || offer.linkedItemId || null
+                                        });
+                                    }
 
-                                            const finalizeCommit = () => {
-                                                return connection.commit((commitError) => {
-                                                    connection.release();
+                                    if (offer.linkedProductId || offer.linkedItemType === 'product') {
+                                        voucherScopes.push({
+                                            bookingOnly: 0,
+                                            merchantId: offer.linkedProductSalonId || offer.merchantId || null,
+                                            linkedItemType: 'product',
+                                            linkedItemId: offer.linkedProductId || offer.linkedItemId || null
+                                        });
+                                    }
 
-                                                    if (commitError) {
-                                                        callback(commitError);
-                                                        return;
-                                                    }
+                                    const uniqueScopes = voucherScopes.filter((scope, index, scopes) => {
+                                        const key = `${scope.bookingOnly}:${scope.merchantId || ''}:${scope.linkedItemType || ''}:${scope.linkedItemId || ''}`;
+                                        return scopes.findIndex((entry) => `${entry.bookingOnly}:${entry.merchantId || ''}:${entry.linkedItemType || ''}:${entry.linkedItemId || ''}` === key) === index;
+                                    });
 
-                                                    callback(null, {
-                                                        id: result.insertId,
-                                                        code,
-                                                        title: offer.title,
-                                                        voucherValue,
-                                                        discountType,
-                                                        discountPercent: discountType === 'percentage' ? discountValue : 0,
-                                                        discountValue,
-                                                        glintsCost: cost,
-                                                        bookingOnly: bookingOnly === 1,
-                                                        merchantId: offer.merchantId || null,
-                                                        merchantName: offer.merchantName || '',
-                                                        expiresAt: offer.expiryDate || null
-                                                    });
-                                                });
-                                            };
+                                    const finalizeRedemption = () => {
+                                        const incrementSql = Number(offer.voucherId || offer.id || 0) > 0
+                                            ? 'UPDATE reward_shop_vouchers SET redemption_count = COALESCE(redemption_count, 0) + 1 WHERE voucher_id = ?'
+                                            : null;
 
-                                            if (!incrementSql) {
-                                                finalizeCommit();
-                                                return;
-                                            }
+                                        const finalizeCommit = () => {
+                                            return connection.commit((commitError) => {
+                                                connection.release();
 
-                                            connection.query(
-                                                incrementSql,
-                                                [offer.voucherId || offer.id],
-                                                (incrementError) => {
-                                                    if (incrementError) {
-                                                        return connection.rollback(() => {
-                                                            connection.release();
-                                                            callback(incrementError);
-                                                        });
-                                                    }
-
-                                                    finalizeCommit();
+                                                if (commitError) {
+                                                    callback(commitError);
+                                                    return;
                                                 }
-                                            );
+
+                                                callback(null, {
+                                                    id: issuedVouchers[0]?.id || null,
+                                                    code: issuedVouchers[0]?.code || '',
+                                                    title: offer.title,
+                                                    voucherValue,
+                                                    discountType,
+                                                    discountPercent: discountType === 'percentage' ? discountValue : 0,
+                                                    discountValue,
+                                                    glintsCost: cost,
+                                                    bookingOnly: Boolean(issuedVouchers[0]?.bookingOnly),
+                                                    merchantId: issuedVouchers[0]?.merchantId || null,
+                                                    merchantName: offer.merchantName || '',
+                                                    expiresAt: offer.expiryDate || null,
+                                                    issuedCount: issuedVouchers.length
+                                                });
+                                            });
+                                        };
+
+                                        if (!incrementSql) {
+                                            finalizeCommit();
+                                            return;
                                         }
-                                    );
+
+                                        connection.query(
+                                            incrementSql,
+                                            [offer.voucherId || offer.id],
+                                            (incrementError) => {
+                                                if (incrementError) {
+                                                    return connection.rollback(() => {
+                                                        connection.release();
+                                                        callback(incrementError);
+                                                    });
+                                                }
+
+                                                finalizeCommit();
+                                            }
+                                        );
+                                    };
+
+                                    const insertScopeVoucher = (scopeIndex) => {
+                                        if (scopeIndex >= uniqueScopes.length) {
+                                            finalizeRedemption();
+                                            return;
+                                        }
+
+                                        const scope = uniqueScopes[scopeIndex];
+                                        const code = generateCode('RWD');
+
+                                        connection.query(
+                                            `
+                                                INSERT INTO user_vouchers
+                                                    (user_id, source_type, source_reference, title, detail, voucher_value, remaining_value, discount_type, discount_percent,
+                                                        status, booking_only, first_booking_only, voucher_definition_id, merchant_id, linked_item_type, linked_item_id,
+                                                        minimum_spend, code, expires_at)
+                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, 0, ?, ?, ?, ?, ?, ?, ?)
+                                            `,
+                                            [
+                                                userId,
+                                                sourceType,
+                                                String(offer.voucherId || offer.id || ''),
+                                                offer.title,
+                                                offer.detail || null,
+                                                voucherValue,
+                                                remainingValue,
+                                                discountType,
+                                                discountType === 'percentage' ? discountValue : 0,
+                                                scope.bookingOnly,
+                                                Number(offer.voucherId || offer.id || 0) || null,
+                                                scope.merchantId || null,
+                                                scope.linkedItemType || null,
+                                                scope.linkedItemId || null,
+                                                Number(offer.minimumSpend || 0),
+                                                code,
+                                                offer.expiryDate || null
+                                            ],
+                                            (insertError, result) => {
+                                                if (insertError) {
+                                                    return connection.rollback(() => {
+                                                        connection.release();
+                                                        callback(insertError);
+                                                    });
+                                                }
+
+                                                issuedVouchers.push({
+                                                    id: result.insertId,
+                                                    code,
+                                                    bookingOnly: scope.bookingOnly === 1,
+                                                    merchantId: scope.merchantId || null
+                                                });
+
+                                                insertScopeVoucher(scopeIndex + 1);
+                                            }
+                                        );
+                                    };
+
+                                    insertScopeVoucher(0);
                                 }
                             );
                         };
@@ -561,11 +633,11 @@ function getByUserId(userId, callback) {
                     SELECT
                         user_vouchers.*,
                         salons.salon_name AS merchant_name,
-                        reward_shop_vouchers.linked_item_type,
-                        reward_shop_vouchers.linked_item_id,
+                        COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) AS user_linked_item_type,
+                        COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id) AS user_linked_item_id,
                         CASE
-                            WHEN reward_shop_vouchers.linked_item_type = 'service' THEN services.service_name
-                            WHEN reward_shop_vouchers.linked_item_type = 'product' THEN products.name
+                            WHEN COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'service' THEN services.service_name
+                            WHEN COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'product' THEN products.name
                             ELSE ''
                         END AS linked_item_name
                     FROM user_vouchers
@@ -573,11 +645,11 @@ function getByUserId(userId, callback) {
                     LEFT JOIN reward_shop_vouchers
                         ON reward_shop_vouchers.voucher_id = user_vouchers.voucher_definition_id
                     LEFT JOIN services
-                        ON services.service_id = reward_shop_vouchers.linked_item_id
-                        AND reward_shop_vouchers.linked_item_type = 'service'
+                        ON services.service_id = COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id)
+                        AND COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'service'
                     LEFT JOIN products
-                        ON products.product_id = reward_shop_vouchers.linked_item_id
-                        AND reward_shop_vouchers.linked_item_type = 'product'
+                        ON products.product_id = COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id)
+                        AND COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'product'
                     WHERE user_id = ?
                     ORDER BY
                         CASE WHEN user_vouchers.status = 'active' THEN 0 ELSE 1 END,
@@ -631,11 +703,11 @@ function findByIdForUser(userVoucherId, userId, callback) {
                 SELECT
                     user_vouchers.*,
                     salons.salon_name AS merchant_name,
-                    reward_shop_vouchers.linked_item_type,
-                    reward_shop_vouchers.linked_item_id,
+                    COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) AS user_linked_item_type,
+                    COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id) AS user_linked_item_id,
                     CASE
-                        WHEN reward_shop_vouchers.linked_item_type = 'service' THEN services.service_name
-                        WHEN reward_shop_vouchers.linked_item_type = 'product' THEN products.name
+                        WHEN COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'service' THEN services.service_name
+                        WHEN COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'product' THEN products.name
                         ELSE ''
                     END AS linked_item_name
                 FROM user_vouchers
@@ -643,11 +715,11 @@ function findByIdForUser(userVoucherId, userId, callback) {
                 LEFT JOIN reward_shop_vouchers
                     ON reward_shop_vouchers.voucher_id = user_vouchers.voucher_definition_id
                 LEFT JOIN services
-                    ON services.service_id = reward_shop_vouchers.linked_item_id
-                    AND reward_shop_vouchers.linked_item_type = 'service'
+                    ON services.service_id = COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id)
+                    AND COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'service'
                 LEFT JOIN products
-                    ON products.product_id = reward_shop_vouchers.linked_item_id
-                    AND reward_shop_vouchers.linked_item_type = 'product'
+                    ON products.product_id = COALESCE(user_vouchers.linked_item_id, reward_shop_vouchers.linked_item_id)
+                    AND COALESCE(user_vouchers.linked_item_type, reward_shop_vouchers.linked_item_type) = 'product'
                 WHERE user_vouchers.user_voucher_id = ?
                     AND user_vouchers.user_id = ?
                 LIMIT 1
@@ -723,6 +795,11 @@ function validateForBooking(voucher, payment, callback) {
 
     if (voucher.merchantId && String(voucher.merchantId) !== String(payment.merchantId || '')) {
         callback(new Error('This voucher is only valid for another merchant.'));
+        return;
+    }
+
+    if (voucher.linkedItemType === 'service' && voucher.linkedItemId && String(voucher.linkedItemId) !== String(payment.serviceId || '')) {
+        callback(new Error('This voucher is only valid for another service.'));
         return;
     }
 

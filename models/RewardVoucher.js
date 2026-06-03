@@ -150,6 +150,9 @@ function ensureSchema(callback) {
             usage_limit_total INT DEFAULT NULL,
             redemption_count INT NOT NULL DEFAULT 0,
             created_by INT DEFAULT NULL,
+            applies_to_booking TINYINT(1) NOT NULL DEFAULT 1,
+            linked_service_id INT DEFAULT NULL,
+            linked_product_id INT DEFAULT NULL,
             linked_item_type VARCHAR(20) DEFAULT NULL,
             linked_item_id INT DEFAULT NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
@@ -224,8 +227,20 @@ function ensureSchema(callback) {
                 alters.push('ADD COLUMN created_by INT DEFAULT NULL AFTER redemption_count');
             }
 
+            if (!fields.has('applies_to_booking')) {
+                alters.push('ADD COLUMN applies_to_booking TINYINT(1) NOT NULL DEFAULT 1 AFTER created_by');
+            }
+
+            if (!fields.has('linked_service_id')) {
+                alters.push('ADD COLUMN linked_service_id INT DEFAULT NULL AFTER applies_to_booking');
+            }
+
+            if (!fields.has('linked_product_id')) {
+                alters.push('ADD COLUMN linked_product_id INT DEFAULT NULL AFTER linked_service_id');
+            }
+
             if (!fields.has('linked_item_type')) {
-                alters.push('ADD COLUMN linked_item_type VARCHAR(20) DEFAULT NULL AFTER created_by');
+                alters.push('ADD COLUMN linked_item_type VARCHAR(20) DEFAULT NULL AFTER linked_product_id');
             }
 
             if (!fields.has('linked_item_id')) {
@@ -240,6 +255,18 @@ function ensureSchema(callback) {
                             discount_value = CASE
                                 WHEN COALESCE(discount_value, 0) > 0 THEN discount_value
                                 ELSE voucher_value
+                            END,
+                            applies_to_booking = CASE
+                                WHEN linked_item_type = 'product' THEN 0
+                                ELSE COALESCE(applies_to_booking, 1)
+                            END,
+                            linked_service_id = CASE
+                                WHEN linked_item_type = 'service' AND linked_service_id IS NULL THEN linked_item_id
+                                ELSE linked_service_id
+                            END,
+                            linked_product_id = CASE
+                                WHEN linked_item_type = 'product' AND linked_product_id IS NULL THEN linked_item_id
+                                ELSE linked_product_id
                             END,
                             status = CASE
                                 WHEN status = 'inactive' THEN 'inactive'
@@ -268,6 +295,18 @@ function ensureSchema(callback) {
                             discount_value = CASE
                                 WHEN COALESCE(discount_value, 0) > 0 THEN discount_value
                                 ELSE voucher_value
+                            END,
+                            applies_to_booking = CASE
+                                WHEN linked_item_type = 'product' THEN 0
+                                ELSE COALESCE(applies_to_booking, 1)
+                            END,
+                            linked_service_id = CASE
+                                WHEN linked_item_type = 'service' AND linked_service_id IS NULL THEN linked_item_id
+                                ELSE linked_service_id
+                            END,
+                            linked_product_id = CASE
+                                WHEN linked_item_type = 'product' AND linked_product_id IS NULL THEN linked_item_id
+                                ELSE linked_product_id
                             END,
                             voucher_source = COALESCE(NULLIF(voucher_source, ''), 'platform')
                     `,
@@ -340,6 +379,13 @@ function mapVoucher(row) {
             : Number(row.usage_limit_total),
         redemptionCount: Number(row.redemption_count || row.redemptionCount || 0),
         createdBy: row.created_by || row.createdBy || null,
+        appliesToBooking: Boolean(Number(row.applies_to_booking ?? row.appliesToBooking ?? (row.linked_item_type === 'product' ? 0 : 1))),
+        linkedServiceId: row.linked_service_id ? Number(row.linked_service_id) : (row.linked_item_type === 'service' && row.linked_item_id ? Number(row.linked_item_id) : null),
+        linkedServiceName: row.linked_service_name || row.linkedServiceName || '',
+        linkedServiceSalonId: row.linked_service_salon_id ? Number(row.linked_service_salon_id) : null,
+        linkedProductId: row.linked_product_id ? Number(row.linked_product_id) : (row.linked_item_type === 'product' && row.linked_item_id ? Number(row.linked_item_id) : null),
+        linkedProductName: row.linked_product_name || row.linkedProductName || '',
+        linkedProductSalonId: row.linked_product_salon_id ? Number(row.linked_product_salon_id) : null,
         linkedItemType: row.linked_item_type || row.linkedItemType || '',
         linkedItemId: row.linked_item_id ? Number(row.linked_item_id) : null,
         linkedItemName: row.linked_item_name || row.linkedItemName || '',
@@ -371,11 +417,18 @@ function buildSelectSql(whereClause = '', orderBy = 'v.sort_order ASC, COALESCE(
             v.usage_limit_total,
             v.redemption_count,
             v.created_by,
+            v.applies_to_booking,
+            v.linked_service_id,
+            v.linked_product_id,
             v.linked_item_type,
             v.linked_item_id,
             v.created_at,
             v.updated_at,
             s.salon_name AS merchant_name,
+            svc.service_name AS linked_service_name,
+            svc.salon_id AS linked_service_salon_id,
+            prod.name AS linked_product_name,
+            prod.salon_id AS linked_product_salon_id,
             CASE
                 WHEN v.linked_item_type = 'service' THEN svc.service_name
                 WHEN v.linked_item_type = 'product' THEN prod.name
@@ -385,11 +438,9 @@ function buildSelectSql(whereClause = '', orderBy = 'v.sort_order ASC, COALESCE(
         LEFT JOIN salons s
             ON s.salon_id = v.merchant_id
         LEFT JOIN services svc
-            ON svc.service_id = v.linked_item_id
-            AND v.linked_item_type = 'service'
+            ON svc.service_id = COALESCE(v.linked_service_id, CASE WHEN v.linked_item_type = 'service' THEN v.linked_item_id ELSE NULL END)
         LEFT JOIN products prod
-            ON prod.product_id = v.linked_item_id
-            AND v.linked_item_type = 'product'
+            ON prod.product_id = COALESCE(v.linked_product_id, CASE WHEN v.linked_item_type = 'product' THEN v.linked_item_id ELSE NULL END)
         ${whereClause}
         ORDER BY ${orderBy}
     `;
@@ -523,6 +574,9 @@ function buildCreateParams(voucher = {}) {
             ? voucher.pointsRequired
             : voucher.glintsCost || 0
     );
+    const appliesToBooking = voucher.appliesToBooking === undefined ? true : Boolean(voucher.appliesToBooking);
+    const linkedServiceId = Number(voucher.linkedServiceId || 0) || null;
+    const linkedProductId = Number(voucher.linkedProductId || 0) || null;
     const linkedItemType = LINKED_ITEM_TYPES.includes(voucher.linkedItemType) ? voucher.linkedItemType : null;
 
     return [
@@ -544,6 +598,9 @@ function buildCreateParams(voucher = {}) {
         voucher.usageLimitTotal || null,
         Number(voucher.redemptionCount || 0),
         voucher.createdBy || null,
+        appliesToBooking ? 1 : 0,
+        linkedServiceId,
+        linkedProductId,
         linkedItemType,
         linkedItemType ? (voucher.linkedItemId || null) : null
     ];
@@ -560,8 +617,9 @@ function create(voucher, callback) {
             INSERT INTO reward_shop_vouchers
                 (glints_cost, voucher_value, title, detail, status, sort_order, voucher_source, merchant_id, discount_type,
                     discount_value, minimum_spend, points_required, start_date, expiry_date, usage_limit_per_user,
-                    usage_limit_total, redemption_count, created_by, linked_item_type, linked_item_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    usage_limit_total, redemption_count, created_by, applies_to_booking, linked_service_id, linked_product_id,
+                    linked_item_type, linked_item_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(sql, buildCreateParams(voucher), callback);
@@ -595,6 +653,9 @@ function update(voucherId, voucher, callback) {
                 usage_limit_total = ?,
                 redemption_count = ?,
                 created_by = ?,
+                applies_to_booking = ?,
+                linked_service_id = ?,
+                linked_product_id = ?,
                 linked_item_type = ?,
                 linked_item_id = ?
             WHERE voucher_id = ?
