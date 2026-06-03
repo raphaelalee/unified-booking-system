@@ -47,7 +47,25 @@
                 <% } else if (currentUser && currentUser.role === 'merchant') { %>
                     <%- include('merchant-navbar') %>
                 <% } else { %>
-                    <a href="/services">Services</a>
+                    <div class="nav-dropdown">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="services-menu">
+                            <span>Services</span>
+                            <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+                        </button>
+                        <div class="nav-dropdown-menu" id="services-menu" aria-label="Services menu">
+                            <a href="/services?filter=men">Men</a>
+                            <a href="/services?filter=women">Women</a>
+                            <a href="/services?filter=hair">Hair</a>
+                            <a href="/services?filter=nails">Nails</a>
+                            <a href="/services?filter=spa">Spa</a>
+                            <a href="/services?filter=massage">Massage</a>
+                            <a href="/services?filter=packages">Packages</a>
+                            <% if (typeof hasPublicPromotions !== 'undefined' ? hasPublicPromotions : (typeof locals !== 'undefined' && locals.hasPublicPromotions)) { %>
+                                <a href="/services?filter=promotions">Promotions</a>
+                            <% } %>
+                            <a href="/services">View All Services</a>
+                        </div>
+                    </div>
                     <a href="/products">Products</a>
                     <div class="nav-dropdown">
                         <button class="nav-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="promotions-menu">

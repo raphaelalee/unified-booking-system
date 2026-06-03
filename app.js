@@ -38,6 +38,7 @@ const {
 } = require('./middleware');
 const Product = require('./models/Product');
 const Notification = require('./models/Notification');
+const Promotion = require('./models/Promotion');
 const Loyalty = require('./models/Loyalty');
 const { getCartItemCount } = require('./utils/cart');
 
@@ -104,7 +105,18 @@ app.use((req, res, next) => {
             res.locals.notificationUnreadCount = count;
         }
 
-        next();
+        // Also expose whether there are any active public promotions so templates can
+        // conditionally render a Promotions item in the Services dropdown.
+        Promotion.getActivePublic((promoError, promoRows = []) => {
+            if (promoError) {
+                console.error('Promotion check failed:', promoError);
+                res.locals.hasPublicPromotions = false;
+            } else {
+                res.locals.hasPublicPromotions = Array.isArray(promoRows) && promoRows.length > 0;
+            }
+
+            next();
+        });
     });
 });
 

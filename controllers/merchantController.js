@@ -1391,6 +1391,7 @@ function showHome(req, res) {
 
 function showServices(req, res) {
     const search = req.query.search || '';
+    const filter = (req.query.filter || '').toLowerCase();
     const favouriteIds = req.session.favouriteMerchantIds || [];
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
@@ -1429,25 +1430,63 @@ function showServices(req, res) {
                 amount: Number(service.price || 0)
             })
         }))).then((serviceCatalogWithCashback) => {
-        const prices = serviceCatalog.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
-        const merchantIds = new Set(serviceCatalogWithCashback.map((service) => service.merchantId).filter(Boolean));
+        // Determine active promotions and optionally filter the catalog by the requested filter.
+        Promotion.getActivePublic((promoError, promoRows = []) => {
+            const promoServiceIds = new Set((promoRows || []).map((p) => Number(p.serviceId || 0)).filter(Boolean));
+            const promoSalonIds = new Set((promoRows || []).map((p) => String(p.salonId || '')).filter(Boolean));
 
-        return res.render('services', {
-            title: 'Services',
-            merchants: Merchant.getAll(search),
-            favouriteIds,
-            serviceCatalog: serviceCatalogWithCashback,
-            portalStats: serviceError || databaseServices.length === 0
-                ? Merchant.getPortalStats(search)
-                : {
-                    merchantCount: merchantIds.size,
-                    serviceCount: serviceCatalogWithCashback.length,
-                    promotionCount: 0,
-                    slotCount: serviceCatalogWithCashback.reduce((total, service) => total + (service.slots || []).length, 0),
-                    startingPrice: prices.length > 0 ? Math.min(...prices) : 0
-                },
-            search,
-            showChatbot: true
+            let filteredCatalog = serviceCatalogWithCashback;
+
+            if (filter) {
+                switch (filter) {
+                    case 'men':
+                    case 'male':
+                        filteredCatalog = filteredCatalog.filter((s) => String(s.genderTarget || '').toLowerCase() === 'male');
+                        break;
+                    case 'women':
+                    case 'female':
+                        filteredCatalog = filteredCatalog.filter((s) => String(s.genderTarget || '').toLowerCase() === 'female');
+                        break;
+                    case 'hair':
+                    case 'nails':
+                    case 'spa':
+                    case 'massage':
+                        filteredCatalog = filteredCatalog.filter((s) => String(s.category || s.merchantCategory || '').toLowerCase().includes(filter));
+                        break;
+                    case 'packages':
+                        filteredCatalog = filteredCatalog.filter((s) => Boolean(s.packageEnabled));
+                        break;
+                    case 'promotions':
+                        filteredCatalog = filteredCatalog.filter((s) => promoServiceIds.has(Number(s.id)) || promoSalonIds.has(String(s.merchantId || s.salonId)));
+                        break;
+                    case 'all':
+                    case 'view-all':
+                    default:
+                        // no-op, show all
+                        break;
+                }
+            }
+
+            const prices = filteredCatalog.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
+            const merchantIds = new Set(filteredCatalog.map((service) => service.merchantId).filter(Boolean));
+
+            return res.render('services', {
+                title: 'Services',
+                merchants: Merchant.getAll(search),
+                favouriteIds,
+                serviceCatalog: filteredCatalog,
+                portalStats: serviceError || databaseServices.length === 0
+                    ? Merchant.getPortalStats(search)
+                    : {
+                        merchantCount: merchantIds.size,
+                        serviceCount: filteredCatalog.length,
+                        promotionCount: Array.isArray(promoRows) ? promoRows.length : 0,
+                        slotCount: filteredCatalog.reduce((total, service) => total + (service.slots || []).length, 0),
+                        startingPrice: prices.length > 0 ? Math.min(...prices) : 0
+                    },
+                search,
+                showChatbot: true
+            });
         });
         });
     });
