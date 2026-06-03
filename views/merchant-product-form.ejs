@@ -67,6 +67,16 @@
                 </label>
 
                 <label>
+                    Category
+                    <select name="categoryId">
+                        <option value="" <%= String(form.categoryId) === '' ? 'selected' : '' %>>Uncategorised</option>
+                        <% categories.forEach((category) => { %>
+                            <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>><%= category.category_name %></option>
+                        <% }) %>
+                    </select>
+                </label>
+
+                <label>
                     Stock quantity
                     <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
                 </label>

@@ -541,8 +541,24 @@ function estimateProductCampaign(product) {
     });
 }
 
-app.get('/products', allowGuestOrCustomer, (req, res) => {
-    Product.getAll(async (error, products = []) => {
+const productCategorySlugs = {
+    hair: 'Hair',
+    nails: 'Nails',
+    spa: 'Spa',
+    massage: 'Massage',
+    sets: 'Sets',
+    skincare: 'Skincare',
+    bodycare: 'Bodycare',
+    wellness: 'Wellness',
+    makeup: 'Makeup'
+};
+
+function renderProductListingPage(req, res, categoryName = null) {
+    const loadProducts = categoryName
+        ? (callback) => Product.getAllByCategory(categoryName, callback)
+        : Product.getAll;
+
+    loadProducts(async (error, products = []) => {
         if (error) {
             console.error(error);
         }
@@ -553,10 +569,22 @@ app.get('/products', allowGuestOrCustomer, (req, res) => {
         })));
 
         res.render('products', {
-            title: 'Products',
+            title: categoryName ? `${categoryName} Products` : 'Products',
             products: enrichedProducts,
-            showChatbot: true
+            showChatbot: true,
+            categoryName
         });
+    });
+}
+
+app.get('/products', allowGuestOrCustomer, (req, res) => {
+    renderProductListingPage(req, res);
+});
+
+['hair','nails','spa','massage','sets','skincare','bodycare','wellness','makeup'].forEach((slug) => {
+    app.get(`/products/${slug}`, allowGuestOrCustomer, (req, res) => {
+        const categoryName = productCategorySlugs[slug];
+        renderProductListingPage(req, res, categoryName);
     });
 });
 

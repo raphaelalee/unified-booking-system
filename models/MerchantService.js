@@ -616,6 +616,17 @@ function getCategories(callback) {
     db.query(sql, callback);
 }
 
+function getProductCategories(callback) {
+    const sql = `
+        SELECT category_id, category_name
+        FROM categories
+        WHERE category_name != 'Barber'
+        ORDER BY display_order, category_name
+    `;
+
+    db.query(sql, callback);
+}
+
 function getSalons(callback) {
     const sql = `
         SELECT salons.salon_id, salons.salon_name, salons.address, salons.business_category, users.email AS owner_email
@@ -1736,6 +1747,7 @@ module.exports = {
     getMerchantByUserId,
     getMerchantBySalonId,
     getCategories,
+    getProductCategories,
     getSalons,
     getAllServices,
     getFeaturedMerchants,

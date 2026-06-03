@@ -243,6 +243,7 @@ function renderServiceForm(res, {
 function getProductForm(body = {}, imageUrlOverride = null) {
     return {
         name: String(body.name || '').trim(),
+        categoryId: String(body.categoryId || body.category_id || '').trim(),
         price: String(body.price || '').trim(),
         stockQuantity: String(body.stockQuantity || body.stock_quantity || '').trim(),
         imageUrl: imageUrlOverride !== null
@@ -407,6 +408,7 @@ function buildProductPayload(form) {
         price: Number(form.price),
         stockQuantity: Number(form.stockQuantity),
         imageUrl: form.imageUrl,
+        categoryId: form.categoryId ? Number(form.categoryId) : null,
         description: form.description || `${form.name} from Vaniday merchant.`,
         ingredients: form.ingredients || 'Ingredients will be updated by the merchant.',
         howToUse: form.howToUse || 'Use as directed by the merchant.'
@@ -2253,12 +2255,23 @@ function showNewProduct(req, res) {
         const uploadError = req.session.merchantError;
         req.session.merchantError = null;
 
-        return res.render('merchant-product-form', {
-            title: 'Add Product',
-            merchant,
-            product: null,
-            form: getProductForm(),
-            errors: uploadError ? [uploadError] : []
+        return MerchantService.getProductCategories((categoryError, categories) => {
+            if (categoryError) {
+                console.error(categoryError);
+                return res.status(500).render('error', {
+                    title: 'Categories Not Found',
+                    message: 'Product categories could not be loaded.'
+                });
+            }
+
+            return res.render('merchant-product-form', {
+                title: 'Add Product',
+                merchant,
+                categories,
+                product: null,
+                form: getProductForm(),
+                errors: uploadError ? [uploadError] : []
+            });
         });
     });
 }
@@ -2271,69 +2284,81 @@ function createProduct(req, res) {
             return handled;
         }
 
-        const uploadedImagePath = getProductImagePath(req.file);
-        const form = getProductForm(req.body, uploadedImagePath || '');
-        const errors = validateProductForm(form);
+        return MerchantService.getProductCategories((categoryError, categories) => {
+            if (categoryError) {
+                console.error(categoryError);
+                return res.status(500).render('error', {
+                    title: 'Categories Not Found',
+                    message: 'Product categories could not be loaded.'
+                });
+            }
 
-        if (errors.length > 0) {
-            deleteProductImageFile(uploadedImagePath);
-            form.imageUrl = '';
-            return res.status(400).render('merchant-product-form', {
-                title: 'Add Product',
-                merchant,
-                product: null,
-                form,
-                errors
-            });
-        }
+            const uploadedImagePath = getProductImagePath(req.file);
+            const form = getProductForm(req.body, uploadedImagePath || '');
+            const errors = validateProductForm(form);
 
-        return Product.createForMerchant(req.session.user.id, buildProductPayload(form), (createError, result) => {
-            if (createError) {
-                console.error(createError);
+            if (errors.length > 0) {
                 deleteProductImageFile(uploadedImagePath);
-                return res.status(500).render('merchant-product-form', {
+                form.imageUrl = '';
+                return res.status(400).render('merchant-product-form', {
                     title: 'Add Product',
                     merchant,
+                    categories,
                     product: null,
                     form,
-                    errors: ['Product could not be created. Please try again.']
+                    errors
                 });
             }
 
-            if (!result || result.affectedRows === 0) {
-                deleteProductImageFile(uploadedImagePath);
-                return res.status(403).render('error', {
-                    title: 'Merchant Not Assigned',
-                    message: 'Your merchant account needs an admin-created salon before products can be listed.'
-                });
-            }
+            return Product.createForMerchant(req.session.user.id, buildProductPayload(form), (createError, result) => {
+                if (createError) {
+                    console.error(createError);
+                    deleteProductImageFile(uploadedImagePath);
+                    return res.status(500).render('merchant-product-form', {
+                        title: 'Add Product',
+                        merchant,
+                        categories,
+                        product: null,
+                        form,
+                        errors: ['Product could not be created. Please try again.']
+                    });
+                }
 
-            req.session.merchantSuccess = 'Product created successfully.';
-            notifyMerchant(req.session.user.id, {
-                actorUserId: req.session.user.id,
-                type: 'product_update',
-                title: 'Product listed',
-                message: `${form.name} is now available in the Vaniday product catalogue.`,
-                linkUrl: '/merchant/products',
-                dedupeKey: `merchant-product-created-${result?.insertId || Date.now()}-${req.session.user.id}`
+                if (!result || result.affectedRows === 0) {
+                    deleteProductImageFile(uploadedImagePath);
+                    return res.status(403).render('error', {
+                        title: 'Merchant Not Assigned',
+                        message: 'Your merchant account needs an admin-created salon before products can be listed.'
+                    });
+                }
+
+                req.session.merchantSuccess = 'Product created successfully.';
+                notifyMerchant(req.session.user.id, {
+                    actorUserId: req.session.user.id,
+                    type: 'product_update',
+                    title: 'Product listed',
+                    message: `${form.name} is now available in the Vaniday product catalogue.`,
+                    linkUrl: '/merchant/products',
+                    dedupeKey: `merchant-product-created-${result?.insertId || Date.now()}-${req.session.user.id}`
+                });
+                notifyCustomers({
+                    actorUserId: req.session.user.id,
+                    type: 'product_update',
+                    title: 'New beauty product added',
+                    message: `${merchant.name} added ${form.name} to the Vaniday shop.`,
+                    linkUrl: '/products',
+                    dedupeKey: `customer-product-created-${result?.insertId || Date.now()}`
+                });
+                notifyAdmins({
+                    actorUserId: req.session.user.id,
+                    type: 'product_update',
+                    title: 'Merchant listed a product',
+                    message: `${merchant.name} listed ${form.name}.`,
+                    linkUrl: '/admin/products',
+                    dedupeKey: `admin-product-created-${result?.insertId || Date.now()}`
+                });
+                return res.redirect('/merchant/products');
             });
-            notifyCustomers({
-                actorUserId: req.session.user.id,
-                type: 'product_update',
-                title: 'New beauty product added',
-                message: `${merchant.name} added ${form.name} to the Vaniday shop.`,
-                linkUrl: '/products',
-                dedupeKey: `customer-product-created-${result?.insertId || Date.now()}`
-            });
-            notifyAdmins({
-                actorUserId: req.session.user.id,
-                type: 'product_update',
-                title: 'Merchant listed a product',
-                message: `${merchant.name} listed ${form.name}.`,
-                linkUrl: '/admin/products',
-                dedupeKey: `admin-product-created-${result?.insertId || Date.now()}`
-            });
-            return res.redirect('/merchant/products');
         });
     });
 }
@@ -2372,20 +2397,32 @@ function showEditProduct(req, res) {
             const uploadError = req.session.merchantError;
             req.session.merchantError = null;
 
-            return res.render('merchant-product-form', {
-                title: 'Edit Product',
-                merchant,
-                product,
-                form: {
-                    name: product.name,
-                    price: String(product.price),
-                    stockQuantity: String(product.stockQuantity),
-                    imageUrl: product.imageUrl || '',
-                    description: product.description || '',
-                    ingredients: product.ingredients || '',
-                    howToUse: product.howToUse || ''
-                },
-                errors: uploadError ? [uploadError] : []
+            return MerchantService.getProductCategories((categoryError, categories) => {
+                if (categoryError) {
+                    console.error(categoryError);
+                    return res.status(500).render('error', {
+                        title: 'Categories Not Found',
+                        message: 'Product categories could not be loaded.'
+                    });
+                }
+
+                return res.render('merchant-product-form', {
+                    title: 'Edit Product',
+                    merchant,
+                    categories,
+                    product,
+                    form: {
+                        name: product.name,
+                        categoryId: product.categoryId || '',
+                        price: String(product.price),
+                        stockQuantity: String(product.stockQuantity),
+                        imageUrl: product.imageUrl || '',
+                        description: product.description || '',
+                        ingredients: product.ingredients || '',
+                        howToUse: product.howToUse || ''
+                    },
+                    errors: uploadError ? [uploadError] : []
+                });
             });
         });
     });
@@ -2425,20 +2462,75 @@ function updateProduct(req, res) {
                 return res.redirect('/merchant/products');
             }
 
-            const form = getProductForm(req.body, uploadedImagePath || product.imageUrl || '');
-            const errors = validateProductForm(form);
+            return MerchantService.getProductCategories((categoryError, categories) => {
+                if (categoryError) {
+                    console.error(categoryError);
+                    deleteProductImageFile(uploadedImagePath);
+                    return res.status(500).render('error', {
+                        title: 'Categories Not Found',
+                        message: 'Product categories could not be loaded.'
+                    });
+                }
 
-            if (errors.length > 0) {
-                deleteProductImageFile(uploadedImagePath);
-                form.imageUrl = product.imageUrl || '';
-                return res.status(400).render('merchant-product-form', {
-                    title: 'Edit Product',
-                    merchant,
-                    product,
-                    form,
-                    errors
+                const form = getProductForm(req.body, uploadedImagePath || product.imageUrl || '');
+                const errors = validateProductForm(form);
+
+                if (errors.length > 0) {
+                    deleteProductImageFile(uploadedImagePath);
+                    form.imageUrl = product.imageUrl || '';
+                    return res.status(400).render('merchant-product-form', {
+                        title: 'Edit Product',
+                        merchant,
+                        categories,
+                        product,
+                        form,
+                        errors
+                    });
+                }
+
+                return Product.updateForMerchant(req.session.user.id, product.id, buildProductPayload(form), (updateError, result) => {
+                    if (updateError) {
+                        console.error(updateError);
+                        deleteProductImageFile(uploadedImagePath);
+                        form.imageUrl = product.imageUrl || '';
+                        return res.status(500).render('merchant-product-form', {
+                            title: 'Edit Product',
+                            merchant,
+                            categories,
+                            product,
+                            form,
+                            errors: ['Product could not be updated. Please try again.']
+                        });
+                    }
+
+                    req.session.merchantSuccess = result.affectedRows > 0 ? 'Product updated successfully.' : null;
+                    req.session.merchantError = result.affectedRows > 0 ? null : 'Product could not be updated.';
+                    if (result.affectedRows > 0) {
+                        if (uploadedImagePath && uploadedImagePath !== product.imageUrl) {
+                            deleteProductImageFile(product.imageUrl);
+                        }
+                        notifyMerchant(req.session.user.id, {
+                            actorUserId: req.session.user.id,
+                            type: 'product_update',
+                            title: 'Product updated',
+                            message: `${form.name} details were saved.`,
+                            linkUrl: '/merchant/products',
+                            dedupeKey: `merchant-product-updated-${product.id}-${Date.now()}`
+                        });
+                        notifyAdmins({
+                            actorUserId: req.session.user.id,
+                            type: 'product_update',
+                            title: 'Merchant updated a product',
+                            message: `${merchant.name} updated ${form.name}.`,
+                            linkUrl: '/admin/products',
+                            dedupeKey: `admin-product-updated-${product.id}-${Date.now()}`
+                        });
+                    } else {
+                        deleteProductImageFile(uploadedImagePath);
+                    }
+                    return res.redirect('/merchant/products');
                 });
-            }
+            });
 
             return Product.updateForMerchant(req.session.user.id, product.id, buildProductPayload(form), (updateError, result) => {
                 if (updateError) {

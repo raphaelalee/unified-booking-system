@@ -19,16 +19,7 @@
         'cream-cleanser': 'product-cleanser',
         'room-mist': 'product-fragrance'
     };
-    const getProductCategory = (product) => {
-        const text = `${product.name || ''} ${product.description || ''} ${product.category || ''}`.toLowerCase();
-        if (text.includes('hair') || text.includes('scalp')) return 'Haircare';
-        if (text.includes('cleanser') || text.includes('serum') || text.includes('pore') || text.includes('skin') || text.includes('face')) return 'Skincare';
-        if (text.includes('body') || text.includes('oil') || text.includes('spa')) return 'Bodycare';
-        if (text.includes('lip') || text.includes('makeup')) return 'Makeup';
-        if (text.includes('mist') || text.includes('wellness') || text.includes('fragrance')) return 'Wellness';
-        return product.category || 'Aftercare';
-    };
-    const categoryList = [...new Set(productList.map(getProductCategory))].sort();
+    const categoryList = [...new Set(productList.map((product) => product.category || 'Uncategorised'))].sort();
     const maxPrice = productList.reduce((max, product) => Math.max(max, Number(product.price || 0)), 0);
     const formatStock = (product) => {
         if (typeof product.stockQuantity === 'undefined') return 'Available';
@@ -42,8 +33,8 @@
 <section class="marketplace-hero">
     <div class="marketplace-hero-copy">
         <p class="eyebrow">Product marketplace</p>
-        <h1>Salon favourites for better aftercare.</h1>
-        <p>Shop beauty and wellness products recommended for post-treatment routines, daily care, and at-home maintenance.</p>
+        <h1><%= typeof categoryName !== 'undefined' && categoryName ? `${categoryName} products` : 'Salon favourites for better aftercare.' %></h1>
+        <p><%= typeof categoryName !== 'undefined' && categoryName ? `Shop ${categoryName.toLowerCase()} products recommended for post-treatment routines, daily care, and at-home maintenance.` : 'Shop beauty and wellness products recommended for post-treatment routines, daily care, and at-home maintenance.' %></p>
         <div class="marketplace-hero-actions">
             <a class="button primary" href="#product-catalog">Shop now</a>
             <a class="button secondary" href="/cart">View cart (<span data-cart-count><%= typeof cartCount !== 'undefined' ? cartCount : 0 %></span>)</a>
@@ -106,7 +97,7 @@
                 <%
                     const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
                     const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
-                    const category = getProductCategory(product);
+                    const category = product.category || 'Uncategorised';
                     const merchantName = product.salonName || (product.category && !categoryList.includes(product.category) ? product.category : 'Vaniday Beauty Studio');
                     const stockLabel = formatStock(product);
                     const isOutOfStock = stockLabel === 'Out of stock';

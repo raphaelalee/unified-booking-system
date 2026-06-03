@@ -160,7 +160,8 @@ function mapRow(row) {
         productId: row.product_id,
         salonId: row.salon_id,
         salonName: row.salon_name || 'Vaniday Merchant',
-        category: row.salon_name || 'Merchant Product',
+        categoryId: row.category_id || null,
+        category: row.category_name || 'Uncategorised',
         name: row.name,
         price: Number(row.price),
         stockQuantity: Number(row.stock_quantity || 0),
@@ -193,13 +194,15 @@ function getAll(callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
-                products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, products.is_featured,
-                products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+            SELECT products.product_id, products.salon_id, products.category_id,
+                products.name, products.price, products.stock_quantity,
+                products.image_url, products.description, products.ingredients,
+                products.how_to_use, products.is_featured, products.featured_order,
+                products.featured_start_date, products.featured_end_date,
+                salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
@@ -211,6 +214,38 @@ function getAll(callback) {
 
             const databaseProducts = rows.map(mapRow);
             callback(null, databaseProducts.length > 0 ? databaseProducts : getFallbackAll());
+        });
+    });
+}
+
+function getAllByCategory(categoryName, callback) {
+    return ensureProductSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT products.product_id, products.salon_id, products.category_id,
+                products.name, products.price, products.stock_quantity,
+                products.image_url, products.description, products.ingredients,
+                products.how_to_use, products.is_featured, products.featured_order,
+                products.featured_start_date, products.featured_end_date,
+                salons.salon_name, categories.category_name
+            FROM products
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
+            WHERE LOWER(categories.category_name) = ?
+            ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
+        `;
+
+        db.query(sql, [String(categoryName || '').trim().toLowerCase()], (error, rows) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.map(mapRow));
         });
     });
 }
@@ -261,13 +296,15 @@ function findById(id, callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
-                products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, products.is_featured,
-                products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+            SELECT products.product_id, products.salon_id, products.category_id,
+                products.name, products.price, products.stock_quantity,
+                products.image_url, products.description, products.ingredients,
+                products.how_to_use, products.is_featured, products.featured_order,
+                products.featured_start_date, products.featured_end_date,
+                salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE products.product_id = ?
             LIMIT 1
         `;
@@ -298,13 +335,15 @@ function findMerchantProductById(id, callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
-                products.stock_quantity, products.image_url, products.description,
-                products.ingredients, products.how_to_use, products.is_featured,
-                products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+            SELECT products.product_id, products.salon_id, products.category_id,
+                products.name, products.price, products.stock_quantity,
+                products.image_url, products.description, products.ingredients,
+                products.how_to_use, products.is_featured, products.featured_order,
+                products.featured_start_date, products.featured_end_date,
+                salons.salon_name, categories.category_name
             FROM products
-            INNER JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE products.product_id = ?
             LIMIT 1
         `;
@@ -322,14 +361,15 @@ function findMerchantProductById(id, callback) {
 
 function getByMerchantUserId(userId, callback) {
     const sql = `
-        SELECT products.product_id, products.salon_id, products.name, products.price,
-            products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, products.is_featured,
-            products.featured_order, products.featured_start_date, products.featured_end_date,
-            salons.salon_name
-        FROM products
-        INNER JOIN salons ON salons.salon_id = products.salon_id
-        WHERE salons.merchant_id = ?
+            SELECT products.product_id, products.salon_id, products.category_id,
+                products.name, products.price, products.stock_quantity,
+                products.image_url, products.description, products.ingredients,
+                products.how_to_use, products.is_featured, products.featured_order,
+                products.featured_start_date, products.featured_end_date,
+                salons.salon_name, categories.category_name
+            FROM products
+            INNER JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
         ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
     `;
 
@@ -345,13 +385,15 @@ function getByMerchantUserId(userId, callback) {
 
 function findForMerchant(userId, productId, callback) {
     const sql = `
-        SELECT products.product_id, products.salon_id, products.name, products.price,
-            products.stock_quantity, products.image_url, products.description,
-            products.ingredients, products.how_to_use, products.is_featured,
-            products.featured_order, products.featured_start_date, products.featured_end_date,
-            salons.salon_name
+        SELECT products.product_id, products.salon_id, products.category_id,
+            products.name, products.price, products.stock_quantity,
+            products.image_url, products.description, products.ingredients,
+            products.how_to_use, products.is_featured, products.featured_order,
+            products.featured_start_date, products.featured_end_date,
+            salons.salon_name, categories.category_name
         FROM products
         INNER JOIN salons ON salons.salon_id = products.salon_id
+        LEFT JOIN categories ON categories.category_id = products.category_id
         WHERE salons.merchant_id = ?
             AND products.product_id = ?
         LIMIT 1
@@ -375,8 +417,8 @@ function createForMerchant(userId, product, callback) {
         }
 
         const sql = `
-            INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use)
-            SELECT salon_id, ?, ?, ?, ?, ?, ?, ?
+            INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use, category_id)
+            SELECT salon_id, ?, ?, ?, ?, ?, ?, ?, ?
             FROM salons
             WHERE merchant_id = ?
             LIMIT 1
@@ -390,6 +432,7 @@ function createForMerchant(userId, product, callback) {
             product.description,
             product.ingredients,
             product.howToUse,
+            product.categoryId !== undefined ? product.categoryId : null,
             userId
         ], callback);
     });
@@ -436,7 +479,8 @@ function updateForMerchant(userId, productId, product, callback) {
                 products.image_url = ?,
                 products.description = ?,
                 products.ingredients = ?,
-                products.how_to_use = ?
+                products.how_to_use = ?,
+                products.category_id = ?
             WHERE products.product_id = ?
                 AND salons.merchant_id = ?
         `;
@@ -449,6 +493,7 @@ function updateForMerchant(userId, productId, product, callback) {
             product.description,
             product.ingredients,
             product.howToUse,
+            product.categoryId !== undefined ? product.categoryId : null,
             productId,
             userId
         ], callback);
@@ -694,6 +739,7 @@ function removeProductFeatured(userId, productId, callback) {
 
 module.exports = {
     getAll,
+    getAllByCategory,
     getAllMerchantProducts,
     getFeaturedProducts,
     getFeaturedProductsByMerchant,
