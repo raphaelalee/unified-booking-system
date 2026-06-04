@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650" role="img" aria-labelledby="title desc">
+  <title id="title">Botanical room mist spray bottle</title>
+  <desc id="desc">A spa-style room mist spray bottle with botanical leaves on a warm shelf.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8f3e8"/>
+      <stop offset="0.55" stop-color="#dbe7d5"/>
+      <stop offset="1" stop-color="#b8c9ad"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef7ee" stop-opacity="0.96"/>
+      <stop offset="0.45" stop-color="#c7dfc8" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#7a9b7a" stop-opacity="0.82"/>
+    </linearGradient>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d8ead7" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#8cac84" stop-opacity="0.58"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#34432d" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect width="900" height="650" fill="url(#bg)"/>
+  <circle cx="190" cy="145" r="92" fill="#fff9ec" opacity="0.55"/>
+  <circle cx="760" cy="125" r="136" fill="#eff5e8" opacity="0.62"/>
+  <path d="M0 500 C185 450 278 540 430 494 C590 446 702 500 900 456 L900 650 L0 650 Z" fill="#f7efe1" opacity="0.7"/>
+  <g opacity="0.9">
+    <path d="M214 390 C160 310 174 226 260 184 C279 275 272 344 214 390 Z" fill="#6f8d66" opacity="0.55"/>
+    <path d="M708 381 C758 302 742 226 660 186 C639 278 648 342 708 381 Z" fill="#6f8d66" opacity="0.48"/>
+    <path d="M236 395 C176 346 123 348 78 414 C150 432 202 421 236 395 Z" fill="#8daa7f" opacity="0.55"/>
+    <path d="M686 397 C752 350 812 356 851 421 C772 434 724 421 686 397 Z" fill="#8daa7f" opacity="0.55"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="376" y="94" width="148" height="42" rx="14" fill="#33442f"/>
+    <rect x="405" y="125" width="86" height="62" rx="10" fill="#41543b"/>
+    <rect x="489" y="108" width="116" height="24" rx="12" fill="#33442f"/>
+    <rect x="581" y="115" width="50" height="14" rx="7" fill="#33442f"/>
+    <path d="M626 121 C676 117 716 132 754 153" fill="none" stroke="#eef5e8" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+    <path d="M650 142 C704 142 736 162 778 195" fill="none" stroke="#eef5e8" stroke-width="4" stroke-linecap="round" opacity="0.45"/>
+    <rect x="315" y="178" width="270" height="392" rx="42" fill="url(#glass)" stroke="#f8fff4" stroke-width="7"/>
+    <path d="M330 380 C400 345 482 405 570 365 L570 529 C570 552 552 570 529 570 L371 570 C348 570 330 552 330 529 Z" fill="url(#liquid)"/>
+    <rect x="358" y="286" width="204" height="132" rx="20" fill="#fffdf5" opacity="0.92"/>
+    <rect x="382" y="315" width="156" height="13" rx="6.5" fill="#5f7658" opacity="0.85"/>
+    <rect x="398" y="344" width="124" height="10" rx="5" fill="#b9c9ad"/>
+    <rect x="412" y="367" width="96" height="10" rx="5" fill="#d2dec8"/>
+    <path d="M377 210 C396 194 423 196 440 214 C406 225 392 225 377 210 Z" fill="#ffffff" opacity="0.45"/>
+    <path d="M548 194 C562 230 564 320 552 422" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" opacity="0.32"/>
+  </g>
+  <g fill="none" stroke="#7d9f72" stroke-linecap="round" opacity="0.75">
+    <path d="M238 205 C288 286 283 373 222 462"/>
+    <path d="M733 206 C684 284 689 376 753 460"/>
+    <path d="M112 414 C176 382 219 393 261 438"/>
+    <path d="M852 420 C786 382 736 396 699 445"/>
+  </g>
+</svg>

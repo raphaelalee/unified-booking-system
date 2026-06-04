@@ -63,8 +63,9 @@
         <div class="merchant-product-list">
             <% products.forEach((product) => { %>
                 <%
-                    const productImageClass = product.imageUrl ? '' : 'product-skin';
-                    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+                    const displayImageUrl = product.imageUrl || product.fallbackImageUrl || '';
+                    const productImageClass = displayImageUrl ? '' : 'product-skin';
+                    const productImageStyle = displayImageUrl ? `background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(48, 68, 43, 0.16)), url('${displayImageUrl}')` : '';
                 %>
                 <article class="merchant-product-row compact">
                     <div class="merchant-product-thumb <%= productImageClass %>" style="<%= productImageStyle %>"></div>

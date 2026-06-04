@@ -1,7 +1,7 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const productList = typeof products !== 'undefined' && products.length > 0
+    const productList = Array.isArray(products)
         ? products
         : [
             { id: 'skin-serum', name: 'Hydrating Glow Serum', category: 'Skincare', price: 38, description: 'Best after facial treatments' },
@@ -95,8 +95,9 @@
         <div class="products-marketplace-grid" data-products-grid>
             <% productList.forEach((product, index) => { %>
                 <%
-                    const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
-                    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+                    const displayImageUrl = product.imageUrl || product.fallbackImageUrl || '';
+                    const productImageClass = displayImageUrl ? '' : (productImages[product.id] || 'product-skin');
+                    const productImageStyle = displayImageUrl ? `background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(48, 68, 43, 0.16)), url('${displayImageUrl}')` : '';
                     const category = product.category || 'Uncategorised';
                     const merchantName = product.salonName || (product.category && !categoryList.includes(product.category) ? product.category : 'Vaniday Beauty Studio');
                     const stockLabel = formatStock(product);

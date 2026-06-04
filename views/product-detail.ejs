@@ -9,8 +9,9 @@
         'cream-cleanser': 'product-cleanser',
         'room-mist': 'product-fragrance'
     };
-    const productImageClass = product.imageUrl ? '' : (productImages[product.id] || 'product-skin');
-    const productImageStyle = product.imageUrl ? `background-image: url('${product.imageUrl}')` : '';
+    const displayImageUrl = product.imageUrl || product.fallbackImageUrl || '';
+    const productImageClass = displayImageUrl ? '' : (productImages[product.id] || 'product-skin');
+    const productImageStyle = displayImageUrl ? `background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(48, 68, 43, 0.16)), url('${displayImageUrl}')` : '';
     const productReviews = Array.isArray(reviews) ? reviews : [];
     const campaignCashbackTotal = Number(product.campaignCashback?.total || 0);
     const averageRating = Number.isFinite(reviewSummary?.averageRating) ? reviewSummary.averageRating : null;

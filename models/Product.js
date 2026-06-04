@@ -36,12 +36,109 @@ const fallbackProducts = [
     { id: 'room-mist', name: 'Botanical Room Mist', category: 'Wellness', price: 22, description: 'Calm spa scent for home', ...productDetails['room-mist'] }
 ];
 
+const productCategories = [
+    { name: 'Sets', order: 70, keywords: ['bundle', 'set', 'kit', 'collection'] },
+    { name: 'Haircare', order: 10, keywords: ['hair', 'shampoo', 'conditioner', 'scalp', 'keratin'] },
+    { name: 'Skincare', order: 20, keywords: ['serum', 'cleanser', 'face wash', 'facial', 'skin', 'pore', 'foam', 'toner', 'moisturiser', 'sunscreen', 'mask sheet', 'face mask'] },
+    { name: 'Bodycare', order: 30, keywords: ['body', 'oil', 'lotion', 'scrub', 'butter'] },
+    { name: 'Wellness', order: 40, keywords: ['room mist', 'mist', 'fragrance', 'scent', 'aroma', 'candle', 'diffuser', 'linen'] },
+    { name: 'Makeup', order: 50, keywords: ['lip', 'tint', 'makeup', 'colour', 'mascara', 'blush'] },
+    { name: 'Nailcare', order: 60, keywords: ['nail', 'polish', 'manicure', 'pedicure', 'gel'] }
+];
+
+const productImageFallbacks = [
+    {
+        keywords: ['anua', 'cleansing foam', 'face wash', 'cleanser'],
+        url: '/images/anua.2.webp'
+    },
+    {
+        keywords: ['hair care bundle', 'bundle set', 'hair bundle'],
+        url: 'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['scalp', 'hair growth'],
+        url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['effaclar', 'concentrated serum', 'treatment serum'],
+        url: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['massage oil', 'body oil', 'aromatherapy'],
+        url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['face mask', 'hydrating mask', 'facial mask'],
+        url: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['nail polish', 'gel nail', 'polish'],
+        url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['shampoo', 'conditioner'],
+        url: 'https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['lip tint', 'makeup', 'lipstick'],
+        url: 'https://images.unsplash.com/photo-1588689489981-df0979a21e9f?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+        keywords: ['room mist', 'fragrance', 'diffuser', 'candle'],
+        url: '/images/product-room-mist.svg'
+    }
+];
+
+const categoryImageFallbacks = {
+    Bodycare: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=900&q=80',
+    Haircare: 'https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?auto=format&fit=crop&w=900&q=80',
+    Makeup: 'https://images.unsplash.com/photo-1588689489981-df0979a21e9f?auto=format&fit=crop&w=900&q=80',
+    Nailcare: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=80',
+    Sets: 'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&w=900&q=80',
+    Skincare: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=900&q=80',
+    Wellness: '/images/product-room-mist.svg'
+};
+
 function getFeaturedWindowCondition(tableName) {
     return `(
         ${tableName}.is_featured = 1
         AND (${tableName}.featured_start_date IS NULL OR ${tableName}.featured_start_date <= CURDATE())
         AND (${tableName}.featured_end_date IS NULL OR ${tableName}.featured_end_date >= CURDATE())
     )`;
+}
+
+function runSequential(tasks, callback) {
+    let index = 0;
+
+    function next(error) {
+        if (error || index >= tasks.length) {
+            callback(error || null);
+            return;
+        }
+
+        const task = tasks[index];
+        index += 1;
+        task(next);
+    }
+
+    next();
+}
+
+function classifyProductCategory(product) {
+    const text = `${product?.name || ''} ${product?.description || ''}`.toLowerCase();
+    const category = productCategories.find((entry) => entry.keywords.some((keyword) => text.includes(keyword)));
+    return category?.name || 'Skincare';
+}
+
+function getFallbackImageUrl(product) {
+    const text = `${product?.name || ''} ${product?.description || ''} ${product?.category || ''}`.toLowerCase();
+    const productMatch = productImageFallbacks.find((entry) => entry.keywords.some((keyword) => text.includes(keyword)));
+
+    if (productMatch) {
+        return productMatch.url;
+    }
+
+    return categoryImageFallbacks[product?.category] || categoryImageFallbacks.Skincare;
 }
 
 function validateFeaturedDates(startDate, endDate) {
@@ -95,6 +192,10 @@ function ensureProductSchema(callback) {
             alters.push('ADD COLUMN how_to_use TEXT');
         }
 
+        if (!fields.has('category_id')) {
+            alters.push('ADD COLUMN category_id INT DEFAULT NULL');
+        }
+
         if (!fields.has('created_at')) {
             alters.push('ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
         }
@@ -125,12 +226,134 @@ function ensureProductSchema(callback) {
             alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
         }
 
+        const continueSetup = () => ensureProductCategories(callback);
+
         if (alters.length === 0) {
-            callback(null);
+            continueSetup();
             return;
         }
 
-        db.query(`ALTER TABLE products ${alters.join(', ')}`, callback);
+        db.query(`ALTER TABLE products ${alters.join(', ')}`, (alterError) => {
+            if (alterError) {
+                callback(alterError);
+                return;
+            }
+
+            continueSetup();
+        });
+    });
+}
+
+function ensureProductCategories(callback) {
+    db.query('SHOW COLUMNS FROM categories', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('display_order')) {
+            alters.push('ADD COLUMN display_order INT NOT NULL DEFAULT 999');
+        }
+
+        if (!fields.has('category_scope')) {
+            alters.push("ADD COLUMN category_scope VARCHAR(20) NOT NULL DEFAULT 'service'");
+        }
+
+        const continueSetup = () => {
+            const tasks = productCategories.map((category) => (next) => {
+                db.query(
+                    `
+                        INSERT INTO categories (category_name, display_order, category_scope)
+                        SELECT ?, ?, 'product'
+                        FROM DUAL
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM categories
+                            WHERE category_name = ?
+                                AND category_scope = 'product'
+                        )
+                    `,
+                    [category.name, category.order, category.name],
+                    (insertError) => {
+                        if (insertError) {
+                            next(insertError);
+                            return;
+                        }
+
+                        db.query(
+                            `
+                                UPDATE categories
+                                SET display_order = ?
+                                WHERE category_name = ?
+                                    AND category_scope = 'product'
+                            `,
+                            [category.order, category.name],
+                            next
+                        );
+                    }
+                );
+            });
+
+            tasks.push((next) => autoCategorizeProducts(next));
+            runSequential(tasks, callback);
+        };
+
+        if (!alters.length) {
+            continueSetup();
+            return;
+        }
+
+        db.query(`ALTER TABLE categories ${alters.join(', ')}`, (alterError) => {
+            if (alterError) {
+                callback(alterError);
+                return;
+            }
+
+            continueSetup();
+        });
+    });
+}
+
+function autoCategorizeProducts(callback) {
+    const sql = `
+        SELECT products.product_id, products.name, products.description,
+            categories.category_name, categories.category_scope
+        FROM products
+        LEFT JOIN categories ON categories.category_id = products.category_id
+    `;
+
+    db.query(sql, (error, rows = []) => {
+        if (error || !rows.length) {
+            callback(error || null);
+            return;
+        }
+
+        const tasks = rows.map((row) => (next) => {
+            const categoryName = classifyProductCategory(row);
+
+            if (row.category_scope === 'product' && row.category_name === categoryName) {
+                next();
+                return;
+            }
+
+            db.query(
+                `
+                    UPDATE products
+                    INNER JOIN categories
+                        ON categories.category_name = ?
+                        AND categories.category_scope = 'product'
+                    SET products.category_id = categories.category_id
+                    WHERE products.product_id = ?
+                `,
+                [categoryName, row.product_id],
+                next
+            );
+        });
+
+        runSequential(tasks, callback);
     });
 }
 
@@ -146,11 +369,14 @@ function getDefaultDetails(product) {
 }
 
 function withDetails(product) {
+    const fallbackImageUrl = getFallbackImageUrl(product);
+
     return {
         ...product,
         ...getDefaultDetails(product),
         ingredients: product.ingredients || getDefaultDetails(product).ingredients,
-        howToUse: product.howToUse || getDefaultDetails(product).howToUse
+        howToUse: product.howToUse || getDefaultDetails(product).howToUse,
+        fallbackImageUrl
     };
 }
 
@@ -180,6 +406,11 @@ function mapRow(row) {
 
 function getFallbackAll() {
     return fallbackProducts.map((product) => withDetails(product));
+}
+
+function getFallbackByCategory(categoryName) {
+    const normalizedCategory = String(categoryName || '').trim().toLowerCase();
+    return getFallbackAll().filter((product) => String(product.category || '').toLowerCase() === normalizedCategory);
 }
 
 function getAll(callback) {
@@ -236,6 +467,7 @@ function getAllByCategory(categoryName, callback) {
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE LOWER(categories.category_name) = ?
+                AND categories.category_scope = 'product'
             ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
@@ -245,7 +477,8 @@ function getAllByCategory(categoryName, callback) {
                 return;
             }
 
-            callback(null, rows.map(mapRow));
+            const databaseProducts = rows.map(mapRow);
+            callback(null, databaseProducts.length > 0 ? databaseProducts : getFallbackByCategory(categoryName));
         });
     });
 }
@@ -258,13 +491,14 @@ function getAllMerchantProducts(callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
+            SELECT products.product_id, products.salon_id, products.category_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+                salons.salon_name, categories.category_name
             FROM products
             INNER JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             ORDER BY salons.salon_name, products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
@@ -585,13 +819,14 @@ function getFeaturedProducts(callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
+            SELECT products.product_id, products.salon_id, products.category_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+                salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE ${getFeaturedWindowCondition('products')}
             ORDER BY products.featured_order, products.product_id DESC
         `;
@@ -622,13 +857,14 @@ function getFeaturedProductsByMerchant(merchantId, callback) {
         }
 
         const sql = `
-            SELECT products.product_id, products.salon_id, products.name, products.price,
+            SELECT products.product_id, products.salon_id, products.category_id, products.name, products.price,
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
-                salons.salon_name
+                salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
+            LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE products.salon_id = ?
                 AND ${getFeaturedWindowCondition('products')}
             ORDER BY products.featured_order, products.product_id DESC

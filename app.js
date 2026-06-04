@@ -542,10 +542,12 @@ function estimateProductCampaign(product) {
 }
 
 const productCategorySlugs = {
-    hair: 'Hair',
-    nails: 'Nails',
-    spa: 'Spa',
-    massage: 'Massage',
+    hair: 'Haircare',
+    haircare: 'Haircare',
+    nails: 'Nailcare',
+    nailcare: 'Nailcare',
+    spa: 'Wellness',
+    massage: 'Wellness',
     sets: 'Sets',
     skincare: 'Skincare',
     bodycare: 'Bodycare',
@@ -581,7 +583,7 @@ app.get('/products', allowGuestOrCustomer, (req, res) => {
     renderProductListingPage(req, res);
 });
 
-['hair','nails','spa','massage','sets','skincare','bodycare','wellness','makeup'].forEach((slug) => {
+['hair','haircare','nails','nailcare','spa','massage','sets','skincare','bodycare','wellness','makeup'].forEach((slug) => {
     app.get(`/products/${slug}`, allowGuestOrCustomer, (req, res) => {
         const categoryName = productCategorySlugs[slug];
         renderProductListingPage(req, res, categoryName);

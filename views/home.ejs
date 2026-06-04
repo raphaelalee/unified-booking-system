@@ -360,8 +360,9 @@
         </div>
         <div class="storefront-product-strip">
             <% featuredProductItems.slice(0, 4).forEach((product) => { %>
+                <% const displayImageUrl = product.imageUrl || product.fallbackImageUrl || ''; %>
                 <article class="storefront-product-card">
-                    <div class="home-card-image home-product-image"<% if (product.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= product.imageUrl %>');"<% } %>></div>
+                    <div class="home-card-image home-product-image"<% if (displayImageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= displayImageUrl %>');"<% } %>></div>
                     <span class="tag">⭐ Featured Product</span>
                     <h3><%= product.name %></h3>
                     <p class="muted"><%= product.salonName || 'Vaniday merchant' %></p>

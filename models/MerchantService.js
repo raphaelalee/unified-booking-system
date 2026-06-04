@@ -1,5 +1,15 @@
 const db = require('../db');
 
+const productCategoryOptions = [
+    { name: 'Haircare', order: 10 },
+    { name: 'Skincare', order: 20 },
+    { name: 'Bodycare', order: 30 },
+    { name: 'Wellness', order: 40 },
+    { name: 'Makeup', order: 50 },
+    { name: 'Nailcare', order: 60 },
+    { name: 'Sets', order: 70 }
+];
+
 ensureServiceSchema((error) => {
     if (error) {
         console.error('Service package schema could not be prepared:', error.message || error);
@@ -232,13 +242,74 @@ function ensureCategorySchema(callback) {
             alters.push('ADD COLUMN display_order INT NOT NULL DEFAULT 999');
         }
 
+        if (!fields.has('category_scope')) {
+            alters.push("ADD COLUMN category_scope VARCHAR(20) NOT NULL DEFAULT 'service'");
+        }
+
+        const continueSetup = () => ensureProductCategoryRows(callback);
+
         if (alters.length === 0) {
-            callback(null);
+            continueSetup();
             return;
         }
 
-        db.query(`ALTER TABLE categories ${alters.join(', ')}`, callback);
+        db.query(`ALTER TABLE categories ${alters.join(', ')}`, (alterError) => {
+            if (alterError) {
+                callback(alterError);
+                return;
+            }
+
+            continueSetup();
+        });
     });
+}
+
+function ensureProductCategoryRows(callback) {
+    let index = 0;
+
+    function next(error) {
+        if (error || index >= productCategoryOptions.length) {
+            callback(error || null);
+            return;
+        }
+
+        const category = productCategoryOptions[index];
+        index += 1;
+
+        db.query(
+            `
+                INSERT INTO categories (category_name, display_order, category_scope)
+                SELECT ?, ?, 'product'
+                FROM DUAL
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM categories
+                    WHERE category_name = ?
+                        AND category_scope = 'product'
+                )
+            `,
+            [category.name, category.order, category.name],
+            (insertError) => {
+                if (insertError) {
+                    next(insertError);
+                    return;
+                }
+
+                db.query(
+                    `
+                        UPDATE categories
+                        SET display_order = ?
+                        WHERE category_name = ?
+                            AND category_scope = 'product'
+                    `,
+                    [category.order, category.name],
+                    next
+                );
+            }
+        );
+    }
+
+    next();
 }
 
 function ensureSalonCommissionSchema(callback) {
@@ -607,24 +678,39 @@ function getMerchantBySalonId(salonId, callback) {
 }
 
 function getCategories(callback) {
-    const sql = `
-        SELECT category_id, category_name, display_order
-        FROM categories
-        ORDER BY display_order, category_name
-    `;
+    ensureCategorySchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    db.query(sql, callback);
+        const sql = `
+            SELECT category_id, category_name, display_order
+            FROM categories
+            WHERE category_scope = 'service'
+            ORDER BY display_order, category_name
+        `;
+
+        db.query(sql, callback);
+    });
 }
 
 function getProductCategories(callback) {
-    const sql = `
-        SELECT category_id, category_name
-        FROM categories
-        WHERE category_name != 'Barber'
-        ORDER BY display_order, category_name
-    `;
+    ensureCategorySchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
-    db.query(sql, callback);
+        const sql = `
+            SELECT category_id, category_name
+            FROM categories
+            WHERE category_scope = 'product'
+            ORDER BY display_order, category_name
+        `;
+
+        db.query(sql, callback);
+    });
 }
 
 function getSalons(callback) {
