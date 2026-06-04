@@ -125,13 +125,15 @@
                             <span>No package</span>
                         <% } %>
                     </div>
-                    <div class="merchant-service-package">
+                    <div class="merchant-featured-cell <%= service.isFeatured ? 'is-featured' : 'is-idle' %>">
+                        <span class="merchant-featured-pill <%= service.isFeatured ? 'is-featured' : 'is-idle' %>">
+                            <%= service.isFeatured ? 'Featured' : 'Not featured' %>
+                        </span>
                         <% if (service.isFeatured) { %>
-                            <strong>Featured</strong>
-                            <span>#<%= Number(service.featuredOrder || 0) %></span>
+                            <strong>Priority #<%= Number(service.featuredOrder || 0) %></strong>
                             <span><%= service.featuredStartDate || 'No start' %> to <%= service.featuredEndDate || 'No end' %></span>
                         <% } else { %>
-                            <span>Not featured</span>
+                            <span>Use this to highlight the service on booking and marketplace surfaces.</span>
                         <% } %>
                     </div>
                     <% if (Array.isArray(service.slots) && service.slots.length > 0) { %>
@@ -145,16 +147,27 @@
                     <% } %>
                     <div class="merchant-service-actions">
                         <a class="button secondary" href="/merchant/services/<%= service.id %>/edit">Edit</a>
+                        <details class="merchant-featured-editor">
+                            <summary><%= service.isFeatured ? 'Edit featured' : 'Feature service' %></summary>
+                            <form class="merchant-featured-form" action="/merchant/services/<%= service.id %>/feature" method="POST">
+                                <label>
+                                    <span>Priority</span>
+                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= Number(service.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
+                                </label>
+                                <label>
+                                    <span>Start date</span>
+                                    <input type="date" name="featuredStartDate" value="<%= service.featuredStartDate || '' %>" aria-label="Featured start date">
+                                </label>
+                                <label>
+                                    <span>End date</span>
+                                    <input type="date" name="featuredEndDate" value="<%= service.featuredEndDate || '' %>" aria-label="Featured end date">
+                                </label>
+                                <button class="button secondary" type="submit"><%= service.isFeatured ? 'Save featured settings' : 'Mark as Featured' %></button>
+                            </form>
+                        </details>
                         <% if (service.isFeatured) { %>
                             <form action="/merchant/services/<%= service.id %>/unfeature" method="POST">
                                 <button class="button secondary" type="submit">Remove Featured</button>
-                            </form>
-                        <% } else { %>
-                            <form action="/merchant/services/<%= service.id %>/feature" method="POST">
-                                <input type="number" name="featuredOrder" min="0" max="99" value="0" placeholder="Order" aria-label="Featured order">
-                                <input type="date" name="featuredStartDate" aria-label="Featured start date">
-                                <input type="date" name="featuredEndDate" aria-label="Featured end date">
-                                <button class="button secondary" type="submit">Mark as Featured</button>
                             </form>
                         <% } %>
                         <form action="/merchant/services/<%= service.id %>/delete" method="POST">

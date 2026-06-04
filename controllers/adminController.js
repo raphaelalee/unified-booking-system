@@ -342,6 +342,8 @@ function buildMerchantFeaturedRecommendations(merchants = []) {
 
         recommendationMap.set(String(merchant.salon_id), {
             featuredType,
+            recommendationRank: rank,
+            recommendationScore: Number(merchant.recommendationScore || 0),
             featuredOrder: String(activeFeaturedCount + rank),
             featuredStartDate: formatDateInputValue(today),
             featuredEndDate: formatDateInputValue(addDays(today, 30)),

@@ -3,6 +3,11 @@
 <%
     const safeMerchants = Array.isArray(merchants) ? merchants : [];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const currentMonthLabel = new Date().toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+    const monthlyFeaturedCandidates = safeMerchants
+        .filter((merchant) => !merchant.is_featured && merchant.featuredRecommendation && Number(merchant.featuredRecommendation.recommendationRank || 0) > 0)
+        .sort((left, right) => Number(left.featuredRecommendation.recommendationRank || 0) - Number(right.featuredRecommendation.recommendationRank || 0))
+        .slice(0, 3);
 %>
 
 <section class="admin-dashboard-v2">
@@ -19,6 +24,40 @@
             <article class="admin-stat-card accent-red"><strong><%= merchantReport.merchantsMissingBusinessProfile.length %></strong><span>Incomplete profiles</span></article>
             <article class="admin-stat-card accent-green"><strong><%= merchantReport.topMerchant?.salon_name || 'None' %></strong><span>Top merchant</span></article>
         </section>
+
+        <% if (monthlyFeaturedCandidates.length > 0) { %>
+            <section class="admin-panel admin-featured-recommendations-panel">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">Recommendation</p>
+                        <h2>Recommended To Be Featured In <%= currentMonthLabel %></h2>
+                        <p class="muted">Top merchant candidates based on current marketplace readiness and performance score.</p>
+                    </div>
+                </div>
+                <div class="admin-featured-recommendations-grid">
+                    <% monthlyFeaturedCandidates.forEach((merchant) => { %>
+                        <% const recommendation = merchant.featuredRecommendation || {}; %>
+                        <article class="admin-featured-recommendation-card">
+                            <span class="admin-featured-recommendation-rank">#<%= recommendation.recommendationRank || 0 %></span>
+                            <h3><%= merchant.salon_name %></h3>
+                            <p><%= recommendation.reason || 'Strong marketplace momentum.' %></p>
+                            <div class="admin-featured-recommendation-metrics">
+                                <span><strong><%= Number(merchant.featured_score || 0).toFixed(2) %></strong> score</span>
+                                <span><strong><%= merchant.service_count || 0 %></strong> services</span>
+                                <span><strong><%= recommendation.featuredType || 'trending' %></strong> type</span>
+                            </div>
+                            <form class="admin-featured-recommendation-form" action="/admin/merchants/<%= merchant.salon_id %>/feature" method="POST">
+                                <input type="hidden" name="featuredType" value="<%= recommendation.featuredType || 'featured_month' %>">
+                                <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder || 1 %>">
+                                <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate || '' %>">
+                                <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate || '' %>">
+                                <button class="button secondary" type="submit">Feature for this month</button>
+                            </form>
+                        </article>
+                    <% }) %>
+                </div>
+            </section>
+        <% } %>
 
         <section class="admin-panel">
             <div class="admin-panel-heading"><div><p class="eyebrow">Directory</p><h2>Merchant accounts</h2></div></div>

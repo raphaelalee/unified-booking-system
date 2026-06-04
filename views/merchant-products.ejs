@@ -80,13 +80,15 @@
                         <strong><%= product.stockQuantity %></strong>
                         <span>in stock</span>
                     </div>
-                    <div class="merchant-product-stock">
+                    <div class="merchant-featured-cell <%= product.isFeatured ? 'is-featured' : 'is-idle' %>">
+                        <span class="merchant-featured-pill <%= product.isFeatured ? 'is-featured' : 'is-idle' %>">
+                            <%= product.isFeatured ? 'Featured' : 'Not featured' %>
+                        </span>
                         <% if (product.isFeatured) { %>
-                            <strong>Featured</strong>
-                            <span>#<%= Number(product.featuredOrder || 0) %></span>
+                            <strong>Priority #<%= Number(product.featuredOrder || 0) %></strong>
                             <span><%= product.featuredStartDate || 'No start' %> to <%= product.featuredEndDate || 'No end' %></span>
                         <% } else { %>
-                            <strong>Not featured</strong>
+                            <span>Use this to push the product into featured storefront slots.</span>
                         <% } %>
                     </div>
                     <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
@@ -95,16 +97,27 @@
                     </form>
                     <div class="merchant-product-actions">
                         <a class="button secondary" href="/merchant/products/<%= product.id %>/edit">Edit</a>
+                        <details class="merchant-featured-editor">
+                            <summary><%= product.isFeatured ? 'Edit featured' : 'Feature product' %></summary>
+                            <form class="merchant-featured-form" action="/merchant/products/<%= product.id %>/feature" method="POST">
+                                <label>
+                                    <span>Priority</span>
+                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= Number(product.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
+                                </label>
+                                <label>
+                                    <span>Start date</span>
+                                    <input type="date" name="featuredStartDate" value="<%= product.featuredStartDate || '' %>" aria-label="Featured start date">
+                                </label>
+                                <label>
+                                    <span>End date</span>
+                                    <input type="date" name="featuredEndDate" value="<%= product.featuredEndDate || '' %>" aria-label="Featured end date">
+                                </label>
+                                <button class="button secondary" type="submit"><%= product.isFeatured ? 'Save featured settings' : 'Mark as Featured' %></button>
+                            </form>
+                        </details>
                         <% if (product.isFeatured) { %>
                             <form action="/merchant/products/<%= product.id %>/unfeature" method="POST">
                                 <button class="button secondary" type="submit">Remove Featured</button>
-                            </form>
-                        <% } else { %>
-                            <form action="/merchant/products/<%= product.id %>/feature" method="POST">
-                                <input type="number" name="featuredOrder" min="0" max="99" value="0" placeholder="Order" aria-label="Featured order">
-                                <input type="date" name="featuredStartDate" aria-label="Featured start date">
-                                <input type="date" name="featuredEndDate" aria-label="Featured end date">
-                                <button class="button secondary" type="submit">Mark as Featured</button>
                             </form>
                         <% } %>
                         <form action="/merchant/products/<%= product.id %>/delete" method="POST">

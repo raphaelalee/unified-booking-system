@@ -51,7 +51,7 @@
                     ? 'Pick up'
                     : '';
         %>
-        <form class="login-form payment-form" action="/payment" method="POST">
+        <form class="login-form payment-form" action="/payment" method="POST" data-base-amount="<%= Number(amount || 0).toFixed(2) %>" data-cashback-balance="<%= typeof loyalty !== 'undefined' && loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <input type="hidden" name="amount" value="<%= amount %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
@@ -98,7 +98,7 @@
             <% if (paymentVoucherList.length > 0 || (voucherRecommendationView && voucherRecommendationView.voucher) || smartVoucherMessageView) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
                     <% if (paymentVoucherList.length > 0) { %>
-                        <label>
+                        <div class="cart-voucher-picker">
                             <span>
                                 <strong>Platform vouchers</strong>
                                 <small>
@@ -108,18 +108,55 @@
                                         : ' Service smart vouchers are checked automatically.' %>
                                 </small>
                             </span>
-                            <select name="selectedVoucherId" style="display:block; width:100%; margin-top:0.65rem;">
-                                <option value="">Select voucher</option>
-                                <% paymentVoucherList.forEach((voucher) => { %>
-                                    <option value="<%= voucher.id %>" <%= String(voucher.id) === paymentSelectedVoucherId ? 'selected' : '' %>>
-                                        <%= voucher.title %> (<%= voucher.code %>) -
-                                        <%= voucher.discountType === 'percentage'
-                                            ? `${Number(voucher.discountPercent || 0)}% OFF`
-                                            : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
-                                    </option>
-                                <% }) %>
-                            </select>
-                        </label>
+                            <button
+                                class="button secondary compact cart-voucher-toggle"
+                                type="button"
+                                id="payment-voucher-toggle"
+                                aria-expanded="false"
+                                aria-controls="payment-voucher-panel">
+                                Use vouchers
+                            </button>
+                            <div
+                                class="cart-voucher-panel"
+                                id="payment-voucher-panel"
+                                hidden>
+                                <div class="cart-voucher-options">
+                                    <label class="cart-voucher-option">
+                                        <input
+                                            type="radio"
+                                            name="selectedVoucherId"
+                                            value="none"
+                                            data-discount-type="none"
+                                            <%= paymentSelectedVoucherId === 'none' ? 'checked' : '' %>>
+                                        <span class="cart-voucher-option-copy">
+                                            <strong>Do not use a voucher</strong>
+                                            <small>Continue without applying a platform voucher.</small>
+                                        </span>
+                                    </label>
+                                    <% paymentVoucherList.forEach((voucher) => { %>
+                                        <label class="cart-voucher-option">
+                                            <input
+                                                type="radio"
+                                                name="selectedVoucherId"
+                                                value="<%= voucher.id %>"
+                                                data-discount-type="<%= voucher.discountType || 'fixed' %>"
+                                                data-discount-percent="<%= Number(voucher.discountPercent || 0) %>"
+                                                data-discount-value="<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>"
+                                                <%= String(voucher.id) === paymentSelectedVoucherId ? 'checked' : '' %>>
+                                            <span class="cart-voucher-option-copy">
+                                                <strong><%= voucher.title %></strong>
+                                                <small><%= voucher.code %></small>
+                                                <small>
+                                                    <%= voucher.discountType === 'percentage'
+                                                        ? `${Number(voucher.discountPercent || 0)}% OFF`
+                                                        : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
+                                                </small>
+                                            </span>
+                                        </label>
+                                    <% }) %>
+                                </div>
+                            </div>
+                        </div>
                     <% } else { %>
                         <span>
                             <strong>No platform vouchers to choose</strong>
@@ -325,13 +362,9 @@
             <% } %>
             <div class="cart-totals">
                 <p><span>Subtotal</span><strong>$<%= Number(amount).toFixed(2) %></strong></p>
-                <% if (paymentVoucherEstimate > 0) { %>
-                    <p><span>Voucher</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
-                <% } %>
+                <p id="payment-voucher-row" style="<%= paymentVoucherEstimate > 0 ? '' : 'display:none;' %>"><span>Voucher</span><strong id="payment-voucher-value">-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
                 <p id="payment-points-row" style="<%= paymentPointEstimate > 0 ? '' : 'display:none;' %>"><span>Points</span><strong id="payment-points-value">-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
-                <% if (paymentCashbackEstimate > 0) { %>
-                    <p><span>Wallet cashback used</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
-                <% } %>
+                <p id="payment-cashback-row" style="<%= paymentCashbackEstimate > 0 ? '' : 'display:none;' %>"><span>Wallet cashback used</span><strong id="payment-cashback-value">-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                 <% if (campaignCashbackTotal > 0) { %>
                     <p><span>Campaign cashback earned</span><strong>+$<%= campaignCashbackTotal.toFixed(2) %></strong></p>
                 <% } %>
@@ -364,8 +397,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const redeemPointsInput = document.getElementById('payment-redeem-points');
     const pointsRow = document.getElementById('payment-points-row');
     const pointsValue = document.getElementById('payment-points-value');
+    const voucherRow = document.getElementById('payment-voucher-row');
+    const voucherValue = document.getElementById('payment-voucher-value');
+    const cashbackRow = document.getElementById('payment-cashback-row');
+    const cashbackValue = document.getElementById('payment-cashback-value');
     const summaryTotal = document.getElementById('payment-summary-total');
     const liveTotal = document.getElementById('payment-live-total');
+    const voucherToggle = document.getElementById('payment-voucher-toggle');
+    const voucherPanel = document.getElementById('payment-voucher-panel');
+    const voucherInputs = Array.from(document.querySelectorAll('input[name="selectedVoucherId"]'));
     const paypalEnabled = <%= paypalEnabled ? 'true' : 'false' %>;
 
     function setPayPalMessage(message) {
@@ -409,6 +449,51 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatMoney(value) {
         return '$' + Number(value || 0).toFixed(2);
+    }
+
+    function getVoucherDiscount(baseAmount) {
+        const selectedVoucher = voucherInputs.find((input) => input.checked);
+        if (!selectedVoucher || selectedVoucher.value === 'none') {
+            return 0;
+        }
+
+        const discountType = selectedVoucher.dataset.discountType || 'fixed';
+        const discountPercent = Number(selectedVoucher.dataset.discountPercent || 0);
+        const discountValue = Number(selectedVoucher.dataset.discountValue || 0);
+
+        if (discountType === 'percentage') {
+            return Math.min(baseAmount * (discountPercent / 100), baseAmount);
+        }
+
+        return Math.min(discountValue, baseAmount);
+    }
+
+    function syncVoucherRedemption() {
+        if (!form || !summaryTotal || !liveTotal) return;
+
+        const baseAmount = Number(form.dataset.baseAmount || 0);
+        const voucherDiscount = getVoucherDiscount(baseAmount);
+        const cashbackBalance = Number(form.dataset.cashbackBalance || 0);
+        const cashbackCheckbox = form.querySelector('input[type="checkbox"][name="redeemCashback"]');
+        const cashbackHidden = form.querySelector('input[type="hidden"][name="useCashback"][value="true"]');
+        const useCashback = Boolean((cashbackCheckbox && cashbackCheckbox.checked) || cashbackHidden);
+        const cashbackApplied = useCashback ? Math.min(cashbackBalance, Math.max(baseAmount - voucherDiscount, 0)) : 0;
+
+        if (voucherRow) voucherRow.style.display = voucherDiscount > 0 ? '' : 'none';
+        if (voucherValue) voucherValue.textContent = '-' + formatMoney(voucherDiscount);
+        if (cashbackRow) cashbackRow.style.display = cashbackApplied > 0 ? '' : 'none';
+        if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
+
+        if (redeemPointsInput) {
+            redeemPointsInput.dataset.baseAmount = Math.max(baseAmount - voucherDiscount, 0).toFixed(2);
+            redeemPointsInput.dataset.cashbackEstimate = cashbackApplied.toFixed(2);
+            syncPointRedemption();
+            return;
+        }
+
+        const totalDue = Math.max(baseAmount - voucherDiscount - cashbackApplied, 0);
+        summaryTotal.textContent = formatMoney(totalDue);
+        liveTotal.textContent = formatMoney(totalDue);
     }
 
     function syncPointRedemption() {
@@ -495,10 +580,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));
     methodField?.addEventListener('change', syncPaymentMethod);
+    if (voucherToggle && voucherPanel) {
+        const selectedVoucherInput = voucherPanel.querySelector('input[name="selectedVoucherId"]:checked');
+        if (selectedVoucherInput && selectedVoucherInput.value && selectedVoucherInput.value !== 'none') {
+            voucherToggle.setAttribute('aria-expanded', 'true');
+            voucherPanel.hidden = false;
+        }
+
+        voucherToggle.addEventListener('click', function () {
+            const isOpen = voucherToggle.getAttribute('aria-expanded') === 'true';
+            voucherToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+            voucherPanel.hidden = isOpen;
+        });
+    }
+    voucherInputs.forEach((input) => {
+        input.addEventListener('change', syncVoucherRedemption);
+    });
     if (redeemPointsInput) {
         redeemPointsInput.addEventListener('input', syncPointRedemption);
         redeemPointsInput.addEventListener('change', syncPointRedemption);
-        syncPointRedemption();
+    }
+    if (voucherInputs.some((input) => input.checked)) {
+        syncVoucherRedemption();
     }
     syncPaymentMethod();
 });

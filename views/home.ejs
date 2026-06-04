@@ -315,14 +315,27 @@
 
 <% if (featuredMonthMerchant) { %>
     <section class="home-section">
-        <div class="home-section-heading">
-            <div>
+        <article class="home-month-spotlight">
+            <div class="home-month-spotlight-copy">
                 <p class="eyebrow">Featured Salon of the Month</p>
-                <h2>🏆 <%= featuredMonthMerchant.name %></h2>
+                <div class="home-month-spotlight-heading">
+                    <span class="home-month-spotlight-icon" aria-hidden="true"></span>
+                    <div>
+                        <h2><%= featuredMonthMerchant.name %></h2>
+                        <p><%= featuredMonthMerchant.description || `${featuredMonthMerchant.category || 'Beauty'} merchant in ${featuredMonthMerchant.location || 'Singapore'}.` %></p>
+                    </div>
+                </div>
+                <div class="home-month-spotlight-meta">
+                    <span><strong><%= featuredMonthMerchant.category || 'Beauty & Wellness' %></strong> category</span>
+                    <span><strong><%= featuredMonthMerchant.location || 'Singapore' %></strong> location</span>
+                    <span><strong><%= featuredMonthMerchant.rating || '4.8' %></strong> rating</span>
+                </div>
             </div>
-            <a class="button secondary" href="/merchants/<%= featuredMonthMerchant.id %>?from=home">View merchant</a>
-        </div>
-        <p><%= featuredMonthMerchant.description || `${featuredMonthMerchant.category || 'Beauty'} merchant in ${featuredMonthMerchant.location || 'Singapore'}.` %></p>
+            <div class="home-month-spotlight-actions">
+                <span class="home-month-spotlight-badge">Monthly spotlight</span>
+                <a class="button secondary" href="/merchants/<%= featuredMonthMerchant.id %>?from=home">View merchant</a>
+            </div>
+        </article>
     </section>
 <% } %>
 

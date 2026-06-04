@@ -3790,12 +3790,17 @@ async function getSmartVoucherRecommendationDetails(userId, payment) {
 }
 
 async function applyVoucherRedemption(req, payment) {
-    const selectedVoucherId = Number(req.body.selectedVoucherId || payment.selectedVoucherId || 0);
+    const rawSelectedVoucherId = String(req.body.selectedVoucherId || payment.selectedVoucherId || '').trim();
+    const voucherDisabled = rawSelectedVoucherId === 'none';
+    const selectedVoucherId = voucherDisabled ? 0 : Number(rawSelectedVoucherId || 0);
     const fallbackVoucherId = Number(payment.voucherRecommendation?.voucher?.id || 0);
-    const effectiveVoucherId = selectedVoucherId || fallbackVoucherId;
+    const effectiveVoucherId = voucherDisabled ? 0 : (selectedVoucherId || fallbackVoucherId);
 
     if (!effectiveVoucherId) {
-        return payment;
+        return {
+            ...payment,
+            selectedVoucherId: voucherDisabled ? 'none' : (selectedVoucherId ? String(selectedVoucherId) : '')
+        };
     }
 
     const voucher = await new Promise((resolve, reject) => {
@@ -3841,7 +3846,7 @@ async function applyVoucherRedemption(req, payment) {
 
     return {
         ...payment,
-        selectedVoucherId: selectedVoucherId ? String(selectedVoucherId) : '',
+        selectedVoucherId: voucherDisabled ? 'none' : (selectedVoucherId ? String(selectedVoucherId) : ''),
         voucherId: validatedVoucher.id,
         voucherCode: validatedVoucher.code,
         voucherTitle: validatedVoucher.title,

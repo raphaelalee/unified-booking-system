@@ -190,22 +190,62 @@
                             </span>
                         <% } %>
                         <% if (cartVoucherList.length > 0) { %>
-                            <label>
-                                <span>
-                                    <small>Choose an active platform voucher now. You can still review it again on the payment page.</small>
-                                </span>
-                                <select name="selectedVoucherId" style="display:block; width:100%; margin-top:0.65rem;">
-                                    <option value="">Select voucher</option>
-                                    <% cartVoucherList.forEach((voucher) => { %>
-                                        <option value="<%= voucher.id %>" <%= String(voucher.id) === cartSelectedVoucherId ? 'selected' : '' %>>
-                                            <%= voucher.title %> (<%= voucher.code %>) -
-                                            <%= voucher.discountType === 'percentage'
-                                                ? `${Number(voucher.discountPercent || 0)}% OFF`
-                                                : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
-                                        </option>
-                                    <% }) %>
-                                </select>
-                            </label>
+                            <div class="cart-voucher-picker">
+                                <button
+                                    class="button secondary compact cart-voucher-toggle"
+                                    type="button"
+                                    id="cart-voucher-toggle"
+                                    aria-expanded="false"
+                                    aria-controls="cart-voucher-panel">
+                                    Use vouchers
+                                </button>
+                                <div
+                                    class="cart-voucher-panel"
+                                    id="cart-voucher-panel"
+                                    hidden>
+                                    <div class="cart-voucher-panel-header">
+                                        <div>
+                                            <strong>Platform vouchers</strong>
+                                            <p class="muted">Choose an active platform voucher now. You can still review it again on the payment page.</p>
+                                        </div>
+                                    </div>
+                                    <div class="cart-voucher-options">
+                                        <label class="cart-voucher-option">
+                                            <input
+                                                type="radio"
+                                                name="selectedVoucherId"
+                                                value="none"
+                                                data-discount-type="none"
+                                                <%= cartSelectedVoucherId === 'none' ? 'checked' : '' %>>
+                                            <span class="cart-voucher-option-copy">
+                                                <strong>Do not use a voucher</strong>
+                                                <small>Continue without applying a platform voucher from the cart.</small>
+                                            </span>
+                                        </label>
+                                        <% cartVoucherList.forEach((voucher) => { %>
+                                            <label class="cart-voucher-option">
+                                                <input
+                                                    type="radio"
+                                                    name="selectedVoucherId"
+                                                    value="<%= voucher.id %>"
+                                                    data-discount-type="<%= voucher.discountType || 'fixed' %>"
+                                                    data-discount-percent="<%= Number(voucher.discountPercent || 0) %>"
+                                                    data-discount-value="<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>"
+                                                    <%= String(voucher.id) === cartSelectedVoucherId ? 'checked' : '' %>>
+                                                <span class="cart-voucher-option-copy">
+                                                    <strong><%= voucher.title %></strong>
+                                                    <small><%= voucher.code %></small>
+                                                    <small>
+                                                        <%= voucher.discountType === 'percentage'
+                                                            ? `${Number(voucher.discountPercent || 0)}% OFF`
+                                                            : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
+                                                    </small>
+                                                </span>
+                                            </label>
+                                        <% }) %>
+                                    </div>
+                                </div>
+                            </div>
                         <% } %>
                         <% if (cartSmartVoucher && cartSmartVoucher.voucher) { %>
                             <div class="notice success">
@@ -228,6 +268,7 @@
                     <div class="cart-totals cart-summary-totals">
                         <p><span>Items subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
                         <p id="cart-shipping-row" style="display:none;"><span>Shipping fee</span><strong id="cart-shipping-value">$<%= deliveryFee.toFixed(2) %></strong></p>
+                        <p id="cart-voucher-row" style="display:none;"><span>Voucher</span><strong id="cart-voucher-value">-$0.00</strong></p>
                         <% if (cashbackApplied > 0) { %>
                             <p><span>Wallet cashback used</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
                         <% } %>
@@ -317,11 +358,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtotalValue = document.getElementById('cart-subtotal-value');
     const shippingRow = document.getElementById('cart-shipping-row');
     const shippingValue = document.getElementById('cart-shipping-value');
+    const voucherRow = document.getElementById('cart-voucher-row');
+    const voucherValue = document.getElementById('cart-voucher-value');
     const cashbackValue = document.getElementById('cart-cashback-value');
     const dueValue = document.getElementById('cart-due-value');
     const cashbackCopy = document.getElementById('cart-cashback-copy');
     const cashbackToggle = document.getElementById('cart-use-cashback');
     const checkoutForm = document.getElementById('cart-checkout-form');
+    const voucherToggle = document.getElementById('cart-voucher-toggle');
+    const voucherPanel = document.getElementById('cart-voucher-panel');
+    const voucherInputs = Array.from(document.querySelectorAll('input[name="selectedVoucherId"]'));
     const shippingFee = checkoutForm ? Number(checkoutForm.dataset.shippingFee || 0) : 0;
     const hasProductItems = checkoutForm ? checkoutForm.dataset.hasProductItems === 'true' : false;
 
@@ -337,6 +383,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return document.querySelector('input[name="fulfilment"]:checked')?.value || 'pickup';
     }
 
+    function getVoucherDiscount(subtotal) {
+        const selectedVoucher = voucherInputs.find((input) => input.checked);
+        if (!selectedVoucher || selectedVoucher.value === 'none') {
+            return 0;
+        }
+
+        const discountType = selectedVoucher.dataset.discountType || 'fixed';
+        const discountPercent = Number(selectedVoucher.dataset.discountPercent || 0);
+        const discountValue = Number(selectedVoucher.dataset.discountValue || 0);
+
+        if (discountType === 'percentage') {
+            return Math.min(subtotal * (discountPercent / 100), subtotal);
+        }
+
+        return Math.min(discountValue, subtotal);
+    }
+
     function updateSummary() {
         const selectedChecks = getSelectedChecks();
         const lineCount = selectedChecks.length;
@@ -344,7 +407,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const subtotal = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.lineTotal || 0), 0);
         const selectedProductCount = selectedChecks.filter((check) => check.dataset.isProduct === '1').length;
         const activeShippingFee = hasProductItems && getFulfilmentValue() === 'delivery' && selectedProductCount > 0 ? shippingFee : 0;
-        const grossTotal = subtotal + activeShippingFee;
+        const voucherDiscount = getVoucherDiscount(subtotal);
+        const grossTotal = Math.max(subtotal - voucherDiscount, 0) + activeShippingFee;
         const cashbackBalance = cashbackToggle ? Number(cashbackToggle.dataset.cashbackBalance || 0) : 0;
         const cashbackApplied = cashbackToggle && cashbackToggle.checked
             ? Math.min(cashbackBalance, grossTotal)
@@ -357,6 +421,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
         if (shippingRow) shippingRow.style.display = activeShippingFee > 0 ? '' : 'none';
         if (shippingValue) shippingValue.textContent = formatMoney(activeShippingFee);
+        if (voucherRow) voucherRow.style.display = voucherDiscount > 0 ? '' : 'none';
+        if (voucherValue) voucherValue.textContent = '-' + formatMoney(voucherDiscount);
         if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
         if (dueValue) dueValue.textContent = formatMoney(due);
         if (cashbackCopy) cashbackCopy.textContent = formatMoney(cashbackApplied);
@@ -383,6 +449,24 @@ document.addEventListener('DOMContentLoaded', function () {
     if (cashbackToggle) {
         cashbackToggle.addEventListener('change', updateSummary);
     }
+
+    if (voucherToggle && voucherPanel) {
+        const selectedVoucherInput = voucherPanel.querySelector('input[name="selectedVoucherId"]:checked');
+        if (selectedVoucherInput && selectedVoucherInput.value && selectedVoucherInput.value !== 'none') {
+            voucherToggle.setAttribute('aria-expanded', 'true');
+            voucherPanel.hidden = false;
+        }
+
+        voucherToggle.addEventListener('click', function () {
+            const isOpen = voucherToggle.getAttribute('aria-expanded') === 'true';
+            voucherToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+            voucherPanel.hidden = isOpen;
+        });
+    }
+
+    voucherInputs.forEach((input) => {
+        input.addEventListener('change', updateSummary);
+    });
 
     const fulfilmentOptions = document.querySelector('.cart-fulfilment-options');
     const fulfilmentChoices = Array.from(document.querySelectorAll('.fulfilment-choice'));
