@@ -647,6 +647,51 @@ function getUpcomingByUserId(userId, callback) {
     db.query(sql, [userId], callback);
 }
 
+function getNextManageableByUserId(userId, callback) {
+    return ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                bookings.booking_id AS id,
+                bookings.user_id,
+                bookings.booking_date,
+                TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+                bookings.status,
+                bookings.cancellation_reason,
+                bookings.refund_status,
+                bookings.cancelled_at,
+                services.service_id,
+                services.duration_mins,
+                salons.salon_id,
+                salons.merchant_id AS merchant_user_id,
+                salons.salon_name AS merchant_name,
+                services.service_name,
+                services.price AS service_price
+            FROM bookings
+            INNER JOIN services ON services.service_id = bookings.service_id
+            INNER JOIN salons ON salons.salon_id = services.salon_id
+            WHERE bookings.user_id = ?
+                AND bookings.booking_date >= CURDATE()
+                AND bookings.status NOT IN ('cancelled', 'completed', 'checked_in')
+            ORDER BY bookings.booking_date ASC, bookings.timeslot ASC
+            LIMIT 1
+        `;
+
+        db.query(sql, [userId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows[0] || null);
+        });
+    });
+}
+
 function getCheckInDetails(bookingId, merchantUserId, callback) {
     ensureBookingManagementSchema((schemaError) => {
         if (schemaError) {
@@ -1989,6 +2034,27 @@ function cancelForCustomer(bookingId, userId, reason, refundStatus, callback) {
     });
 }
 
+function markConfirmedForCustomer(bookingId, userId, callback) {
+    return ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `
+                UPDATE bookings
+                SET status = 'confirmed'
+                WHERE booking_id = ?
+                    AND user_id = ?
+                    AND status = 'pending'
+            `,
+            [bookingId, userId],
+            callback
+        );
+    });
+}
+
 function updateSchedule(bookingId, bookingDate, bookingTime, callback) {
     const sql = `
         UPDATE bookings
@@ -2113,6 +2179,7 @@ module.exports = {
     getBookingMaxDateKey,
     getCheckInDetails,
     getNotificationDetailsById,
+    getNextManageableByUserId,
     getSupportBookingsByUserId,
     getSingaporeTodayKey,
     getUpcomingByUserId,
@@ -2125,6 +2192,7 @@ module.exports = {
     markWhatsAppReminderSent,
     markCancelled,
     markCompleted,
+    markConfirmedForCustomer,
     markCheckedIn,
     markCheckedInByToken,
     listRescheduleRequestsForMerchant,

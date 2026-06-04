@@ -45,7 +45,12 @@ function buildBookingMessage(booking) {
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
         booking.checkInUrl ? `Check-in: ${booking.checkInUrl}` : '',
-        'Please contact the merchant if you need to reschedule or cancel.'
+        '',
+        'WhatsApp actions:',
+        'Reply MY BOOKING to view your next booking.',
+        'Reply CONFIRM to confirm a pending booking.',
+        'Reply RESCHEDULE to change your appointment slot.',
+        'Reply CANCEL to cancel your booking.'
     ].filter(Boolean).join('\n');
 }
 
@@ -57,7 +62,8 @@ function buildReminderMessage(booking) {
         `Date: ${booking.bookingDate}`,
         `Time: ${booking.bookingTime}`,
         booking.checkInUrl ? `Check-in QR: ${booking.checkInUrl}` : '',
-        'Please contact the merchant if you need to reschedule or cancel.'
+        '',
+        'Reply CONFIRM to confirm, RESCHEDULE to change your slot, or CANCEL to cancel.'
     ].filter(Boolean).join('\n');
 }
 

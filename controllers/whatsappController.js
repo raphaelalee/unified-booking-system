@@ -13,6 +13,9 @@ const findServiceById = promisify(MerchantService.findServiceById);
 const findCustomerByPhone = promisify(User.findCustomerByPhone);
 const getAvailableSlots = promisify(Booking.getAvailableSlots);
 const autoConfirmBooking = promisify(Booking.autoConfirmBooking);
+const cancelForCustomer = promisify(Booking.cancelForCustomer);
+const getNextManageableByUserId = promisify(Booking.getNextManageableByUserId);
+const markConfirmedForCustomer = promisify(Booking.markConfirmedForCustomer);
 
 function cleanupSessions() {
     const now = Date.now();
@@ -84,6 +87,31 @@ function formatSlotList(service) {
         `Selected: ${service.name} at ${service.salonName}.`,
         'Reply with your preferred date in YYYY-MM-DD format.',
         `Available times later: ${slots.join(', ')}`
+    ].join('\n');
+}
+
+function toDateOnly(value) {
+    if (!value) {
+        return '';
+    }
+
+    if (value instanceof Date) {
+        return value.toISOString().slice(0, 10);
+    }
+
+    return String(value).slice(0, 10);
+}
+
+function formatBookingSummary(booking) {
+    if (!booking) {
+        return '';
+    }
+
+    return [
+        `${booking.service_name} at ${booking.merchant_name}`,
+        `${toDateOnly(booking.booking_date)} at ${booking.booking_time}`,
+        `Status: ${String(booking.status || '').replace(/_/g, ' ')}`,
+        `Booking ID: ${booking.id}`
     ].join('\n');
 }
 
@@ -161,6 +189,168 @@ async function handleStart(phone) {
     session.services = services.slice(0, 9);
 
     return sendReply(phone, formatServiceList(session.services));
+}
+
+async function findRegisteredCustomerOrReply(phone) {
+    const user = await findCustomerByPhone(phone);
+
+    if (!user) {
+        await sendReply(phone, [
+            'I could not find a Vaniday customer account linked to this WhatsApp number.',
+            'Please add this phone number to your profile, then reply BOOK to start.'
+        ].join('\n'));
+        return null;
+    }
+
+    return user;
+}
+
+async function handleMyBooking(phone) {
+    const user = await findRegisteredCustomerOrReply(phone);
+
+    if (!user) {
+        return;
+    }
+
+    const booking = await getNextManageableByUserId(user.user_id);
+
+    if (!booking) {
+        return sendReply(phone, 'You have no upcoming manageable bookings. Reply BOOK to make a new booking.');
+    }
+
+    return sendReply(phone, [
+        'Your next Vaniday booking:',
+        formatBookingSummary(booking),
+        '',
+        'Reply CONFIRM to confirm, RESCHEDULE to change the slot, or CANCEL to cancel.'
+    ].join('\n'));
+}
+
+async function handleConfirmBooking(phone) {
+    const user = await findRegisteredCustomerOrReply(phone);
+
+    if (!user) {
+        return;
+    }
+
+    const booking = await getNextManageableByUserId(user.user_id);
+
+    if (!booking) {
+        return sendReply(phone, 'There is no upcoming booking to confirm. Reply BOOK to make a new booking.');
+    }
+
+    if (String(booking.status || '').toLowerCase() !== 'pending') {
+        return sendReply(phone, [
+            'This booking is already active in Vaniday:',
+            formatBookingSummary(booking)
+        ].join('\n'));
+    }
+
+    await markConfirmedForCustomer(booking.id, user.user_id);
+
+    Notification.create({
+        recipientUserId: user.user_id,
+        recipientRole: 'customer',
+        type: 'booking_confirmed',
+        title: 'Booking confirmed via WhatsApp',
+        message: `${booking.service_name} at ${booking.merchant_name} is confirmed for ${toDateOnly(booking.booking_date)} at ${booking.booking_time}.`,
+        linkUrl: '/profile#bookings',
+        dedupeKey: `whatsapp-confirm-customer-${booking.id}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    Notification.create({
+        recipientUserId: booking.merchant_user_id,
+        recipientRole: 'merchant',
+        actorUserId: user.user_id,
+        type: 'booking_confirmed',
+        title: 'Customer confirmed via WhatsApp',
+        message: `${user.name || 'A customer'} confirmed ${booking.service_name} for ${toDateOnly(booking.booking_date)} at ${booking.booking_time}.`,
+        linkUrl: '/merchant/bookings',
+        dedupeKey: `whatsapp-confirm-merchant-${booking.id}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    return sendReply(phone, [
+        'Booking confirmed. Thank you.',
+        formatBookingSummary({ ...booking, status: 'confirmed' })
+    ].join('\n'));
+}
+
+async function handleCancelBooking(phone) {
+    const user = await findRegisteredCustomerOrReply(phone);
+
+    if (!user) {
+        return;
+    }
+
+    const booking = await getNextManageableByUserId(user.user_id);
+
+    if (!booking) {
+        return sendReply(phone, 'There is no upcoming booking to cancel. Reply BOOK to make a new booking.');
+    }
+
+    await cancelForCustomer(booking.id, user.user_id, 'Cancelled by WhatsApp reply', 'customer_cancelled_review');
+
+    Notification.create({
+        recipientUserId: user.user_id,
+        recipientRole: 'customer',
+        type: 'booking_cancelled',
+        title: 'Booking cancelled via WhatsApp',
+        message: `${booking.service_name} at ${booking.merchant_name} was cancelled from WhatsApp.`,
+        linkUrl: '/profile#bookings',
+        dedupeKey: `whatsapp-cancel-customer-${booking.id}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    Notification.create({
+        recipientUserId: booking.merchant_user_id,
+        recipientRole: 'merchant',
+        actorUserId: user.user_id,
+        type: 'booking_cancelled',
+        title: 'Customer cancelled via WhatsApp',
+        message: `${user.name || 'A customer'} cancelled ${booking.service_name} for ${toDateOnly(booking.booking_date)} at ${booking.booking_time}.`,
+        linkUrl: '/merchant/bookings',
+        dedupeKey: `whatsapp-cancel-merchant-${booking.id}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    return sendReply(phone, [
+        'Your booking has been cancelled in Vaniday.',
+        formatBookingSummary({ ...booking, status: 'cancelled' }),
+        'Refund eligibility can be reviewed from your profile or Help Center.'
+    ].join('\n'));
+}
+
+async function handleRescheduleBooking(phone) {
+    const user = await findRegisteredCustomerOrReply(phone);
+
+    if (!user) {
+        return;
+    }
+
+    const booking = await getNextManageableByUserId(user.user_id);
+
+    if (!booking) {
+        return sendReply(phone, 'There is no upcoming booking to reschedule. Reply BOOK to make a new booking.');
+    }
+
+    return sendReply(phone, [
+        'Reschedule request started.',
+        formatBookingSummary(booking),
+        '',
+        'To avoid double-booking, Vaniday checks live slots in the app before changing your appointment.',
+        'Open your profile, choose this booking, and tap Reschedule:',
+        `${process.env.APP_BASE_URL || 'http://localhost:3000'}/profile#bookings`
+    ].join('\n'));
 }
 
 async function handleServiceStep(phone, text, session) {
@@ -320,6 +510,30 @@ async function handleIncomingMessage(message) {
     if (/^reset$/i.test(text)) {
         resetSession(phone);
         await sendReply(phone, 'Booking flow reset. Reply BOOK to start again.');
+        return;
+    }
+
+    if (/^(my booking|status|appointment)$/i.test(text)) {
+        resetSession(phone);
+        await handleMyBooking(phone);
+        return;
+    }
+
+    if (/^(confirm|yes)$/i.test(text)) {
+        resetSession(phone);
+        await handleConfirmBooking(phone);
+        return;
+    }
+
+    if (/^(reschedule|change)$/i.test(text)) {
+        resetSession(phone);
+        await handleRescheduleBooking(phone);
+        return;
+    }
+
+    if (/^(cancel|cancel booking)$/i.test(text)) {
+        resetSession(phone);
+        await handleCancelBooking(phone);
         return;
     }
 
