@@ -144,14 +144,15 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
             }
 
             const transactionSql = `
-                INSERT INTO transactions (user_id, total_amount, payment_status, payment_method, original_amount, cashback_used)
-                VALUES (?, ?, 'paid', ?, ?, ?)
+                INSERT INTO transactions (user_id, total_amount, payment_status, payment_method, booking_id, original_amount, cashback_used)
+                VALUES (?, ?, 'paid', ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
                 userId,
                 amount,
                 paymentMethod || 'card',
+                transactionOptions.bookingId || null,
                 Number(transactionOptions.originalAmount || amount || 0),
                 Number(transactionOptions.cashbackUsed || 0)
             ], (insertError, transactionResult) => {
@@ -162,40 +163,131 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     });
                 }
 
-                const orderItems = (items || [])
-                    .filter((item) => item.type === 'Product' && Number.isInteger(Number(item.serviceId)))
-                    .map((item) => [
-                        transactionResult.insertId,
-                        Number(item.serviceId),
-                        Number(item.quantity || 1),
-                        Number(item.price || 0)
-                    ]);
+                const productItems = (items || [])
+                    .filter((item) => String(item.type || '').trim().toLowerCase() === 'product'
+                        && Number.isInteger(Number(item.serviceId))
+                        && Number(item.serviceId) > 0);
 
-                if (orderItems.length === 0) {
-                    return connection.commit((commitError) => {
-                        connection.release();
-                        done(commitError, transactionResult);
-                    });
-                }
+                const commitTransaction = () => connection.commit((commitError) => {
+                    connection.release();
+                    done(commitError, transactionResult);
+                });
 
-                const itemSql = `
-                    INSERT INTO order_items (transaction_id, product_id, quantity, price_at_purchase)
-                    VALUES ?
-                `;
-
-                return connection.query(itemSql, [orderItems], (itemError) => {
-                    if (itemError) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            done(itemError);
-                        });
+                const decrementProductStock = (index, callback) => {
+                    if (index >= productItems.length) {
+                        callback(null);
+                        return;
                     }
 
-                    return connection.commit((commitError) => {
-                        connection.release();
-                        done(commitError, transactionResult);
+                    const item = productItems[index];
+                    const quantity = Math.max(1, Number(item.quantity || 1));
+                    const productId = Number(item.serviceId);
+                    const stockSql = `
+                        UPDATE products
+                        SET stock_quantity = stock_quantity - ?
+                        WHERE product_id = ?
+                            AND stock_quantity >= ?
+                    `;
+
+                    connection.query(stockSql, [quantity, productId, quantity], (stockError, stockResult) => {
+                        if (stockError) {
+                            callback(stockError);
+                            return;
+                        }
+
+                        if (stockResult.affectedRows === 0) {
+                            callback(new Error(`${item.name || 'A product'} does not have enough stock for this order.`));
+                            return;
+                        }
+
+                        decrementProductStock(index + 1, callback);
                     });
-                });
+                };
+
+                const insertOrderItems = (orderId = null) => {
+                    if (productItems.length === 0) {
+                        commitTransaction();
+                        return;
+                    }
+
+                    const orderItems = productItems.map((item) => [
+                        transactionResult.insertId,
+                        Number(item.serviceId),
+                        Math.max(1, Number(item.quantity || 1)),
+                        Number(item.price || 0),
+                        orderId
+                    ]);
+                    const itemSql = `
+                        INSERT INTO order_items (transaction_id, product_id, quantity, price_at_purchase, order_id)
+                        VALUES ?
+                    `;
+
+                    connection.query(itemSql, [orderItems], (itemError, itemResult) => {
+                        if (itemError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                done(itemError);
+                            });
+                        }
+
+                        connection.query(
+                            'UPDATE transactions SET order_item_id = ? WHERE transaction_id = ?',
+                            [itemResult.insertId, transactionResult.insertId],
+                            (linkError) => {
+                                if (linkError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        done(linkError);
+                                    });
+                                }
+
+                                decrementProductStock(0, (stockError) => {
+                                    if (stockError) {
+                                        return connection.rollback(() => {
+                                            connection.release();
+                                            done(stockError);
+                                        });
+                                    }
+
+                                    commitTransaction();
+                                });
+                            }
+                        );
+                    });
+                };
+
+                if (transactionOptions.createOrder !== true) {
+                    insertOrderItems();
+                    return;
+                }
+
+                connection.query(
+                    'INSERT INTO orders (user_id, transaction_id, total_amount) VALUES (?, ?, ?)',
+                    [userId, transactionResult.insertId, amount],
+                    (orderError, orderResult) => {
+                        if (orderError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                done(orderError);
+                            });
+                        }
+
+                        connection.query(
+                            'UPDATE transactions SET order_id = ? WHERE transaction_id = ?',
+                            [orderResult.insertId, transactionResult.insertId],
+                            (linkError) => {
+                                if (linkError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        done(linkError);
+                                    });
+                                }
+
+                                insertOrderItems(orderResult.insertId);
+                            }
+                        );
+                    }
+                );
             });
         });
     });

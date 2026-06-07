@@ -14,6 +14,9 @@ const Review = require('../models/Review');
 const UserVoucher = require('../models/UserVoucher');
 const User = require('../models/User');
 const GiftCardVoucher = require('../models/GiftCardVoucher');
+const FavouriteMerchant = require('../models/FavouriteMerchant');
+const PaymentAttempt = require('../models/PaymentAttempt');
+const CustomerCart = require('../models/CustomerCart');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
@@ -362,24 +365,25 @@ async function persistGiftCardVouchers(req, payment) {
 
     const saved = [];
 
-    for (const item of giftCardItems) {
+    for (const [index, item] of giftCardItems.entries()) {
         const giftCard = item.giftCard || {};
         const recipientEmail = giftCard.deliveryOption === 'recipient'
             ? giftCard.recipientEmail
-            : String(req.session.user?.email || '').trim();
+            : String(req.session.user?.email || payment.userEmail || '').trim();
         const payload = {
             code: GiftCardVoucher.generateCode('VANI'),
             amount: Number(item.price || 0),
             balance: Number(item.price || 0),
-            senderUserId: Number(req.session.user?.id || null) || null,
-            senderName: String(giftCard.senderName || req.session.user?.name || '').trim(),
+            senderUserId: Number(req.session.user?.id || payment.userId || null) || null,
+            senderName: String(giftCard.senderName || req.session.user?.name || payment.userName || '').trim(),
             recipientName: String(giftCard.recipientName || '').trim(),
             recipientEmail: recipientEmail || null,
             message: String(giftCard.message || '').trim(),
             deliveryOption: giftCard.deliveryOption || 'self',
             scheduledSendDate: giftCard.scheduledSendDate || null,
             expiryDate: getGiftCardExpiryDate(),
-            status: 'active'
+            status: 'active',
+            sourceReference: `${payment.receiptId}:gift-card:${index}`
         };
 
         try {
@@ -390,13 +394,21 @@ async function persistGiftCardVouchers(req, payment) {
                         return;
                     }
 
-                    resolve({ id: resultData.insertId, voucherCode: payload.code, ...payload });
+                    resolve({
+                        id: resultData.insertId,
+                        voucherCode: resultData.voucherCode || payload.code,
+                        duplicate: resultData.duplicate === true,
+                        ...payload
+                    });
                 });
             });
 
-            saved.push(result);
+            if (!result.duplicate) {
+                saved.push(result);
+            }
         } catch (error) {
             console.error('Gift card voucher persistence failed:', error.message);
+            throw error;
         }
     }
 
@@ -2685,22 +2697,41 @@ function createBooking(req, res) {
         });
     }
 
-    const booking = Booking.create({
+    return Booking.autoConfirmBooking({
+        userId: req.session.user?.id || null,
         merchantId: merchant.id,
-        merchantName: merchant.name,
         serviceId: validation.service.id,
-        serviceName: validation.serviceName,
         customerName: validation.customerName,
         email: validation.email,
         phone: validation.phone,
         bookingDate: req.body.bookingDate,
         bookingTime: validation.bookingTime,
-        status: 'Confirmed'
-    });
+        durationMins: validation.bookableItem.durationMins || validation.service.durationMins
+    }, (bookingError, confirmation) => {
+        if (bookingError) {
+            console.error(bookingError);
+            return renderMerchantDetail(req, res, merchant, {
+                status: 500,
+                errors: ['Booking availability could not be checked. Please try again.'],
+                form: req.body
+            });
+        }
 
-    notifyBookingCreated(req, merchant, validation, booking.id || null);
-    req.session.success = `Booking confirmed for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${validation.bookingTime}.`;
-    return res.redirect('/');
+        if (!confirmation?.created) {
+            return renderMerchantDetail(req, res, merchant, {
+                status: 400,
+                errors: [confirmation?.message || 'This slot is already booked. Please choose another time.'],
+                form: req.body
+            });
+        }
+
+        const bookingId = confirmation.result?.insertId || null;
+        notifyBookingCreated(req, merchant, validation, bookingId);
+        req.session.success = confirmation.confirmed
+            ? `Booking confirmed for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${validation.bookingTime}.`
+            : `Booking submitted for ${validation.serviceName} at ${merchant.name} and is waiting for merchant review.`;
+        return res.redirect('/');
+    });
 }
 
 function wantsCartJson(req) {
@@ -2975,6 +3006,7 @@ function checkout(req, res) {
         cartCheckout: true,
         userId: req.session.user.id,
         userName,
+        userEmail: req.session.user.email || '',
         merchantName: fulfilmentMerchantName,
         serviceName: 'Cart checkout',
         amount,
@@ -3001,6 +3033,9 @@ function checkout(req, res) {
         pickupMerchantName: selectedPickupName || '',
         ...deliveryDetails
     };
+    savePaymentAttempt('checkout', checkoutId, req.session.pendingPayments[checkoutId]).catch((error) => {
+        console.error('Pending checkout could not be persisted:', error);
+    });
     req.session.applyCashback = false;
 
     return Loyalty.getWalletView(req.session.user.id, async (walletError, loyalty) => {
@@ -3097,16 +3132,28 @@ function toggleFavouriteMerchant(req, res) {
         });
     }
 
-    req.session.favouriteMerchantIds = req.session.favouriteMerchantIds || [];
     const merchantId = merchant.id;
+    const redirectPath = req.get('referer') || '/merchants';
 
-    if (req.session.favouriteMerchantIds.includes(merchantId)) {
-        req.session.favouriteMerchantIds = req.session.favouriteMerchantIds.filter((id) => id !== merchantId);
-    } else {
-        req.session.favouriteMerchantIds.push(merchantId);
-    }
+    return FavouriteMerchant.toggle(req.session.user.id, merchantId, (error, isFavourite) => {
+        if (error) {
+            console.error('Favourite merchant could not be saved:', error);
+            req.session.success = 'Favourite merchant could not be saved. Please try again.';
+            return res.redirect(redirectPath);
+        }
 
-    return res.redirect(req.get('referer') || '/merchants');
+        const favouriteIds = new Set(req.session.favouriteMerchantIds || []);
+
+        if (isFavourite) {
+            favouriteIds.add(merchantId);
+        } else {
+            favouriteIds.delete(merchantId);
+        }
+
+        req.session.favouriteMerchantIds = Array.from(favouriteIds);
+        req.session.favouritesLoadedForUserId = req.session.user.id;
+        return res.redirect(redirectPath);
+    });
 }
 
 function getBookingReceipt(bookingId) {
@@ -3304,6 +3351,45 @@ function saveSession(req) {
 
             resolve();
         });
+    });
+}
+
+function savePaymentAttempt(provider, providerReference, payment) {
+    const attemptId = `${provider}:${providerReference}`.slice(0, 100);
+    const durablePayment = { ...payment, paymentAttemptId: attemptId };
+
+    return new Promise((resolve, reject) => {
+        PaymentAttempt.save({
+            attemptId,
+            userId: payment.userId,
+            provider,
+            providerReference,
+            payment: durablePayment
+        }, (error) => error ? reject(error) : resolve(durablePayment));
+    });
+}
+
+function findPaymentAttempt(provider, providerReference) {
+    return new Promise((resolve, reject) => {
+        PaymentAttempt.findByProviderReference(provider, providerReference, (error, attempt) => {
+            if (error) reject(error);
+            else resolve(attempt);
+        });
+    });
+}
+
+function findPaymentAttemptById(attemptId) {
+    return new Promise((resolve, reject) => {
+        PaymentAttempt.find(attemptId, (error, attempt) => {
+            if (error) reject(error);
+            else resolve(attempt);
+        });
+    });
+}
+
+function updatePaymentAttempt(method, ...args) {
+    return new Promise((resolve, reject) => {
+        PaymentAttempt[method](...args, (error, result) => error ? reject(error) : resolve(result));
     });
 }
 
@@ -3510,7 +3596,12 @@ async function buildTrustedPayment(req, payment) {
     }
 
     if (payment.checkoutId) {
-        const pending = req.session.pendingPayments?.[payment.checkoutId];
+        let pending = req.session.pendingPayments?.[payment.checkoutId];
+
+        if (!pending) {
+            const attempt = await findPaymentAttempt('checkout', payment.checkoutId);
+            pending = attempt?.payment || null;
+        }
 
         if (!pending || String(pending.userId) !== String(req.session.user.id)) {
             throw new Error('Order payment session is invalid or expired.');
@@ -3963,7 +4054,9 @@ function persistPaidTransaction(payment, paymentMethod) {
     return new Promise((resolve, reject) => {
         Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], {
             originalAmount: Number(payment.originalAmount || payment.amount || 0),
-            cashbackUsed: Number(payment.cashbackRedeemed || 0)
+            cashbackUsed: Number(payment.cashbackRedeemed || 0),
+            bookingId: payment.kind === 'booking' ? payment.bookingId || payment.receiptId : null,
+            createOrder: payment.kind === 'order'
         }, (error, result) => {
             if (error) {
                 reject(error);
@@ -3989,14 +4082,29 @@ function persistPaidTransaction(payment, paymentMethod) {
     });
 }
 
-function applyPaymentSideEffects(req, payment) {
-    if (payment.kind === 'order') {
-        const selectedIds = String(payment.selectedItemIds || '').split(',').map((id) => id.trim()).filter(Boolean);
+async function applyPaymentSideEffects(req, payment) {
+    if (payment.kind !== 'order') return;
 
-        req.session.cart = selectedIds.length
-            ? (req.session.cart || []).filter((item) => !selectedIds.includes(String(item.id)))
-            : [];
-    }
+    const selectedIds = String(payment.selectedItemIds || '').split(',').map((id) => id.trim()).filter(Boolean);
+    const filterPurchased = (cart) => selectedIds.length
+        ? (cart || []).filter((item) => !selectedIds.includes(String(item.id)))
+        : [];
+
+    req.session.cart = filterPurchased(req.session.cart || []);
+
+    await new Promise((resolve, reject) => {
+        CustomerCart.load(payment.userId, (loadError, storedCart = []) => {
+            if (loadError) {
+                reject(loadError);
+                return;
+            }
+
+            CustomerCart.save(payment.userId, filterPurchased(storedCart), (saveError) => {
+                if (saveError) reject(saveError);
+                else resolve();
+            });
+        });
+    });
 }
 
 function getOrderRecipients(transactionId) {
@@ -4199,10 +4307,15 @@ function getCampaignCashbackEstimate(payment) {
     });
 }
 
-async function completeTrustedPayment(req, payment, paymentMethod) {
+async function completeTrustedPaymentWork(req, payment, paymentMethod) {
     const pendingPaymentId = payment.receiptId;
-    const transactionId = await persistPaidTransaction(payment, paymentMethod);
-    const paidPayment = { ...payment, pendingPaymentId };
+    const transactionId = payment.existingTransactionId || await persistPaidTransaction(payment, paymentMethod);
+
+    if (payment.paymentAttemptId && !payment.existingTransactionId) {
+        await updatePaymentAttempt('markTransaction', payment.paymentAttemptId, transactionId);
+    }
+
+    const paidPayment = { ...payment, pendingPaymentId, transactionId };
 
     if (payment.kind === 'order' && transactionId) {
         paidPayment.receiptId = `order-${transactionId}`;
@@ -4221,8 +4334,13 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
                     merchantName: paidPayment.merchantName
                 },
                 (error, result) => {
-                    if (error || result?.duplicate) {
-                        reject(error || new Error('Reward points were already redeemed for this receipt.'));
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+
+                    if (result?.duplicate) {
+                        resolve();
                         return;
                     }
 
@@ -4270,7 +4388,7 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
         });
     }
 
-    applyPaymentSideEffects(req, payment);
+    await applyPaymentSideEffects(req, payment);
     await savePaidReceipt(req, paidPayment, paymentMethod);
 
     const savedGiftCards = await persistGiftCardVouchers(req, paidPayment);
@@ -4297,6 +4415,54 @@ async function completeTrustedPayment(req, payment, paymentMethod) {
     await notifyPaymentCompleted(req, paidPayment, transactionId);
 
     return paidPayment.receiptId;
+}
+
+async function completeTrustedPayment(req, payment, paymentMethod) {
+    const attemptId = payment.paymentAttemptId || '';
+
+    if (!attemptId) {
+        return completeTrustedPaymentWork(req, payment, paymentMethod);
+    }
+
+    const lockName = `payment:${attemptId}`.slice(0, 64);
+    const connection = await new Promise((resolve, reject) => {
+        const db = require('../db');
+        db.getConnection((error, value) => error ? reject(error) : resolve(value));
+    });
+
+    try {
+        const acquired = await new Promise((resolve, reject) => {
+            connection.query('SELECT GET_LOCK(?, 15) AS acquired', [lockName], (error, rows = []) => {
+                if (error) reject(error);
+                else resolve(Number(rows[0]?.acquired) === 1);
+            });
+        });
+
+        if (!acquired) {
+            throw new Error('Payment completion is already being processed. Please try again.');
+        }
+
+        const attempt = await findPaymentAttemptById(attemptId);
+
+        if (attempt?.status === 'completed' && attempt.receiptId) {
+            return attempt.receiptId;
+        }
+
+        const resumablePayment = {
+            ...(attempt?.payment || {}),
+            ...payment,
+            paymentAttemptId: attemptId,
+            existingTransactionId: attempt?.transactionId || payment.existingTransactionId || null
+        };
+        const receiptId = await completeTrustedPaymentWork(req, resumablePayment, paymentMethod);
+        await updatePaymentAttempt('markCompleted', attemptId, receiptId);
+        return receiptId;
+    } catch (error) {
+        await updatePaymentAttempt('markError', attemptId, error).catch(() => {});
+        throw error;
+    } finally {
+        connection.query('SELECT RELEASE_LOCK(?)', [lockName], () => connection.release());
+    }
 }
 
 async function renderNetsQrPayment(req, res, trustedPayment) {
@@ -4326,13 +4492,13 @@ async function renderNetsQrPayment(req, res, trustedPayment) {
         netsErrorMessage = error.message;
     }
 
-    req.session.pendingNetsPayment = {
+    req.session.pendingNetsPayment = await savePaymentAttempt('nets', txnRetrievalRef, {
         ...trustedPayment,
         txnRetrievalRef,
         netsQrData: qrData,
         isPrototypeQr,
         netsConfirmed: isPrototypeQr
-    };
+    });
 
     return res.render('netsQR', {
         title: 'NETS QR Payment',
@@ -4436,7 +4602,8 @@ async function confirmPayment(req, res) {
 
     if (trustedPayment.amount === 0) {
         try {
-            const receiptId = await completeTrustedPayment(req, trustedPayment, trustedPayment.pointsRedeemed ? 'Rewards' : 'Cashback');
+            const durablePayment = await savePaymentAttempt('direct', `zero-${trustedPayment.receiptId}`, trustedPayment);
+            const receiptId = await completeTrustedPayment(req, durablePayment, trustedPayment.pointsRedeemed ? 'Rewards' : 'Cashback');
             return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
         } catch (error) {
             console.error(error);
@@ -4472,7 +4639,8 @@ async function confirmPayment(req, res) {
     }
 
     try {
-        const receiptId = await completeTrustedPayment(req, trustedPayment, getPaymentMethodLabel(selectedPaymentMethod));
+        const durablePayment = await savePaymentAttempt('direct', `${selectedPaymentMethod}-${trustedPayment.receiptId}`, trustedPayment);
+        const receiptId = await completeTrustedPayment(req, durablePayment, getPaymentMethodLabel(selectedPaymentMethod));
         return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
     } catch (error) {
         console.error(error);
@@ -4481,7 +4649,12 @@ async function confirmPayment(req, res) {
 }
 
 async function completeNetsPayment(req, res) {
-    const payment = req.session.pendingNetsPayment;
+    let payment = req.session.pendingNetsPayment;
+
+    if (!payment && req.body?.txnRetrievalRef) {
+        const attempt = await findPaymentAttempt('nets', String(req.body.txnRetrievalRef));
+        payment = attempt?.payment || null;
+    }
 
     if (!payment) {
         return res.status(400).json({ ok: false });
@@ -4567,11 +4740,11 @@ async function createPayPalOrder(req, res) {
         });
 
         req.session.pendingPayPalOrders = req.session.pendingPayPalOrders || {};
-        req.session.pendingPayPalOrders[order.id] = {
+        req.session.pendingPayPalOrders[order.id] = await savePaymentAttempt('paypal', order.id, {
             ...trustedPayment,
             paypalOrderId: order.id,
             paypalStatus: order.status || 'CREATED'
-        };
+        });
 
         return res.json({
             success: true,
@@ -4588,7 +4761,21 @@ async function createPayPalOrder(req, res) {
 
 async function capturePayPalOrder(req, res) {
     const orderId = String(req.body?.orderId || '').trim();
-    const pendingPayment = req.session.pendingPayPalOrders?.[orderId];
+    let pendingPayment = req.session.pendingPayPalOrders?.[orderId];
+    let durableAttempt = null;
+
+    if (!pendingPayment && orderId) {
+        durableAttempt = await findPaymentAttempt('paypal', orderId);
+        pendingPayment = durableAttempt?.payment || null;
+    }
+
+    if (durableAttempt?.status === 'completed' && durableAttempt.receiptId) {
+        return res.json({
+            success: true,
+            receiptId: durableAttempt.receiptId,
+            redirectUrl: `/receipt/${encodeURIComponent(durableAttempt.receiptId)}`
+        });
+    }
 
     if (!paypal.isConfigured()) {
         return res.status(503).json({
@@ -4672,14 +4859,11 @@ async function startHitPayPayment(req, res, trustedPayment) {
         }
 
         req.session.pendingHitPayPayments = req.session.pendingHitPayPayments || {};
-        req.session.pendingHitPayPayments[request.id] = {
-            ...trustedPayment,
-            hitpayRequestId: request.id
-        };
-        storePendingHitPayPayment(request.id, {
+        req.session.pendingHitPayPayments[request.id] = await savePaymentAttempt('hitpay', request.id, {
             ...trustedPayment,
             hitpayRequestId: request.id
         });
+        storePendingHitPayPayment(request.id, req.session.pendingHitPayPayments[request.id]);
         await saveSession(req);
 
         return res.redirect(request.url);
@@ -4695,7 +4879,12 @@ async function startHitPayPayment(req, res, trustedPayment) {
 async function handleHitPayReturn(req, res) {
     const requestId = String(req.query.reference || req.query.request_id || '').trim();
     const redirectStatus = String(req.query.status || '').trim().toLowerCase();
-    const pendingPayment = getPendingHitPayPayment(req, requestId);
+    let pendingPayment = getPendingHitPayPayment(req, requestId);
+
+    if (!pendingPayment && requestId) {
+        const attempt = await findPaymentAttempt('hitpay', requestId);
+        pendingPayment = attempt?.payment || null;
+    }
     const recordedReceiptId = req.session.lastPayment?.receiptId || '';
 
     if (!requestId || !pendingPayment) {
@@ -4754,7 +4943,12 @@ async function handleHitPayReturn(req, res) {
 
 async function getHitPayStatus(req, res) {
     const requestId = String(req.params.requestId || '').trim();
-    const pendingPayment = getPendingHitPayPayment(req, requestId);
+    let pendingPayment = getPendingHitPayPayment(req, requestId);
+
+    if (!pendingPayment && requestId) {
+        const attempt = await findPaymentAttempt('hitpay', requestId);
+        pendingPayment = attempt?.payment || null;
+    }
     const recordedReceiptId = req.session.lastPayment?.receiptId || '';
 
     if (!requestId || !pendingPayment) {
@@ -4818,7 +5012,12 @@ async function handleHitPayWebhook(req, res) {
 
     const payload = req.body || {};
     const requestId = String(payload.id || '').trim();
-    const pendingPayment = getPendingHitPayPayment(req, requestId);
+    let pendingPayment = getPendingHitPayPayment(req, requestId);
+
+    if (!pendingPayment && requestId) {
+        const attempt = await findPaymentAttempt('hitpay', requestId);
+        pendingPayment = attempt?.payment || null;
+    }
 
     if (!requestId) {
         return res.status(400).json({
@@ -4898,10 +5097,10 @@ async function startStripePayment(req, res, trustedPayment) {
 
         // Store pending payment in session
         req.session.pendingStripePayments = req.session.pendingStripePayments || {};
-        req.session.pendingStripePayments[session.id] = {
+        req.session.pendingStripePayments[session.id] = await savePaymentAttempt('stripe', session.id, {
             ...trustedPayment,
             stripeSessionId: session.id
-        };
+        });
         await saveSession(req);
 
         console.log('Stripe session ID:', session.id);
@@ -4928,7 +5127,17 @@ async function handleStripeReturn(req, res) {
         });
     }
 
-    const pendingPayment = req.session.pendingStripePayments?.[sessionId];
+    let pendingPayment = req.session.pendingStripePayments?.[sessionId];
+    let durableAttempt = null;
+
+    if (!pendingPayment) {
+        durableAttempt = await findPaymentAttempt('stripe', sessionId);
+        pendingPayment = durableAttempt?.payment || null;
+    }
+
+    if (durableAttempt?.status === 'completed' && durableAttempt.receiptId) {
+        return res.redirect(`/receipt/${encodeURIComponent(durableAttempt.receiptId)}`);
+    }
 
     if (!pendingPayment) {
         console.error(`Stripe return: No pending payment found for session ${sessionId}`);
@@ -5001,7 +5210,7 @@ async function handleStripeCancel(req, res) {
     return res.redirect('/payment');
 }
 
-function streamNetsPaymentStatus(req, res) {
+async function streamNetsPaymentStatus(req, res) {
     const txn = req.params.txnRetrievalRef;
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -5011,7 +5220,12 @@ function streamNetsPaymentStatus(req, res) {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
-    const pendingPayment = req.session.pendingNetsPayment;
+    let pendingPayment = req.session.pendingNetsPayment;
+
+    if (!pendingPayment) {
+        const attempt = await findPaymentAttempt('nets', String(txn));
+        pendingPayment = attempt?.payment || null;
+    }
     if (!pendingPayment || String(pendingPayment.txnRetrievalRef) !== String(txn)) {
         send({ fail: true, message: 'Payment session not found.' });
         res.end();

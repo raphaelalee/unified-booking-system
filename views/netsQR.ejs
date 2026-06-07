@@ -94,7 +94,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (data.success) {
             if (statusEl) statusEl.textContent = 'Payment successful. Redirecting...';
             clearInterval(timerInterval);
-            await fetch('<%= _completeUrl %>', { method: 'POST', credentials: 'include' });
+            await fetch('<%= _completeUrl %>', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `txnRetrievalRef=${encodeURIComponent(txnRetrievalRef)}`
+            });
             window.location.href = '<%= _successRedirect %>';
             es.close();
             return;

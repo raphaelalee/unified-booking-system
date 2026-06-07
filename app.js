@@ -38,6 +38,8 @@ const {
 } = require('./middleware');
 const Product = require('./models/Product');
 const Notification = require('./models/Notification');
+const FavouriteMerchant = require('./models/FavouriteMerchant');
+const CustomerCart = require('./models/CustomerCart');
 const Promotion = require('./models/Promotion');
 const Loyalty = require('./models/Loyalty');
 const { getCartItemCount } = require('./utils/cart');
@@ -84,6 +86,60 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(ensureCsrfToken);
+
+app.use((req, res, next) => {
+    const userId = req.session.user?.id;
+
+    if (!userId || req.session.cartLoadedForUserId === userId) {
+        req.initialCartJson = JSON.stringify(req.session.cart || []);
+        next();
+        return;
+    }
+
+    CustomerCart.load(userId, (error, storedCart = []) => {
+        if (error) {
+            console.error('Customer cart could not be loaded:', error);
+        } else if (!Array.isArray(req.session.cart) || req.session.cart.length === 0) {
+            req.session.cart = storedCart;
+        }
+
+        req.session.cartLoadedForUserId = userId;
+        req.initialCartJson = JSON.stringify(req.session.cart || []);
+        next();
+    });
+});
+
+app.use((req, res, next) => {
+    res.on('finish', () => {
+        const userId = req.session?.user?.id;
+
+        if (!userId || JSON.stringify(req.session.cart || []) === req.initialCartJson) return;
+
+        CustomerCart.save(userId, req.session.cart || [], (error) => {
+            if (error) console.error('Customer cart could not be saved:', error);
+        });
+    });
+
+    next();
+});
+
+app.use((req, res, next) => {
+    if (!req.session.user || req.session.favouritesLoadedForUserId === req.session.user.id) {
+        next();
+        return;
+    }
+
+    FavouriteMerchant.getMerchantIds(req.session.user.id, (error, merchantIds = []) => {
+        if (error) {
+            console.error('Favourite merchants could not be loaded:', error);
+        } else {
+            req.session.favouriteMerchantIds = merchantIds;
+            req.session.favouritesLoadedForUserId = req.session.user.id;
+        }
+
+        next();
+    });
+});
 
 app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);

@@ -16,6 +16,43 @@ let whatsappReminderSchemaQueue = [];
 let rescheduleAutomationSchemaReady = false;
 let rescheduleAutomationSchemaPending = false;
 let rescheduleAutomationSchemaQueue = [];
+let serviceInventoryUsageSchemaReady = false;
+
+function ensureServiceInventoryUsageSchema(callback) {
+    if (serviceInventoryUsageSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    const sql = `
+        CREATE TABLE IF NOT EXISTS service_inventory_usage (
+            usage_id INT NOT NULL AUTO_INCREMENT,
+            booking_id INT NOT NULL,
+            service_id INT NOT NULL,
+            product_id INT NOT NULL,
+            quantity_used INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usage_id),
+            UNIQUE KEY uq_service_inventory_usage_booking (booking_id),
+            KEY idx_service_inventory_usage_service (service_id),
+            KEY idx_service_inventory_usage_product (product_id),
+            CONSTRAINT fk_service_inventory_usage_booking
+                FOREIGN KEY (booking_id) REFERENCES bookings (booking_id) ON DELETE CASCADE,
+            CONSTRAINT fk_service_inventory_usage_service
+                FOREIGN KEY (service_id) REFERENCES services (service_id),
+            CONSTRAINT fk_service_inventory_usage_product
+                FOREIGN KEY (product_id) REFERENCES products (product_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(sql, (error) => {
+        if (!error) {
+            serviceInventoryUsageSchemaReady = true;
+        }
+
+        callback(error);
+    });
+}
 
 function flushBookingManagementSchema(error) {
     const queue = bookingManagementSchemaQueue;
@@ -1046,7 +1083,7 @@ function getAvailableSlots(merchantId, serviceId, bookingDate, options, callback
     });
 }
 
-function autoConfirmBooking(bookingData, callback) {
+function autoConfirmBookingUnlocked(bookingData, callback) {
     getServiceAvailabilityContext(bookingData.merchantId, bookingData.serviceId, (contextError, context) => {
         if (contextError || !context) {
             callback(contextError || new Error('Selected service could not be found.'), null);
@@ -1992,13 +2029,163 @@ function attachTransaction(bookingId, transactionId, callback) {
 }
 
 function markCompleted(bookingId, callback) {
-    const sql = `
-        UPDATE bookings
-        SET status = 'completed'
-        WHERE booking_id = ?
-    `;
+    completeBookingWithInventory(bookingId, null, callback);
+}
 
-    db.query(sql, [bookingId], callback);
+function autoConfirmBooking(bookingData, callback) {
+    const merchantId = Number(bookingData.merchantId);
+    const bookingDate = String(bookingData.bookingDate || '').slice(0, 10);
+    const lockName = `booking:${merchantId}:${bookingDate}`.slice(0, 64);
+
+    db.getConnection((connectionError, connection) => {
+        if (connectionError) {
+            callback(connectionError);
+            return;
+        }
+
+        connection.query('SELECT GET_LOCK(?, 10) AS acquired', [lockName], (lockError, rows = []) => {
+            if (lockError || Number(rows[0]?.acquired) !== 1) {
+                connection.release();
+                callback(lockError || new Error('Booking creation is busy. Please try again.'));
+                return;
+            }
+
+            autoConfirmBookingUnlocked(bookingData, (error, result) => {
+                connection.query('SELECT RELEASE_LOCK(?)', [lockName], () => {
+                    connection.release();
+                    callback(error, result);
+                });
+            });
+        });
+    });
+}
+
+function completeBookingWithInventory(bookingId, merchantUserId, callback) {
+    ensureServiceInventoryUsageSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+        if (connectionError) {
+            callback(connectionError);
+            return;
+        }
+
+        connection.beginTransaction((transactionError) => {
+            if (transactionError) {
+                connection.release();
+                callback(transactionError);
+                return;
+            }
+
+            const rollback = (error) => connection.rollback(() => {
+                connection.release();
+                callback(error);
+            });
+            const ownerJoin = merchantUserId
+                ? 'INNER JOIN salons ON salons.salon_id = bookings.merchant_id'
+                : '';
+            const ownerWhere = merchantUserId ? 'AND salons.merchant_id = ?' : '';
+            const params = merchantUserId ? [bookingId, merchantUserId] : [bookingId];
+            const lookupSql = `
+                SELECT
+                    bookings.booking_id,
+                    bookings.service_id,
+                    service_inventory_links.product_id,
+                    service_inventory_links.quantity_required,
+                    products.stock_quantity
+                FROM bookings
+                ${ownerJoin}
+                LEFT JOIN service_inventory_links ON service_inventory_links.service_id = bookings.service_id
+                LEFT JOIN products ON products.product_id = service_inventory_links.product_id
+                WHERE bookings.booking_id = ?
+                    ${ownerWhere}
+                FOR UPDATE
+            `;
+
+            connection.query(lookupSql, params, (lookupError, rows = []) => {
+                if (lookupError) {
+                    rollback(lookupError);
+                    return;
+                }
+
+                if (!rows.length) {
+                    rollback(new Error('Booking was not found.'));
+                    return;
+                }
+
+                const booking = rows[0];
+                const finish = () => {
+                    connection.query(
+                        `UPDATE bookings SET status = 'completed' WHERE booking_id = ?`,
+                        [bookingId],
+                        (updateError, result) => {
+                            if (updateError) {
+                                rollback(updateError);
+                                return;
+                            }
+
+                            connection.commit((commitError) => {
+                                connection.release();
+                                callback(commitError, result);
+                            });
+                        }
+                    );
+                };
+
+                if (!booking.product_id) {
+                    finish();
+                    return;
+                }
+
+                const quantity = Math.max(1, Number(booking.quantity_required || 1));
+                const usageSql = `
+                    INSERT IGNORE INTO service_inventory_usage
+                        (booking_id, service_id, product_id, quantity_used)
+                    VALUES (?, ?, ?, ?)
+                `;
+
+                connection.query(
+                    usageSql,
+                    [bookingId, booking.service_id, booking.product_id, quantity],
+                    (usageError, usageResult) => {
+                        if (usageError) {
+                            rollback(usageError);
+                            return;
+                        }
+
+                        if (usageResult.affectedRows === 0) {
+                            finish();
+                            return;
+                        }
+
+                        connection.query(
+                            `UPDATE products
+                             SET stock_quantity = stock_quantity - ?
+                             WHERE product_id = ? AND stock_quantity >= ?`,
+                            [quantity, booking.product_id, quantity],
+                            (stockError, stockResult) => {
+                                if (stockError) {
+                                    rollback(stockError);
+                                    return;
+                                }
+
+                                if (stockResult.affectedRows === 0) {
+                                    rollback(new Error('The linked service inventory does not have enough stock.'));
+                                    return;
+                                }
+
+                                finish();
+                            }
+                        );
+                    }
+                );
+            });
+        });
+    });
+    });
 }
 
 function markCancelled(bookingId, callback) {
@@ -2127,6 +2314,11 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
 
     if (!allowedStatuses.has(nextStatus)) {
         callback(new Error('Invalid booking status.'));
+        return;
+    }
+
+    if (nextStatus === 'completed') {
+        completeBookingWithInventory(bookingId, merchantUserId, callback);
         return;
     }
 

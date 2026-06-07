@@ -3,6 +3,7 @@ const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const WhatsAppSession = require('../models/WhatsAppSession');
 const { sendBookingNotification, sendWhatsAppText } = require('../utils/whatsappNotifications');
 
 const sessions = new Map();
@@ -115,18 +116,41 @@ function formatBookingSummary(booking) {
     ].join('\n');
 }
 
-function getSession(phone) {
+async function getSession(phone) {
     cleanupSessions();
 
     const key = normalizePhone(phone);
-    const session = sessions.get(key) || { step: 'start' };
+    let session = sessions.get(key);
+
+    if (!session) {
+        session = await new Promise((resolve) => {
+            WhatsAppSession.load(key, (error, storedSession) => {
+                if (error) console.error('WhatsApp session could not be loaded:', error);
+                resolve(storedSession || { step: 'start' });
+            });
+        });
+    }
+
     session.updatedAt = Date.now();
     sessions.set(key, session);
     return session;
 }
 
 function resetSession(phone) {
-    sessions.delete(normalizePhone(phone));
+    const key = normalizePhone(phone);
+    sessions.delete(key);
+    WhatsAppSession.remove(key, (error) => {
+        if (error) console.error('WhatsApp session could not be cleared:', error);
+    });
+}
+
+function persistSession(phone, session) {
+    return new Promise((resolve) => {
+        WhatsAppSession.save(normalizePhone(phone), session, (error) => {
+            if (error) console.error('WhatsApp session could not be saved:', error);
+            resolve();
+        });
+    });
 }
 
 function extractIncomingMessages(body = {}) {
@@ -183,10 +207,11 @@ async function handleStart(phone) {
     }
 
     const services = await getAllServices();
-    const session = getSession(phone);
+    const session = await getSession(phone);
     session.step = 'service';
     session.user = user;
     session.services = services.slice(0, 9);
+    await persistSession(phone, session);
 
     return sendReply(phone, formatServiceList(session.services));
 }
@@ -364,6 +389,7 @@ async function handleServiceStep(phone, text, session) {
 
     session.step = 'date';
     session.service = service;
+    await persistSession(phone, session);
     return sendReply(phone, formatSlotList(service));
 }
 
@@ -381,6 +407,7 @@ async function handleDateStep(phone, text, session) {
     if (!session.availableSlots.length) {
         session.step = 'date';
     }
+    await persistSession(phone, session);
 
     return sendReply(phone, [
         `Date selected: ${bookingDate}.`,
@@ -537,7 +564,7 @@ async function handleIncomingMessage(message) {
         return;
     }
 
-    const session = getSession(phone);
+    const session = await getSession(phone);
 
     if (session.step === 'service') {
         await handleServiceStep(phone, text, session);

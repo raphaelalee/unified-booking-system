@@ -41,9 +41,11 @@ function ensureSchema(callback) {
             scheduled_send_date DATETIME NULL,
             expiry_date DATETIME NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'active',
+            source_reference VARCHAR(120) NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (gift_card_voucher_id),
-            UNIQUE KEY uq_gift_card_voucher_code (voucher_code)
+            UNIQUE KEY uq_gift_card_voucher_code (voucher_code),
+            UNIQUE KEY uq_gift_card_voucher_source (source_reference)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `;
 
@@ -83,13 +85,16 @@ function create(payload, callback) {
             payload.scheduledSendDate || null,
             payload.expiryDate || null,
             payload.status || 'active'
+            ,
+            payload.sourceReference || null
         ];
 
         db.query(
             `
                 INSERT INTO gift_card_vouchers
-                    (voucher_code, amount, balance, sender_user_id, sender_name, recipient_name, recipient_email, message, delivery_option, scheduled_send_date, expiry_date, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (voucher_code, amount, balance, sender_user_id, sender_name, recipient_name, recipient_email, message, delivery_option, scheduled_send_date, expiry_date, status, source_reference)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE gift_card_voucher_id = LAST_INSERT_ID(gift_card_voucher_id)
             `,
             values,
             (error, result) => {
@@ -100,7 +105,8 @@ function create(payload, callback) {
 
                 callback(null, {
                     insertId: result.insertId,
-                    voucherCode: code
+                    voucherCode: code,
+                    duplicate: result.affectedRows > 1
                 });
             }
         );
