@@ -2835,12 +2835,14 @@ body:has(.admin-nav-toggle) .nav {
 
 /* Profile wallet and rewards cleanup */
 .profile-redesign-page .account-membership-panel,
-.profile-redesign-page .loyalty-profile-panel {
+.profile-redesign-page .loyalty-profile-panel,
+.profile-redesign-page .account-vouchers-panel {
     padding: clamp(18px, 3vw, 28px) !important;
 }
 
 .profile-rewards-dashboard,
-.profile-wallet-dashboard {
+.profile-wallet-dashboard,
+.account-vouchers-panel {
     display: grid;
     gap: 18px;
 }
@@ -3063,6 +3065,51 @@ body:has(.admin-nav-toggle) .nav {
 .profile-wallet-row small {
     color: #687462;
     font-weight: 750;
+}
+
+.profile-vouchers-main {
+    padding: 18px;
+}
+
+.profile-voucher-terms {
+    grid-column: 1 / -1;
+    padding-top: 10px;
+    border-top: 1px solid rgba(44, 55, 42, 0.10);
+}
+
+.profile-voucher-terms summary {
+    width: fit-content;
+    cursor: pointer;
+    color: #47603d;
+    font-size: 0.82rem;
+    font-weight: 850;
+}
+
+.profile-voucher-terms ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: #596653;
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.profile-voucher-terms li + li {
+    margin-top: 5px;
+}
+
+.profile-history-list {
+    margin-bottom: 22px;
+}
+
+.profile-history-review-heading {
+    margin-top: 6px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(44, 55, 42, 0.10);
+}
+
+.profile-history-review-heading h2 {
+    margin: 3px 0 0;
+    color: #253225;
 }
 
 .profile-referral-compact {

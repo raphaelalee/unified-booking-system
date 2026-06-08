@@ -1,6 +1,16 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
+<%
+    const config = typeof giftCardConfig !== 'undefined' && giftCardConfig ? giftCardConfig : {};
+    const giftAmounts = Array.isArray(config.amounts) ? config.amounts : [];
+    const minGiftAmount = Number(config.minAmount || 0);
+    const maxGiftAmount = Number(config.maxAmount || 0);
+    const validityMonths = Number(config.validityMonths || 0);
+    const giftTerms = Array.isArray(config.terms) ? config.terms : [];
+    const defaultAmount = Number(giftAmounts[0] || minGiftAmount || 0);
+%>
+
+<section class="page-title giftcard-title">
     <p class="eyebrow">Gift Cards</p>
     <h1>Give someone their next self-care moment.</h1>
     <p>Vaniday gift cards can be used for beauty, salon, spa, and grooming appointments.</p>
@@ -11,447 +21,506 @@
         <div class="notice success"><%= success %></div>
     <% } %>
 
-    <div class="giftcard-grid">
-        <aside class="giftcard-preview-panel">
-            <div class="giftcard-card">
-                <div class="giftcard-decor" aria-hidden="true"></div>
-                <div class="giftcard-brand">Vaniday</div>
-                <div class="giftcard-subtitle">Beauty Gift Card</div>
-                <div class="giftcard-value" id="giftcard-preview-amount">$50</div>
-
-                <div class="giftcard-detail-row">
-                    <span class="giftcard-detail-label">Recipient</span>
-                    <span class="giftcard-detail-value" id="giftcard-preview-recipient">Recipient Name</span>
+    <form id="giftcard-purchase-form" class="giftcard-checkout" action="/giftcards/add" method="POST">
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <main class="giftcard-form-column">
+            <section class="giftcard-step">
+                <div class="giftcard-step-heading">
+                    <span>01</span>
+                    <div>
+                        <strong>Gift value</strong>
+                        <small>Pick one amount or enter a custom value.</small>
+                    </div>
                 </div>
 
-                <p class="giftcard-message-preview" id="giftcard-preview-message">Write a short personalised message to make this gift extra special.</p>
-
-                <div class="giftcard-footer-row">
-                    <span class="giftcard-footer-tag">Voucher code</span>
-                    <span class="giftcard-footer-value" id="giftcard-preview-code">VANI-XXXXXX</span>
-                </div>
-
-                <div class="giftcard-meta">Valid for 12 months from purchase date</div>
-            </div>
-        </aside>
-
-        <main class="giftcard-purchase-panel">
-            <section class="giftcard-purchase-card">
-                <h2>Purchase a gift voucher</h2>
-                <p class="muted">Complete the personalised gift voucher details below before adding it to your cart.</p>
-
-                <form id="giftcard-purchase-form" action="/giftcards/add" method="POST">
-                    <div class="form-group">
-                        <label class="field-label">Gift card amount</label>
+                <div class="giftcard-step-content">
+                    <% if (giftAmounts.length) { %>
                         <div class="giftcard-amount-options" role="radiogroup" aria-label="Gift card amount">
-                            <% [20, 50, 80, 100].forEach((amount) => { %>
+                            <% giftAmounts.forEach((amount) => { %>
                                 <label class="giftcard-amount-choice">
-                                    <input type="radio" name="amount" value="<%= amount %>" <%= amount === 50 ? 'checked' : '' %>>
-                                    <span>$<%= amount %></span>
+                                    <input type="radio" name="amount" value="<%= Number(amount) %>" <%= Number(amount) === defaultAmount ? 'checked' : '' %>>
+                                    <span>$<%= Number(amount).toFixed(0) %></span>
                                 </label>
                             <% }) %>
                         </div>
-                        <div class="custom-amount-field">
-                            <label for="custom-amount">Custom amount</label>
-                            <input id="custom-amount" name="customAmount" type="number" min="10" max="500" step="1" placeholder="Enter amount" autocomplete="off">
-                        </div>
-                        <p class="field-note">Minimum $10, maximum $500.</p>
-                    </div>
+                    <% } %>
 
-                    <div class="form-group">
-                        <label class="field-label">Delivery option</label>
-                        <div class="radio-grid">
-                            <label class="radio-choice">
-                                <input type="radio" name="deliveryOption" value="self" checked>
-                                <span>Send to my email</span>
-                            </label>
-                            <label class="radio-choice">
-                                <input type="radio" name="deliveryOption" value="recipient">
-                                <span>Send to recipient’s email</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group hidden" id="recipient-email-group">
-                        <label for="recipient-email" class="field-label">Recipient email</label>
-                        <input id="recipient-email" name="recipientEmail" type="email" placeholder="recipient@example.com">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="recipient-name" class="field-label">Recipient name</label>
-                        <input id="recipient-name" name="recipientName" type="text" placeholder="Recipient name">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="sender-name" class="field-label">Sender name</label>
-                        <input id="sender-name" name="senderName" type="text" placeholder="Your name">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="message" class="field-label">Personalised message</label>
-                        <textarea id="message" name="message" rows="4" placeholder="Add a note to make the gift special"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="field-label">Delivery date</label>
-                        <div class="radio-grid">
-                            <label class="radio-choice">
-                                <input type="radio" name="deliveryDateOption" value="now" checked>
-                                <span>Send now</span>
-                            </label>
-                            <label class="radio-choice">
-                                <input type="radio" name="deliveryDateOption" value="schedule">
-                                <span>Send on selected date</span>
-                            </label>
-                        </div>
-                        <div class="scheduled-date-field hidden" id="scheduled-date-group">
-                            <label for="scheduled-date">Send on date</label>
-                            <input id="scheduled-date" name="scheduledDate" type="date" min="<%= new Date().toISOString().split('T')[0] %>">
-                        </div>
-                    </div>
-
-                    <div class="order-summary-card">
-                        <h3>Order summary</h3>
-                        <div class="summary-row">
-                            <span>Gift card amount</span>
-                            <span id="summary-amount">$50</span>
-                        </div>
-                        <div class="summary-row">
-                            <span>Delivery method</span>
-                            <span id="summary-delivery">Send to my email</span>
-                        </div>
-                        <div class="summary-row">
-                            <span>Recipient</span>
-                            <span id="summary-recipient">Not set</span>
-                        </div>
-                        <div class="summary-row total-row">
-                            <span>Total</span>
-                            <strong id="summary-total">$50</strong>
-                        </div>
-                        <p class="summary-note">Valid for 12 months from purchase date.</p>
-                    </div>
-
-                    <div class="form-actions">
-                        <button class="button primary full" type="submit" id="giftcard-submit-button" disabled>Add gift card to cart</button>
-                        <p class="form-error hidden" id="giftcard-form-error" role="alert"></p>
-                    </div>
-                </form>
+                    <label class="giftcard-field custom-amount-field" for="custom-amount">
+                        <span>Custom amount</span>
+                        <input id="custom-amount" name="customAmount" type="number" min="<%= minGiftAmount %>" max="<%= maxGiftAmount %>" step="1" placeholder="$<%= minGiftAmount %> - $<%= maxGiftAmount %>" autocomplete="off">
+                    </label>
+                    <p class="giftcard-note">Minimum $<%= minGiftAmount %>, maximum $<%= maxGiftAmount %>.</p>
+                </div>
             </section>
 
-            <article class="giftcard-terms-card">
-                <h2>Terms and conditions</h2>
-                <ul class="giftcard-terms">
-                    <li>Gift cards are redeemable for Vaniday beauty, salon, spa, and grooming appointments.</li>
-                    <li>Gift cards are valid for 12 months from the purchase date.</li>
-                    <li>Gift cards cannot be exchanged for cash or refunded after purchase.</li>
-                    <li>Gift card value can be used across multiple appointments until the balance is fully redeemed.</li>
-                    <li>Lost, stolen, or expired gift cards cannot be replaced.</li>
-                    <li>Gift cards cannot be used with other vouchers unless stated by Vaniday.</li>
-                </ul>
-            </article>
+            <section class="giftcard-step">
+                <div class="giftcard-step-heading">
+                    <span>02</span>
+                    <div>
+                        <strong>Delivery</strong>
+                        <small>Send to your email or directly to the recipient.</small>
+                    </div>
+                </div>
+
+                <div class="giftcard-step-content">
+                    <div class="giftcard-delivery-options">
+                        <label class="giftcard-delivery-choice">
+                            <input type="radio" name="deliveryOption" value="self" checked>
+                            <span>
+                                <strong>Send to my email</strong>
+                                <small>Receive the gift card after payment.</small>
+                            </span>
+                        </label>
+                        <label class="giftcard-delivery-choice">
+                            <input type="radio" name="deliveryOption" value="recipient">
+                            <span>
+                                <strong>Send to recipient email</strong>
+                                <small>Deliver it straight to them.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <label class="giftcard-field hidden" id="recipient-email-group" for="recipient-email">
+                        <span>Recipient email</span>
+                        <input id="recipient-email" name="recipientEmail" type="email" placeholder="recipient@example.com">
+                    </label>
+                </div>
+            </section>
+
+            <section class="giftcard-step">
+                <div class="giftcard-step-heading">
+                    <span>03</span>
+                    <div>
+                        <strong>Personal details</strong>
+                        <small>Add the names and message shown in the gift email.</small>
+                    </div>
+                </div>
+
+                <div class="giftcard-step-content giftcard-detail-grid">
+                    <label class="giftcard-field" for="recipient-name">
+                        <span>Recipient name</span>
+                        <input id="recipient-name" name="recipientName" type="text" placeholder="Recipient name">
+                    </label>
+                    <label class="giftcard-field" for="sender-name">
+                        <span>Sender name</span>
+                        <input id="sender-name" name="senderName" type="text" placeholder="Your name">
+                    </label>
+                    <label class="giftcard-field giftcard-message-field" for="message">
+                        <span>Personalised message</span>
+                        <textarea id="message" name="message" rows="4" placeholder="Add a note to make the gift special"></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <p class="form-error hidden" id="giftcard-form-error" role="alert"></p>
+            <span id="summary-amount" class="hidden">$<%= defaultAmount %></span>
         </main>
-    </div>
+
+        <aside class="giftcard-summary-column">
+            <div class="giftcard-preview-card">
+                <div class="giftcard-preview-top">
+                    <span class="giftcard-brand">Vaniday</span>
+                    <span>Beauty Gift Card</span>
+                </div>
+                <strong class="giftcard-preview-amount" id="giftcard-preview-amount">$<%= defaultAmount %></strong>
+                <p id="giftcard-preview-message">Write a short personalised message to make this gift extra special.</p>
+                <div class="giftcard-preview-meta">
+                    <span>
+                        <small>Recipient</small>
+                        <b id="giftcard-preview-recipient">Recipient Name</b>
+                    </span>
+                    <span>
+                        <small>Voucher code</small>
+                        <b id="giftcard-preview-code">VANI-XXXXXX</b>
+                    </span>
+                    <span>
+                        <small>Validity</small>
+                        <b><%= validityMonths %> months</b>
+                    </span>
+                </div>
+            </div>
+
+            <section class="giftcard-order-panel">
+                <div class="giftcard-order-row">
+                    <span>Total</span>
+                    <strong id="summary-total">$<%= defaultAmount %></strong>
+                </div>
+                <div class="giftcard-order-row">
+                    <span>Delivery</span>
+                    <strong id="summary-delivery">Send to my email</strong>
+                </div>
+                <div class="giftcard-order-row">
+                    <span>Recipient</span>
+                    <strong id="summary-recipient">Not set</strong>
+                </div>
+                <button class="button primary full" type="submit" id="giftcard-submit-button" disabled>Add gift card to cart</button>
+            </section>
+
+            <section class="giftcard-terms-panel">
+                <button class="giftcard-terms-toggle" type="button" aria-expanded="true" aria-controls="giftcard-terms-list">
+                    Terms and conditions
+                </button>
+                <ul class="giftcard-terms" id="giftcard-terms-list">
+                    <% giftTerms.forEach((term) => { %>
+                        <li><%= term %></li>
+                    <% }) %>
+                </ul>
+            </section>
+        </aside>
+    </form>
 </section>
 
 <style>
-.giftcard-page .giftcard-grid {
+.giftcard-title {
+    min-height: 170px !important;
+}
+
+.giftcard-page {
+    width: min(1320px, calc(100% - 40px)) !important;
+    max-width: none !important;
+    padding: 34px 0 64px !important;
+}
+
+.giftcard-checkout {
     display: grid;
-    grid-template-columns: 1.05fr 1fr;
-    gap: 2rem;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 44px;
+    align-items: start;
 }
 
-.giftcard-preview-panel,
-.giftcard-purchase-panel {
-    width: 100%;
+.giftcard-form-column,
+.giftcard-summary-column {
+    min-width: 0;
 }
 
-.giftcard-card {
-    position: relative;
-    min-height: 420px;
-    padding: 2rem;
-    border-radius: 28px;
-    background: linear-gradient(135deg, #1f4d35 0%, #3a7d5c 100%);
-    color: #f5f5ef;
-    overflow: hidden;
-    box-shadow: 0 28px 70px rgba(22, 39, 31, 0.25);
-}
-
-.giftcard-decor {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 30%), radial-gradient(circle at bottom right, rgba(255,255,255,0.1), transparent 18%);
-    pointer-events: none;
-}
-
-.giftcard-brand {
-    font-size: 1.1rem;
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
-    font-weight: 700;
-    margin-bottom: 1rem;
-}
-
-.giftcard-subtitle {
-    font-size: 1.25rem;
-    margin-bottom: 1.4rem;
-    color: #d9e7d9;
-}
-
-.giftcard-value {
-    display: inline-flex;
-    align-items: baseline;
-    font-size: 3rem;
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    margin-bottom: 1.8rem;
-}
-
-.giftcard-detail-row,
-.giftcard-footer-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    margin-bottom: 0.9rem;
-    font-size: 0.95rem;
-}
-
-.giftcard-detail-label,
-.giftcard-footer-tag {
-    color: rgba(245,245,239,0.75);
-}
-
-.giftcard-detail-value,
-.giftcard-footer-value {
-    font-weight: 600;
-}
-
-.giftcard-message-preview {
-    margin: 0 0 1.8rem;
-    line-height: 1.7;
-    color: rgba(245,245,239,0.92);
-    min-height: 56px;
-}
-
-.giftcard-meta {
-    margin-top: auto;
-    padding-top: 1rem;
-    color: rgba(245,245,239,0.75);
-    font-size: 0.95rem;
-    letter-spacing: 0.01em;
-}
-
-.giftcard-purchase-card {
-    padding: 2rem;
-    border-radius: 24px;
-    background: #ffffff;
-    border: 1px solid #e2e7e1;
-    box-shadow: 0 18px 30px rgba(47, 62, 54, 0.08);
-}
-
-.giftcard-purchase-card h2 {
-    margin-top: 0;
-}
-
-.giftcard-purchase-card .muted {
-    margin: 0.5rem 0 1.75rem;
-    color: #6c766d;
-}
-
-.form-group {
-    margin-bottom: 1.25rem;
-}
-
-.field-label {
-    display: block;
-    margin-bottom: 0.65rem;
-    font-weight: 700;
-    color: #1f332c;
-}
-
-.giftcard-amount-options,
-.radio-grid {
+.giftcard-form-column {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
+    gap: 0;
 }
 
-.giftcard-amount-choice,
-.radio-choice {
+.giftcard-step {
+    padding: 26px 0;
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    gap: 34px;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.14);
+}
+
+.giftcard-step:first-child {
+    padding-top: 0;
+}
+
+.giftcard-step-heading {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 12px;
+    align-content: start;
+}
+
+.giftcard-step-heading > span {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(39, 53, 35, 0.22);
+    color: #536e49;
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.giftcard-step-heading strong,
+.giftcard-field span,
+.giftcard-order-row strong,
+.giftcard-preview-meta b {
+    color: var(--sand-ink);
+}
+
+.giftcard-step-heading small,
+.giftcard-note,
+.giftcard-delivery-choice small,
+.giftcard-order-row span,
+.giftcard-preview-meta small,
+.giftcard-terms {
+    color: var(--sand-muted);
+}
+
+.giftcard-step-heading small {
     display: block;
-    border: 1px solid #d9e5dc;
-    border-radius: 14px;
-    padding: 0.95rem 1rem;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.giftcard-step-content {
+    display: grid;
+    gap: 16px;
+}
+
+.giftcard-amount-options {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid rgba(39, 53, 35, 0.15);
+    border-width: 1px 0;
+}
+
+.giftcard-amount-choice {
+    min-height: 64px;
+    display: grid;
+    place-items: center;
     cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease;
-    background: #fafcf9;
+}
+
+.giftcard-amount-choice + .giftcard-amount-choice {
+    border-left: 1px solid rgba(39, 53, 35, 0.13);
 }
 
 .giftcard-amount-choice input,
-.radio-choice input {
-    display: none;
+.giftcard-delivery-choice input {
+    position: absolute;
+    opacity: 0;
 }
 
-.giftcard-amount-choice span,
-.radio-choice span {
-    display: block;
-    font-weight: 700;
-    color: #1f332c;
-}
-
-.giftcard-amount-choice input:checked + span,
-.radio-choice input:checked + span {
-    color: #0f3525;
-}
-
-.giftcard-amount-choice input:checked,
-.radio-choice input:checked {
-    outline: none;
-}
-
-.giftcard-amount-choice:hover,
-.radio-choice:hover {
-    border-color: #82ad8d;
-}
-
-.giftcard-amount-choice input:checked ~ span,
-.radio-choice input:checked ~ span {
-    color: #0f3525;
-}
-
-.custom-amount-field,
-.scheduled-date-field {
-    margin-top: 0.75rem;
-}
-
-.custom-amount-field input,
-.form-group input,
-.form-group textarea {
-    width: 100%;
-    padding: 0.95rem 1rem;
-    border: 1px solid #d9e5dc;
-    border-radius: 14px;
+.giftcard-amount-choice span {
+    color: var(--sand-ink);
     font-size: 1rem;
-    background: #fbfcfb;
-    color: #1f332c;
+    font-weight: 900;
 }
 
-.form-group textarea {
-    min-height: 110px;
+.giftcard-amount-choice:has(input:checked),
+.giftcard-delivery-choice:has(input:checked) {
+    background: #f0f5ec;
+    box-shadow: inset 0 -3px 0 #536e49;
+}
+
+.giftcard-field {
+    display: grid;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.giftcard-field input,
+.giftcard-field textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 0;
+    border: 1px solid rgba(39, 53, 35, 0.24);
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
+    color: var(--sand-ink);
+}
+
+.giftcard-field textarea {
+    min-height: 104px;
     resize: vertical;
 }
 
-.field-note {
-    margin: 0.7rem 0 0;
-    color: #6c766d;
-    font-size: 0.92rem;
+.giftcard-note {
+    margin: -4px 0 0;
+    font-size: 0.78rem;
 }
 
-.order-summary-card {
-    margin-top: 1.5rem;
-    padding: 1.5rem;
-    border-radius: 18px;
-    background: #fbfef9;
-    border: 1px solid #dbe5dd;
+.giftcard-delivery-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid rgba(39, 53, 35, 0.15);
+    border-width: 1px 0;
 }
 
-.order-summary-card h3 {
-    margin-top: 0;
+.giftcard-delivery-choice {
+    min-height: 78px;
+    padding: 14px 0;
+    display: grid;
+    align-items: center;
+    cursor: pointer;
 }
 
-.summary-row {
+.giftcard-delivery-choice + .giftcard-delivery-choice {
+    padding-left: 18px;
+    border-left: 1px solid rgba(39, 53, 35, 0.13);
+}
+
+.giftcard-delivery-choice span {
+    display: grid;
+    gap: 3px;
+}
+
+.giftcard-delivery-choice strong {
+    color: var(--sand-ink);
+}
+
+.giftcard-delivery-choice small {
+    font-size: 0.78rem;
+}
+
+.giftcard-detail-grid {
+    grid-template-columns: 1fr 1fr;
+}
+
+.giftcard-message-field {
+    grid-column: 1 / -1;
+}
+
+.giftcard-summary-column {
+    position: sticky;
+    top: 92px;
+    display: grid;
+    gap: 18px;
+}
+
+.giftcard-preview-card {
+    min-height: 290px;
+    padding: 24px;
+    display: grid;
+    align-content: space-between;
+    gap: 22px;
+    background: #314c36;
+    color: #fffef8;
+}
+
+.giftcard-preview-top,
+.giftcard-preview-meta {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #e6ece4;
-    font-size: 0.98rem;
+    gap: 14px;
+    align-items: start;
 }
 
-.summary-row:last-of-type {
-    border-bottom: none;
+.giftcard-brand {
+    font-family: Georgia, serif;
+    font-size: 1.28rem;
 }
 
-.total-row {
-    margin-top: 0.5rem;
-    font-weight: 700;
-    color: #1f332c;
+.giftcard-preview-top span:last-child,
+.giftcard-preview-meta small {
+    color: rgba(255, 254, 248, 0.72);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
 }
 
-.summary-note {
-    margin: 1rem 0 0;
-    color: #6c766d;
-    font-size: 0.92rem;
+.giftcard-preview-amount {
+    color: #fffef8;
+    font-size: 3.25rem;
+    line-height: 1;
 }
 
-.form-actions {
-    margin-top: 1.5rem;
+.giftcard-preview-card p {
+    margin: 0;
+    color: rgba(255, 254, 248, 0.86);
+    line-height: 1.55;
 }
 
-.button.full {
+.giftcard-preview-meta span {
+    display: grid;
+    gap: 4px;
+}
+
+.giftcard-preview-meta b {
+    color: #fffef8;
+    font-size: 0.84rem;
+}
+
+.giftcard-order-panel,
+.giftcard-terms-panel {
+    padding-top: 18px;
+    border-top: 1px solid rgba(39, 53, 35, 0.16);
+}
+
+.giftcard-order-panel {
+    display: grid;
+    gap: 12px;
+}
+
+.giftcard-order-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: baseline;
+}
+
+.giftcard-order-row span {
+    font-size: 0.76rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.giftcard-order-row strong {
+    text-align: right;
+}
+
+.giftcard-order-panel .button {
+    margin-top: 6px;
+}
+
+.giftcard-terms-toggle {
     width: 100%;
+    padding: 0 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--sand-ink);
+    font-weight: 900;
+    text-align: left;
+}
+
+.giftcard-terms {
+    margin: 0;
+    padding-left: 18px;
+    line-height: 1.65;
+    font-size: 0.86rem;
 }
 
 .form-error {
-    margin-top: 0.85rem;
+    margin: 16px 0 0;
     color: #9d2c2c;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
 }
 
 .hidden {
     display: none !important;
 }
 
-.giftcard-terms-card {
-    margin-top: 1.75rem;
-    padding: 1.5rem;
-    border-radius: 18px;
-    background: #ffffff;
-    border: 1px solid #e6ece4;
-    color: #4f5d52;
-}
-
-.giftcard-terms-card h2 {
-    margin-top: 0;
-}
-
-.giftcard-terms {
-    margin: 1rem 0 0;
-    padding-left: 1.2rem;
-    list-style: disc;
-    color: #4f5d52;
-    font-size: 0.95rem;
-    line-height: 1.8;
-}
-
-.giftcard-terms li {
-    margin-bottom: 0.65rem;
-}
-
-@media (max-width: 980px) {
-    .giftcard-grid {
+@media (max-width: 1040px) {
+    .giftcard-checkout {
         grid-template-columns: 1fr;
     }
 
-    .giftcard-purchase-panel {
-        order: 2;
+    .giftcard-summary-column {
+        position: static;
+        grid-row: 1;
     }
 }
 
-@media (max-width: 680px) {
-    .giftcard-card {
-        padding: 1.6rem;
-        min-height: auto;
+@media (max-width: 720px) {
+    .giftcard-page {
+        width: min(100% - 28px, 1320px) !important;
     }
 
-    .giftcard-purchase-card,
-    .giftcard-terms-card {
-        padding: 1.5rem;
-    }
-
-    .giftcard-amount-options,
-    .radio-grid {
+    .giftcard-step,
+    .giftcard-detail-grid,
+    .giftcard-delivery-options {
         grid-template-columns: 1fr;
+    }
+
+    .giftcard-step {
+        gap: 18px;
+    }
+
+    .giftcard-amount-options {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .giftcard-amount-choice + .giftcard-amount-choice,
+    .giftcard-delivery-choice + .giftcard-delivery-choice {
+        padding-left: 0;
+        border-left: 0;
+        border-top: 1px solid rgba(39, 53, 35, 0.13);
+    }
+
+    .giftcard-preview-top,
+    .giftcard-preview-meta {
+        display: grid;
     }
 }
 </style>
@@ -466,9 +535,6 @@
     const senderNameInput = document.getElementById('sender-name');
     const messageInput = document.getElementById('message');
     const deliveryOptionInputs = Array.from(document.querySelectorAll('input[name="deliveryOption"]'));
-    const deliveryDateInputs = Array.from(document.querySelectorAll('input[name="deliveryDateOption"]'));
-    const scheduledDateGroup = document.getElementById('scheduled-date-group');
-    const scheduledDateInput = document.getElementById('scheduled-date');
     const previewAmount = document.getElementById('giftcard-preview-amount');
     const previewRecipient = document.getElementById('giftcard-preview-recipient');
     const previewMessage = document.getElementById('giftcard-preview-message');
@@ -479,8 +545,12 @@
     const submitButton = document.getElementById('giftcard-submit-button');
     const errorMessage = document.getElementById('giftcard-form-error');
     const previewCode = document.getElementById('giftcard-preview-code');
+    const termsToggle = document.querySelector('.giftcard-terms-toggle');
+    const termsList = document.getElementById('giftcard-terms-list');
+    const minAmount = Number(customAmountInput.min || 10);
+    const maxAmount = Number(customAmountInput.max || 500);
 
-    const formatCurrency = (value) => `$${Number(value || 0).toFixed(0)}`;
+    const formatCurrency = (value) => '$' + Number(value || 0).toFixed(0);
 
     function getSelectedAmount() {
         const customValue = Number(customAmountInput.value || '0');
@@ -496,13 +566,9 @@
         return deliveryOptionInputs.find((input) => input.checked)?.value || 'self';
     }
 
-    function getDeliveryDateOption() {
-        return deliveryDateInputs.find((input) => input.checked)?.value || 'now';
-    }
-
     function updatePreview() {
         const amount = getSelectedAmount();
-        previewAmount.textContent = formatCurrency(amount || 50);
+        previewAmount.textContent = formatCurrency(amount || <%= defaultAmount %>);
         previewRecipient.textContent = recipientNameInput.value.trim() || 'Recipient Name';
         previewMessage.textContent = messageInput.value.trim() || 'Write a short personalised message to make this gift extra special.';
         previewCode.textContent = 'VANI-XXXXXX';
@@ -514,89 +580,70 @@
         const recipientName = recipientNameInput.value.trim();
         const recipientEmail = recipientEmailInput.value.trim();
 
-        summaryAmount.textContent = formatCurrency(amount || 50);
-        summaryTotal.textContent = formatCurrency(amount || 50);
-        summaryDelivery.textContent = deliveryOption === 'recipient' ? 'Send to recipient’s email' : 'Send to my email';
+        summaryAmount.textContent = formatCurrency(amount || <%= defaultAmount %>);
+        summaryTotal.textContent = formatCurrency(amount || <%= defaultAmount %>);
+        summaryDelivery.textContent = deliveryOption === 'recipient' ? 'Send to recipient email' : 'Send to my email';
         summaryRecipient.textContent = recipientName || recipientEmail || 'Not set';
     }
 
     function setVisibility() {
-        recipientEmailGroup.classList.toggle('hidden', getDeliveryOption() !== 'recipient');
-        scheduledDateGroup.classList.toggle('hidden', getDeliveryDateOption() !== 'schedule');
-        scheduledDateInput.disabled = getDeliveryDateOption() !== 'schedule';
+        const recipientDelivery = getDeliveryOption() === 'recipient';
+        recipientEmailGroup.classList.toggle('hidden', !recipientDelivery);
+        recipientEmailInput.disabled = !recipientDelivery;
     }
 
     function validateAmount() {
         const amount = getSelectedAmount();
-        if (customAmountInput.value.trim() !== '') {
-            if (!Number.isFinite(amount)) {
-                return false;
-            }
-        }
-        return amount >= 10 && amount <= 500;
+        return Number.isFinite(amount) && amount >= minAmount && amount <= maxAmount;
     }
 
     function validateForm() {
-        const amountValid = validateAmount();
         const deliveryOption = getDeliveryOption();
-        const scheduledOption = getDeliveryDateOption();
-        const scheduledDate = scheduledDateInput.value.trim();
-        let valid = amountValid;
+        let valid = validateAmount();
 
         if (deliveryOption === 'recipient') {
-            valid = valid && recipientEmailInput.value.trim() !== '' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmailInput.value.trim());
-        }
-
-        if (scheduledOption === 'schedule') {
-            valid = valid && scheduledDate !== '';
+            valid = valid && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmailInput.value.trim());
         }
 
         return valid;
     }
 
     function updateButtonState() {
-        const valid = validateForm();
-        submitButton.disabled = !valid;
-
-        if (!valid) {
-            submitButton.textContent = 'Add gift card to cart';
-            errorMessage.classList.add('hidden');
-            return;
-        }
-
-        submitButton.textContent = 'Add gift card to cart';
+        submitButton.disabled = !validateForm();
         errorMessage.classList.add('hidden');
     }
 
-    function attachInputHandlers() {
-        amountRadios.forEach((input) => {
-            input.addEventListener('change', () => {
-                if (customAmountInput.value.trim() !== '') {
-                    customAmountInput.value = '';
-                }
-                updateAll();
-            });
-        });
-
-        customAmountInput.addEventListener('input', updateAll);
-        recipientNameInput.addEventListener('input', updateAll);
-        senderNameInput.addEventListener('input', updateAll);
-        messageInput.addEventListener('input', updateAll);
-        recipientEmailInput.addEventListener('input', updateAll);
-        deliveryOptionInputs.forEach((input) => input.addEventListener('change', () => {
-            setVisibility();
-            updateAll();
-        }));
-        deliveryDateInputs.forEach((input) => input.addEventListener('change', () => {
-            setVisibility();
-            updateAll();
-        }));
-    }
-
     function updateAll() {
+        setVisibility();
         updatePreview();
         updateSummary();
         updateButtonState();
+    }
+
+    amountRadios.forEach((input) => {
+        input.addEventListener('change', () => {
+            if (customAmountInput.value.trim() !== '') {
+                customAmountInput.value = '';
+            }
+            updateAll();
+        });
+    });
+    [
+        customAmountInput,
+        recipientEmailInput,
+        recipientNameInput,
+        senderNameInput,
+        messageInput,
+        ...deliveryOptionInputs
+    ].forEach((input) => input.addEventListener('input', updateAll));
+    deliveryOptionInputs.forEach((input) => input.addEventListener('change', updateAll));
+
+    if (termsToggle && termsList) {
+        termsToggle.addEventListener('click', function () {
+            const expanded = termsToggle.getAttribute('aria-expanded') === 'true';
+            termsToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            termsList.hidden = expanded;
+        });
     }
 
     document.getElementById('giftcard-purchase-form').addEventListener('submit', function (event) {
@@ -604,12 +651,9 @@
             event.preventDefault();
             errorMessage.textContent = 'Please complete the form with a valid amount and recipient details.';
             errorMessage.classList.remove('hidden');
-            return;
         }
     });
 
-    setVisibility();
-    attachInputHandlers();
     updateAll();
 })();
 </script>

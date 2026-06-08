@@ -51,6 +51,129 @@
         ? birthdayPromotion
         : { hasBirthday: false, isBirthdayMonth: false, monthName: '', monthEndLabel: '', voucher: null, pointsMultiplier: 1 };
     const profileContactMethodLabel = profileContactMethodLabels[profile.preferredContactMethod] || 'Not set';
+    const profilePurchaseHistory = typeof walletHistory !== 'undefined' && Array.isArray(walletHistory) ? walletHistory : [];
+    const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
+    const formatProfileDate = (value) => {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-SG', { dateStyle: 'medium' });
+    };
+    const voucherIsActive = (voucher) => {
+        if (voucher.status !== 'active') {
+            return false;
+        }
+
+        if (voucher.discountType === 'percentage') {
+            return Number(voucher.discountPercent || 0) > 0;
+        }
+
+        return Number(voucher.remainingValue || 0) > 0;
+    };
+    const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
+    const inactiveProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
+    const usedProfileVouchers = inactiveProfileVouchers.filter((voucher) => {
+        const status = String(voucher.status || '').toLowerCase();
+        return status !== 'expired' && (status === 'used' || voucher.redeemedAt || voucher.usedAt);
+    });
+    const expiredProfileVouchers = inactiveProfileVouchers.filter((voucher) => String(voucher.status || '').toLowerCase() === 'expired');
+    const otherInactiveProfileVouchers = inactiveProfileVouchers.filter((voucher) => !usedProfileVouchers.includes(voucher) && !expiredProfileVouchers.includes(voucher));
+    const activePlatformVouchers = activeProfileVouchers.filter((voucher) =>
+        voucher.bookingOnly !== false
+        && voucher.sourceType !== 'reward_shop_merchant'
+    );
+    const activeServiceVouchers = activeProfileVouchers.filter((voucher) =>
+        voucher.bookingOnly !== false
+        && voucher.sourceType === 'reward_shop_merchant'
+    );
+    const activeProductVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly === false);
+    const voucherSourceLabel = (voucher) => voucher.sourceType === 'referral'
+        ? 'Referral'
+        : voucher.sourceType === 'birthday'
+            ? 'Birthday'
+            : voucher.merchantName
+                ? 'Merchant voucher'
+                : 'Reward shop';
+    const voucherValueLabel = (voucher) => voucher.discountType === 'percentage'
+        ? `${Number(voucher.discountPercent || 0)}% OFF`
+        : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}`;
+    const voucherUsageLabel = (voucher) => {
+        if (voucher.expiresAt) {
+            const expiryLabel = formatProfileDate(voucher.expiresAt);
+            if (expiryLabel) {
+                return `Expires ${expiryLabel}`;
+            }
+        }
+
+        if (voucher.merchantName) {
+            return voucher.bookingOnly === false
+                ? `Product voucher at ${voucher.merchantName}`
+                : `Use at ${voucher.merchantName}`;
+        }
+
+        if (voucher.firstBookingOnly) {
+            return 'First booking only';
+        }
+
+        return voucher.bookingOnly === false ? 'Eligible product checkout' : 'Eligible booking payment';
+    };
+    const voucherStatusLabel = (voucher) => {
+        const status = String(voucher.status || '').toLowerCase();
+
+        if (status === 'active') {
+            return 'Active';
+        }
+
+        if (status === 'used') {
+            return `Used ${formatProfileDate(voucher.usedAt || voucher.redeemedAt) || ''}`.trim();
+        }
+
+        if (status === 'expired') {
+            return `Expired ${formatProfileDate(voucher.expiresAt) || ''}`.trim();
+        }
+
+        return status ? status.replace(/_/g, ' ') : 'Inactive';
+    };
+    const voucherTermsList = (voucher) => {
+        const terms = [];
+
+        if (voucher.detail) {
+            terms.push(voucher.detail);
+        }
+
+        if (voucher.bookingOnly === false) {
+            terms.push(voucher.linkedItemName
+                ? `Only eligible product offer item: ${voucher.linkedItemName}.`
+                : 'Valid only on eligible product checkout items.');
+        } else {
+            terms.push(voucher.linkedItemName
+                ? `Only eligible service offer item: ${voucher.linkedItemName}.`
+                : 'Valid only on eligible service booking payments.');
+        }
+
+        if (voucher.merchantName) {
+            terms.push(`Only valid at ${voucher.merchantName}.`);
+        }
+
+        if (Number(voucher.minimumSpend || 0) > 0) {
+            terms.push(`Minimum eligible spend $${Number(voucher.minimumSpend || 0).toFixed(2)}.`);
+        }
+
+        if (voucher.firstBookingOnly) {
+            terms.push('Valid for the first paid booking only.');
+        }
+
+        if (voucher.expiresAt) {
+            const expiryLabel = formatProfileDate(voucher.expiresAt);
+            if (expiryLabel) {
+                terms.push(`Expires on ${expiryLabel}.`);
+            }
+        }
+
+        terms.push('Applies only to eligible offer items; other items in the cart are not discounted by this voucher.');
+        terms.push('Cannot be combined with wallet cashback in the same checkout.');
+        terms.push('The best eligible voucher is selected automatically at checkout unless you choose not to use a voucher.');
+
+        return terms;
+    };
     const canReviewBooking = (booking) => ['completed', 'checked_in'].includes(String(booking.status || '').toLowerCase());
     const renderStars = (rating) => '&#9733;'.repeat(Number(rating || 0)) + '&#9734;'.repeat(Math.max(0, 5 - Number(rating || 0)));
     const bookingDataFor = (booking) => {
@@ -88,7 +211,7 @@
         <div class="profile-heading-actions">
             <% if (isCustomer) { %>
                 <a class="button primary" href="/services">Book services</a>
-                <a class="button secondary" href="/profile/history">Purchase history</a>
+                <a class="button secondary" href="#history" data-profile-tab-link="history">Purchase history</a>
             <% } else { %>
                 <a class="button primary" href="<%= dashboardPath %>">Dashboard</a>
             <% } %>
@@ -137,6 +260,7 @@
         <div class="profile-hero-actions">
             <% if (isCustomer) { %>
                 <a class="button secondary full" href="#wallet">Wallet</a>
+                <a class="button secondary full" href="#vouchers">Vouchers</a>
                 <a class="button secondary full" href="#membership">Rewards</a>
             <% } else { %>
                 <a class="button primary full" href="<%= dashboardPath %>">Back to dashboard</a>
@@ -151,8 +275,9 @@
         <a href="#profile-details" data-profile-tab="profile-details">Profile</a>
         <% if (isCustomer) { %>
             <a href="#bookings" data-profile-tab="bookings">Bookings</a>
-            <a href="#to-rate" data-profile-tab="to-rate">To Rate</a>
+            <a href="#history" data-profile-tab="history">History</a>
             <a href="#wallet" data-profile-tab="wallet">Wallet</a>
+            <a href="#vouchers" data-profile-tab="vouchers">Vouchers</a>
             <a href="#membership" data-profile-tab="membership">Rewards</a>
         <% } %>
         <a href="#settings" data-profile-tab="settings">Settings</a>
@@ -335,7 +460,7 @@
                                         <div class="profile-booking-actions">
                                             <a class="button secondary" href="/booking/<%= booking.merchant_id %>?serviceId=<%= booking.service_id %>">Rebook</a>
                                             <% if (canReviewBooking(booking) && !booking.review) { %>
-                                                <a class="button secondary" href="#to-rate" data-profile-tab-link="to-rate">Leave Review</a>
+                                                <a class="button secondary" href="#history" data-profile-tab-link="history">Leave Review</a>
                                             <% } %>
                                             <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
                                         </div>
@@ -393,7 +518,39 @@
                     <% } %>
                 </section>
 
-                <section id="to-rate" class="account-panel profile-tab-panel" data-profile-panel="to-rate">
+                <section id="history" class="account-panel profile-tab-panel" data-profile-panel="history">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Purchase history</p>
+                            <h2>Recent purchases</h2>
+                        </div>
+                        <a class="button secondary" href="/profile/history">View full history</a>
+                    </div>
+
+                    <% if (!profilePurchaseHistory.length) { %>
+                        <p class="muted">No purchases yet.</p>
+                    <% } else { %>
+                        <div class="profile-wallet-list profile-history-list">
+                            <% profilePurchaseHistory.slice(0, 8).forEach((entry) => { %>
+                                <a class="profile-wallet-row" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">
+                                    <div>
+                                        <span><%= entry.type %></span>
+                                        <strong><%= entry.itemNames || 'Purchase' %></strong>
+                                        <small><%= formatBookingDateTime(entry.createdAt) %></small>
+                                    </div>
+                                    <div>
+                                        <strong><%= formatMoney(entry.totalAmount) %></strong>
+                                        <small><%= entry.paymentStatus || entry.paymentMethod || 'paid' %></small>
+                                    </div>
+                                </a>
+                            <% }) %>
+                        </div>
+                    <% } %>
+
+                    <div class="profile-history-review-heading">
+                        <p class="eyebrow">Reviews</p>
+                        <h2>Ratings and reviews</h2>
+                    </div>
                     <div class="profile-review-hub">
                         <div class="profile-review-hub-top">
                             <div>
@@ -647,41 +804,6 @@
                 </section>
 
                 <section id="membership" class="account-panel account-membership-panel profile-tab-panel" data-profile-panel="membership">
-                    <%
-                        const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
-                        const voucherIsActive = (voucher) => {
-                            if (voucher.status !== 'active') {
-                                return false;
-                            }
-
-                            if (voucher.discountType === 'percentage') {
-                                return Number(voucher.discountPercent || 0) > 0;
-                            }
-
-                            return Number(voucher.remainingValue || 0) > 0;
-                        };
-                        const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
-                        const usedProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
-                        const activePlatformVouchers = activeProfileVouchers.filter((voucher) =>
-                            voucher.bookingOnly !== false
-                            && voucher.sourceType !== 'reward_shop_merchant'
-                        );
-                        const activeServiceVouchers = activeProfileVouchers.filter((voucher) =>
-                            voucher.bookingOnly !== false
-                            && voucher.sourceType === 'reward_shop_merchant'
-                        );
-                        const activeProductVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly === false);
-                        const voucherSourceLabel = (voucher) => voucher.sourceType === 'referral'
-                            ? 'Referral'
-                            : voucher.sourceType === 'birthday'
-                                ? 'Birthday'
-                                : voucher.merchantName
-                                    ? 'Merchant voucher'
-                                : 'Reward shop';
-                        const voucherValueLabel = (voucher) => voucher.discountType === 'percentage'
-                            ? `${Number(voucher.discountPercent || 0)}% OFF`
-                            : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}`;
-                    %>
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Membership</p>
@@ -745,6 +867,7 @@
                         <% } %>
 
                         <div class="profile-rewards-grid">
+                            <% if (false) { %>
                             <section class="profile-rewards-block">
                                 <div class="wallet-section-heading">
                                     <div>
@@ -865,6 +988,7 @@
                                     </div>
                                 <% } %>
                             </section>
+                            <% } %>
 
                             <% if (referral) { %>
                                 <section class="profile-rewards-block">
@@ -888,7 +1012,7 @@
                             <% } %>
                         </div>
 
-                        <% if (usedProfileVouchers.length) { %>
+                        <% if (false && usedProfileVouchers.length) { %>
                             <details class="profile-rewards-history">
                                 <summary>Used or inactive vouchers (<%= usedProfileVouchers.length %>)</summary>
                                 <div class="profile-voucher-list">
@@ -912,6 +1036,127 @@
                             </details>
                         <% } %>
                     </div>
+                </section>
+
+                <section id="vouchers" class="account-panel account-vouchers-panel profile-tab-panel" data-profile-panel="vouchers">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Voucher wallet</p>
+                            <h2>My vouchers</h2>
+                            <p class="muted">Review eligibility, expiry, and terms before checkout.</p>
+                        </div>
+                        <a class="button primary" href="/reward-shop">Reward shop</a>
+                    </div>
+
+                    <div class="profile-rewards-metrics profile-voucher-metrics">
+                        <article>
+                            <span>Active</span>
+                            <strong><%= activeProfileVouchers.length %></strong>
+                        </article>
+                        <article>
+                            <span>Used</span>
+                            <strong><%= usedProfileVouchers.length %></strong>
+                        </article>
+                        <article>
+                            <span>Expired</span>
+                            <strong><%= expiredProfileVouchers.length %></strong>
+                        </article>
+                        <article>
+                            <span>Other inactive</span>
+                            <strong><%= otherInactiveProfileVouchers.length %></strong>
+                        </article>
+                    </div>
+
+                    <section class="profile-rewards-block profile-vouchers-main">
+                        <div class="wallet-section-heading">
+                            <div>
+                                <p class="eyebrow">Ready to use</p>
+                                <h3>Active vouchers</h3>
+                            </div>
+                            <span><%= activeProfileVouchers.length %> ready</span>
+                        </div>
+
+                        <div class="profile-voucher-tabs" data-voucher-tabs>
+                            <button class="profile-voucher-tab is-active" type="button" data-voucher-tab="platform">
+                                Platform (<%= activePlatformVouchers.length %>)
+                            </button>
+                            <button class="profile-voucher-tab" type="button" data-voucher-tab="service">
+                                Services (<%= activeServiceVouchers.length %>)
+                            </button>
+                            <button class="profile-voucher-tab" type="button" data-voucher-tab="product">
+                                Product (<%= activeProductVouchers.length %>)
+                            </button>
+                        </div>
+
+                        <div class="profile-voucher-tab-panel is-active" data-voucher-panel="platform">
+                            <% if (!activePlatformVouchers.length) { %>
+                                <p class="muted">No active platform vouchers right now.</p>
+                            <% } else { %>
+                                <div class="profile-voucher-list">
+                                    <% activePlatformVouchers.forEach((voucher) => { %>
+                                        <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <div class="profile-voucher-tab-panel" data-voucher-panel="service" hidden>
+                            <% if (!activeServiceVouchers.length) { %>
+                                <p class="muted">No active service vouchers right now.</p>
+                            <% } else { %>
+                                <div class="profile-voucher-list">
+                                    <% activeServiceVouchers.forEach((voucher) => { %>
+                                        <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <div class="profile-voucher-tab-panel" data-voucher-panel="product" hidden>
+                            <% if (!activeProductVouchers.length) { %>
+                                <p class="muted">No active product vouchers right now.</p>
+                            <% } else { %>
+                                <div class="profile-voucher-list">
+                                    <% activeProductVouchers.forEach((voucher) => { %>
+                                        <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
+                    </section>
+
+                    <% if (usedProfileVouchers.length) { %>
+                        <details class="profile-rewards-history">
+                            <summary>Used vouchers (<%= usedProfileVouchers.length %>)</summary>
+                            <div class="profile-voucher-list">
+                                <% usedProfileVouchers.forEach((voucher) => { %>
+                                    <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                <% }) %>
+                            </div>
+                        </details>
+                    <% } %>
+
+                    <% if (expiredProfileVouchers.length) { %>
+                        <details class="profile-rewards-history">
+                            <summary>Expired vouchers (<%= expiredProfileVouchers.length %>)</summary>
+                            <div class="profile-voucher-list">
+                                <% expiredProfileVouchers.forEach((voucher) => { %>
+                                    <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                <% }) %>
+                            </div>
+                        </details>
+                    <% } %>
+
+                    <% if (otherInactiveProfileVouchers.length) { %>
+                        <details class="profile-rewards-history">
+                            <summary>Other inactive vouchers (<%= otherInactiveProfileVouchers.length %>)</summary>
+                            <div class="profile-voucher-list">
+                                <% otherInactiveProfileVouchers.forEach((voucher) => { %>
+                                    <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                <% }) %>
+                            </div>
+                        </details>
+                    <% } %>
                 </section>
 
                 <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
@@ -945,7 +1190,7 @@
                             <p class="eyebrow">Wallet</p>
                             <h2>Loyalty wallet</h2>
                         </div>
-                        <a class="button secondary" href="/profile/history">Purchase history</a>
+                        <a class="button secondary" href="#history" data-profile-tab-link="history">Purchase history</a>
                     </div>
 
                     <% if (loyalty) { %>
@@ -1029,7 +1274,7 @@
                                             <p class="eyebrow">Receipts</p>
                                             <h3>Recent paid receipts</h3>
                                         </div>
-                                        <a class="text-button" href="/profile/history">View all</a>
+                                        <a class="text-button" href="#history" data-profile-tab-link="history">View all</a>
                                     </div>
 
                                     <% if (!recentWalletReceipts.length) { %>
@@ -1213,7 +1458,7 @@
                 const panelName = tab.dataset.profileTab;
                 history.replaceState(null, '', `#${panelName}`);
                 showPanel(panelName);
-                if (panelName === 'to-rate') {
+                if (panelName === 'history') {
                     showReviewPanel('to-rate');
                 }
             });
@@ -1225,7 +1470,7 @@
                 const panelName = link.dataset.profileTabLink;
                 history.replaceState(null, '', `#${panelName}`);
                 showPanel(panelName);
-                if (panelName === 'to-rate') {
+                if (panelName === 'history') {
                     showReviewPanel('to-rate');
                 }
             });
@@ -1235,19 +1480,19 @@
             control.addEventListener('click', () => {
                 const panelName = control.dataset.reviewTabControl;
                 history.replaceState(null, '', panelName === 'my-reviews' ? '#my-reviews' : '#to-rate');
-                showPanel('to-rate');
+                showPanel('history');
                 showReviewPanel(panelName);
             });
         });
 
         const hash = window.location.hash.replace('#', '');
         if (hash === 'my-reviews') {
-            showPanel('to-rate');
+            showPanel('history');
             showReviewPanel('my-reviews');
             return;
         }
 
-        showPanel(hash || defaultPanel);
+        showPanel(hash === 'to-rate' ? 'history' : (hash || defaultPanel));
         showReviewPanel(hash === 'to-rate' ? 'to-rate' : defaultReviewPanel);
     })();
 

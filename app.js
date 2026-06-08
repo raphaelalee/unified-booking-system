@@ -230,7 +230,7 @@ function handleReviewMediaUpload(req, res, next) {
 
         console.error(error);
         req.session.profileError = error.message || 'Review media could not be uploaded.';
-        res.redirect('/profile#bookings');
+        res.redirect('/profile#history');
     });
 }
 
@@ -243,7 +243,7 @@ function handleHistoryReviewMediaUpload(req, res, next) {
 
         console.error(error);
         req.session.profileError = error.message || 'Review media could not be uploaded.';
-        res.redirect('/profile/history?type=products');
+        res.redirect('/profile#history');
     });
 }
 
@@ -716,11 +716,7 @@ app.post('/customer/wallet/redeem', requireCustomer, loyaltyController.redeemPoi
 app.post('/customer/checkout/apply-cashback', requireCustomer, loyaltyController.applyCashback);
 app.get('/cashback', requireCustomer, (req, res) => res.redirect('/profile#wallet'));
 
-app.get('/giftcards', requireCustomer, (req, res) => {
-    const success = req.session.success;
-    req.session.success = null;
-    res.render('giftcards', { title: 'Gift Cards', success });
-});
+app.get('/giftcards', requireCustomer, merchantController.showGiftCards);
 app.get('/giftcards/add', requireCustomer, (req, res) => {
     res.redirect('/giftcards');
 });

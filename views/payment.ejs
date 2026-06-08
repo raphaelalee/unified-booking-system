@@ -16,7 +16,15 @@
             const smartVoucherMessageView = typeof smartVoucherMessage !== 'undefined' ? String(smartVoucherMessage || '').trim() : '';
             const paymentBirthdayPromotion = typeof birthdayPromotion !== 'undefined' ? birthdayPromotion : null;
             const paymentSelectedVoucher = paymentVoucherList.find((voucher) => String(voucher.id) === paymentSelectedVoucherId) || null;
-            const paymentAppliedVoucher = paymentSelectedVoucher || voucherRecommendationView?.voucher || null;
+            const isCartPayment = typeof cartCheckout !== 'undefined' && cartCheckout;
+            const paymentItems = typeof items !== 'undefined' && Array.isArray(items) ? items : [];
+            const paymentPickupOptions = typeof pickupMerchantOptions !== 'undefined' && Array.isArray(pickupMerchantOptions) ? pickupMerchantOptions : [];
+            const checkoutHasProductItems = isCartPayment && paymentItems.some((item) => item.type === 'Product');
+            const paymentDeliveryFee = Number(typeof deliveryFee !== 'undefined' ? deliveryFee || 0 : shippingFee || 0);
+            const paymentAppliedVoucher = paymentSelectedVoucher
+                || (!isCartPayment && paymentSelectedVoucherId !== 'none' ? voucherRecommendationView?.voucher : null)
+                || null;
+            const paymentCashbackBlockedByVoucher = Boolean(paymentAppliedVoucher);
             const paymentVoucherBaseAmount = paymentVoucherMode === 'product'
                 ? Number(paymentAppliedVoucher?.eligibleSubtotal || itemSubtotal || 0)
                 : Number(amount || 0);
@@ -39,7 +47,7 @@
                     rewardBaseAmount
                 )
                 : 0;
-            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty
+            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty && !paymentCashbackBlockedByVoucher
                 ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate, 0))
                 : 0;
             const campaignCashbackView = typeof campaignCashback !== 'undefined' && campaignCashback ? campaignCashback : { total: 0, breakdown: [] };
@@ -51,9 +59,11 @@
                     ? 'Pick up'
                     : '';
         %>
-        <form class="login-form payment-form" action="/payment" method="POST" data-base-amount="<%= Number(amount || 0).toFixed(2) %>" data-cashback-balance="<%= typeof loyalty !== 'undefined' && loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>">
+        <form class="login-form payment-form" action="/payment" method="POST" data-base-amount="<%= Number(amount || 0).toFixed(2) %>" data-item-subtotal="<%= Number(itemSubtotal || amount || 0).toFixed(2) %>" data-delivery-fee="<%= paymentDeliveryFee.toFixed(2) %>" data-voucher-estimate="<%= paymentVoucherEstimate.toFixed(2) %>" data-cashback-balance="<%= typeof loyalty !== 'undefined' && loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-            <input type="hidden" name="amount" value="<%= amount %>">
+            <input id="payment-amount-input" type="hidden" name="amount" value="<%= amount %>">
+            <input type="hidden" name="itemSubtotal" value="<%= Number(itemSubtotal || amount || 0).toFixed(2) %>">
+            <input id="payment-shipping-input" type="hidden" name="shippingFee" value="<%= Number(shippingFee || 0).toFixed(2) %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
             <input type="hidden" name="serviceName" value="<%= serviceName %>">
             <input type="hidden" name="cartItemId" value="<%= cartItemId || '' %>">
@@ -65,12 +75,17 @@
             <% if (typeof useCashback !== 'undefined' && useCashback) { %>
                 <input type="hidden" name="redeemCashback" value="on">
             <% } %>
-            <input type="hidden" name="fulfilment" value="<%= fulfilment || '' %>">
-            <input type="hidden" name="pickupMerchantId" value="<%= pickupMerchantId || '' %>">
-            <input type="hidden" name="deliveryAddress" value="<%= deliveryAddress || '' %>">
-            <input type="hidden" name="deliveryUnit" value="<%= deliveryUnit || '' %>">
-            <input type="hidden" name="deliveryPostal" value="<%= deliveryPostal || '' %>">
-            <input type="hidden" name="deliveryPhone" value="<%= deliveryPhone || '' %>">
+            <% if (!checkoutHasProductItems) { %>
+                <input type="hidden" name="fulfilment" value="<%= fulfilment || '' %>">
+                <input type="hidden" name="pickupMerchantId" value="<%= pickupMerchantId || '' %>">
+                <input type="hidden" name="deliveryAddress" value="<%= deliveryAddress || '' %>">
+                <input type="hidden" name="deliveryUnit" value="<%= deliveryUnit || '' %>">
+                <input type="hidden" name="deliveryPostal" value="<%= deliveryPostal || '' %>">
+                <input type="hidden" name="deliveryPhone" value="<%= deliveryPhone || '' %>">
+            <% } %>
+            <% if (isCartPayment) { %>
+                <input type="hidden" name="selectedVoucherId" value="<%= paymentSelectedVoucherId || 'none' %>">
+            <% } %>
 
             <% if (typeof error !== 'undefined' && error) { %>
                 <div class="notice error"><p><%= error %></p></div>
@@ -95,7 +110,81 @@
                 </div>
             <% } %>
 
-            <% if (paymentVoucherList.length > 0 || (voucherRecommendationView && voucherRecommendationView.voucher) || smartVoucherMessageView) { %>
+            <% if (isCartPayment && paymentSelectedVoucher) { %>
+                <div class="loyalty-redemption-card payment-cashback-card payment-selected-voucher">
+                    <span>
+                        <strong><%= paymentSelectedVoucher.title %></strong>
+                        <small>
+                            Voucher ID: <%= paymentSelectedVoucher.id %> &middot; Code: <%= paymentSelectedVoucher.code %>
+                        </small>
+                    </span>
+                    <b>
+                        <%= paymentSelectedVoucher.discountType === 'percentage'
+                            ? `${Number(paymentSelectedVoucher.discountPercent || 0)}% OFF`
+                            : `$${Number(paymentSelectedVoucher.remainingValue || paymentSelectedVoucher.voucherValue || 0).toFixed(2)}` %>
+                    </b>
+                </div>
+            <% } %>
+
+            <% if (checkoutHasProductItems) { %>
+                <section class="payment-fulfilment-section">
+                    <div class="payment-fulfilment-heading">
+                        <strong>Collection option</strong>
+                        <small>Choose how you want to receive the product items in this checkout.</small>
+                    </div>
+                    <div class="fulfilment-options payment-fulfilment-options">
+                        <label class="fulfilment-choice <%= fulfilment !== 'delivery' ? 'active' : '' %>">
+                            <input type="radio" name="fulfilment" value="pickup" <%= fulfilment !== 'delivery' ? 'checked' : '' %>>
+                            <span>
+                                Pick up
+                                <small>Collect selected products from a merchant.</small>
+                            </span>
+                        </label>
+                        <label class="fulfilment-choice <%= fulfilment === 'delivery' ? 'active' : '' %>">
+                            <input type="radio" name="fulfilment" value="delivery" <%= fulfilment === 'delivery' ? 'checked' : '' %>>
+                            <span>
+                                Delivery
+                                <small>Send products to your address.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="payment-pickup-options" class="fulfilment-panel payment-pickup-panel">
+                        <label class="pickup-field">
+                            Pickup merchant
+                            <select id="payment-pickup-merchant-select" name="pickupMerchantId">
+                                <option value="any" <%= !pickupMerchantId || pickupMerchantId === 'any' ? 'selected' : '' %>>Any merchant</option>
+                                <% paymentPickupOptions.forEach((merchant) => { %>
+                                    <option value="<%= merchant.id %>" <%= String(pickupMerchantId || '') === String(merchant.id) ? 'selected' : '' %>><%= merchant.name %></option>
+                                <% }) %>
+                            </select>
+                        </label>
+                        <p class="muted">Includes Vaniday Beauty Studio, FreshGlow Spa, Urban Groom Barbers, and other salons.</p>
+                    </div>
+
+                    <div id="payment-delivery-options" class="fulfilment-panel payment-delivery-panel" style="display:none;">
+                        <label class="delivery-field">
+                            Street address
+                            <input type="text" name="deliveryAddress" value="<%= deliveryAddress || '' %>" placeholder="123 Orchard Road" minlength="8" autocomplete="street-address" data-payment-delivery-required>
+                        </label>
+                        <label class="delivery-field">
+                            Unit number
+                            <input type="text" name="deliveryUnit" value="<%= deliveryUnit || '' %>" placeholder="#12-34" pattern="[A-Za-z0-9#\-/\s]+" autocomplete="address-line2" data-payment-delivery-required>
+                        </label>
+                        <label class="delivery-field">
+                            Postal code
+                            <input type="text" name="deliveryPostal" value="<%= deliveryPostal || '' %>" placeholder="123456" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="postal-code" data-payment-delivery-required>
+                        </label>
+                        <label class="delivery-field">
+                            Contact phone
+                            <input type="tel" name="deliveryPhone" value="<%= deliveryPhone || '' %>" placeholder="91234567" inputmode="tel" pattern="(\+65\s*)?[689][0-9]{7}" autocomplete="tel" data-payment-delivery-required>
+                        </label>
+                        <p class="muted">Delivery adds a $<%= paymentDeliveryFee.toFixed(2) %> shipping fee. All address fields are required.</p>
+                    </div>
+                </section>
+            <% } %>
+
+            <% if (!isCartPayment && (paymentVoucherList.length > 0 || (voucherRecommendationView && voucherRecommendationView.voucher) || smartVoucherMessageView)) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
                     <% if (paymentVoucherList.length > 0) { %>
                         <div class="cart-voucher-picker">
@@ -130,7 +219,7 @@
                                             <%= paymentSelectedVoucherId === 'none' ? 'checked' : '' %>>
                                         <span class="cart-voucher-option-copy">
                                             <strong>Do not use a voucher</strong>
-                                            <small>Continue without applying a platform voucher.</small>
+                                            <small class="payment-voucher-meta">Continue without applying a platform voucher.</small>
                                         </span>
                                     </label>
                                     <% paymentVoucherList.forEach((voucher) => { %>
@@ -145,11 +234,20 @@
                                                 <%= String(voucher.id) === paymentSelectedVoucherId ? 'checked' : '' %>>
                                             <span class="cart-voucher-option-copy">
                                                 <strong><%= voucher.title %></strong>
-                                                <small><%= voucher.code %></small>
-                                                <small>
+                                                <small class="payment-voucher-meta">
+                                                    Voucher ID: <%= voucher.id %> &middot; Code: <%= voucher.code %>
+                                                </small>
+                                                <small class="payment-voucher-value">
                                                     <%= voucher.discountType === 'percentage'
                                                         ? `${Number(voucher.discountPercent || 0)}% OFF`
                                                         : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
+                                                </small>
+                                                <small class="payment-voucher-meta">
+                                                    <%= voucher.expiresAt
+                                                        ? `Expires ${new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' })}`
+                                                        : voucher.minimumSpend
+                                                            ? `Minimum spend $${Number(voucher.minimumSpend || 0).toFixed(2)}`
+                                                            : 'Applied to eligible items only' %>
                                                 </small>
                                             </span>
                                         </label>
@@ -226,10 +324,12 @@
             <% if (typeof cartCheckout !== 'undefined' && cartCheckout && typeof useCashback !== 'undefined' && useCashback) { %>
                 <div class="loyalty-redemption-card payment-cashback-card">
                     <span>
-                        <strong>Cashback selected from cart</strong>
+                        <strong><%= paymentCashbackBlockedByVoucher ? 'Cashback paused for this voucher' : 'Cashback selected from cart' %></strong>
                         <small>
                             Available $<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>.
-                            Estimated cashback applied: $<%= paymentCashbackEstimate.toFixed(2) %>.
+                            <%= paymentCashbackBlockedByVoucher
+                                ? 'Wallet cashback cannot be combined with a voucher in the same checkout.'
+                                : `Estimated cashback applied: $${paymentCashbackEstimate.toFixed(2)}.` %>
                             The final discount is checked again securely when payment is recorded.
                         </small>
                     </span>
@@ -238,12 +338,14 @@
                 <div class="loyalty-redemption-card payment-cashback-card">
                     <% if (typeof loyalty !== 'undefined' && loyalty && Number(loyalty.wallet.cashbackBalance || 0) > 0) { %>
                     <label>
-                        <input type="checkbox" name="redeemCashback" value="on">
+                        <input type="checkbox" name="redeemCashback" value="on" <%= paymentCashbackBlockedByVoucher ? 'disabled' : '' %>>
                         <span>
                             <strong>Use cashback rewards</strong>
                             <small>
                                 Available $<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %>.
-                                Up to $<%= Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0)).toFixed(2) %> will be applied to this payment.
+                                <%= paymentCashbackBlockedByVoucher
+                                    ? 'Wallet cashback cannot be combined with the selected voucher.'
+                                    : `Up to $${Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0)).toFixed(2)} will be applied to this payment.` %>
                             </small>
                         </span>
                     </label>
@@ -287,20 +389,38 @@
 
             <fieldset class="payment-methods">
                 <legend class="eyebrow">Choose payment</legend>
-                <label class="payment-method-select-card">
-                    <span>
-                        <strong>Payment method</strong>
-                        <small>Select how you want to complete this payment.</small>
-                    </span>
-                    <select name="paymentMethod" id="payment-method-select">
-                        <option value="apple_pay" selected>Apple Pay - fast wallet checkout</option>
-                        <option value="paypal">PayPal - pay with your PayPal account</option>
-                        <option value="stripe">Stripe - secure hosted card payment</option>
-                        <option value="nets">NETS QR - scan and pay locally</option>
-                        <option value="paynow">PayNow - instant bank transfer</option>
-                        <option value="card">Card payment - manual prototype card form</option>
-                    </select>
-                </label>
+                <div class="payment-method-grid">
+                    <label class="payment-method-card is-selected">
+                        <span class="payment-method-icon">AP</span>
+                        <span><strong>Apple Pay</strong><small>Fast wallet checkout</small></span>
+                        <input type="radio" name="paymentMethod" value="apple_pay" checked>
+                    </label>
+                    <label class="payment-method-card">
+                        <span class="payment-method-icon">PP</span>
+                        <span><strong>PayPal</strong><small>Pay with your PayPal account</small></span>
+                        <input type="radio" name="paymentMethod" value="paypal">
+                    </label>
+                    <label class="payment-method-card">
+                        <span class="payment-method-icon">ST</span>
+                        <span><strong>Stripe</strong><small>Secure hosted card payment</small></span>
+                        <input type="radio" name="paymentMethod" value="stripe">
+                    </label>
+                    <label class="payment-method-card">
+                        <span class="payment-method-icon">N</span>
+                        <span><strong>NETS QR</strong><small>Scan and pay locally</small></span>
+                        <input type="radio" name="paymentMethod" value="nets">
+                    </label>
+                    <label class="payment-method-card">
+                        <span class="payment-method-icon">PN</span>
+                        <span><strong>PayNow</strong><small>Instant bank transfer</small></span>
+                        <input type="radio" name="paymentMethod" value="paynow">
+                    </label>
+                    <label class="payment-method-card">
+                        <span class="payment-method-icon">CC</span>
+                        <span><strong>Card payment</strong><small>Enter card details manually</small></span>
+                        <input type="radio" name="paymentMethod" value="card">
+                    </label>
+                </div>
             </fieldset>
 
             <div id="card-payment-fields" class="payment-card-fields">
@@ -351,17 +471,23 @@
             <p><%= serviceName %></p>
             <% if (fulfilmentLabel) { %>
                 <div class="payment-detail-list">
-                    <p><span>Fulfilment</span><strong><%= fulfilmentLabel %></strong></p>
-                    <% if (fulfilment === 'pickup') { %>
-                        <p><span>Pickup merchant</span><strong><%= merchantName %></strong></p>
-                    <% } %>
-                    <% if (fulfilment === 'delivery' && deliveryAddress) { %>
-                        <p><span>Delivery address</span><strong><%= deliveryAddress %><% if (deliveryUnit) { %>, <%= deliveryUnit %><% } %></strong></p>
+                    <p><span>Fulfilment</span><strong id="payment-summary-fulfilment"><%= fulfilmentLabel %></strong></p>
+                    <% if (checkoutHasProductItems) { %>
+                        <p id="payment-summary-pickup-row"><span>Pickup merchant</span><strong id="payment-summary-pickup"><%= merchantName %></strong></p>
+                        <p id="payment-summary-delivery-row" style="display:none;"><span>Delivery address</span><strong id="payment-summary-delivery">Not entered yet</strong></p>
+                    <% } else { %>
+                        <% if (fulfilment === 'pickup') { %>
+                            <p><span>Pickup merchant</span><strong><%= merchantName %></strong></p>
+                        <% } %>
+                        <% if (fulfilment === 'delivery' && deliveryAddress) { %>
+                            <p><span>Delivery address</span><strong><%= deliveryAddress %><% if (deliveryUnit) { %>, <%= deliveryUnit %><% } %></strong></p>
+                        <% } %>
                     <% } %>
                 </div>
             <% } %>
             <div class="cart-totals">
-                <p><span>Subtotal</span><strong>$<%= Number(amount).toFixed(2) %></strong></p>
+                <p><span>Subtotal</span><strong>$<%= Number(itemSubtotal || amount).toFixed(2) %></strong></p>
+                <p id="payment-shipping-row" style="<%= Number(shippingFee || 0) > 0 ? '' : 'display:none;' %>"><span>Shipping fee</span><strong id="payment-shipping-value">$<%= Number(shippingFee || 0).toFixed(2) %></strong></p>
                 <p id="payment-voucher-row" style="<%= paymentVoucherEstimate > 0 ? '' : 'display:none;' %>"><span>Voucher</span><strong id="payment-voucher-value">-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
                 <p id="payment-points-row" style="<%= paymentPointEstimate > 0 ? '' : 'display:none;' %>"><span>Points</span><strong id="payment-points-value">-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                 <p id="payment-cashback-row" style="<%= paymentCashbackEstimate > 0 ? '' : 'display:none;' %>"><span>Wallet cashback used</span><strong id="payment-cashback-value">-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
@@ -399,13 +525,29 @@ document.addEventListener('DOMContentLoaded', function () {
     const pointsValue = document.getElementById('payment-points-value');
     const voucherRow = document.getElementById('payment-voucher-row');
     const voucherValue = document.getElementById('payment-voucher-value');
+    const shippingRow = document.getElementById('payment-shipping-row');
+    const shippingValue = document.getElementById('payment-shipping-value');
     const cashbackRow = document.getElementById('payment-cashback-row');
     const cashbackValue = document.getElementById('payment-cashback-value');
     const summaryTotal = document.getElementById('payment-summary-total');
     const liveTotal = document.getElementById('payment-live-total');
+    const amountInput = document.getElementById('payment-amount-input');
+    const shippingInput = document.getElementById('payment-shipping-input');
     const voucherToggle = document.getElementById('payment-voucher-toggle');
     const voucherPanel = document.getElementById('payment-voucher-panel');
-    const voucherInputs = Array.from(document.querySelectorAll('input[name="selectedVoucherId"]'));
+    const voucherInputs = Array.from(document.querySelectorAll('input[type="radio"][name="selectedVoucherId"]'));
+    const fulfilmentChoices = Array.from(document.querySelectorAll('.payment-fulfilment-options .fulfilment-choice'));
+    const fulfilmentRadios = Array.from(document.querySelectorAll('.payment-fulfilment-options input[name="fulfilment"]'));
+    const pickupPanel = document.getElementById('payment-pickup-options');
+    const deliveryPanel = document.getElementById('payment-delivery-options');
+    const pickupSelect = document.getElementById('payment-pickup-merchant-select');
+    const deliveryFields = Array.from(document.querySelectorAll('[data-payment-delivery-required]'));
+    const fulfilmentPill = document.querySelector('.payment-fulfilment-pill');
+    const summaryFulfilment = document.getElementById('payment-summary-fulfilment');
+    const summaryPickupRow = document.getElementById('payment-summary-pickup-row');
+    const summaryPickup = document.getElementById('payment-summary-pickup');
+    const summaryDeliveryRow = document.getElementById('payment-summary-delivery-row');
+    const summaryDelivery = document.getElementById('payment-summary-delivery');
     const paypalEnabled = <%= paypalEnabled ? 'true' : 'false' %>;
 
     function setPayPalMessage(message) {
@@ -454,7 +596,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function getVoucherDiscount(baseAmount) {
         const selectedVoucher = voucherInputs.find((input) => input.checked);
         if (!selectedVoucher || selectedVoucher.value === 'none') {
-            return 0;
+            return selectedVoucher && selectedVoucher.value === 'none'
+                ? 0
+                : Math.min(Number(form?.dataset.voucherEstimate || 0), baseAmount);
         }
 
         const discountType = selectedVoucher.dataset.discountType || 'fixed';
@@ -473,12 +617,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const baseAmount = Number(form.dataset.baseAmount || 0);
         const voucherDiscount = getVoucherDiscount(baseAmount);
+        const voucherApplied = voucherDiscount > 0;
         const cashbackBalance = Number(form.dataset.cashbackBalance || 0);
         const cashbackCheckbox = form.querySelector('input[type="checkbox"][name="redeemCashback"]');
         const cashbackHidden = form.querySelector('input[type="hidden"][name="useCashback"][value="true"]');
-        const useCashback = Boolean((cashbackCheckbox && cashbackCheckbox.checked) || cashbackHidden);
+        const cashbackRequestFields = Array.from(form.querySelectorAll('input[type="hidden"][name="redeemCashback"], input[type="hidden"][name="useCashback"]'));
+        const useCashback = !voucherApplied && Boolean((cashbackCheckbox && cashbackCheckbox.checked) || cashbackHidden);
         const cashbackApplied = useCashback ? Math.min(cashbackBalance, Math.max(baseAmount - voucherDiscount, 0)) : 0;
 
+        if (cashbackCheckbox) cashbackCheckbox.disabled = voucherApplied;
+        cashbackRequestFields.forEach((field) => {
+            field.disabled = voucherApplied;
+        });
         if (voucherRow) voucherRow.style.display = voucherDiscount > 0 ? '' : 'none';
         if (voucherValue) voucherValue.textContent = '-' + formatMoney(voucherDiscount);
         if (cashbackRow) cashbackRow.style.display = cashbackApplied > 0 ? '' : 'none';
@@ -494,6 +644,59 @@ document.addEventListener('DOMContentLoaded', function () {
         const totalDue = Math.max(baseAmount - voucherDiscount - cashbackApplied, 0);
         summaryTotal.textContent = formatMoney(totalDue);
         liveTotal.textContent = formatMoney(totalDue);
+    }
+
+    function getFulfilmentValue() {
+        return fulfilmentRadios.find((input) => input.checked)?.value || 'pickup';
+    }
+
+    function getDeliverySummary() {
+        const values = {};
+        deliveryFields.forEach((field) => {
+            values[field.name] = String(field.value || '').trim();
+        });
+
+        if (!values.deliveryAddress) {
+            return 'Not entered yet';
+        }
+
+        return [values.deliveryAddress, values.deliveryUnit, values.deliveryPostal].filter(Boolean).join(', ');
+    }
+
+    function syncCheckoutFulfilment() {
+        if (!form || !fulfilmentRadios.length) return;
+
+        const selected = getFulfilmentValue();
+        const itemSubtotal = Number(form.dataset.itemSubtotal || form.dataset.baseAmount || 0);
+        const deliveryFee = selected === 'delivery' ? Number(form.dataset.deliveryFee || 0) : 0;
+        const baseAmount = Math.round((itemSubtotal + deliveryFee) * 100) / 100;
+
+        fulfilmentChoices.forEach((choice) => {
+            const input = choice.querySelector('input[name="fulfilment"]');
+            choice.classList.toggle('active', input && input.checked);
+        });
+        if (pickupPanel) pickupPanel.style.display = selected === 'pickup' ? '' : 'none';
+        if (deliveryPanel) deliveryPanel.style.display = selected === 'delivery' ? '' : 'none';
+        if (pickupSelect) pickupSelect.disabled = selected !== 'pickup';
+        deliveryFields.forEach((field) => {
+            const isDelivery = selected === 'delivery';
+            field.required = isDelivery;
+            field.disabled = !isDelivery;
+        });
+        form.dataset.baseAmount = baseAmount.toFixed(2);
+        if (amountInput) amountInput.value = baseAmount.toFixed(2);
+        if (shippingInput) shippingInput.value = deliveryFee.toFixed(2);
+        if (shippingRow) shippingRow.style.display = deliveryFee > 0 ? '' : 'none';
+        if (shippingValue) shippingValue.textContent = formatMoney(deliveryFee);
+        if (fulfilmentPill) fulfilmentPill.textContent = selected === 'delivery' ? 'Delivery' : 'Pick up';
+        if (summaryFulfilment) summaryFulfilment.textContent = selected === 'delivery' ? 'Delivery' : 'Pick up';
+        if (summaryPickupRow) summaryPickupRow.style.display = selected === 'pickup' ? '' : 'none';
+        if (summaryDeliveryRow) summaryDeliveryRow.style.display = selected === 'delivery' ? '' : 'none';
+        if (summaryPickup && pickupSelect) {
+            summaryPickup.textContent = pickupSelect.options[pickupSelect.selectedIndex]?.text || 'Any merchant';
+        }
+        if (summaryDelivery) summaryDelivery.textContent = getDeliverySummary();
+        syncVoucherRedemption();
     }
 
     function syncPointRedemption() {
@@ -516,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncPaymentMethod() {
-        const selected = methodField?.value || methodInputs.find((input) => input.checked)?.value || 'apple_pay';
+        const selected = methodInputs.find((input) => input.checked)?.value || methodField?.value || 'apple_pay';
         document.querySelectorAll('.payment-method-card').forEach((card) => {
             const input = card.querySelector('input[name="paymentMethod"]');
             card.classList.toggle('is-selected', input && input.checked);
@@ -557,6 +760,9 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             createOrder: async function () {
                 setPayPalMessage('');
+                if (form && !form.reportValidity()) {
+                    throw new Error('Please complete the required checkout details.');
+                }
                 const payload = collectPaymentPayload();
                 const result = await postJson('/api/paypal/create-order', payload);
                 return result.orderId;
@@ -580,6 +786,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     methodInputs.forEach((input) => input.addEventListener('change', syncPaymentMethod));
     methodField?.addEventListener('change', syncPaymentMethod);
+    fulfilmentRadios.forEach((input) => input.addEventListener('change', syncCheckoutFulfilment));
+    if (pickupSelect) pickupSelect.addEventListener('change', syncCheckoutFulfilment);
+    deliveryFields.forEach((field) => {
+        field.addEventListener('input', syncCheckoutFulfilment);
+        field.addEventListener('change', syncCheckoutFulfilment);
+    });
     if (voucherToggle && voucherPanel) {
         const selectedVoucherInput = voucherPanel.querySelector('input[name="selectedVoucherId"]:checked');
         if (selectedVoucherInput && selectedVoucherInput.value && selectedVoucherInput.value !== 'none') {
@@ -600,9 +812,10 @@ document.addEventListener('DOMContentLoaded', function () {
         redeemPointsInput.addEventListener('input', syncPointRedemption);
         redeemPointsInput.addEventListener('change', syncPointRedemption);
     }
-    if (voucherInputs.some((input) => input.checked)) {
+    if (voucherInputs.some((input) => input.checked) || Number(form?.dataset.voucherEstimate || 0) > 0) {
         syncVoucherRedemption();
     }
+    syncCheckoutFulfilment();
     syncPaymentMethod();
 });
 </script>

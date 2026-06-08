@@ -1310,8 +1310,8 @@ function redeemRewardShopVoucher(req, res) {
 
             req.session.user.glintsBalance = Math.max(0, Number(req.session.user.glintsBalance || 0) - Number(offer.glintsCost || 0));
             const issuedLabel = Number(voucher.issuedCount || 1) > 1
-                ? `${voucher.issuedCount} vouchers were added under Rewards on your profile.`
-                : 'It is now stored under Rewards on your profile.';
+                ? `${voucher.issuedCount} vouchers were added to the Vouchers tab on your profile.`
+                : 'It is now stored in the Vouchers tab on your profile.';
             req.session.rewardShopSuccess = `${voucher.title} redeemed successfully. ${issuedLabel}`;
             Notification.create({
                 recipientUserId: req.session.user.id,
@@ -1320,7 +1320,7 @@ function redeemRewardShopVoucher(req, res) {
                 type: 'reward_update',
                 title: 'Voucher redeemed',
                 message: `${voucher.title} was added to your profile vouchers.`,
-                linkUrl: '/profile#membership',
+                linkUrl: '/profile#vouchers',
                 dedupeKey: `reward-voucher-redeemed-${req.session.user.id}-${voucher.id}`
             }, logNotificationError);
             return res.redirect('/reward-shop');

@@ -1,6 +1,6 @@
 /* Payment page layout. Loaded after the main theme stylesheet. */
 .payment-title {
-    min-height: 260px !important;
+    min-height: 170px !important;
 }
 
 .payment-title h1 {
@@ -8,27 +8,50 @@
 }
 
 .payment-page {
-    padding: 34px 42px 54px !important;
+    width: min(1360px, calc(100% - 40px)) !important;
+    max-width: none !important;
+    padding: 34px 0 64px !important;
 }
 
 .payment-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 24px;
+    gap: 44px;
     align-items: start;
 }
 
 .payment-form,
 .payment-summary-card {
-    border: 1px solid rgba(39, 53, 35, 0.12) !important;
-    border-radius: 8px !important;
-    background: #fffefb !important;
-    box-shadow: 0 12px 30px rgba(22, 31, 19, 0.06) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
 }
 
 .payment-form {
-    padding: 22px !important;
-    gap: 18px !important;
+    padding: 0 !important;
+    display: grid !important;
+    gap: 0 !important;
+    overflow: visible;
+}
+
+.payment-form > * {
+    margin: 0 !important;
+}
+
+.payment-form > .notice,
+.payment-form > .loyalty-redemption-card,
+.payment-form > .payment-methods,
+.payment-form > .payment-card-fields,
+.payment-form > .payment-note,
+.payment-form > #paypal-message,
+.payment-form > #paypal-button-container {
+    padding: 20px 0;
+    border: 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .payment-form-header {
@@ -36,8 +59,9 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
     align-items: end;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
+    padding: 0 0 24px;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.16);
+    background: transparent;
 }
 
 .payment-form-header h2 {
@@ -56,20 +80,21 @@
 .payment-fulfilment-pill {
     width: fit-content;
     margin: 0;
-    padding: 5px 10px;
-    border: 1px solid rgba(39, 53, 35, 0.16);
-    border-radius: 999px;
-    background: #eef5e8;
-    color: var(--sand-ink);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #536e49;
     font-size: 0.8rem;
     font-weight: 900;
 }
 
 .payment-cashback-card {
-    padding: 12px;
-    border: 1px solid rgba(39, 53, 35, 0.12);
-    border-radius: 8px;
-    background: #f7f9f3;
+    padding: 20px 0;
+    border: 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
+    border-radius: 0;
+    background: transparent;
 }
 
 .payment-cashback-card label {
@@ -85,8 +110,8 @@
     min-height: 42px;
     padding: 9px 12px;
     border: 1px solid rgba(39, 53, 35, 0.22);
-    border-radius: 8px;
-    background: #fffefb;
+    border-radius: 3px;
+    background: #fff;
     color: var(--sand-ink);
 }
 
@@ -103,47 +128,271 @@
     line-height: 1.4;
 }
 
+.payment-fulfilment-section {
+    padding: 24px 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
+    background: transparent;
+}
+
+.payment-fulfilment-heading {
+    display: grid;
+    gap: 3px;
+    margin-bottom: 12px;
+}
+
+.payment-fulfilment-heading strong {
+    color: var(--sand-ink);
+}
+
+.payment-fulfilment-heading small,
+.payment-pickup-panel .muted,
+.payment-delivery-panel .muted {
+    color: var(--sand-muted);
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.payment-fulfilment-options {
+    margin: 0 0 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid rgba(39, 53, 35, 0.16);
+    border-bottom: 1px solid rgba(39, 53, 35, 0.16);
+}
+
+.payment-fulfilment-options .fulfilment-choice {
+    min-height: 74px;
+    padding: 14px 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.payment-fulfilment-options .fulfilment-choice.active {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: inset 0 -3px 0 #536e49;
+}
+
+.payment-fulfilment-options .fulfilment-choice + .fulfilment-choice {
+    padding-left: 18px;
+    border-left: 1px solid rgba(39, 53, 35, 0.13);
+}
+
+.payment-fulfilment-options input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--sand-espresso);
+}
+
+.payment-fulfilment-options span,
+.payment-pickup-panel label,
+.payment-delivery-panel label {
+    color: var(--sand-ink);
+    font-weight: 900;
+}
+
+.payment-fulfilment-options small {
+    display: block;
+    margin-top: 3px;
+    color: var(--sand-muted);
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.payment-pickup-panel,
+.payment-delivery-panel {
+    padding: 0;
+    display: grid;
+    gap: 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.payment-delivery-panel {
+    grid-template-columns: 1fr 1fr;
+}
+
+.payment-delivery-panel p {
+    grid-column: 1 / -1;
+}
+
+.payment-pickup-panel label,
+.payment-delivery-panel label {
+    display: grid;
+    gap: 5px;
+    font-size: 0.8rem;
+}
+
+.payment-pickup-panel select,
+.payment-delivery-panel input {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 0;
+    border: 1px solid rgba(39, 53, 35, 0.22);
+    border-width: 0 0 1px;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--sand-ink);
+}
+
+.payment-cashback-card .cart-voucher-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.payment-cashback-card .cart-voucher-toggle {
+    min-width: 132px;
+    border-radius: 3px;
+}
+
+.payment-cashback-card .cart-voucher-panel {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding: 0;
+    border: 1px solid rgba(39, 53, 35, 0.14);
+    border-radius: 4px;
+    background: #fff;
+}
+
+.payment-cashback-card .cart-voucher-options {
+    display: grid;
+    gap: 0;
+}
+
+.payment-cashback-card .cart-voucher-option {
+    min-height: 86px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 13px;
+    align-items: start;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    transform: none;
+}
+
+.payment-cashback-card .cart-voucher-option + .cart-voucher-option {
+    border-top: 1px solid rgba(39, 53, 35, 0.13);
+}
+
+.payment-cashback-card .cart-voucher-option:hover,
+.payment-cashback-card .cart-voucher-option:focus-within {
+    transform: none;
+    border-color: transparent;
+    background: #fafbf8;
+    box-shadow: none;
+}
+
+.payment-cashback-card .cart-voucher-option:has(input[type="radio"]:checked) {
+    border-color: transparent;
+    background: #f0f5ec;
+    box-shadow: inset 4px 0 0 #536e49;
+}
+
+.payment-cashback-card .cart-voucher-option-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 14px;
+}
+
+.payment-cashback-card .cart-voucher-option-copy strong {
+    color: var(--sand-ink);
+    font-size: 0.94rem;
+}
+
+.payment-cashback-card .payment-voucher-value {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    color: #385134;
+    font-size: 0.96rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.payment-cashback-card .payment-voucher-meta {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--sand-muted);
+    font-size: 0.76rem;
+}
+
+.payment-selected-voucher {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+}
+
+.payment-selected-voucher b {
+    color: #385134;
+    white-space: nowrap;
+}
+
 .payment-methods {
     margin: 0;
-    padding: 0;
+    padding: 24px 0 !important;
     border: 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12) !important;
 }
 
 .payment-methods legend {
-    margin: 0 0 10px;
+    margin: 0 0 14px;
 }
 
 .payment-method-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 1px solid rgba(39, 53, 35, 0.14);
+    border-bottom: 1px solid rgba(39, 53, 35, 0.14);
+    border-radius: 0;
+    overflow: visible;
 }
 
 .payment-method-card {
-    min-height: 86px;
-    padding: 14px;
+    min-height: 68px;
+    padding: 14px 0;
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 20px;
+    grid-template-columns: 38px minmax(0, 1fr) 20px;
     gap: 12px;
     align-items: center;
-    border: 1px solid rgba(39, 53, 35, 0.13);
-    border-radius: 8px;
-    background: #fffefb;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--sand-ink);
     cursor: pointer;
-    transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    transition: background 160ms ease;
+}
+
+.payment-method-card:nth-child(even) {
+    border-left: 0;
+}
+
+.payment-method-card + .payment-method-card,
+.payment-method-card:nth-child(n + 3) {
+    border-top: 1px solid rgba(39, 53, 35, 0.14);
 }
 
 .payment-method-card:hover {
-    border-color: rgba(39, 53, 35, 0.32);
-    background: #fafbf7;
-    box-shadow: 0 12px 24px rgba(22, 31, 19, 0.07);
+    background: rgba(247, 249, 245, 0.75);
+    box-shadow: none;
 }
 
 .payment-method-card.is-selected {
-    border-color: rgba(39, 53, 35, 0.55);
-    background: #eef5e8;
-    box-shadow: inset 0 0 0 1px rgba(39, 53, 35, 0.08);
+    background: transparent;
+    box-shadow: inset 0 -3px 0 #536e49;
 }
 
 .payment-method-card input[type="radio"] {
@@ -154,13 +403,13 @@
 }
 
 .payment-method-icon {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     display: grid;
     place-items: center;
     border: 1px solid rgba(39, 53, 35, 0.12);
-    border-radius: 8px;
-    background: #f7f9f3;
+    border-radius: 3px;
+    background: transparent;
     color: var(--sand-ink);
     font-size: 0.76rem;
     font-weight: 900;
@@ -193,34 +442,38 @@
 .payment-card-fields {
     display: grid;
     gap: 12px;
-    padding: 14px;
-    border: 1px solid rgba(39, 53, 35, 0.12);
-    border-radius: 8px;
-    background: #fafbf7;
+    padding: 20px 0 !important;
+    border: 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
+    border-radius: 0;
+    background: transparent;
 }
 
 .payment-card-fields input {
     width: 100%;
     min-height: 42px;
-    padding: 9px 12px;
+    padding: 9px 0;
     border: 1px solid rgba(39, 53, 35, 0.22);
-    border-radius: 8px;
-    background: #fffefb;
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
     color: var(--sand-ink);
 }
 
 .payment-note {
     margin: 0;
-    padding: 10px 12px;
-    border-radius: 8px;
-    background: #f7f9f3;
-    border: 1px solid rgba(39, 53, 35, 0.1);
+    padding: 14px 0 !important;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgba(39, 53, 35, 0.12);
 }
 
 .payment-summary-card {
     position: sticky;
-    top: 18px;
-    padding: 20px !important;
+    top: 88px;
+    padding: 4px 0 0 28px !important;
+    border-left: 1px solid rgba(39, 53, 35, 0.16) !important;
 }
 
 .payment-summary-card h2 {
@@ -232,7 +485,7 @@
     margin: 14px 0;
     display: grid;
     gap: 8px;
-    padding: 12px 0;
+    padding: 14px 0;
     border-top: 1px solid rgba(39, 53, 35, 0.12);
     border-bottom: 1px solid rgba(39, 53, 35, 0.12);
 }
@@ -274,9 +527,17 @@
     font-size: 1.08rem;
 }
 
+.payment-form > #payment-submit-button {
+    width: 100% !important;
+    min-height: 50px;
+    margin: 22px 0 0 !important;
+    border-radius: 3px !important;
+}
+
 @media (max-width: 980px) {
     .payment-page {
-        padding: 32px 22px 48px !important;
+        width: min(100% - 28px, 1460px) !important;
+        padding: 28px 0 48px !important;
     }
 
     .payment-layout {
@@ -285,12 +546,17 @@
 
     .payment-summary-card {
         position: static;
+        padding: 22px 0 0 !important;
+        border-left: 0 !important;
+        border-top: 1px solid rgba(39, 53, 35, 0.16) !important;
     }
 }
 
 @media (max-width: 680px) {
     .payment-form-header,
-    .payment-method-grid {
+    .payment-method-grid,
+    .payment-fulfilment-options,
+    .payment-delivery-panel {
         grid-template-columns: 1fr;
     }
 
@@ -298,5 +564,25 @@
         grid-column: auto;
         grid-row: auto;
         text-align: left;
+    }
+
+    .payment-cashback-card .cart-voucher-picker,
+    .payment-cashback-card .cart-voucher-option-copy {
+        grid-template-columns: 1fr;
+    }
+
+    .payment-cashback-card .payment-voucher-value {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .payment-selected-voucher {
+        align-items: start;
+    }
+
+    .payment-fulfilment-options .fulfilment-choice + .fulfilment-choice {
+        padding-left: 0;
+        border-left: 0;
+        border-top: 1px solid rgba(39, 53, 35, 0.14);
     }
 }

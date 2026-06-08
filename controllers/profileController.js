@@ -411,12 +411,12 @@ function submitProductReview(req, res) {
 
     if (!receiptId || !userId || !Number.isInteger(productId) || productId <= 0) {
         setProfileError(req, 'The selected product purchase could not be found.');
-        return res.redirect('/profile/history?type=products');
+        return res.redirect('/profile#history');
     }
 
     if (!rating) {
         setProfileError(req, 'Please choose a rating from 1 to 5 stars.');
-        return res.redirect('/profile/history?type=products');
+        return res.redirect('/profile#history');
     }
 
     const imageUpload = req.files?.reviewImage?.[0] || null;
@@ -428,38 +428,38 @@ function submitProductReview(req, res) {
         if (receiptError) {
             console.error(receiptError);
             setProfileError(req, 'That purchase could not be loaded.');
-            return res.redirect('/profile/history?type=products');
+            return res.redirect('/profile#history');
         }
 
         const receipt = PurchaseHistory.mapReceipt(row);
 
         if (!receipt || receipt.type !== 'order') {
             setProfileError(req, 'That purchase could not be found on your account.');
-            return res.redirect('/profile/history?type=products');
+            return res.redirect('/profile#history');
         }
 
         if (!isCompletedProductOrder(receipt)) {
             setProfileError(req, 'Product reviews can only be submitted after delivery or pickup is completed.');
-            return res.redirect('/profile/history?type=products');
+            return res.redirect('/profile#history');
         }
 
         const item = (receipt.items || []).find((entry) => Number(entry.serviceId || entry.productId) === productId);
 
         if (!item) {
             setProfileError(req, 'That product was not found in this order.');
-            return res.redirect('/profile/history?type=products');
+            return res.redirect('/profile#history');
         }
 
         return Review.findByReceiptAndProduct(receiptId, productId, (reviewLookupError, existingReview) => {
             if (reviewLookupError) {
                 console.error(reviewLookupError);
                 setProfileError(req, 'Your review could not be checked.');
-                return res.redirect('/profile/history?type=products');
+                return res.redirect('/profile#history');
             }
 
             if (existingReview) {
                 setProfileError(req, 'You have already submitted a review for this product in this order.');
-                return res.redirect('/profile/history?type=products');
+                return res.redirect('/profile#history');
             }
 
             return Review.create({
@@ -476,11 +476,11 @@ function submitProductReview(req, res) {
                 if (createError) {
                     console.error(createError);
                     setProfileError(req, 'Your product review could not be saved.');
-                    return res.redirect('/profile/history?type=products');
+                    return res.redirect('/profile#history');
                 }
 
                 setProfileSuccess(req, `Review submitted successfully for ${item.name || 'this product'}.`);
-                return res.redirect('/profile/history?type=products');
+                return res.redirect('/profile#history');
             });
         });
     });

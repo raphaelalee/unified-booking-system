@@ -1,0 +1,29 @@
+<%
+    const terms = voucherTermsList(voucher);
+%>
+<article class="profile-voucher-row <%= voucherIsActive(voucher) ? '' : 'is-muted' %>">
+    <div>
+        <span><%= voucherSourceLabel(voucher) %></span>
+        <strong><%= voucher.title %></strong>
+        <% if (voucher.merchantName) { %>
+            <small><%= voucher.merchantName %></small>
+        <% } %>
+        <% if (voucher.linkedItemName) { %>
+            <small><%= voucher.linkedItemName %></small>
+        <% } %>
+        <small><%= voucher.code %></small>
+    </div>
+    <div>
+        <strong><%= voucherValueLabel(voucher) %></strong>
+        <small><%= voucherStatusLabel(voucher) %></small>
+        <small><%= voucherUsageLabel(voucher) %></small>
+    </div>
+    <details class="profile-voucher-terms">
+        <summary>Terms and conditions</summary>
+        <ul>
+            <% terms.forEach((term) => { %>
+                <li><%= term %></li>
+            <% }) %>
+        </ul>
+    </details>
+</article>
