@@ -10,21 +10,27 @@ function buildConfig(settingsRows = [], amountRows = [], termRows = []) {
         map[row.setting_key] = row.setting_value;
         return map;
     }, {});
-    const amounts = amountRows
+    const configuredAmounts = amountRows
         .map((row) => Number(row.amount))
         .filter((amount) => Number.isFinite(amount) && amount > 0);
-    const terms = termRows
+    const terms = Array.from(new Set(termRows
         .map((row) => String(row.term_text || '').trim())
-        .filter(Boolean);
+        .filter(Boolean)));
     const minAmount = toNumber(settings.min_amount);
     const maxAmount = toNumber(settings.max_amount);
     const validityMonths = toNumber(settings.validity_months);
+    const resolvedMinAmount = minAmount && minAmount > 0 ? minAmount : 20;
+    const resolvedMaxAmount = maxAmount && maxAmount >= resolvedMinAmount ? maxAmount : 500;
+    const fallbackAmounts = [20, 50, 100, 150];
+    const amounts = configuredAmounts.length
+        ? configuredAmounts
+        : fallbackAmounts.filter((amount) => amount >= resolvedMinAmount && amount <= resolvedMaxAmount);
 
     return {
         amounts,
-        minAmount,
-        maxAmount,
-        validityMonths: validityMonths ? Math.max(1, Math.floor(validityMonths)) : null,
+        minAmount: resolvedMinAmount,
+        maxAmount: resolvedMaxAmount,
+        validityMonths: validityMonths ? Math.max(1, Math.floor(validityMonths)) : 12,
         terms
     };
 }
