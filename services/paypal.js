@@ -126,6 +126,36 @@ async function captureOrder(orderId) {
     });
 }
 
+async function refundCapture(captureId, { amount, currencyCode = 'SGD', reason = '' } = {}) {
+    const accessToken = await getAccessToken();
+    const value = Number(amount || 0);
+
+    if (!captureId || !String(captureId).trim()) {
+        throw new Error('PayPal capture ID is required.');
+    }
+
+    if (!Number.isFinite(value) || value <= 0) {
+        throw new Error('PayPal refund amount is invalid.');
+    }
+
+    return paypalRequest(`/v2/payments/captures/${encodeURIComponent(String(captureId).trim())}/refund`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation',
+            'PayPal-Request-Id': crypto.randomUUID()
+        },
+        body: JSON.stringify({
+            amount: {
+                currency_code: currencyCode,
+                value: value.toFixed(2)
+            },
+            note_to_payer: String(reason || 'Vaniday refund').slice(0, 255)
+        })
+    });
+}
+
 function extractCaptureDetails(order = {}) {
     const purchaseUnit = Array.isArray(order.purchase_units) ? order.purchase_units[0] : null;
     const payments = purchaseUnit?.payments || {};
@@ -149,5 +179,6 @@ module.exports = {
     getApiBase,
     createOrder,
     captureOrder,
+    refundCapture,
     extractCaptureDetails
 };

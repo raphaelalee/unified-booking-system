@@ -1,5 +1,4 @@
 const db = require('../db');
-const Booking = require('../models/Booking');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Review = require('../models/Review');
 
@@ -86,67 +85,6 @@ function normalizeFilter(filter) {
     }
 
     return 'all';
-}
-
-function getSessionHistory(req) {
-    const receipts = Object.values(req.session.receipts || {});
-    const userId = req.session.user?.id;
-
-    return receipts
-        .filter((receipt) => String(receipt.userId) === String(userId))
-        .map((receipt) => {
-            const isBooking = receipt.type === 'booking';
-            const createdAt = receipt.paidAt || new Date().toISOString();
-
-            return {
-                id: receipt.displayId || receipt.id,
-                receiptId: receipt.id,
-                type: isBooking ? 'booking' : 'product',
-                items: Array.isArray(receipt.items) ? receipt.items : [],
-                itemNames: (receipt.items || [])
-                    .map((item) => {
-                        const quantity = Number(item.quantity || 1);
-                        return quantity > 1 ? `${item.name} x${quantity}` : item.name;
-                    })
-                    .join(', ') || (isBooking ? 'Service booking' : 'Product order'),
-                totalAmount: Number(receipt.totalAmount || 0),
-                paymentMethod: receipt.paymentMethod || 'paid',
-                paymentStatus: receipt.paymentStatus || 'paid',
-                fulfilment: receipt.fulfilment || '',
-                deliveryStatus: receipt.deliveryStatus || 'processing',
-                pickupStatus: receipt.pickupStatus || '',
-                createdAt,
-                createdAtLabel: formatHistoryDate(createdAt),
-                source: 'session'
-            };
-        });
-}
-
-function getMemoryBookingHistory(req) {
-    const user = req.session.user || {};
-
-    return Booking.getAll()
-        .filter((booking) => {
-            return booking.email && user.email
-                ? String(booking.email).toLowerCase() === String(user.email).toLowerCase()
-                : booking.customerName && user.name && booking.customerName === user.name;
-        })
-        .map((booking) => {
-            const createdAt = booking.createdAt || booking.bookingDate || new Date().toISOString();
-
-            return {
-                id: booking.id,
-                receiptId: booking.id,
-                type: 'booking',
-                itemNames: booking.serviceName || 'Service booking',
-                totalAmount: Number(booking.price || booking.servicePrice || 0),
-                paymentMethod: 'Not paid',
-                paymentStatus: booking.status || 'pending',
-                createdAt,
-                createdAtLabel: formatHistoryDate(createdAt),
-                source: 'memory'
-            };
-        });
 }
 
 function mergeHistoryRows(databaseRows, sessionRows) {
@@ -324,15 +262,13 @@ async function showHistory(req, res) {
             getProductHistory(userId),
             getPersistentHistory(userId)
         ]);
-        const sessionHistory = getSessionHistory(req);
-        const memoryBookings = getMemoryBookingHistory(req);
         const mergedBookings = mergeHistoryRows(
             bookings,
-            [...persistentHistory, ...sessionHistory, ...memoryBookings].filter((row) => row.type === 'booking')
+            persistentHistory.filter((row) => row.type === 'booking')
         );
         const mergedProducts = mergeHistoryRows(
             products,
-            [...persistentHistory, ...sessionHistory].filter((row) => row.type === 'product')
+            persistentHistory.filter((row) => row.type === 'product')
         );
         const productReceiptIds = mergedProducts.map((row) => row.receiptId).filter(Boolean);
         const productReviews = await new Promise((resolve, reject) => {

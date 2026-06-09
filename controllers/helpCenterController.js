@@ -13,12 +13,14 @@ const {
     sendSmsCancellationForBooking,
     sendSmsRescheduleForBooking
 } = require('../services/smsAutomation');
+const { refundTransaction } = require('../services/refundProcessor');
 
 const ACTIVE_REQUEST_LIMIT = 5;
 const SHIPPED_STATUSES = ['shipped', 'delivered'];
 const ORDER_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
 const REFUND_REQUEST_TYPES = ['order_refund', 'booking_refund'];
 const REFUND_TERMS_VERSION = 'refund-policy-2026-05';
+const RESOLVED_REQUEST_STATUSES = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
 
 const requestLabels = {
     order_refund: 'Order refund',
@@ -44,11 +46,11 @@ const findBookingForCustomer = promisify(Booking.findSupportBookingForCustomer);
 const getBookingNotificationDetails = promisify(Booking.getNotificationDetailsById);
 const getAvailableSlots = promisify(Booking.getAvailableSlots);
 const markBookingCancelled = promisify(Booking.markCancelled);
+const markBookingRefundStatus = promisify(Booking.markRefundStatus);
 const updateBookingSchedule = promisify(Booking.updateSchedule);
 const getCustomerOrders = promisify(Transaction.getCustomerOrders);
 const getOrderForCustomer = promisify(Transaction.getOrderForCustomer);
 const getOrderById = promisify(Transaction.getOrderById);
-const recordTransactionRefund = promisify(Transaction.recordRefund);
 const getHistoryOrders = promisify(PurchaseHistory.getSupportOrdersByUserId);
 const getHistoryOrderForCustomer = promisify(PurchaseHistory.getSupportOrderForCustomer);
 const updateHistoryDeliveryStatus = promisify(PurchaseHistory.updateDeliveryStatus);
@@ -698,6 +700,10 @@ async function adminSendToMerchant(req, res) {
             throw new Error('Support request not found.');
         }
 
+        if (RESOLVED_REQUEST_STATUSES.includes(request.status)) {
+            throw new Error('This request is already closed or cannot be updated.');
+        }
+
         if (!isRefundRequest(request.requestType) || request.status !== 'pending_admin_review') {
             throw new Error('Only new refund requests can be sent to the merchant.');
         }
@@ -794,6 +800,8 @@ async function merchantRespond(req, res) {
 }
 
 async function adminResolve(req, res) {
+    let refundOutcome = null;
+
     try {
         const request = await findSupportRequest(req.params.requestId);
 
@@ -846,6 +854,59 @@ async function adminResolve(req, res) {
             }
         }
 
+        if (decision === 'approved') {
+            const approvedRefundAmount = getApprovedRefundAmount(request);
+            if (request.requestType === 'order_refund') {
+                const transactionId = parseOrderTransactionId(request.targetId);
+
+                if (transactionId) {
+                    await updateDeliveryStatus(transactionId, 'cancelled', {});
+                    refundOutcome = await refundTransaction(transactionId, {
+                        amount: approvedRefundAmount,
+                        reason: adminNote || request.reason || request.customerNote || 'Approved order refund',
+                        refundedBy: req.session.user.id,
+                        merchantId: request.merchantUserId || null
+                    });
+
+                    if (request.receiptId && !refundOutcome.manualRequired) {
+                        await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
+                        await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                        await reverseCampaignCashback(request.receiptId);
+                    }
+                } else {
+                    await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
+                    await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
+                    await reverseCampaignCashback(request.receiptId || request.targetId);
+                }
+            } else if (request.targetType === 'booking') {
+                const booking = await findBookingForCustomer(request.targetId, request.customerUserId);
+
+                if (booking?.transaction_id) {
+                    refundOutcome = await refundTransaction(booking.transaction_id, {
+                        amount: approvedRefundAmount,
+                        reason: adminNote || request.reason || request.customerNote || 'Approved booking refund',
+                        refundedBy: req.session.user.id,
+                        merchantId: request.merchantUserId || null,
+                        bookingId: request.targetId
+                    });
+                } else if (approvedRefundAmount > 0) {
+                    throw new Error('This paid booking is missing a linked payment transaction, so it cannot be refunded automatically.');
+                }
+
+                await markBookingCancelled(request.targetId);
+                if (refundOutcome) {
+                    await markBookingRefundStatus(request.targetId, refundOutcome.refundStatus);
+                }
+                await reverseCampaignCashback(String(request.targetId));
+                await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+                    console.error('WhatsApp cancellation notification failed:', error.message);
+                });
+                await sendSmsCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+                    console.error('SMS cancellation notification failed:', error.message);
+                });
+            }
+        }
+
         const result = await adminResolveRequest(
             request.id,
             req.session.user.id,
@@ -857,41 +918,11 @@ async function adminResolve(req, res) {
             throw new Error('This request is already closed or cannot be updated.');
         }
 
-        if (decision === 'approved') {
-            const approvedRefundAmount = getApprovedRefundAmount(request);
-            if (request.requestType === 'order_refund') {
-                const transactionId = parseOrderTransactionId(request.targetId);
-
-                if (transactionId) {
-                    await updateDeliveryStatus(transactionId, 'cancelled', {});
-                    await recordTransactionRefund(transactionId, approvedRefundAmount);
-                    await reverseCampaignCashback(`order-${transactionId}`);
-
-                    if (request.receiptId) {
-                        await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
-                        await recordHistoryRefund(request.receiptId, approvedRefundAmount);
-                        await reverseCampaignCashback(request.receiptId);
-                    }
-                } else {
-                    await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
-                    await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
-                    await reverseCampaignCashback(request.receiptId || request.targetId);
-                }
-            } else if (request.targetType === 'booking') {
-                await markBookingCancelled(request.targetId);
-                await reverseCampaignCashback(String(request.targetId));
-                await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
-                    console.error('WhatsApp cancellation notification failed:', error.message);
-                });
-                await sendSmsCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
-                    console.error('SMS cancellation notification failed:', error.message);
-                });
-            }
-        }
-
         const label = requestLabels[request.requestType] || 'Support request';
         const approvedRefundAmount = getApprovedRefundAmount(request);
-        const moneyMessage = decision === 'approved' && approvedRefundAmount > 0
+        const moneyMessage = decision === 'approved' && approvedRefundAmount > 0 && refundOutcome?.manualRequired
+            ? ` Manual refund required: $${approvedRefundAmount.toFixed(2)} must be returned through ${refundOutcome.provider || 'the original payment provider'}.`
+            : decision === 'approved' && approvedRefundAmount > 0
             ? ` Refund recorded: $${approvedRefundAmount.toFixed(2)}.`
             : '';
         const feeMessage = decision === 'approved' && request.lateFeeAmount > 0

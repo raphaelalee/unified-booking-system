@@ -405,7 +405,7 @@ function mapRow(row) {
 }
 
 function getFallbackAll() {
-    return fallbackProducts.map((product) => withDetails(product));
+    return [];
 }
 
 function getFallbackByCategory(categoryName) {
@@ -515,11 +515,11 @@ function getAllMerchantProducts(callback) {
 
 function findById(id, callback) {
     if (!callback) {
-        return fallbackProducts.find((product) => String(product.id) === String(id)) || null;
+        return null;
     }
 
     if (!Number.isInteger(Number(id))) {
-        callback(null, findById(id));
+        callback(null, null);
         return;
     }
 
@@ -549,7 +549,7 @@ function findById(id, callback) {
                 return;
             }
 
-            callback(null, rows[0] ? mapRow(rows[0]) : findById(id));
+            callback(null, rows[0] ? mapRow(rows[0]) : null);
         });
     });
 }

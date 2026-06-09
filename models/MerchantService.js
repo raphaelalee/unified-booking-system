@@ -715,7 +715,7 @@ function getProductCategories(callback) {
 
 function getSalons(callback) {
     const sql = `
-        SELECT salons.salon_id, salons.salon_name, salons.address, salons.business_category, users.email AS owner_email
+        SELECT salons.salon_id, salons.salon_name, salons.address, salons.description, salons.business_category, users.email AS owner_email
         FROM salons
         INNER JOIN users ON users.user_id = salons.merchant_id
         ORDER BY salons.salon_name

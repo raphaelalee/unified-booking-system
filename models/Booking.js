@@ -1,6 +1,5 @@
 const db = require('../db');
 
-const bookings = [];
 const BOOKING_REVIEW_STATUSES = ['pending'];
 const BOOKING_CONFIRMED_STATUSES = ['confirmed', 'paid', 'checked_in', 'completed'];
 const BOOKING_UNAVAILABLE_STATUSES = [...BOOKING_REVIEW_STATUSES, ...BOOKING_CONFIRMED_STATUSES];
@@ -570,22 +569,6 @@ function isPeakHour(bookingTime) {
     return (minutes >= 12 * 60 && minutes < 14 * 60) || minutes >= 17 * 60;
 }
 
-function create(bookingData) {
-    const booking = {
-        id: bookings.length + 1,
-        status: 'Pending',
-        createdAt: new Date(),
-        ...bookingData
-    };
-
-    bookings.push(booking);
-    return booking;
-}
-
-function getAll() {
-    return bookings;
-}
-
 function getAllInDatabase(callback) {
     const sql = `
         SELECT
@@ -771,16 +754,6 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
 
             callback(null, results[0] || null);
         });
-    });
-}
-
-function hasExistingBooking(merchantId, serviceId, bookingDate, bookingTime) {
-    return bookings.some((booking) => {
-        return booking.merchantId === Number(merchantId)
-            && booking.serviceId === Number(serviceId)
-            && booking.bookingDate === bookingDate
-            && booking.bookingTime === bookingTime
-            && booking.status !== 'Cancelled';
     });
 }
 
@@ -2198,6 +2171,21 @@ function markCancelled(bookingId, callback) {
     db.query(sql, [bookingId], callback);
 }
 
+function markRefundStatus(bookingId, refundStatus, callback) {
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `UPDATE bookings SET refund_status = ? WHERE booking_id = ?`,
+            [refundStatus || 'refunded', bookingId],
+            callback
+        );
+    });
+}
+
 function cancelForCustomer(bookingId, userId, reason, refundStatus, callback) {
     const sql = `
         UPDATE bookings
@@ -2347,7 +2335,6 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
 
 module.exports = {
     attachTransaction,
-    create,
     autoConfirmBooking,
     createCustomerBooking,
     createInDatabase,
@@ -2364,7 +2351,6 @@ module.exports = {
     getReceiptById,
     getRescheduleSettings,
     getRescheduleSuggestionCandidates,
-    getAll,
     getAllInDatabase,
     getByMerchantUserId,
     getBookingDateState,
@@ -2378,11 +2364,11 @@ module.exports = {
     filterSlotsForBookingDate,
     getWhatsAppReminderCandidates,
     ensureBookingManagementSchema,
-    hasExistingBooking,
     hasExistingBookingInDatabase,
     hasBookingClash,
     markWhatsAppReminderSent,
     markCancelled,
+    markRefundStatus,
     markCompleted,
     markConfirmedForCustomer,
     markCheckedIn,

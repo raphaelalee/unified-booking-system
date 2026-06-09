@@ -1,6 +1,5 @@
 const QRCode = require('qrcode');
 const crypto = require('crypto');
-const Merchant = require('../models/Merchant');
 const MerchantService = require('../models/MerchantService');
 const Promotion = require('../models/Promotion');
 const Booking = require('../models/Booking');
@@ -16,6 +15,7 @@ const User = require('../models/User');
 const GiftCardVoucher = require('../models/GiftCardVoucher');
 const GiftCardConfig = require('../models/GiftCardConfig');
 const FavouriteMerchant = require('../models/FavouriteMerchant');
+const CustomerAddress = require('../models/CustomerAddress');
 const PaymentAttempt = require('../models/PaymentAttempt');
 const CustomerCart = require('../models/CustomerCart');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
@@ -60,15 +60,6 @@ function buildPickupMerchantOptions(cart = []) {
             optionMap.set(String(item.merchantId), {
                 id: String(item.merchantId),
                 name: item.merchantName
-            });
-        }
-    });
-
-    Merchant.getAll().forEach((merchant) => {
-        if (merchant?.id && merchant?.name) {
-            optionMap.set(String(merchant.id), {
-                id: String(merchant.id),
-                name: merchant.name
             });
         }
     });
@@ -215,6 +206,95 @@ function sortProductsByFeatured(products = []) {
 
         return Number(right.id || 0) - Number(left.id || 0);
     });
+}
+
+function matchesPublicSearch(search, values = []) {
+    const normalized = String(search || '').trim().toLowerCase();
+
+    if (!normalized) {
+        return true;
+    }
+
+    return values.some((value) => String(value || '').toLowerCase().includes(normalized));
+}
+
+function mapSalonForPublic(row) {
+    return {
+        id: row.salon_id,
+        salonId: row.salon_id,
+        name: row.salon_name,
+        category: row.business_category || 'Merchant',
+        location: row.address || 'Singapore',
+        description: row.description || '',
+        ownerEmail: row.owner_email || '',
+        rating: 'New',
+        services: []
+    };
+}
+
+function getPublicMerchants(search, callback) {
+    return MerchantService.getSalons((error, salons = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, salons
+            .map(mapSalonForPublic)
+            .filter((merchant) => matchesPublicSearch(search, [
+                merchant.name,
+                merchant.category,
+                merchant.location,
+                merchant.description,
+                merchant.ownerEmail
+            ])));
+    });
+}
+
+function mapServiceForPublic(service, req) {
+    return {
+        ...service,
+        merchantId: service.salonId,
+        merchantName: service.salonName,
+        merchantLocation: service.salonAddress || '',
+        merchantCategory: service.category || 'Service',
+        merchantRating: 'New',
+        serviceBookingPath: `/booking/${service.salonId}?serviceId=${service.id}`,
+        serviceBookingUrl: `${req.protocol}://${req.get('host')}/booking/${service.salonId}?serviceId=${service.id}`
+    };
+}
+
+function getPublicServiceCatalog(req, search, callback) {
+    return MerchantService.getAllServices((error, services = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, services
+            .map((service) => mapServiceForPublic(service, req))
+            .filter((service) => !service.inventoryBlocked)
+            .filter((service) => matchesPublicSearch(search, [
+                service.name,
+                service.category,
+                service.merchantName,
+                service.merchantLocation,
+                service.description
+            ])));
+    });
+}
+
+function getPortalStatsFromServices(services = [], promotions = []) {
+    const prices = services.map((service) => Number(service.price)).filter((price) => !Number.isNaN(price));
+    const merchantIds = new Set(services.map((service) => service.merchantId || service.salonId).filter(Boolean));
+
+    return {
+        merchantCount: merchantIds.size,
+        serviceCount: services.length,
+        promotionCount: Array.isArray(promotions) ? promotions.length : 0,
+        slotCount: services.reduce((total, service) => total + (service.slots || []).length, 0),
+        startingPrice: prices.length > 0 ? Math.min(...prices) : 0
+    };
 }
 
 function calculateVoucherDiscount(voucher, amount) {
@@ -1013,32 +1093,9 @@ function getBookingAvailability(req, res) {
         });
     }
 
-    const respondWithFallbackSlots = () => {
-        const merchant = Merchant.findById(merchantId);
-        const service = getSelectedService(merchant, serviceId) || getServiceByOptionId(merchant, serviceId);
-        const selection = getBookableSelection(service, serviceId);
-        const bookableItem = selection.selectedOption || service;
-        const fallbackSlots = Array.isArray(bookableItem?.slots) ? bookableItem.slots.map(normalizeBookingTime).filter(Boolean) : [];
-        const dateFilteredSlots = Booking.filterSlotsForBookingDate(fallbackSlots, bookingDate).slots;
-        const availableSlots = dateFilteredSlots.filter((slot) => {
-            return !Booking.hasExistingBooking(merchantId, service?.id, bookingDate, slot);
-        });
-
-        return res.json({
-            success: true,
-            slots: availableSlots,
-            message: availableSlots.length ? '' : 'No available slots for this date.',
-            meta: { source: 'fallback' }
-        });
-    };
-
     return Booking.getAvailableSlots(merchantId, serviceId, bookingDate, (error, slots = [], meta = {}) => {
         if (error) {
             console.error(error);
-
-            if (Merchant.findById(merchantId)) {
-                return respondWithFallbackSlots();
-            }
 
             return res.status(500).json({
                 success: false,
@@ -1054,19 +1111,6 @@ function getBookingAvailability(req, res) {
             meta
         });
     });
-}
-
-function rejectInvalidQrToken(req, res, merchant) {
-    if (!req.params.qrToken || Merchant.hasValidQrToken(merchant, req.params.qrToken)) {
-        return false;
-    }
-
-    res.status(404).render('error', {
-        title: 'Invalid Booking QR',
-        message: 'This QR booking link does not belong to the selected merchant.'
-    });
-
-    return true;
 }
 
 function renderMerchantDetail(req, res, merchant, options = {}) {
@@ -1199,10 +1243,6 @@ function validateBooking(merchant, form) {
         if (!currentlyBookableSlots.includes(normalizedBookingTime)) {
             errors.push('This time slot is no longer available. Please choose another time.');
         }
-    }
-
-    if (service && Booking.hasExistingBooking(merchant.id, service.id, form.bookingDate, normalizedBookingTime)) {
-        errors.push('This slot is already booked. Please choose another time.');
     }
 
     const serviceName = serviceSelection.selectedOption
@@ -1385,11 +1425,16 @@ function validatePromotionForBooking(req, selectedPromotion, validation, callbac
 function showHome(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const serviceCatalog = Merchant.getServiceCatalog(search).map((service) => ({
-        ...service,
-        serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
-    }));
+
+    return getPublicMerchants(search, (publicMerchantError, publicMerchants = []) => {
+        if (publicMerchantError) {
+            console.error(publicMerchantError);
+        }
+
+    return getPublicServiceCatalog(req, search, (catalogError, serviceCatalog = []) => {
+        if (catalogError) {
+            console.error(catalogError);
+        }
 
     return MerchantService.getFeaturedMerchants((merchantError, featuredMerchants = []) => {
         if (merchantError) {
@@ -1408,10 +1453,10 @@ function showHome(req, res) {
 
                 res.render('home', {
                     title: 'Vaniday',
-                    merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(Merchant.getAll(search), featuredMerchants)),
+                    merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(publicMerchants, featuredMerchants)),
                     favouriteIds,
                     serviceCatalog,
-                    portalStats: Merchant.getPortalStats(search),
+                    portalStats: getPortalStatsFromServices(serviceCatalog),
                     search,
                     success: req.session.success,
                     featuredMerchants: featuredMerchants.slice(0, 6),
@@ -1425,36 +1470,26 @@ function showHome(req, res) {
             });
         });
     });
+    });
+    });
 }
 
 function showServices(req, res) {
     const search = req.query.search || '';
     const filter = (req.query.filter || '').toLowerCase();
     const favouriteIds = req.session.favouriteMerchantIds || [];
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    return MerchantService.getAllServices((serviceError, databaseServices = []) => {
+    return getPublicMerchants(search, (merchantError, merchants = []) => {
+        if (merchantError) {
+            console.error(merchantError);
+        }
+
+    return getPublicServiceCatalog(req, search, (serviceError, databaseServices = []) => {
         if (serviceError) {
             console.error(serviceError);
         }
 
-        const sourceServices = serviceError || databaseServices.length === 0
-            ? Merchant.getServiceCatalog(search)
-            : databaseServices.map((service) => ({
-                ...service,
-                merchantId: service.salonId,
-                merchantName: service.salonName,
-                merchantLocation: service.salonAddress || '',
-                merchantCategory: service.category || 'Service',
-                merchantRating: 'New',
-                serviceBookingPath: `/booking/${service.salonId}?serviceId=${service.id}`
-            }));
-        const serviceCatalog = sortServicesByFeatured(sourceServices
-            .filter((service) => !service.inventoryBlocked)
-            .map((service) => ({
-            ...service,
-            serviceBookingUrl: `${baseUrl}${service.serviceBookingPath}`
-        })));
+        const serviceCatalog = sortServicesByFeatured(databaseServices);
         return Promise.all(serviceCatalog.map(async (service) => ({
             ...service,
             campaignCashback: await getCampaignCashbackEstimate({
@@ -1510,79 +1545,27 @@ function showServices(req, res) {
 
             return res.render('services', {
                 title: 'Services',
-                merchants: Merchant.getAll(search),
+                merchants,
                 favouriteIds,
                 serviceCatalog: filteredCatalog,
-                portalStats: serviceError || databaseServices.length === 0
-                    ? Merchant.getPortalStats(search)
-                    : {
-                        merchantCount: merchantIds.size,
-                        serviceCount: filteredCatalog.length,
-                        promotionCount: Array.isArray(promoRows) ? promoRows.length : 0,
-                        slotCount: filteredCatalog.reduce((total, service) => total + (service.slots || []).length, 0),
-                        startingPrice: prices.length > 0 ? Math.min(...prices) : 0
-                    },
+                portalStats: {
+                    merchantCount: merchantIds.size,
+                    serviceCount: filteredCatalog.length,
+                    promotionCount: Array.isArray(promoRows) ? promoRows.length : 0,
+                    slotCount: filteredCatalog.reduce((total, service) => total + (service.slots || []).length, 0),
+                    startingPrice: prices.length > 0 ? Math.min(...prices) : 0
+                },
                 search,
                 showChatbot: true
             });
         });
         });
     });
+    });
 }
 
 function buildPromotionOffers() {
-    const discountPattern = [25, 20, 15, 10, 5];
-    const cashbackPattern = [10, 9, 8, 7, 6, 5];
-
-    return Merchant.getAll().flatMap((merchant) => {
-        return merchant.services.flatMap((service) => {
-            const options = getServiceOptions(service);
-            const items = options.length > 0 ? options : [service];
-
-            return items.map((item, index) => {
-                const basePrice = Number(item.price);
-                const campaignLabel = index === 0 ? 'First Trial' : index === 1 ? 'Happy Hour' : '1 For 1';
-                const discountIndex = (merchant.id + service.id + index) % discountPattern.length;
-                const cashbackIndex = (merchant.id + service.id + index) % cashbackPattern.length;
-                const discountPercent = discountPattern[discountIndex];
-                const cashbackPercent = cashbackPattern[cashbackIndex];
-                const originalPrice = basePrice;
-                const price = Math.max(1, Math.round((basePrice * (100 - discountPercent))) / 100);
-
-                return {
-                    id: `${merchant.id}-${service.id}-${item.id || index}`,
-                    merchantId: merchant.id,
-                    merchantName: merchant.name,
-                    merchantLocation: merchant.location,
-                    merchantCategory: merchant.category,
-                    merchantRating: merchant.rating,
-                    merchantPromotion: merchant.promotion,
-                    name: options.length > 0 ? `${service.name} - ${item.name}` : service.name,
-                    serviceCategory: service.name,
-                    duration: item.duration || service.duration,
-                    price,
-                    originalPrice,
-                    discountPercent,
-                    cashbackPercent,
-                    campaignLabel,
-                    priceTier: price < 30 ? '$' : price < 55 ? '$$' : price < 80 ? '$$$' : '$$$$',
-                    regions: [merchant.location, merchant.category],
-                    serviceBookingPath: appendQueryParams(
-                        `/booking/${merchant.id}/${merchant.qrToken}?serviceId=${encodeURIComponent(service.id)}`,
-                        {
-                            source: 'promotions',
-                            serviceOptionId: options.length > 0 ? item.id : '',
-                            promoCampaign: campaignLabel,
-                            promoTitle: options.length > 0 ? `${service.name} - ${item.name}` : service.name,
-                            promoPrice: price,
-                            promoOriginalPrice: originalPrice,
-                            promoDiscountPercent: discountPercent
-                        }
-                    )
-                };
-            });
-        });
-    }).sort((left, right) => right.discountPercent - left.discountPercent);
+    return [];
 }
 
 function calculatePromotionPrice(basePrice, promotion) {
@@ -2004,6 +1987,11 @@ function listMerchants(req, res) {
     const search = req.query.search || '';
     const favouriteIds = req.session.favouriteMerchantIds || [];
 
+    return getPublicMerchants(search, (merchantListError, merchants = []) => {
+        if (merchantListError) {
+            console.error(merchantListError);
+        }
+
     return MerchantService.getFeaturedMerchants((error, featuredMerchants = []) => {
         if (error) {
             console.error(error);
@@ -2011,29 +1999,37 @@ function listMerchants(req, res) {
 
         res.render('merchants', {
             title: 'Merchants',
-            merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(Merchant.getAll(search), featuredMerchants)),
+            merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(merchants, featuredMerchants)),
             featuredMerchants,
             favouriteIds,
             search
         });
     });
+    });
 }
 
 function showMerchant(req, res) {
-    const merchant = Merchant.findById(req.params.id);
+    return MerchantService.getMerchantBySalonId(req.params.id, (error, merchant) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant data could not be loaded from the database.'
+            });
+        }
 
-    if (!merchant) {
-        return res.status(404).render('error', {
-            title: 'Merchant Not Found',
-            message: 'The merchant you selected could not be found.'
-        });
-    }
+        if (!merchant) {
+            return res.status(404).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant you selected could not be found.'
+            });
+        }
 
-    if (req.session.user?.role !== 'merchant') {
-        return renderMerchantDetail(req, res, merchant);
-    }
+        if (req.session.user?.role !== 'merchant') {
+            return renderMerchantDetail(req, res, merchant);
+        }
 
-    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, ownedMerchant) => {
+        return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, ownedMerchant) => {
         if (lookupError) {
             console.error(lookupError);
             return renderMerchantDetail(req, res, merchant);
@@ -2042,6 +2038,7 @@ function showMerchant(req, res) {
         return renderMerchantDetail(req, res, merchant, {
             canGenerateQr: Boolean(ownedMerchant && String(ownedMerchant.id) === String(merchant.id))
         });
+    });
     });
 }
 
@@ -2181,50 +2178,25 @@ function saveStorefrontBooking(req, res) {
 }
 
 function showBookingPage(req, res) {
-    const tokenMerchant = Merchant.findById(req.params.merchantId);
-
-    if (!tokenMerchant) {
-        return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, databaseMerchant) => {
-            if (error) {
-                console.error(error);
-                return res.status(500).render('error', {
-                    title: 'Merchant Not Found',
-                    message: 'The merchant booking page could not be loaded.'
-                });
-            }
-
-            if (!databaseMerchant) {
-                return res.status(404).render('error', {
-                    title: 'Merchant Not Found',
-                    message: 'The merchant booking page could not be found.'
-                });
-            }
-
-            return res.redirect(appendQueryParams(getMerchantStorefrontPath(databaseMerchant), {
-                serviceId: req.query.serviceId || ''
-            }));
-        });
-    }
-
-    if (rejectInvalidQrToken(req, res, tokenMerchant)) {
-        return null;
-    }
-
-    if (!req.params.qrToken && tokenMerchant.qrToken) {
-        return res.redirect(getBookingPath(tokenMerchant, getSelectedService(tokenMerchant, req.query.serviceId)));
-    }
-
     return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, databaseMerchant) => {
         if (error) {
             console.error(error);
-            return renderBookingPage(req, res, tokenMerchant);
+            return res.status(500).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant booking page could not be loaded.'
+            });
         }
 
-        const merchant = databaseMerchant
-            ? { ...tokenMerchant, ...databaseMerchant, qrToken: tokenMerchant.qrToken }
-            : tokenMerchant;
+        if (!databaseMerchant) {
+            return res.status(404).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant booking page could not be found.'
+            });
+        }
 
-        return renderBookingPage(req, res, merchant);
+        return res.redirect(appendQueryParams(getMerchantStorefrontPath(databaseMerchant), {
+            serviceId: req.query.serviceId || ''
+        }));
     });
 }
 
@@ -2280,34 +2252,29 @@ function showSecureScanBooking(req, res) {
 }
 
 function saveQrBooking(req, res) {
-    const tokenMerchant = Merchant.findById(req.params.merchantId);
-
-    if (!tokenMerchant) {
-        return res.status(404).render('error', {
-            title: 'Merchant Not Found',
-            message: 'The merchant booking page could not be found.'
-        });
-    }
-
-    if (rejectInvalidQrToken(req, res, tokenMerchant)) {
-        return null;
-    }
-
-    if (!req.params.qrToken) {
+    if (!req.params.qrToken || !verifyMerchantToken(req.params.merchantId, req.params.qrToken)) {
         return res.status(400).render('error', {
             title: 'Invalid Booking QR',
             message: 'Booking requests must use this merchant-specific QR booking link.'
         });
     }
 
-    return MerchantService.getMerchantBySalonId(req.params.merchantId, (merchantLookupError, databaseMerchant) => {
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (merchantLookupError, merchant) => {
         if (merchantLookupError) {
             console.error(merchantLookupError);
+            return res.status(500).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant booking page could not be loaded.'
+            });
         }
 
-        const merchant = databaseMerchant
-            ? { ...tokenMerchant, ...databaseMerchant, qrToken: tokenMerchant.qrToken }
-            : tokenMerchant;
+        if (!merchant) {
+            return res.status(404).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant booking page could not be found.'
+            });
+        }
+
         const validation = validateBooking(merchant, req.body);
 
         if (validation.errors.length > 0) {
@@ -2704,7 +2671,14 @@ function confirmBookingCheckIn(req, res) {
 }
 
 function createBooking(req, res) {
-    const merchant = Merchant.findById(req.params.id);
+    return MerchantService.getMerchantBySalonId(req.params.id, (lookupError, merchant) => {
+    if (lookupError) {
+        console.error(lookupError);
+        return res.status(500).render('error', {
+            title: 'Merchant Not Found',
+            message: 'The merchant you selected could not be loaded.'
+        });
+    }
 
     if (!merchant) {
         return res.status(404).render('error', {
@@ -2758,6 +2732,7 @@ function createBooking(req, res) {
             : `Booking submitted for ${validation.serviceName} at ${merchant.name} and is waiting for merchant review.`;
         return res.redirect('/');
     });
+    });
 }
 
 function wantsCartJson(req) {
@@ -2783,8 +2758,16 @@ function respondCartAdded(req, res, message, item = null) {
 }
 
 function addToCart(req, res) {
-    const merchant = Merchant.findById(req.params.merchantId);
-    const service = Merchant.findService(req.params.merchantId, req.body.serviceId);
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (lookupError, merchant) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Service Not Found',
+                message: 'The service you selected could not be loaded.'
+            });
+        }
+
+        const service = getSelectedService(merchant, req.body.serviceId);
 
     if (!merchant || !service) {
         return res.status(404).render('error', {
@@ -2798,7 +2781,7 @@ function addToCart(req, res) {
         id: Date.now(),
         merchantId: merchant.id,
         merchantName: merchant.name,
-        merchantQrToken: merchant.qrToken,
+        merchantQrToken: signMerchantToken(merchant.id),
         serviceId: service.id,
         serviceName: service.name,
         duration: service.duration,
@@ -2807,6 +2790,7 @@ function addToCart(req, res) {
     req.session.cart.push(cartItem);
 
     return respondCartAdded(req, res, `${service.name} was added to your cart.`, cartItem);
+    });
 }
 
 function addProductToCart(req, res) {
@@ -2933,11 +2917,9 @@ function showCart(req, res) {
             };
         }
 
-        const merchant = Merchant.findById(item.merchantId);
-
         return {
             ...item,
-            merchantQrToken: merchant ? merchant.qrToken : null,
+            merchantQrToken: signMerchantToken(item.merchantId),
             quantity,
             lineTotal
         };
@@ -3153,7 +3135,14 @@ function updateCartItem(req, res) {
 }
 
 function toggleFavouriteMerchant(req, res) {
-    const merchant = Merchant.findById(req.params.merchantId);
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (lookupError, merchant) => {
+        if (lookupError) {
+            console.error(lookupError);
+            return res.status(500).render('error', {
+                title: 'Merchant Not Found',
+                message: 'The merchant you selected could not be loaded.'
+            });
+        }
 
     if (!merchant) {
         return res.status(404).render('error', {
@@ -3183,6 +3172,7 @@ function toggleFavouriteMerchant(req, res) {
         req.session.favouriteMerchantIds = Array.from(favouriteIds);
         req.session.favouritesLoadedForUserId = req.session.user.id;
         return res.redirect(redirectPath);
+    });
     });
 }
 
@@ -3539,6 +3529,9 @@ async function finalizeHitPayPayment(req, requestId, pendingPayment) {
     if (shouldTrustHitPayRedirect()) {
         const receiptId = await completeTrustedPayment(req, {
             ...pendingPayment,
+            paymentProvider: 'hitpay',
+            providerPaymentId: requestId,
+            providerSessionId: requestId,
             hitpayRequestId: requestId,
             hitpayStatus: 'redirect_completed'
         }, 'PayNow');
@@ -3577,6 +3570,9 @@ async function finalizeHitPayPayment(req, requestId, pendingPayment) {
 
     const receiptId = await completeTrustedPayment(req, {
         ...pendingPayment,
+        paymentProvider: 'hitpay',
+        providerPaymentId: requestId,
+        providerSessionId: requestId,
         hitpayRequestId: requestId,
         hitpayStatus: actualStatus
     }, 'PayNow');
@@ -4169,12 +4165,25 @@ async function prepareTrustedPayment(req, payment) {
 }
 
 function persistPaidTransaction(payment, paymentMethod) {
+    const normalizedMethod = String(paymentMethod || '').trim().toLowerCase();
+    const inferredProvider = payment.paymentProvider
+        || (normalizedMethod.includes('stripe') ? 'stripe'
+            : normalizedMethod.includes('paypal') ? 'paypal'
+                : normalizedMethod.includes('paynow') || normalizedMethod.includes('hitpay') ? 'hitpay'
+                    : normalizedMethod.includes('nets') ? 'nets'
+                        : 'direct');
+
     return new Promise((resolve, reject) => {
         Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], {
             originalAmount: Number(payment.originalAmount || payment.amount || 0),
             cashbackUsed: Number(payment.cashbackRedeemed || 0),
             bookingId: payment.kind === 'booking' ? payment.bookingId || payment.receiptId : null,
-            createOrder: payment.kind === 'order'
+            createOrder: payment.kind === 'order',
+            currency: payment.currency || 'SGD',
+            paymentProvider: inferredProvider,
+            providerPaymentId: payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || null,
+            providerSessionId: payment.providerSessionId || payment.stripeSessionId || payment.paypalOrderId || null,
+            providerCaptureId: payment.providerCaptureId || payment.paypalCaptureId || null
         }, (error, result) => {
             if (error) {
                 reject(error);
@@ -4376,21 +4385,32 @@ function savePaidReceipt(req, payment, paymentMethod) {
                     receipt.campaignCashbackBreakdown = cashbackAward.breakdown || [];
                     req.session.receipts[receiptId] = receipt;
 
-                    if (payment.kind === 'order' && req.session.pendingPayments) {
-                        delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
-                    }
+                    const finishReceiptSave = () => {
+                        if (payment.kind === 'order' && req.session.pendingPayments) {
+                            delete req.session.pendingPayments[payment.pendingPaymentId || receiptId];
+                        }
 
-                    if (payment.kind === 'booking') {
-                        req.session.lastBookingId = null;
-                    }
+                        if (payment.kind === 'booking') {
+                            req.session.lastBookingId = null;
+                        }
 
-                    req.session.lastPayment = {
-                        receiptId,
-                        loyaltyAward: awardResult,
-                        campaignCashbackAward: cashbackAward
+                        req.session.lastPayment = {
+                            receiptId,
+                            loyaltyAward: awardResult,
+                            campaignCashbackAward: cashbackAward
+                        };
+
+                        resolve({ receipt, awardResult, cashbackAward });
                     };
 
-                    resolve({ receipt, awardResult, cashbackAward });
+                    CustomerAddress.saveFromReceipt(receipt, (addressError) => {
+                        if (addressError) {
+                            reject(addressError);
+                            return;
+                        }
+
+                        finishReceiptSave();
+                    });
                 });
             });
         });
@@ -4924,6 +4944,10 @@ async function capturePayPalOrder(req, res) {
 
         const receiptId = await completeTrustedPayment(req, {
             ...pendingPayment,
+            paymentProvider: 'paypal',
+            providerPaymentId: details.captureId,
+            providerSessionId: details.orderId,
+            providerCaptureId: details.captureId,
             paypalOrderId: details.orderId,
             paypalCaptureId: details.captureId,
             paypalPayerEmail: details.payerEmail,
@@ -5290,7 +5314,14 @@ async function handleStripeReturn(req, res) {
         }
 
         // Payment succeeded - complete the transaction
-        const receiptId = await completeTrustedPayment(req, pendingPayment, 'Stripe');
+        const receiptId = await completeTrustedPayment(req, {
+            ...pendingPayment,
+            paymentProvider: 'stripe',
+            providerPaymentId: paymentIntent.id,
+            providerSessionId: sessionId,
+            stripePaymentIntentId: paymentIntent.id,
+            stripeSessionId: sessionId
+        }, 'Stripe');
         delete req.session.pendingStripePayments[sessionId];
         req.session.lastPayment = { receiptId };
         await saveSession(req);

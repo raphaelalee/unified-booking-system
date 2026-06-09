@@ -84,6 +84,38 @@ function ensureFulfilmentSchema(callback) {
             alters.push('ADD COLUMN cashback_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
         }
 
+        if (!fields.has('currency')) {
+            alters.push("ADD COLUMN currency VARCHAR(10) NOT NULL DEFAULT 'SGD'");
+        }
+
+        if (!fields.has('payment_provider')) {
+            alters.push('ADD COLUMN payment_provider VARCHAR(40) DEFAULT NULL');
+        }
+
+        if (!fields.has('provider_payment_id')) {
+            alters.push('ADD COLUMN provider_payment_id VARCHAR(190) DEFAULT NULL');
+        }
+
+        if (!fields.has('provider_session_id')) {
+            alters.push('ADD COLUMN provider_session_id VARCHAR(190) DEFAULT NULL');
+        }
+
+        if (!fields.has('provider_capture_id')) {
+            alters.push('ADD COLUMN provider_capture_id VARCHAR(190) DEFAULT NULL');
+        }
+
+        if (!fields.has('provider_refund_id')) {
+            alters.push('ADD COLUMN provider_refund_id VARCHAR(190) DEFAULT NULL');
+        }
+
+        if (!fields.has('refund_reason')) {
+            alters.push('ADD COLUMN refund_reason TEXT DEFAULT NULL');
+        }
+
+        if (!fields.has('refunded_by')) {
+            alters.push('ADD COLUMN refunded_by INT DEFAULT NULL');
+        }
+
         if (alters.length === 0) {
             fulfilmentSchemaReady = true;
             callback(null);
@@ -144,8 +176,21 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
             }
 
             const transactionSql = `
-                INSERT INTO transactions (user_id, total_amount, payment_status, payment_method, booking_id, original_amount, cashback_used)
-                VALUES (?, ?, 'paid', ?, ?, ?, ?)
+                INSERT INTO transactions (
+                    user_id,
+                    total_amount,
+                    payment_status,
+                    payment_method,
+                    booking_id,
+                    original_amount,
+                    cashback_used,
+                    currency,
+                    payment_provider,
+                    provider_payment_id,
+                    provider_session_id,
+                    provider_capture_id
+                )
+                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
@@ -154,7 +199,12 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                 paymentMethod || 'card',
                 transactionOptions.bookingId || null,
                 Number(transactionOptions.originalAmount || amount || 0),
-                Number(transactionOptions.cashbackUsed || 0)
+                Number(transactionOptions.cashbackUsed || 0),
+                transactionOptions.currency || 'SGD',
+                transactionOptions.paymentProvider || null,
+                transactionOptions.providerPaymentId || null,
+                transactionOptions.providerSessionId || null,
+                transactionOptions.providerCaptureId || null
             ], (insertError, transactionResult) => {
                 if (insertError) {
                     return connection.rollback(() => {
@@ -657,9 +707,17 @@ function getCustomerOrders(userId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.currency,
+                transactions.payment_provider,
+                transactions.provider_payment_id,
+                transactions.provider_session_id,
+                transactions.provider_capture_id,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.refund_status,
                 transactions.refunded_amount,
+                transactions.refund_reason,
+                transactions.refunded_by,
                 transactions.created_at,
                 COUNT(order_items.order_item_id) AS item_count,
                 GROUP_CONCAT(products.name ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
@@ -677,9 +735,17 @@ function getCustomerOrders(userId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.currency,
+                transactions.payment_provider,
+                transactions.provider_payment_id,
+                transactions.provider_session_id,
+                transactions.provider_capture_id,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.refund_status,
                 transactions.refunded_amount,
+                transactions.refund_reason,
+                transactions.refunded_by,
                 transactions.created_at
             ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
         `;
@@ -704,9 +770,17 @@ function getCustomerOrders(userId, callback) {
                 totalAmount: Number(row.total_amount || 0),
                 paymentStatus: row.payment_status || 'paid',
                 paymentMethod: row.payment_method || 'card',
+                currency: row.currency || 'SGD',
+                paymentProvider: row.payment_provider || '',
+                providerPaymentId: row.provider_payment_id || '',
+                providerSessionId: row.provider_session_id || '',
+                providerCaptureId: row.provider_capture_id || '',
+                providerRefundId: row.provider_refund_id || '',
                 deliveryStatus: row.delivery_status || 'processing',
                 refundStatus: row.refund_status || 'none',
                 refundedAmount: Number(row.refunded_amount || 0),
+                refundReason: row.refund_reason || '',
+                refundedBy: row.refunded_by || null,
                 createdAt: row.created_at
             })));
         });
@@ -727,9 +801,17 @@ function getOrderById(transactionId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.currency,
+                transactions.payment_provider,
+                transactions.provider_payment_id,
+                transactions.provider_session_id,
+                transactions.provider_capture_id,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.refund_status,
                 transactions.refunded_amount,
+                transactions.refund_reason,
+                transactions.refunded_by,
                 transactions.created_at,
                 users.name AS customer_name,
                 users.email AS customer_email,
@@ -749,9 +831,17 @@ function getOrderById(transactionId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.currency,
+                transactions.payment_provider,
+                transactions.provider_payment_id,
+                transactions.provider_session_id,
+                transactions.provider_capture_id,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.refund_status,
                 transactions.refunded_amount,
+                transactions.refund_reason,
+                transactions.refunded_by,
                 transactions.created_at,
                 users.name,
                 users.email
@@ -787,9 +877,17 @@ function getOrderById(transactionId, callback) {
                 totalAmount: Number(row.total_amount || 0),
                 paymentStatus: row.payment_status || 'paid',
                 paymentMethod: row.payment_method || 'card',
+                currency: row.currency || 'SGD',
+                paymentProvider: row.payment_provider || '',
+                providerPaymentId: row.provider_payment_id || '',
+                providerSessionId: row.provider_session_id || '',
+                providerCaptureId: row.provider_capture_id || '',
+                providerRefundId: row.provider_refund_id || '',
                 deliveryStatus: row.delivery_status || 'processing',
                 refundStatus: row.refund_status || 'none',
                 refundedAmount: Number(row.refunded_amount || 0),
+                refundReason: row.refund_reason || '',
+                refundedBy: row.refunded_by || null,
                 createdAt: row.created_at
             });
         });
@@ -872,42 +970,126 @@ function markPickupCollected(transactionId, callback) {
     });
 }
 
-function recordRefund(transactionId, amount, callback) {
+function recordRefund(transactionId, amount, options = {}, callback) {
+    const done = typeof options === 'function' ? options : callback;
+    const refundOptions = typeof options === 'function' ? {} : options || {};
+
     ensureFulfilmentSchema((schemaError) => {
         if (schemaError) {
-            callback(schemaError);
+            done(schemaError);
             return;
         }
 
         const sql = `
             UPDATE transactions
             SET
-                refund_status = 'refunded',
+                refund_status = ?,
                 refunded_amount = ?,
-                refunded_at = CURRENT_TIMESTAMP
+                refunded_at = CURRENT_TIMESTAMP,
+                provider_refund_id = COALESCE(?, provider_refund_id),
+                refund_reason = COALESCE(?, refund_reason),
+                refunded_by = COALESCE(?, refunded_by)
             WHERE transaction_id = ?
         `;
 
-        db.query(sql, [Number(amount || 0), transactionId], (error, result) => {
+        db.query(sql, [
+            refundOptions.refundStatus || 'refunded',
+            Number(amount || 0),
+            refundOptions.providerRefundId || null,
+            refundOptions.refundReason || null,
+            refundOptions.refundedBy || null,
+            transactionId
+        ], (error, result) => {
             if (error) {
-                callback(error);
+                done(error);
                 return;
             }
 
             Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
                 if (reverseError) {
-                    callback(reverseError);
+                    done(reverseError);
                     return;
                 }
 
-                callback(null, result);
+                done(null, result);
             });
         });
     });
 }
 
+function getById(transactionId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `SELECT
+                transaction_id,
+                user_id,
+                total_amount,
+                payment_status,
+                payment_method,
+                booking_id,
+                order_id,
+                currency,
+                payment_provider,
+                provider_payment_id,
+                provider_session_id,
+                provider_capture_id,
+                provider_refund_id,
+                refund_status,
+                refunded_amount,
+                refund_reason,
+                refunded_by,
+                refunded_at,
+                created_at
+             FROM transactions
+             WHERE transaction_id = ?
+             LIMIT 1`,
+            [transactionId],
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                const row = rows[0];
+                if (!row) {
+                    callback(null, null);
+                    return;
+                }
+
+                callback(null, {
+                    transactionId: row.transaction_id,
+                    userId: row.user_id,
+                    totalAmount: Number(row.total_amount || 0),
+                    paymentStatus: row.payment_status || 'pending',
+                    paymentMethod: row.payment_method || '',
+                    bookingId: row.booking_id || null,
+                    orderId: row.order_id || null,
+                    currency: row.currency || 'SGD',
+                    paymentProvider: row.payment_provider || '',
+                    providerPaymentId: row.provider_payment_id || '',
+                    providerSessionId: row.provider_session_id || '',
+                    providerCaptureId: row.provider_capture_id || '',
+                    providerRefundId: row.provider_refund_id || '',
+                    refundStatus: row.refund_status || 'none',
+                    refundedAmount: Number(row.refunded_amount || 0),
+                    refundReason: row.refund_reason || '',
+                    refundedBy: row.refunded_by || null,
+                    refundedAt: row.refunded_at,
+                    createdAt: row.created_at
+                });
+            }
+        );
+    });
+}
+
 module.exports = {
     createPaidTransaction,
+    getById,
     getOrderById,
     getMerchantOrderReport,
     getMerchantOrderRecipients,

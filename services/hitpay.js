@@ -1,5 +1,5 @@
 const HITPAY_API_KEY = String(process.env.HITPAY_API_KEY || '').trim();
-const HITPAY_API_BASE = String(process.env.HITPAY_URL || 'https://api.sandbox.hit-pay.com').trim().replace(/\/$/, '');
+const HITPAY_API_BASE = String(process.env.HITPAY_URL || process.env.HITPAY_BASE_URL || 'https://api.sandbox.hit-pay.com').trim().replace(/\/$/, '');
 
 function isConfigured() {
     return Boolean(HITPAY_API_KEY && HITPAY_API_BASE);

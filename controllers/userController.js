@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const Booking = require('../models/Booking');
-const Merchant = require('../models/Merchant');
+const MerchantService = require('../models/MerchantService');
 const Review = require('../models/Review');
 const RewardShop = require('../models/RewardShop');
 const RewardVoucher = require('../models/RewardVoucher');
@@ -262,9 +262,7 @@ function buildProductReviewEntries(receipts = [], reviews = []) {
 
 function buildCustomerProfileExtras(req, accountUser, callback) {
     const favouriteIds = req.session.favouriteMerchantIds || [];
-    const favourites = favouriteIds
-        .map((merchantId) => Merchant.findById(merchantId))
-        .filter(Boolean);
+    let favourites = [];
     const cart = req.session.cart || [];
     const cartItemCount = getCartItemCount(cart);
     const referralCode = accountUser.referral_code || generateReferralCode(accountUser.user_id);
@@ -332,7 +330,34 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
         Loyalty.getWalletView(accountUser.user_id, finishWithWallet);
     }
 
-    PurchaseHistory.getByUserId(accountUser.user_id, (historyError, rows = []) => {
+    function loadFavouriteMerchants(next) {
+        if (!favouriteIds.length) {
+            next();
+            return;
+        }
+
+        MerchantService.getSalons((error, salons = []) => {
+            if (error) {
+                console.error(error);
+                next();
+                return;
+            }
+
+            const favouriteSet = new Set(favouriteIds.map((id) => String(id)));
+            favourites = salons
+                .filter((salon) => favouriteSet.has(String(salon.salon_id)))
+                .map((salon) => ({
+                    id: salon.salon_id,
+                    name: salon.salon_name,
+                    category: salon.business_category || 'Merchant',
+                    location: salon.address || 'Singapore',
+                    description: salon.description || ''
+                }));
+            next();
+        });
+    }
+
+    loadFavouriteMerchants(() => PurchaseHistory.getByUserId(accountUser.user_id, (historyError, rows = []) => {
         if (historyError) {
             console.error(historyError);
             loadWallet();
@@ -508,7 +533,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                 });
             });
         });
-    });
+    }));
 }
 
 function getEmptyCustomerExtras() {

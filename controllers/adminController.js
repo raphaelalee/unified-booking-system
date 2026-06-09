@@ -67,7 +67,7 @@ function buildValidationReport({ merchants, bookings, bookingError, userError })
     const merchantsMissingOwnerPhone = merchants.filter((merchant) => !merchant.owner_phone);
 
     if (bookingError) {
-        issues.push('Booking database reporting could not be loaded, so fallback booking data is displayed.');
+        issues.push('Booking database reporting could not be loaded, so booking metrics are suppressed until MySQL is available.');
     }
 
     if (userError) {
@@ -888,7 +888,7 @@ function showDashboard(req, res, options = {}) {
                                         console.error(supportError);
                                     }
 
-                                    const dashboardBookings = bookingError ? Booking.getAll() : bookings;
+                                    const dashboardBookings = bookingError ? [] : bookings;
                                     const reports = buildAdminReports(
                                         recommendedMerchants,
                                         dashboardBookings,
