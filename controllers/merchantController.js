@@ -2178,7 +2178,7 @@ function saveStorefrontBooking(req, res) {
 }
 
 function showBookingPage(req, res) {
-    return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, databaseMerchant) => {
+    return MerchantService.getMerchantBySalonId(req.params.merchantId, (error, merchant) => {
         if (error) {
             console.error(error);
             return res.status(500).render('error', {
@@ -2187,16 +2187,14 @@ function showBookingPage(req, res) {
             });
         }
 
-        if (!databaseMerchant) {
+        if (!merchant) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant booking page could not be found.'
             });
         }
 
-        return res.redirect(appendQueryParams(getMerchantStorefrontPath(databaseMerchant), {
-            serviceId: req.query.serviceId || ''
-        }));
+        return renderBookingPage(req, res, merchant);
     });
 }
 
@@ -2252,10 +2250,10 @@ function showSecureScanBooking(req, res) {
 }
 
 function saveQrBooking(req, res) {
-    if (!req.params.qrToken || !verifyMerchantToken(req.params.merchantId, req.params.qrToken)) {
+    if (req.params.qrToken && !verifyMerchantToken(req.params.merchantId, req.params.qrToken)) {
         return res.status(400).render('error', {
             title: 'Invalid Booking QR',
-            message: 'Booking requests must use this merchant-specific QR booking link.'
+            message: 'This merchant-specific QR booking link is invalid.'
         });
     }
 
