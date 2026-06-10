@@ -4,6 +4,7 @@ const Loyalty = require('./Loyalty');
 let fulfilmentSchemaReady = false;
 const DEFAULT_COMMISSION_RATE = 15;
 let merchantCommissionSchemaReady = false;
+let orderRefundSchemaReady = false;
 
 function normalizeCommissionRate(value) {
     const numeric = Number(value);
@@ -128,6 +129,78 @@ function ensureFulfilmentSchema(callback) {
             }
 
             callback(alterError);
+        });
+    });
+}
+
+function ensureOrderRefundSchema(callback) {
+    if (orderRefundSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    db.query('SHOW TABLES LIKE "orders"', (tableError, tableRows = []) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        if (!tableRows.length) {
+            orderRefundSchemaReady = true;
+            callback(null);
+            return;
+        }
+
+        db.query('SHOW COLUMNS FROM orders', (columnError, columns = []) => {
+            if (columnError) {
+                callback(columnError);
+                return;
+            }
+
+            const fields = new Set(columns.map((column) => column.Field));
+            const alters = [];
+
+            if (!fields.has('order_status')) {
+                alters.push("ADD COLUMN order_status VARCHAR(40) NOT NULL DEFAULT 'processing'");
+            }
+
+            if (!fields.has('refund_status')) {
+                alters.push("ADD COLUMN refund_status VARCHAR(40) NOT NULL DEFAULT 'none'");
+            }
+
+            if (!fields.has('refunded_amount')) {
+                alters.push('ADD COLUMN refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
+            if (!fields.has('refunded_at')) {
+                alters.push('ADD COLUMN refunded_at DATETIME DEFAULT NULL');
+            }
+
+            if (!fields.has('refund_reason')) {
+                alters.push('ADD COLUMN refund_reason TEXT DEFAULT NULL');
+            }
+
+            if (!fields.has('provider_refund_id')) {
+                alters.push('ADD COLUMN provider_refund_id VARCHAR(190) DEFAULT NULL');
+            }
+
+            if (!fields.has('refunded_by')) {
+                alters.push('ADD COLUMN refunded_by INT DEFAULT NULL');
+            }
+
+            if (!alters.length) {
+                orderRefundSchemaReady = true;
+                callback(null);
+                return;
+            }
+
+            db.query(`ALTER TABLE orders ${alters.join(', ')}`, (alterError) => {
+                if (!alterError) {
+                    orderRefundSchemaReady = true;
+                }
+
+                callback(alterError);
+            });
         });
     });
 }
@@ -980,39 +1053,127 @@ function recordRefund(transactionId, amount, options = {}, callback) {
             return;
         }
 
+        ensureOrderRefundSchema((orderSchemaError) => {
+        if (orderSchemaError) {
+            done(orderSchemaError);
+            return;
+        }
+
         const sql = `
             UPDATE transactions
             SET
                 refund_status = ?,
                 refunded_amount = ?,
                 refunded_at = CURRENT_TIMESTAMP,
+                delivery_status = CASE
+                    WHEN ? IN ('refunded', 'partially_refunded', 'manual_required') THEN 'cancelled'
+                    ELSE delivery_status
+                END,
                 provider_refund_id = COALESCE(?, provider_refund_id),
                 refund_reason = COALESCE(?, refund_reason),
                 refunded_by = COALESCE(?, refunded_by)
             WHERE transaction_id = ?
         `;
 
-        db.query(sql, [
-            refundOptions.refundStatus || 'refunded',
-            Number(amount || 0),
-            refundOptions.providerRefundId || null,
-            refundOptions.refundReason || null,
-            refundOptions.refundedBy || null,
+        const executor = refundOptions.connection || db;
+        const refundStatus = refundOptions.refundStatus || 'refunded';
+        const refundedAmount = Number(amount || 0);
+        const providerRefundId = refundOptions.providerRefundId || null;
+        const refundReason = refundOptions.refundReason || null;
+        const refundedBy = refundOptions.refundedBy || null;
+
+        console.log('[refund:sql:transactions:update:start]', {
+            transactionId,
+            refundStatus,
+            refundedAmount,
+            providerRefundId,
+            refundedBy
+        });
+
+        executor.query(sql, [
+            refundStatus,
+            refundedAmount,
+            refundStatus,
+            providerRefundId,
+            refundReason,
+            refundedBy,
             transactionId
         ], (error, result) => {
             if (error) {
+                console.error('[refund:sql:transactions:update:error]', error);
                 done(error);
                 return;
             }
 
-            Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
+            console.log('[refund:sql:transactions:update:result]', {
+                transactionId,
+                affectedRows: result?.affectedRows,
+                changedRows: result?.changedRows
+            });
+
+            const orderSql = `
+                UPDATE orders
+                SET
+                    order_status = CASE
+                        WHEN ? IN ('refunded', 'partially_refunded') THEN 'cancelled_refunded'
+                        WHEN ? = 'manual_required' THEN 'refund_pending'
+                        ELSE order_status
+                    END,
+                    refund_status = ?,
+                    refunded_amount = ?,
+                    refunded_at = CURRENT_TIMESTAMP,
+                    provider_refund_id = COALESCE(?, provider_refund_id),
+                    refund_reason = COALESCE(?, refund_reason),
+                    refunded_by = COALESCE(?, refunded_by)
+                WHERE transaction_id = ?
+            `;
+
+            console.log('[refund:sql:orders:update:start]', {
+                transactionId,
+                refundStatus,
+                refundedAmount,
+                providerRefundId,
+                refundedBy
+            });
+
+            executor.query(orderSql, [
+                refundStatus,
+                refundStatus,
+                refundStatus,
+                refundedAmount,
+                providerRefundId,
+                refundReason,
+                refundedBy,
+                transactionId
+            ], (orderError, orderResult) => {
+                if (orderError) {
+                    console.error('[refund:sql:orders:update:error]', orderError);
+                    done(orderError);
+                    return;
+                }
+
+                console.log('[refund:sql:orders:update:result]', {
+                    transactionId,
+                    affectedRows: orderResult?.affectedRows,
+                    changedRows: orderResult?.changedRows
+                });
+
+                if (refundOptions.skipLoyaltyReverse) {
+                    done(null, result);
+                    return;
+                }
+
+                Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
                 if (reverseError) {
+                    console.error('[refund:loyalty:reverse:error]', reverseError);
                     done(reverseError);
                     return;
                 }
 
                 done(null, result);
             });
+            });
+        });
         });
     });
 }

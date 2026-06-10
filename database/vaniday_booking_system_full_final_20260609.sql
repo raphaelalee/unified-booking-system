@@ -1,6 +1,6 @@
 -- Vaniday booking system full final SQL export
 -- Database: vaniday_booking_system
--- Generated: 2026-06-09T05:56:19.161Z
+-- Generated: 2026-06-10T05:44:26.654Z
 -- Includes full persistence plus payment/refund schema updates.
 
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
@@ -462,12 +462,20 @@ CREATE TABLE `orders` (
   `transaction_id` int DEFAULT NULL,
   `total_amount` decimal(10,2) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `order_status` varchar(40) NOT NULL DEFAULT 'processing',
+  `refund_status` varchar(40) NOT NULL DEFAULT 'none',
+  `refunded_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `refunded_at` datetime DEFAULT NULL,
+  `refund_reason` text,
+  `provider_refund_id` varchar(190) DEFAULT NULL,
+  `refunded_by` int DEFAULT NULL,
   PRIMARY KEY (`order_id`),
   UNIQUE KEY `uq_orders_transaction_id` (`transaction_id`),
   KEY `idx_orders_user_id` (`user_id`),
+  KEY `idx_orders_refund_status` (`refund_status`),
   CONSTRAINT `fk_orders_transaction_id` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`transaction_id`),
   CONSTRAINT `fk_orders_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Table structure for table `payment_attempts`
 CREATE TABLE `payment_attempts` (
@@ -518,7 +526,7 @@ CREATE TABLE `payment_refunds` (
   KEY `idx_payment_refunds_status` (`refund_status`),
   CONSTRAINT `fk_payment_refunds_transaction` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`transaction_id`),
   CONSTRAINT `fk_payment_refunds_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Table structure for table `products`
 CREATE TABLE `products` (
@@ -863,7 +871,7 @@ CREATE TABLE `transactions` (
   CONSTRAINT `fk_transactions_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`),
   CONSTRAINT `fk_transactions_order_item_id` FOREIGN KEY (`order_item_id`) REFERENCES `order_items` (`order_item_id`),
   CONSTRAINT `transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Table structure for table `user_vouchers`
 CREATE TABLE `user_vouchers` (
@@ -1198,12 +1206,12 @@ INSERT INTO `order_items` (`order_item_id`, `transaction_id`, `product_id`, `qua
 (6, 16, 1, 2, '18.90', 5);
 
 -- Data for table `orders`
-INSERT INTO `orders` (`order_id`, `user_id`, `transaction_id`, `total_amount`, `created_at`) VALUES
-(1, 6, 12, '18.90', '2026-06-07 17:15:40'),
-(2, 6, 13, '17.95', '2026-06-07 17:54:16'),
-(3, 1, 14, '8.91', '2026-06-08 21:34:14'),
-(4, 1, 15, '15.12', '2026-06-08 21:52:11'),
-(5, 1, 16, '78.51', '2026-06-08 22:48:17');
+INSERT INTO `orders` (`order_id`, `user_id`, `transaction_id`, `total_amount`, `created_at`, `order_status`, `refund_status`, `refunded_amount`, `refunded_at`, `refund_reason`, `provider_refund_id`, `refunded_by`) VALUES
+(1, 6, 12, '18.90', '2026-06-07 17:15:40', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL),
+(2, 6, 13, '17.95', '2026-06-07 17:54:16', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL),
+(3, 1, 14, '8.91', '2026-06-08 21:34:14', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL),
+(4, 1, 15, '15.12', '2026-06-08 21:52:11', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL),
+(5, 1, 16, '78.51', '2026-06-08 22:48:17', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL);
 
 -- Data for table `payment_attempts`
 INSERT INTO `payment_attempts` (`attempt_id`, `user_id`, `provider`, `provider_reference`, `payment_json`, `status`, `transaction_id`, `receipt_id`, `last_error`, `created_at`, `updated_at`) VALUES
@@ -1257,17 +1265,6 @@ INSERT INTO `promotions` (`promotion_id`, `salon_id`, `service_id`, `title`, `ty
 (30, 1, NULL, 'Featured Beauty Studio May', 'featured', 'tag_only', NULL, '2026-05-01 00:00:00', '2026-06-30 23:59:59', NULL, 'active', 'Featured salon placement for May.', 'Homepage and featured salon visibility only.', '2026-04-30 18:09:20', '2026-04-30 18:12:36'),
 (31, 2, NULL, 'Featured Spa Escape', 'featured', 'tag_only', NULL, '2026-05-01 00:00:00', '2026-06-30 23:59:59', NULL, 'active', 'Featured spa listing campaign.', 'Featured listing only.', '2026-04-30 18:09:20', '2026-04-30 18:12:36'),
 (32, 3, NULL, 'Featured Barber Spotlight', 'featured', 'tag_only', NULL, '2026-05-01 00:00:00', '2026-06-30 23:59:59', NULL, 'active', 'Featured merchant visibility campaign.', 'Featured listing only.', '2026-04-30 18:09:20', '2026-04-30 18:12:36');
-
--- Data for table `purchase_history`
-INSERT INTO `purchase_history` (`history_id`, `receipt_id`, `user_id`, `purchase_type`, `item_names`, `items_json`, `total_amount`, `payment_method`, `payment_status`, `created_at`, `delivery_status`, `refund_status`, `refunded_amount`, `refunded_at`, `fulfilment`, `pickup_merchant_id`, `pickup_merchant_name`, `pickup_status`, `pickup_at`, `original_amount`, `cashback_used`, `points_redeemed`, `points_discount`, `item_subtotal`, `shipping_fee`) VALUES
-(1, 'order-5', 1, 'product', 'Calming Body Oil', '[object Object]', '28.00', 'Card payment', 'paid', '2026-05-01 18:35:55', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL, NULL, NULL, '0.00', '0.00', 0, '0.00', '0.00', '0.00'),
-(3, 'order-6', 1, 'product', 'Calming Body Oil', '[object Object]', '28.00', 'Card payment', 'paid', '2026-05-01 18:49:39', 'processing', 'none', '0.00', NULL, NULL, NULL, NULL, NULL, NULL, '0.00', '0.00', 0, '0.00', '0.00', '0.00'),
-(4, 'order-11', 1, 'product', 'Repair Hair Mask', '[object Object]', '32.00', 'Apple Pay', 'paid', '2026-06-03 21:46:01', 'processing', 'none', '0.00', NULL, 'pickup', 'any', 'Any merchant', 'pending_pickup', NULL, '32.00', '0.00', 0, '0.00', '32.00', '0.00'),
-(5, 'order-12', 6, 'product', 'Repair Shampoo', '[object Object]', '18.90', 'Stripe', 'paid', '2026-06-07 17:15:40', 'processing', 'none', '0.00', NULL, 'pickup', 'any', 'Any merchant', 'pending_pickup', NULL, '18.90', '0.00', 0, '0.00', '18.90', '0.00'),
-(6, 'order-13', 6, 'product', 'Repair Shampoo', '[object Object]', '17.95', 'Stripe', 'paid', '2026-06-07 17:54:17', 'processing', 'none', '0.00', NULL, 'pickup', 'any', 'Any merchant', 'pending_pickup', NULL, '18.90', '0.95', 0, '0.00', '18.90', '0.00'),
-(7, 'order-14', 1, 'product', 'Repair Shampoo', '[object Object]', '8.91', 'Stripe', 'paid', '2026-06-08 21:34:15', 'processing', 'none', '0.00', NULL, 'pickup', 'any', 'Any merchant', 'pending_pickup', NULL, '18.90', '0.00', 0, '0.00', '18.90', '0.00'),
-(10, 'order-15', 1, 'product', 'Repair Shampoo', '[object Object]', '15.12', 'Stripe', 'paid', '2026-06-08 21:52:12', 'processing', 'none', '0.00', NULL, 'pickup', 'any', 'Any merchant', 'pending_pickup', NULL, '18.90', '0.00', 0, '0.00', '18.90', '0.00'),
-(12, 'order-16', 1, 'product', 'Hydrating Face Mask x2, Repair Shampoo x2', '[object Object]', '[object Object]', '78.51', 'Stripe', 'paid', '2026-06-08 22:48:18', 'processing', 'none', '0.00', NULL, 'delivery', NULL, NULL, NULL, NULL, '88.50', '0.00', 0, '0.00', '83.60', '4.90');
 
 -- Data for table `reward_shop_vouchers`
 INSERT INTO `reward_shop_vouchers` (`voucher_id`, `glints_cost`, `voucher_value`, `title`, `detail`, `status`, `sort_order`, `voucher_source`, `merchant_id`, `discount_type`, `discount_value`, `minimum_spend`, `points_required`, `start_date`, `expiry_date`, `usage_limit_per_user`, `usage_limit_total`, `redemption_count`, `created_by`, `applies_to_booking`, `linked_service_id`, `linked_product_id`, `linked_item_type`, `linked_item_id`, `created_at`, `updated_at`) VALUES

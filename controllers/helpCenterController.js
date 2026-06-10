@@ -607,6 +607,12 @@ async function buildBookingRequest(req, requestType, targetId, body) {
 
 async function createRequest(req, res) {
     try {
+        console.log('[refund:request:create:body]', {
+            userId: req.session.user?.id,
+            role: req.session.user?.role,
+            body: req.body
+        });
+
         const requestType = cleanText(req.body.requestType, 40);
         const targetType = cleanText(req.body.targetType, 20);
         const targetId = cleanText(req.body.targetId, 80);
@@ -645,8 +651,23 @@ async function createRequest(req, res) {
             ? await buildOrderRequest(req, requestType, targetId, req.body)
             : await buildBookingRequest(req, requestType, targetId, req.body);
 
+        console.log('[refund:request:create:resolved]', {
+            requestType,
+            targetType,
+            targetId,
+            merchantUserId: data.merchantUserId,
+            refundAmount: data.refundAmount,
+            approvedRefundAmount: data.approvedRefundAmount,
+            receiptId: data.receiptId
+        });
+
         const result = await createSupportRequest(data);
         const requestId = result.insertId;
+
+        console.log('[refund:request:create:sql:result]', {
+            requestId,
+            affectedRows: result.affectedRows
+        });
         const screenshotPath = req.file ? `/uploads/support/${req.file.filename}` : '';
 
         if (screenshotPath) {
@@ -685,6 +706,12 @@ async function createRequest(req, res) {
             requestId
         });
     } catch (error) {
+        console.error('[refund:request:create:error]', {
+            userId: req.session.user?.id,
+            body: req.body,
+            error: error.message
+        });
+
         return sendSupportResponse(req, res, {
             success: false,
             message: error.message || 'The request could not be submitted.'
@@ -803,11 +830,31 @@ async function adminResolve(req, res) {
     let refundOutcome = null;
 
     try {
+        console.log('[refund:admin:request:body]', {
+            adminUserId: req.session.user?.id,
+            requestId: req.params.requestId,
+            body: req.body
+        });
+
         const request = await findSupportRequest(req.params.requestId);
 
         if (!request) {
             throw new Error('Support request not found.');
         }
+
+        console.log('[refund:admin:request:loaded]', {
+            requestId: request.id,
+            requestType: request.requestType,
+            targetType: request.targetType,
+            targetId: request.targetId,
+            receiptId: request.receiptId,
+            status: request.status,
+            merchantDecision: request.merchantDecision,
+            adminDecision: request.adminDecision,
+            refundAmount: request.refundAmount,
+            approvedRefundAmount: request.approvedRefundAmount,
+            merchantUserId: request.merchantUserId
+        });
 
         const decision = req.body.decision === 'approved' ? 'approved' : 'rejected';
         const adminNote = cleanText(req.body.adminNote);
@@ -860,7 +907,13 @@ async function adminResolve(req, res) {
                 const transactionId = parseOrderTransactionId(request.targetId);
 
                 if (transactionId) {
-                    await updateDeliveryStatus(transactionId, 'cancelled', {});
+                    console.log('[refund:admin:order:start]', {
+                        requestId: request.id,
+                        transactionId,
+                        approvedRefundAmount,
+                        merchantUserId: request.merchantUserId
+                    });
+
                     refundOutcome = await refundTransaction(transactionId, {
                         amount: approvedRefundAmount,
                         reason: adminNote || request.reason || request.customerNote || 'Approved order refund',
@@ -868,12 +921,27 @@ async function adminResolve(req, res) {
                         merchantId: request.merchantUserId || null
                     });
 
-                    if (request.receiptId && !refundOutcome.manualRequired) {
+                    const deliveryResult = await updateDeliveryStatus(transactionId, 'cancelled', {});
+                    console.log('[refund:admin:order:delivery:update:result]', {
+                        transactionId,
+                        affectedRows: deliveryResult?.affectedRows,
+                        changedRows: deliveryResult?.changedRows
+                    });
+
+                    if (request.receiptId) {
                         await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
-                        await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                        if (!refundOutcome.manualRequired) {
+                            await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                        }
                         await reverseCampaignCashback(request.receiptId);
                     }
                 } else {
+                    console.log('[refund:admin:history-only:start]', {
+                        requestId: request.id,
+                        receiptId: request.receiptId || request.targetId,
+                        approvedRefundAmount
+                    });
+
                     await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
                     await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
                     await reverseCampaignCashback(request.receiptId || request.targetId);
@@ -882,6 +950,14 @@ async function adminResolve(req, res) {
                 const booking = await findBookingForCustomer(request.targetId, request.customerUserId);
 
                 if (booking?.transaction_id) {
+                    console.log('[refund:admin:booking:start]', {
+                        requestId: request.id,
+                        bookingId: request.targetId,
+                        transactionId: booking.transaction_id,
+                        approvedRefundAmount,
+                        merchantUserId: request.merchantUserId
+                    });
+
                     refundOutcome = await refundTransaction(booking.transaction_id, {
                         amount: approvedRefundAmount,
                         reason: adminNote || request.reason || request.customerNote || 'Approved booking refund',
@@ -913,6 +989,14 @@ async function adminResolve(req, res) {
             decision,
             adminNote
         );
+
+        console.log('[refund:admin:resolve:sql:result]', {
+            requestId: request.id,
+            decision,
+            affectedRows: result?.affectedRows,
+            changedRows: result?.changedRows,
+            refundOutcome
+        });
 
         if (!result.affectedRows) {
             throw new Error('This request is already closed or cannot be updated.');
@@ -949,6 +1033,14 @@ async function adminResolve(req, res) {
 
         setFlash(req, 'success', `Request #${request.id} was ${decision}.`);
     } catch (error) {
+        console.error('[refund:admin:error]', {
+            requestId: req.params.requestId,
+            adminUserId: req.session.user?.id,
+            body: req.body,
+            error: error.message,
+            stack: error.stack
+        });
+
         setFlash(req, 'error', error.message || 'The final decision could not be saved.');
     }
 
