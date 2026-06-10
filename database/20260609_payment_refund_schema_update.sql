@@ -61,6 +61,15 @@ CALL add_column_if_missing('transactions', 'refund_reason', 'refund_reason TEXT 
 CALL add_column_if_missing('transactions', 'refunded_by', 'refunded_by INT DEFAULT NULL');
 CALL add_index_if_missing('transactions', 'idx_transactions_provider_payment', 'INDEX idx_transactions_provider_payment (payment_provider, provider_payment_id)');
 
+CALL add_column_if_missing('orders', 'order_status', 'order_status VARCHAR(40) NOT NULL DEFAULT ''processing''');
+CALL add_column_if_missing('orders', 'refund_status', 'refund_status VARCHAR(40) NOT NULL DEFAULT ''none''');
+CALL add_column_if_missing('orders', 'refunded_amount', 'refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+CALL add_column_if_missing('orders', 'refunded_at', 'refunded_at DATETIME DEFAULT NULL');
+CALL add_column_if_missing('orders', 'refund_reason', 'refund_reason TEXT DEFAULT NULL');
+CALL add_column_if_missing('orders', 'provider_refund_id', 'provider_refund_id VARCHAR(190) DEFAULT NULL');
+CALL add_column_if_missing('orders', 'refunded_by', 'refunded_by INT DEFAULT NULL');
+CALL add_index_if_missing('orders', 'idx_orders_refund_status', 'INDEX idx_orders_refund_status (refund_status)');
+
 CREATE TABLE IF NOT EXISTS payment_refunds (
     refund_id INT NOT NULL AUTO_INCREMENT,
     transaction_id INT NOT NULL,

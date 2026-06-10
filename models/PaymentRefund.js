@@ -49,7 +49,8 @@ function create(payload, callback) {
     ensureSchema((schemaError) => {
         if (schemaError) return callback(schemaError);
 
-        db.query(`
+        const executor = payload.connection || db;
+        executor.query(`
             INSERT INTO payment_refunds (
                 transaction_id,
                 booking_id,
