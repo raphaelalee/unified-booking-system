@@ -16,6 +16,7 @@ const Notification = require('../models/Notification');
 const { getCartItemCount } = require('../utils/cart');
 const { getSafeReturnPath, rotateCsrfToken } = require('../middleware');
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
+const { getProfileImagePath, deleteProfileImageFile } = require('../utils/profileUpload');
 
 const membershipTiers = [
     { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
@@ -51,6 +52,7 @@ function buildSessionUser(user) {
         gender: user.gender || '',
         postalCode: user.postal_code || user.postalCode || '',
         preferredContactMethod: user.preferred_contact_method || user.preferredContactMethod || '',
+        profileImage: user.profile_image || user.profileImage || '',
         referralCode: user.referral_code || '',
         role: user.role,
         glintsBalance: user.glints_balance || 0
@@ -676,7 +678,8 @@ function setAuthenticatedSession(req, user, message, callback) {
             birthday: formatDateInputValue(user.birthday),
             gender: user.gender || '',
             postalCode: user.postal_code || user.postalCode || '',
-            preferredContactMethod: user.preferred_contact_method || user.preferredContactMethod || ''
+            preferredContactMethod: user.preferred_contact_method || user.preferredContactMethod || '',
+            profileImage: user.profile_image || user.profileImage || ''
         };
         req.session.profileSuccess = message || 'You are logged in.';
         callback(null);
@@ -1149,6 +1152,7 @@ function showProfile(req, res) {
             gender: accountUser?.gender || sessionProfile.gender || req.session.user.gender || '',
             postalCode: accountUser?.postal_code || sessionProfile.postalCode || req.session.user.postalCode || '',
             preferredContactMethod: accountUser?.preferred_contact_method || sessionProfile.preferredContactMethod || req.session.user.preferredContactMethod || '',
+            profileImage: accountUser?.profile_image || sessionProfile.profileImage || req.session.user.profileImage || '',
             glintsBalance: Number(accountUser?.glints_balance ?? req.session.user.glintsBalance ?? 0)
         };
 
@@ -1361,37 +1365,47 @@ function updateProfile(req, res) {
     const name = (req.body.name || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
     const phone = (req.body.phone || '').trim();
+    const previousProfileImage = req.session.user.profileImage || req.session.profile?.profileImage || '';
+    const uploadedProfileImage = getProfileImagePath(req.file);
+    const profileImage = uploadedProfileImage || previousProfileImage;
     const customerDetailsForm = getCustomerDetailsForm(req.body);
     const customerDetailErrors = validateCustomerDetails(customerDetailsForm);
 
     if (name.length < 2 || !isValidEmail(email) || !isValidOptionalPhone(phone)) {
+        deleteProfileImageFile(uploadedProfileImage);
         req.session.profileError = 'Please enter a valid name, email, and Singapore handphone number.';
         return res.redirect('/profile');
     }
 
     if (customerDetailErrors.length > 0) {
+        deleteProfileImageFile(uploadedProfileImage);
         req.session.profileError = customerDetailErrors.join(' ');
         return res.redirect('/profile');
     }
 
     const customerDetails = buildCustomerDetailsPayload(customerDetailsForm);
 
-    return User.updateProfile(req.session.user.id, { name, email, phone, ...customerDetails }, (error) => {
+    return User.updateProfile(req.session.user.id, { name, email, phone, ...customerDetails, profileImage }, (error) => {
         if (error) {
-            console.error(error);
+            deleteProfileImageFile(uploadedProfileImage);
             req.session.profileError = error.code === 'ER_DUP_ENTRY'
                 ? 'Another account already uses that email.'
                 : 'Profile could not be updated. Please try again.';
             return res.redirect('/profile');
         }
 
-        req.session.profile = { name, email, phone, ...customerDetails };
+        if (uploadedProfileImage && previousProfileImage !== uploadedProfileImage) {
+            deleteProfileImageFile(previousProfileImage);
+        }
+
+        req.session.profile = { name, email, phone, ...customerDetails, profileImage };
         req.session.user = {
             ...req.session.user,
             name,
             email,
             phone,
-            ...customerDetails
+            ...customerDetails,
+            profileImage
         };
         req.session.profileSuccess = 'Profile updated successfully.';
 

@@ -13580,3 +13580,252 @@ body:not(.flappy-page) .home-step-grid span {
         justify-content: center;
     }
 }
+
+/* Compact professional customer profile shell. */
+body:has(.profile-redesign-page) .site-header {
+    top: 8px;
+    width: min(1240px, calc(100% - 32px)) !important;
+    margin-top: 8px !important;
+    border-radius: 10px !important;
+}
+
+body:has(.profile-redesign-page) .nav {
+    width: 100% !important;
+    min-height: 60px !important;
+    padding: 8px 12px !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 14px !important;
+}
+
+body:has(.profile-redesign-page) .brand {
+    font-size: 1.55rem !important;
+}
+
+body:has(.profile-redesign-page) .brand-mark,
+body:has(.profile-redesign-page) .nav-avatar {
+    width: 34px;
+    height: 34px;
+}
+
+body:has(.profile-redesign-page) .nav-links {
+    grid-column: auto !important;
+    justify-content: center !important;
+    overflow: visible !important;
+    padding: 0 !important;
+}
+
+body:has(.profile-redesign-page) .nav-dropdown-trigger {
+    min-height: 36px !important;
+    padding: 8px 10px !important;
+    font-size: 0.8rem !important;
+}
+
+body:has(.profile-redesign-page) .nav-account-trigger {
+    min-height: 42px !important;
+}
+
+body:has(.profile-redesign-page) .notification-link,
+body:has(.profile-redesign-page) .nav-bag-link {
+    width: 36px;
+    min-height: 36px !important;
+}
+
+.section.compact.profile-redesign-page {
+    width: min(1240px, calc(100% - 32px)) !important;
+    margin: 0 auto !important;
+    padding: 28px 0 64px !important;
+}
+
+.profile-redesign-page .profile-page-heading {
+    width: 100% !important;
+    margin-bottom: 18px;
+    align-items: center;
+}
+
+.profile-redesign-page .profile-page-heading h1 {
+    font-size: clamp(2rem, 3vw, 2.8rem) !important;
+}
+
+.profile-redesign-page .profile-page-heading p:not(.eyebrow) {
+    margin-top: 6px;
+    font-size: 0.92rem;
+}
+
+.profile-redesign-page .profile-heading-actions .button {
+    min-height: 38px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+}
+
+.profile-redesign-page .profile-hero-card {
+    width: 100% !important;
+    min-height: 0;
+    margin: 0 0 16px !important;
+    padding: 20px !important;
+    grid-template-columns: 64px minmax(300px, 1fr) minmax(300px, 0.62fr) 130px !important;
+    gap: 16px !important;
+    align-items: center !important;
+    border-radius: 10px !important;
+    background: #f8faf5 !important;
+    box-shadow: 0 12px 32px rgba(35, 42, 32, 0.07) !important;
+}
+
+.profile-redesign-page .profile-hero-avatar {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 12px !important;
+    font-size: 1.65rem !important;
+}
+
+.profile-redesign-page .profile-hero-avatar.has-image {
+    overflow: hidden;
+    padding: 0;
+}
+
+.profile-redesign-page .profile-hero-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+body:not(.flappy-page) .nav-avatar.has-image {
+    overflow: hidden;
+    padding: 0;
+}
+
+body:not(.flappy-page) .nav-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.profile-redesign-page .profile-photo-field {
+    grid-column: 1 / -1;
+}
+
+.profile-redesign-page .profile-photo-field small {
+    color: #687462;
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+.profile-redesign-page .profile-hero-details h2 {
+    margin: 5px 0 2px;
+    font-size: 1.35rem;
+}
+
+.profile-redesign-page .profile-hero-details p {
+    font-size: 0.86rem;
+}
+
+.profile-redesign-page .profile-hero-meta {
+    margin-top: 10px;
+    gap: 8px;
+}
+
+.profile-redesign-page .profile-hero-meta span,
+.profile-redesign-page .profile-hero-stats article {
+    padding: 9px 10px;
+    border-radius: 7px;
+}
+
+.profile-redesign-page .profile-hero-meta strong,
+.profile-redesign-page .profile-hero-stats span {
+    margin-bottom: 2px;
+    font-size: 0.6rem;
+}
+
+.profile-redesign-page .profile-hero-meta span {
+    font-size: 0.82rem;
+}
+
+.profile-redesign-page .profile-hero-stats {
+    gap: 8px;
+}
+
+.profile-redesign-page .profile-hero-stats strong {
+    font-size: clamp(1rem, 1.5vw, 1.35rem);
+    overflow-wrap: anywhere;
+}
+
+.profile-redesign-page .profile-hero-actions {
+    min-width: 0;
+    gap: 7px;
+}
+
+.profile-redesign-page .profile-hero-actions .button,
+.profile-redesign-page .profile-hero-actions .text-button {
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 7px !important;
+    font-size: 0.76rem;
+}
+
+.profile-redesign-page .profile-tab-nav {
+    top: 84px;
+    width: 100% !important;
+    margin: 0 0 16px;
+    padding: 6px;
+    justify-content: flex-start !important;
+    border-radius: 10px;
+}
+
+.profile-redesign-page .profile-tab-nav a {
+    min-height: 34px !important;
+    padding: 7px 12px !important;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 1100px) {
+    body:has(.profile-redesign-page) .nav {
+        grid-template-columns: auto auto !important;
+    }
+
+    body:has(.profile-redesign-page) .nav-links {
+        grid-column: 1 / -1 !important;
+        justify-content: flex-start !important;
+        overflow-x: auto !important;
+    }
+
+    .profile-redesign-page .profile-hero-card {
+        grid-template-columns: 64px minmax(0, 1fr) !important;
+    }
+
+    .profile-redesign-page .profile-hero-stats,
+    .profile-redesign-page .profile-hero-actions {
+        grid-column: 1 / -1;
+    }
+
+    .profile-redesign-page .profile-hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 700px) {
+    .section.compact.profile-redesign-page {
+        width: min(100% - 20px, 560px) !important;
+        padding-top: 20px !important;
+    }
+
+    .profile-redesign-page .profile-page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .profile-redesign-page .profile-hero-card {
+        grid-template-columns: 1fr !important;
+    }
+
+    .profile-redesign-page .profile-hero-meta,
+    .profile-redesign-page .profile-hero-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-redesign-page .profile-hero-stats,
+    .profile-redesign-page .profile-hero-actions {
+        grid-column: auto;
+    }
+}

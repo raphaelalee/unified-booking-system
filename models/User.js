@@ -136,7 +136,7 @@ function findByEmail(email, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, profile_image, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE email = ?
             LIMIT 1
@@ -161,7 +161,7 @@ function findById(userId, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, profile_image, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE user_id = ?
             LIMIT 1
@@ -190,7 +190,7 @@ function findCustomerByPhone(phone, callback) {
         }
 
         const sql = `
-            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
+            SELECT user_id, name, email, phone, age, birthday, gender, postal_code, preferred_contact_method, profile_image, referral_code, referred_by_code, password, role, glints_balance, account_status, created_at
             FROM users
             WHERE role = 'customer'
                 AND REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') IN (?, ?)
@@ -235,7 +235,7 @@ function updateProfile(userId, profile, callback) {
 
         const sql = `
             UPDATE users
-            SET name = ?, email = ?, phone = ?, age = ?, birthday = ?, gender = ?, postal_code = ?, preferred_contact_method = ?
+            SET name = ?, email = ?, phone = ?, age = ?, birthday = ?, gender = ?, postal_code = ?, preferred_contact_method = ?, profile_image = ?
             WHERE user_id = ?
         `;
 
@@ -248,6 +248,7 @@ function updateProfile(userId, profile, callback) {
             profile.gender || null,
             profile.postalCode || null,
             profile.preferredContactMethod || null,
+            profile.profileImage || null,
             userId
         ], callback);
     });

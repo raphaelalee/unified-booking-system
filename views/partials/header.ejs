@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=3">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=16">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=52">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=54">
     <link rel="stylesheet" href="/css/portal-refresh.css?v=5">
     <link rel="stylesheet" href="/css/notifications.css?v=1">
     <script src="/js/security.js?v=1" defer></script>
@@ -143,7 +143,13 @@
                         <% } %>
                         <div class="nav-dropdown nav-account-menu">
                             <button class="nav-account-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu">
-                                <span class="nav-avatar" aria-hidden="true"><%= navUserInitial %></span>
+                                <span class="nav-avatar<%= currentUser.profileImage ? ' has-image' : '' %>" aria-hidden="true">
+                                    <% if (currentUser.profileImage) { %>
+                                        <img src="<%= currentUser.profileImage %>" alt="">
+                                    <% } else { %>
+                                        <%= navUserInitial %>
+                                    <% } %>
+                                </span>
                                 <span class="nav-account-copy">
                                     <strong><%= navUserName %></strong>
                                     <small><%= navUserRole %></small>

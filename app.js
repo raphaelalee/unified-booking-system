@@ -23,6 +23,7 @@ const CashbackCampaign = require('./models/CashbackCampaign');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
 const { uploadProductImage } = require('./utils/productUpload');
+const { uploadProfileImage } = require('./utils/profileUpload');
 const { startSmsReminderScheduler } = require('./services/smsAutomation');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const {
@@ -276,6 +277,18 @@ function handleProductImageUpload(req, res, next) {
     });
 }
 
+function handleProfileImageUpload(req, res, next) {
+    uploadProfileImage(req, res, (error) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        req.session.profileError = error.message || 'Profile photo could not be uploaded.';
+        res.redirect('/profile');
+    });
+}
+
 function redirectMerchantProductDetail(req, res) {
     const productId = Number(req.params.productId);
 
@@ -340,7 +353,7 @@ app.post('/reward-shop/vouchers/:voucherId/redeem', requireCustomer, userControl
 app.get('/membership', requireCustomer, (req, res) => {
     res.redirect('/profile#membership');
 });
-app.post('/profile', userController.updateProfile);
+app.post('/profile', handleProfileImageUpload, userController.updateProfile);
 app.post('/profile/password', userController.updatePassword);
 app.post('/profile/bookings/:bookingId/cancel', requireCustomer, bookingController.cancelBooking);
 app.get('/profile/bookings/:bookingId/reschedule-suggestions', requireCustomer, bookingController.getRescheduleSuggestions);

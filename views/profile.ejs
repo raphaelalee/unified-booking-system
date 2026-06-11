@@ -219,8 +219,12 @@
     </div>
 
     <section class="profile-hero-card">
-        <div class="account-avatar profile-hero-avatar" aria-hidden="true">
-            <%= (profile.name || roleLabel || 'V').charAt(0).toUpperCase() %>
+        <div class="account-avatar profile-hero-avatar<%= profile.profileImage ? ' has-image' : '' %>" aria-hidden="true">
+            <% if (profile.profileImage) { %>
+                <img src="<%= profile.profileImage %>" alt="">
+            <% } else { %>
+                <%= (profile.name || roleLabel || 'V').charAt(0).toUpperCase() %>
+            <% } %>
         </div>
 
         <div class="profile-hero-details">
@@ -285,7 +289,7 @@
 
     <div class="account-layout">
         <div class="account-main-stack">
-            <form id="profile-details" class="account-panel account-form profile-tab-panel" data-profile-panel="profile-details" action="/profile" method="POST">
+            <form id="profile-details" class="account-panel account-form profile-tab-panel" data-profile-panel="profile-details" action="/profile?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
                 <div class="account-panel-header">
                     <div>
                         <p class="eyebrow">Details</p>
@@ -294,6 +298,12 @@
                 </div>
 
                 <div class="form-grid">
+                    <label class="profile-photo-field">
+                        Profile photo
+                        <input type="file" name="profileImage" accept="image/*">
+                        <small>JPG, PNG, WEBP, or GIF. Maximum 5 MB.</small>
+                    </label>
+
                     <label>
                         Full name
                         <input type="text" name="name" value="<%= profile.name %>" placeholder="Enter your name" autocomplete="name" required>
