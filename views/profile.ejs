@@ -624,7 +624,7 @@
                                             <span class="profile-review-star-outline" aria-hidden="true">&#9734;&#9734;&#9734;&#9734;&#9734;</span>
                                         </div>
                                         <details class="profile-booking-review-form">
-                                            <summary class="button secondary">Review now</summary>
+                                            <summary class="button secondary">Write a review</summary>
                                             <form action="/profile/orders/<%= entry.receiptId %>/products/<%= entry.productId %>/review?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
                                                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <div class="profile-review-reward-strip">
@@ -697,7 +697,7 @@
                                         <div>
                                             <% if (canReviewBooking(entry)) { %>
                                                 <details class="profile-booking-review-form">
-                                                    <summary class="button secondary">Review now</summary>
+                                                    <summary class="button secondary">Write a review</summary>
                                                     <form action="/profile/bookings/<%= entry.id %>/review?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
                                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                         <div class="profile-review-reward-strip">

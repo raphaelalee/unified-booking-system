@@ -1,10 +1,10 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const allBookingServices = typeof scopedServices !== 'undefined' && Array.isArray(scopedServices) && scopedServices.length > 0
-        ? scopedServices
-        : Array.isArray(merchant.services) && merchant.services.length > 0
-            ? merchant.services
+    const allBookingServices = Array.isArray(merchant.services) && merchant.services.length > 0
+        ? merchant.services
+        : typeof scopedServices !== 'undefined' && Array.isArray(scopedServices) && scopedServices.length > 0
+            ? scopedServices
         : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
     const requestedServiceId = String((form && form.serviceId) || (typeof selectedServiceId !== 'undefined' && selectedServiceId ? selectedServiceId : ''));
     const requestedOptionId = String((form && form.serviceOptionId) || '');
@@ -15,7 +15,7 @@
         ? selectedBookingService.options.find((option) => String(option.id) === requestedOptionId)
         : null;
     const requestedPurchaseType = String((form && form.purchaseType) || (typeof packageSelected !== 'undefined' && packageSelected ? 'package' : 'single'));
-    const bookingServices = selectedBookingService ? [selectedBookingService] : allBookingServices;
+    const bookingServices = allBookingServices;
     const promoDisplayPrice = selectedPromotion && typeof selectedPromotion.price === 'number'
         ? selectedPromotion.price
         : null;
@@ -224,6 +224,7 @@
         </div>
 
         <div class="booking-services-panel">
+            <% if (!selectedBookingService) { %>
             <div class="section-heading">
                 <p class="eyebrow">Services</p>
                 <h2>Choose an appointment</h2>
@@ -243,11 +244,13 @@
 
             <div class="service-list booking-service-options booking-service-groups">
                 <% visibleServiceGroups.forEach((group, groupIndex) => { %>
-                    <section class="category-group <%= groupIndex === 0 ? 'is-open' : '' %>" data-category-group>
+                    <% const groupContainsSelectedService = group.services.some((service) => requestedServiceId === String(service.id)); %>
+                    <% const groupIsOpen = requestedServiceId ? groupContainsSelectedService : groupIndex === 0; %>
+                    <section class="category-group <%= groupIsOpen ? 'is-open' : '' %>" data-category-group>
                         <button
                             class="category-group-header"
                             type="button"
-                            aria-expanded="<%= groupIndex === 0 ? 'true' : 'false' %>"
+                            aria-expanded="<%= groupIsOpen ? 'true' : 'false' %>"
                             data-category-toggle>
                             <span><%= group.title %></span>
                             <span class="toggle-icon" aria-hidden="true">&#9660;</span>
@@ -271,6 +274,7 @@
                                 <button
                                     class="booking-service-card booking-service-row booking-service-option <%= isSelectedServiceCard ? 'is-selected' : '' %>"
                                     type="button"
+                                    aria-pressed="<%= isSelectedServiceCard ? 'true' : 'false' %>"
                                     data-service-card
                                     data-service-id="<%= service.id %>"
                                     data-purchase-type="<%= packageIsSelected ? 'package' : 'single' %>"
@@ -304,6 +308,7 @@
                     </section>
                 <% }) %>
             </div>
+            <% } %>
 
             <div class="booking-picker-stack">
                 <header class="booking-date-time-heading">
