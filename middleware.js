@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const db = require('./db');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const rateLimitBuckets = new Map();
@@ -218,6 +219,53 @@ function requireRole(...roles) {
     };
 }
 
+function requireApprovedMerchant(req, res, next) {
+    if (!req.session.user) {
+        return redirectToLogin(req, res);
+    }
+
+    if (req.session.user.role !== 'merchant') {
+        return res.status(403).render('error', {
+            title: 'Merchant Access Only',
+            message: 'This feature is only available to merchant accounts.'
+        });
+    }
+
+    const sql = `
+        SELECT approval_status
+        FROM salons
+        WHERE merchant_id = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [req.session.user.id], (error, rows = []) => {
+        if (error) {
+            console.error(error);
+            return res.status(500).render('error', {
+                title: 'Merchant Status Error',
+                message: 'Merchant approval status could not be checked.'
+            });
+        }
+
+        const status = rows[0]?.approval_status || 'pending_review';
+        req.session.user.merchantApprovalStatus = status;
+
+        if (status !== 'approved') {
+            if (wantsJson(req)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Your merchant account must be approved before using this feature.',
+                    redirectUrl: '/merchant/onboarding'
+                });
+            }
+
+            return res.redirect('/merchant/onboarding');
+        }
+
+        return next();
+    });
+}
+
 module.exports = {
     allowBookingViewer,
     allowGuestOrCustomer,
@@ -226,6 +274,7 @@ module.exports = {
     ensureCsrfToken,
     requireCustomer,
     requireLogin,
+    requireApprovedMerchant,
     requireRole,
     rotateCsrfToken,
     getSafeReturnPath,

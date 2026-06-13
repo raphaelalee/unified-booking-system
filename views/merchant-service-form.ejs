@@ -12,6 +12,9 @@
         .split(',')
         .map((slot) => slot.trim())
         .filter(Boolean);
+    const selectedRoutineGoals = Array.isArray(form.routineGoalTags) ? form.routineGoalTags : [];
+    const selectedRoutineConcerns = Array.isArray(form.routineConcernTags) ? form.routineConcernTags : [];
+    const checkedTag = (collection, value) => collection.includes(value) ? 'checked' : '';
 %>
 
 <section class="section compact merchant-service-form-page">
@@ -141,6 +144,50 @@
                     Quantity required per booking
                     <input type="number" name="inventoryQuantityRequired" value="<%= form.inventoryQuantityRequired || '' %>" min="1" step="1" placeholder="1">
                 </label>
+            </section>
+
+            <section class="merchant-service-slot-panel merchant-package-panel" aria-label="Routine Finder settings">
+                <div>
+                    <p class="eyebrow">Beauty Routine Finder</p>
+                    <h2>Recommendation tags</h2>
+                    <p class="muted">Use tags and a short note to help this service appear in the right customer consultations.</p>
+                </div>
+                <label>
+                    Recommendation note
+                    <input type="text" name="routineRecommendationNote" maxlength="255" value="<%= form.routineRecommendationNote || '' %>" placeholder="Best for first-time facial customers">
+                </label>
+                <div class="merchant-service-editor-pair">
+                    <label>
+                        Budget minimum
+                        <input type="number" name="routineBudgetMin" value="<%= form.routineBudgetMin || '' %>" min="0" step="0.01" placeholder="50">
+                    </label>
+                    <label>
+                        Budget maximum
+                        <input type="number" name="routineBudgetMax" value="<%= form.routineBudgetMax || '' %>" min="0" step="0.01" placeholder="120">
+                    </label>
+                </div>
+                <div class="routine-merchant-tag-panel">
+                    <span>Goal tags</span>
+                    <div>
+                        <% (routineTagOptions || []).slice(0, 8).forEach((tag) => { %>
+                            <label>
+                                <input type="checkbox" name="routineGoalTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineGoals, tag.value) %>>
+                                <span><%= tag.label %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+                <div class="routine-merchant-tag-panel">
+                    <span>Concern tags</span>
+                    <div>
+                        <% (routineTagOptions || []).slice(6).forEach((tag) => { %>
+                            <label>
+                                <input type="checkbox" name="routineConcernTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineConcerns, tag.value) %>>
+                                <span><%= tag.label %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
             </section>
         </div>
 

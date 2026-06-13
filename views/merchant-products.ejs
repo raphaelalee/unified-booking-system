@@ -72,6 +72,17 @@
                     <div class="merchant-product-main">
                         <h2><%= product.name %></h2>
                         <p class="muted"><%= product.salonName %></p>
+                        <% if ((product.routineGoalTags || []).length || (product.routineConcernTags || []).length || product.routineRecommendationNote) { %>
+                            <p class="muted">
+                                Routine Finder:
+                                <strong><%= [...(product.routineGoalTags || []), ...(product.routineConcernTags || [])].slice(0, 4).join(', ') || 'Note added' %></strong>
+                                <% if (product.routineRecommendationNote) { %>
+                                    &middot; <%= product.routineRecommendationNote %>
+                                <% } %>
+                            </p>
+                        <% } else { %>
+                            <p class="muted">Routine Finder tags not set yet.</p>
+                        <% } %>
                     </div>
                     <div class="merchant-product-meta">
                         <strong>$<%= product.price.toFixed(2) %></strong>

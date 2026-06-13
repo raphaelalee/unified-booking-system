@@ -40,6 +40,19 @@
         </label>
 
         <label>
+            Linked product
+            <select name="productId">
+                <option value="">No linked product</option>
+                <% (products || []).forEach((product) => { %>
+                    <option value="<%= product.id %>" <%= String(form.productId || '') === String(product.id) ? 'selected' : '' %>>
+                        <%= product.name %> (<%= Number(product.stockQuantity || 0) %> in stock)
+                    </option>
+                <% }) %>
+            </select>
+            <span class="form-hint">Use this for product discount Spin rewards. Choose either a service or product, not both.</span>
+        </label>
+
+        <label>
             Promotion type
             <select name="type" class="js-promotion-type" required>
                 <% promotionTypes.forEach((type) => { %>
@@ -61,6 +74,48 @@
             Discount value
             <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20">
         </label>
+
+        <label>
+            Minimum spend
+            <input type="number" name="minimumSpend" value="<%= form.minimumSpend || '' %>" min="0" step="0.01" placeholder="0">
+        </label>
+
+        <label>
+            Usage limit
+            <input type="number" name="usageLimit" value="<%= form.usageLimit || '' %>" min="0" step="1" placeholder="Leave blank for no limit">
+        </label>
+
+        <section class="merchant-spin-settings-panel" aria-label="Spin and Discover settings">
+            <div>
+                <p class="eyebrow">Spin & Discover</p>
+                <h2>Wheel eligibility</h2>
+                <p class="muted">Eligible active promotions can appear in the customer reward wheel until their dates or limits expire.</p>
+            </div>
+            <input type="hidden" name="spinEligible" value="0">
+            <label class="merchant-package-toggle">
+                <input type="checkbox" name="spinEligible" value="1" <%= form.spinEligible ? 'checked' : '' %>>
+                Allow this promotion to appear in Spin & Discover
+            </label>
+            <label>
+                Spin reward type
+                <select name="spinRewardType">
+                    <option value="">Select reward type</option>
+                    <% (spinRewardTypes || []).forEach((type) => { %>
+                        <option value="<%= type %>" <%= form.spinRewardType === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
+                    <% }) %>
+                </select>
+            </label>
+            <div class="merchant-service-editor-pair">
+                <label>
+                    Spin claim limit
+                    <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
+                </label>
+                <label>
+                    Remaining reward inventory
+                    <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
+                </label>
+            </div>
+        </section>
 
         <label>
             Start date

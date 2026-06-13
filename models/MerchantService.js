@@ -1,5 +1,9 @@
 const db = require('../db');
 
+let merchantApprovalSchemaReady = false;
+let merchantApprovalSchemaPending = false;
+let merchantApprovalSchemaQueue = [];
+
 const productCategoryOptions = [
     { name: 'Haircare', order: 10 },
     { name: 'Skincare', order: 20 },
@@ -40,6 +44,12 @@ ensureMerchantFeaturedSchema((error) => {
     }
 });
 
+ensureMerchantApprovalSchema((error) => {
+    if (error) {
+        console.error('Merchant approval schema could not be prepared:', error.message || error);
+    }
+});
+
 ensureServiceInventorySchema((error) => {
     if (error) {
         console.error('Service inventory schema could not be prepared:', error.message || error);
@@ -76,6 +86,21 @@ function getPackageFields(row) {
         packagePrice: enabled ? packagePrice : 0,
         packageLabel: enabled ? `${sessionCount}-session package` : ''
     };
+}
+
+function parseJsonArray(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return String(value)
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+    }
 }
 
 function ensureServiceSchema(callback) {
@@ -126,6 +151,26 @@ function ensureServiceSchema(callback) {
 
         if (!fields.has('featured_end_date')) {
             alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_goal_tags')) {
+            alters.push('ADD COLUMN routine_goal_tags JSON DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_concern_tags')) {
+            alters.push('ADD COLUMN routine_concern_tags JSON DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_recommendation_note')) {
+            alters.push('ADD COLUMN routine_recommendation_note VARCHAR(255) DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_budget_min')) {
+            alters.push('ADD COLUMN routine_budget_min DECIMAL(10,2) DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_budget_max')) {
+            alters.push('ADD COLUMN routine_budget_max DECIMAL(10,2) DEFAULT NULL');
         }
 
         if (alters.length === 0) {
@@ -491,6 +536,11 @@ function mapMerchantRows(rows) {
                 duration: `${row.duration_mins} mins`,
                 price: Number(row.price),
                 displayOrder: Number(row.display_order || 999),
+                routineGoalTags: parseJsonArray(row.routine_goal_tags),
+                routineConcernTags: parseJsonArray(row.routine_concern_tags),
+                routineRecommendationNote: row.routine_recommendation_note || '',
+                routineBudgetMin: row.routine_budget_min === null || row.routine_budget_min === undefined ? null : Number(row.routine_budget_min),
+                routineBudgetMax: row.routine_budget_max === null || row.routine_budget_max === undefined ? null : Number(row.routine_budget_max),
                 ...getServiceFeaturedFields(row),
                 ...getPackageFields(row),
                 slots: []
@@ -517,6 +567,13 @@ function mapMerchantRows(rows) {
         yearsInBusiness: first.years_in_business === null ? '' : Number(first.years_in_business),
         staffCount: first.staff_count === null ? '' : Number(first.staff_count),
         commissionRate: Number(first.commission_rate || 15),
+        approvalStatus: first.approval_status || 'pending_review',
+        approvalStatusLabel: String(first.approval_status || 'pending_review').replace(/_/g, ' '),
+        submittedAt: first.submitted_at || null,
+        reviewedByAdminId: first.reviewed_by_admin_id || null,
+        reviewedAt: first.reviewed_at || null,
+        reviewReason: first.review_reason || '',
+        approvalUpdatedAt: first.approval_updated_at || null,
         ...getMerchantFeaturedFields(first),
         category: 'Merchant',
         services: Array.from(servicesById.values())
@@ -524,6 +581,12 @@ function mapMerchantRows(rows) {
 }
 
 function getMerchantByUserId(userId, callback) {
+    return ensureMerchantApprovalSchema((approvalSchemaError) => {
+        if (approvalSchemaError) {
+            callback(approvalSchemaError);
+            return;
+        }
+
     const sql = `
         SELECT
             salons.salon_id,
@@ -542,6 +605,12 @@ function getMerchantByUserId(userId, callback) {
             salons.featured_start_date,
             salons.featured_end_date,
             salons.featured_score,
+            salons.approval_status,
+            salons.submitted_at,
+            salons.reviewed_by_admin_id,
+            salons.reviewed_at,
+            salons.review_reason,
+            salons.approval_updated_at,
             users.name AS owner_name,
             users.email AS owner_email,
             users.phone AS owner_phone,
@@ -558,6 +627,11 @@ function getMerchantByUserId(userId, callback) {
             services.featured_order,
             services.featured_start_date,
             services.featured_end_date,
+            services.routine_goal_tags,
+            services.routine_concern_tags,
+            services.routine_recommendation_note,
+            services.routine_budget_min,
+            services.routine_budget_max,
             categories.category_name,
             categories.display_order AS category_display_order,
             services.gender_target,
@@ -598,9 +672,16 @@ function getMerchantByUserId(userId, callback) {
             });
         });
     });
+    });
 }
 
 function getMerchantBySalonId(salonId, callback) {
+    return ensureMerchantApprovalSchema((approvalSchemaError) => {
+        if (approvalSchemaError) {
+            callback(approvalSchemaError);
+            return;
+        }
+
     const sql = `
         SELECT
             salons.salon_id,
@@ -619,6 +700,12 @@ function getMerchantBySalonId(salonId, callback) {
             salons.featured_start_date,
             salons.featured_end_date,
             salons.featured_score,
+            salons.approval_status,
+            salons.submitted_at,
+            salons.reviewed_by_admin_id,
+            salons.reviewed_at,
+            salons.review_reason,
+            salons.approval_updated_at,
             users.name AS owner_name,
             users.email AS owner_email,
             users.phone AS owner_phone,
@@ -675,6 +762,7 @@ function getMerchantBySalonId(salonId, callback) {
             });
         });
     });
+    });
 }
 
 function getCategories(callback) {
@@ -714,17 +802,31 @@ function getProductCategories(callback) {
 }
 
 function getSalons(callback) {
+    return ensureMerchantApprovalSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
     const sql = `
-        SELECT salons.salon_id, salons.salon_name, salons.address, salons.description, salons.business_category, users.email AS owner_email
+        SELECT salons.salon_id, salons.salon_name, salons.address, salons.description, salons.business_category, salons.approval_status, users.email AS owner_email
         FROM salons
         INNER JOIN users ON users.user_id = salons.merchant_id
+        WHERE ${getApprovedMerchantCondition('salons')}
         ORDER BY salons.salon_name
     `;
 
     db.query(sql, callback);
+    });
 }
 
 function getAllServices(callback) {
+    return ensureMerchantApprovalSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
     const sql = `
         SELECT
             services.service_id,
@@ -742,6 +844,11 @@ function getAllServices(callback) {
             services.featured_order,
             services.featured_start_date,
             services.featured_end_date,
+            services.routine_goal_tags,
+            services.routine_concern_tags,
+            services.routine_recommendation_note,
+            services.routine_budget_min,
+            services.routine_budget_max,
             categories.category_name,
             salons.salon_name,
             salons.address,
@@ -755,6 +862,7 @@ function getAllServices(callback) {
         INNER JOIN users ON users.user_id = salons.merchant_id
         LEFT JOIN categories ON categories.category_id = services.category_id
         LEFT JOIN service_slots ON service_slots.service_id = services.service_id
+        WHERE ${getApprovedMerchantCondition('salons')}
         ORDER BY salons.salon_name, categories.display_order, services.display_order, services.service_name, service_slots.timeslot
     `;
 
@@ -787,6 +895,11 @@ function getAllServices(callback) {
                     merchantIsFeatured: Boolean(row.merchant_is_featured),
                     merchantFeaturedType: row.merchant_featured_type || '',
                     merchantFeaturedScore: Number(row.merchant_featured_score || 0),
+                    routineGoalTags: parseJsonArray(row.routine_goal_tags),
+                    routineConcernTags: parseJsonArray(row.routine_concern_tags),
+                    routineRecommendationNote: row.routine_recommendation_note || '',
+                    routineBudgetMin: row.routine_budget_min === null || row.routine_budget_min === undefined ? null : Number(row.routine_budget_min),
+                    routineBudgetMax: row.routine_budget_max === null || row.routine_budget_max === undefined ? null : Number(row.routine_budget_max),
                     ...getPackageFields(row),
                     slots: []
                 });
@@ -798,6 +911,7 @@ function getAllServices(callback) {
         });
 
         decorateServiceInventory(Array.from(servicesById.values()), callback);
+    });
     });
 }
 
@@ -817,6 +931,15 @@ function findServiceForMerchant(userId, serviceId, callback) {
             services.gender_target,
             services.display_order,
             services.short_description,
+            services.is_featured,
+            services.featured_order,
+            services.featured_start_date,
+            services.featured_end_date,
+            services.routine_goal_tags,
+            services.routine_concern_tags,
+            services.routine_recommendation_note,
+            services.routine_budget_min,
+            services.routine_budget_max,
             categories.category_name,
             categories.display_order AS category_display_order,
             TIME_FORMAT(service_slots.timeslot, '%H:%i') AS timeslot
@@ -853,6 +976,14 @@ function findServiceForMerchant(userId, serviceId, callback) {
             durationMins: first.duration_mins,
             duration: `${first.duration_mins} mins`,
             price: Number(first.price),
+            genderTarget: String(first.gender_target || 'unisex'),
+            displayOrder: Number(first.display_order || 999),
+            shortDescription: first.short_description || '',
+            routineGoalTags: parseJsonArray(first.routine_goal_tags),
+            routineConcernTags: parseJsonArray(first.routine_concern_tags),
+            routineRecommendationNote: first.routine_recommendation_note || '',
+            routineBudgetMin: first.routine_budget_min === null || first.routine_budget_min === undefined ? null : Number(first.routine_budget_min),
+            routineBudgetMax: first.routine_budget_max === null || first.routine_budget_max === undefined ? null : Number(first.routine_budget_max),
             ...getServiceFeaturedFields(first),
             ...getPackageFields(first),
             slots: rows.map((row) => formatTimeSlot(row.timeslot)).filter(Boolean)
@@ -954,7 +1085,13 @@ function replaceSlots(connection, serviceId, slots, callback) {
 }
 
 function createService(userId, serviceData, callback) {
-    db.getConnection((connectionError, connection) => {
+    ensureServiceSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
         if (connectionError) {
             callback(connectionError);
             return;
@@ -978,8 +1115,13 @@ function createService(userId, serviceData, callback) {
                 }
 
                 const insertSql = `
-                    INSERT INTO services (salon_id, category_id, service_name, description, duration_mins, price, package_enabled, package_sessions, package_price)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO services (
+                        salon_id, category_id, service_name, description, duration_mins, price,
+                        package_enabled, package_sessions, package_price,
+                        routine_goal_tags, routine_concern_tags, routine_recommendation_note,
+                        routine_budget_min, routine_budget_max
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
                 const values = [
                     salons[0].salon_id,
@@ -990,7 +1132,12 @@ function createService(userId, serviceData, callback) {
                     serviceData.price,
                     serviceData.packageEnabled ? 1 : 0,
                     serviceData.packageSessions || 0,
-                    serviceData.packagePrice || 0
+                    serviceData.packagePrice || 0,
+                    JSON.stringify(serviceData.routineGoalTags || []),
+                    JSON.stringify(serviceData.routineConcernTags || []),
+                    serviceData.routineRecommendationNote || null,
+                    serviceData.routineBudgetMin,
+                    serviceData.routineBudgetMax
                 ];
 
                 connection.query(insertSql, values, (insertError, result) => {
@@ -1027,6 +1174,110 @@ function createService(userId, serviceData, callback) {
             });
         });
     });
+    });
+}
+
+function flushMerchantApprovalSchema(error) {
+    const queue = merchantApprovalSchemaQueue;
+    merchantApprovalSchemaQueue = [];
+    merchantApprovalSchemaPending = false;
+    queue.forEach((queuedCallback) => queuedCallback(error));
+}
+
+function ensureMerchantApprovalSchema(callback) {
+    if (merchantApprovalSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    merchantApprovalSchemaQueue.push(callback);
+
+    if (merchantApprovalSchemaPending) {
+        return;
+    }
+
+    merchantApprovalSchemaPending = true;
+
+    db.query('SHOW COLUMNS FROM salons', (columnError, columns = []) => {
+        if (columnError) {
+            flushMerchantApprovalSchema(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+        const alters = [];
+
+        if (!fields.has('approval_status')) {
+            alters.push("ADD COLUMN approval_status ENUM('pending_review','approved','rejected','suspended','changes_requested') NOT NULL DEFAULT 'approved' AFTER commission_rate");
+        }
+
+        if (!fields.has('submitted_at')) {
+            alters.push('ADD COLUMN submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER approval_status');
+        }
+
+        if (!fields.has('reviewed_by_admin_id')) {
+            alters.push('ADD COLUMN reviewed_by_admin_id INT DEFAULT NULL AFTER submitted_at');
+        }
+
+        if (!fields.has('reviewed_at')) {
+            alters.push('ADD COLUMN reviewed_at DATETIME DEFAULT NULL AFTER reviewed_by_admin_id');
+        }
+
+        if (!fields.has('review_reason')) {
+            alters.push('ADD COLUMN review_reason TEXT DEFAULT NULL AFTER reviewed_at');
+        }
+
+        if (!fields.has('approval_updated_at')) {
+            alters.push('ADD COLUMN approval_updated_at DATETIME DEFAULT NULL AFTER review_reason');
+        }
+
+        const ensureLogTable = () => {
+            const logSql = `
+                CREATE TABLE IF NOT EXISTS merchant_approval_logs (
+                    log_id INT NOT NULL AUTO_INCREMENT,
+                    salon_id INT NOT NULL,
+                    merchant_user_id INT NOT NULL,
+                    admin_user_id INT DEFAULT NULL,
+                    from_status VARCHAR(40) DEFAULT NULL,
+                    to_status VARCHAR(40) NOT NULL,
+                    reason TEXT DEFAULT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (log_id),
+                    KEY idx_merchant_approval_salon (salon_id, created_at),
+                    KEY idx_merchant_approval_merchant (merchant_user_id, created_at),
+                    CONSTRAINT fk_merchant_approval_log_salon FOREIGN KEY (salon_id) REFERENCES salons (salon_id) ON DELETE CASCADE,
+                    CONSTRAINT fk_merchant_approval_log_merchant FOREIGN KEY (merchant_user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+                    CONSTRAINT fk_merchant_approval_log_admin FOREIGN KEY (admin_user_id) REFERENCES users (user_id) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            `;
+
+            db.query(logSql, (logError) => {
+                if (!logError) {
+                    merchantApprovalSchemaReady = true;
+                }
+
+                flushMerchantApprovalSchema(logError);
+            });
+        };
+
+        if (alters.length === 0) {
+            ensureLogTable();
+            return;
+        }
+
+        db.query(`ALTER TABLE salons ${alters.join(', ')}`, (alterError) => {
+            if (alterError) {
+                flushMerchantApprovalSchema(alterError);
+                return;
+            }
+
+            ensureLogTable();
+        });
+    });
+}
+
+function getApprovedMerchantCondition(alias = 'salons') {
+    return `${alias}.approval_status = 'approved'`;
 }
 
 function createServiceForSalon(serviceData, callback) {
@@ -1089,7 +1340,13 @@ function createServiceForSalon(serviceData, callback) {
 }
 
 function updateService(userId, serviceId, serviceData, callback) {
-    db.getConnection((connectionError, connection) => {
+    ensureServiceSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
         if (connectionError) {
             callback(connectionError);
             return;
@@ -1115,7 +1372,12 @@ function updateService(userId, serviceId, serviceData, callback) {
                     services.package_price = ?,
                     services.gender_target = ?,
                     services.display_order = ?,
-                    services.short_description = ?
+                    services.short_description = ?,
+                    services.routine_goal_tags = ?,
+                    services.routine_concern_tags = ?,
+                    services.routine_recommendation_note = ?,
+                    services.routine_budget_min = ?,
+                    services.routine_budget_max = ?
                 WHERE services.service_id = ?
                     AND salons.merchant_id = ?
             `;
@@ -1131,6 +1393,11 @@ function updateService(userId, serviceId, serviceData, callback) {
                 serviceData.genderTarget || 'unisex',
                 serviceData.displayOrder || 999,
                 serviceData.shortDescription || null,
+                JSON.stringify(serviceData.routineGoalTags || []),
+                JSON.stringify(serviceData.routineConcernTags || []),
+                serviceData.routineRecommendationNote || null,
+                serviceData.routineBudgetMin,
+                serviceData.routineBudgetMax,
                 serviceId,
                 userId
             ];
@@ -1166,6 +1433,7 @@ function updateService(userId, serviceId, serviceData, callback) {
                     });
                 });
             });
+        });
         });
     });
 }
@@ -1279,6 +1547,12 @@ function getAdminOverview(callback) {
             return;
         }
 
+    ensureMerchantApprovalSchema((approvalSchemaError) => {
+        if (approvalSchemaError) {
+            callback(approvalSchemaError);
+            return;
+        }
+
     ensureMerchantProfileSchema((profileSchemaError) => {
         if (profileSchemaError) {
             callback(profileSchemaError);
@@ -1312,16 +1586,23 @@ function getAdminOverview(callback) {
                 salons.featured_start_date,
                 salons.featured_end_date,
                 salons.featured_score,
+                salons.approval_status,
+                salons.submitted_at,
+                salons.reviewed_by_admin_id,
+                salons.reviewed_at,
+                salons.review_reason,
+                salons.approval_updated_at,
                 COUNT(services.service_id) AS service_count
             FROM salons
             INNER JOIN users ON users.user_id = salons.merchant_id
             LEFT JOIN services ON services.salon_id = salons.salon_id
-            GROUP BY users.user_id, users.name, users.email, users.phone, salons.salon_id, salons.salon_name, salons.business_category, salons.uen, salons.years_in_business, salons.staff_count, salons.address, salons.description, salons.commission_rate, salons.is_featured, salons.featured_type, salons.featured_order, salons.featured_start_date, salons.featured_end_date, salons.featured_score
+            GROUP BY users.user_id, users.name, users.email, users.phone, salons.salon_id, salons.salon_name, salons.business_category, salons.uen, salons.years_in_business, salons.staff_count, salons.address, salons.description, salons.commission_rate, salons.is_featured, salons.featured_type, salons.featured_order, salons.featured_start_date, salons.featured_end_date, salons.featured_score, salons.approval_status, salons.submitted_at, salons.reviewed_by_admin_id, salons.reviewed_at, salons.review_reason, salons.approval_updated_at
             ORDER BY salons.salon_id
         `;
 
             db.query(sql, callback);
         });
+    });
     });
     });
 }
@@ -1353,6 +1634,7 @@ function getFeaturedMerchants(callback) {
             FROM salons
             LEFT JOIN reviews ON reviews.merchant_id = salons.salon_id
             WHERE ${getFeaturedWindowCondition('salons')}
+                AND ${getApprovedMerchantCondition('salons')}
             GROUP BY salons.salon_id, salons.merchant_id, salons.salon_name, salons.address, salons.description, salons.business_category, salons.image_url, salons.is_featured, salons.featured_type, salons.featured_order, salons.featured_start_date, salons.featured_end_date, salons.featured_score
             ORDER BY salons.featured_order, salons.featured_score DESC, average_rating DESC, salons.salon_name
         `;
@@ -1660,6 +1942,12 @@ function calculateFeaturedScore(callback) {
 }
 
 function createMerchant(merchantData, callback) {
+    ensureMerchantApprovalSchema((approvalSchemaError) => {
+        if (approvalSchemaError) {
+            callback(approvalSchemaError);
+            return;
+        }
+
     db.getConnection((connectionError, connection) => {
         if (connectionError) {
             callback(connectionError);
@@ -1692,9 +1980,14 @@ function createMerchant(merchantData, callback) {
                     });
                 }
 
+                const approvalStatus = merchantData.approvalStatus || 'approved';
                 const salonSql = `
-                    INSERT INTO salons (merchant_id, salon_name, business_category, uen, years_in_business, staff_count, address, description, image_url, commission_rate)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 15.00)
+                    INSERT INTO salons (
+                        merchant_id, salon_name, business_category, uen, years_in_business, staff_count,
+                        address, description, image_url, commission_rate, approval_status, submitted_at,
+                        reviewed_by_admin_id, reviewed_at, review_reason, approval_updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 15.00, ?, NOW(), ?, ?, ?, NOW())
                 `;
                 const salonValues = [
                     userResult.insertId,
@@ -1705,7 +1998,11 @@ function createMerchant(merchantData, callback) {
                     merchantData.staffCount || null,
                     merchantData.address,
                     merchantData.description,
-                    merchantData.imageUrl || null
+                    merchantData.imageUrl || null,
+                    approvalStatus,
+                    approvalStatus === 'approved' ? (merchantData.reviewedByAdminId || null) : null,
+                    approvalStatus === 'approved' ? new Date() : null,
+                    merchantData.reviewReason || null
                 ];
 
                 connection.query(salonSql, salonValues, (salonError, salonResult) => {
@@ -1716,20 +2013,136 @@ function createMerchant(merchantData, callback) {
                         });
                     }
 
-                    connection.commit((commitError) => {
-                        connection.release();
+                    const logSql = `
+                        INSERT INTO merchant_approval_logs (
+                            salon_id, merchant_user_id, admin_user_id, from_status, to_status, reason
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    `;
+                    const logValues = [
+                        salonResult.insertId,
+                        userResult.insertId,
+                        merchantData.reviewedByAdminId || null,
+                        null,
+                        approvalStatus,
+                        merchantData.reviewReason || (approvalStatus === 'approved' ? 'Created by admin.' : 'Merchant application submitted.')
+                    ];
 
-                        if (commitError) {
-                            callback(commitError);
-                            return;
+                    connection.query(logSql, logValues, (logError) => {
+                        if (logError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(logError);
+                            });
                         }
 
-                        callback(null, {
-                            userId: userResult.insertId,
-                            salonId: salonResult.insertId
+                        connection.commit((commitError) => {
+                            connection.release();
+
+                            if (commitError) {
+                                callback(commitError);
+                                return;
+                            }
+
+                            callback(null, {
+                                userId: userResult.insertId,
+                                salonId: salonResult.insertId,
+                                approvalStatus
+                            });
                         });
                     });
                 });
+            });
+        });
+    });
+    });
+}
+
+function updateApprovalStatus(salonId, adminUserId, status, reason, callback) {
+    const allowedStatuses = new Set(['pending_review', 'approved', 'rejected', 'suspended', 'changes_requested']);
+
+    if (!allowedStatuses.has(status)) {
+        callback(new Error('Invalid merchant approval status.'));
+        return;
+    }
+
+    return ensureMerchantApprovalSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                connection.query(
+                    'SELECT salon_id, merchant_id, approval_status FROM salons WHERE salon_id = ? FOR UPDATE',
+                    [salonId],
+                    (lookupError, rows = []) => {
+                        if (lookupError || rows.length === 0) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(lookupError || new Error('Merchant application was not found.'));
+                            });
+                        }
+
+                        const merchant = rows[0];
+                        const previousStatus = merchant.approval_status || 'pending_review';
+
+                        connection.query(
+                            `UPDATE salons
+                             SET approval_status = ?,
+                                 reviewed_by_admin_id = ?,
+                                 reviewed_at = NOW(),
+                                 review_reason = ?,
+                                 approval_updated_at = NOW()
+                             WHERE salon_id = ?`,
+                            [status, adminUserId || null, reason || null, salonId],
+                            (updateError, result) => {
+                                if (updateError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        callback(updateError);
+                                    });
+                                }
+
+                                connection.query(
+                                    `INSERT INTO merchant_approval_logs (
+                                        salon_id, merchant_user_id, admin_user_id, from_status, to_status, reason
+                                    ) VALUES (?, ?, ?, ?, ?, ?)`,
+                                    [salonId, merchant.merchant_id, adminUserId || null, previousStatus, status, reason || null],
+                                    (logError) => {
+                                        if (logError) {
+                                            return connection.rollback(() => {
+                                                connection.release();
+                                                callback(logError);
+                                            });
+                                        }
+
+                                        connection.commit((commitError) => {
+                                            connection.release();
+                                            callback(commitError, {
+                                                affectedRows: result.affectedRows,
+                                                merchantUserId: merchant.merchant_id,
+                                                previousStatus,
+                                                status
+                                            });
+                                        });
+                                    }
+                                );
+                            }
+                        );
+                    }
+                );
             });
         });
     });
@@ -1796,7 +2209,19 @@ function updateMerchantProfile(userId, merchantData, callback) {
                                 years_in_business = ?,
                                 staff_count = ?,
                                 address = ?,
-                                description = ?
+                                description = ?,
+                                approval_status = CASE
+                                    WHEN approval_status = 'approved' THEN approval_status
+                                    ELSE 'pending_review'
+                                END,
+                                submitted_at = CASE
+                                    WHEN approval_status = 'approved' THEN submitted_at
+                                    ELSE NOW()
+                                END,
+                                approval_updated_at = CASE
+                                    WHEN approval_status = 'approved' THEN approval_updated_at
+                                    ELSE NOW()
+                                END
                             WHERE merchant_id = ?
                         `;
 
@@ -1854,7 +2279,10 @@ module.exports = {
     deleteService,
     deleteServiceAsAdmin,
     getAdminOverview,
+    ensureMerchantApprovalSchema,
+    getApprovedMerchantCondition,
     createMerchant,
+    updateApprovalStatus,
     updateCommissionRate,
     updateMerchantProfile
 };

@@ -106,6 +106,8 @@
     const serviceChips = Array.from(chipMap.values());
     const heroService = filteredServices[0] || allServices[0] || {};
     const heroVisual = getServiceVisual(heroService, 0);
+    const isCustomer = currentUser && currentUser.role === 'customer';
+    const protectedHref = (href) => isCustomer ? href : `/login?returnTo=${encodeURIComponent(href)}`;
 %>
 
 <section class="page-title services-unified-hero services-shop-hero">
@@ -124,6 +126,9 @@
             >
             <button class="button primary" type="submit">Search</button>
         </form>
+        <div class="services-hero-actions">
+            <a class="button secondary" href="/routine-finder">Find my routine</a>
+        </div>
     </div>
 
     <aside class="services-hero-showcase" aria-label="Services summary">
@@ -288,9 +293,9 @@
                             </div>
                         </div>
                         <div class="service-shopping-actions">
-                            <a class="button primary full" href="<%= serviceBookingPath %>">Book now</a>
+                            <a class="button primary full" href="<%= protectedHref(serviceBookingPath) %>">Book now</a>
                             <% if (service.packageEnabled) { %>
-                                <a class="button secondary full" href="<%= servicePackageBookingPath %>">Book package</a>
+                                <a class="button secondary full" href="<%= protectedHref(servicePackageBookingPath) %>">Book package</a>
                             <% } %>
                             <a class="button secondary full" href="/merchants/<%= service.merchantId %>?from=services">View merchant</a>
                         </div>

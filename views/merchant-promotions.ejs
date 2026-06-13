@@ -71,16 +71,33 @@
                     <div>
                         <h3><%= promotion.title %></h3>
                         <p class="muted">
-                            <%= promotion.serviceName || 'All merchant services' %> &middot;
+                            <%= promotion.serviceName || promotion.productName || 'All merchant listings' %> &middot;
                             <%= promotion.discountType.replace(/_/g, ' ') %>
                             <% if (promotion.discountValue !== null) { %>
                                 &middot; <%= promotion.discountValue %>
                             <% } %>
                         </p>
                         <p class="muted">
+                            Spin & Discover:
+                            <strong><%= promotion.spinEligible ? 'eligible' : 'not eligible' %></strong>
+                            <% if (promotion.spinEligible && promotion.spinRewardType) { %>
+                                &middot; <%= promotion.spinRewardType.replace(/_/g, ' ') %>
+                            <% } %>
+                        </p>
+                        <p class="muted">
                             Redeemed <%= promotion.redemptionCount %> time<%= promotion.redemptionCount === 1 ? '' : 's' %>
                             <% if (promotion.totalRedemptions !== promotion.redemptionCount) { %>
                                 &middot; <%= promotion.totalRedemptions %> total record<%= promotion.totalRedemptions === 1 ? '' : 's' %>
+                            <% } %>
+                        </p>
+                        <p class="muted">
+                            Wheel wins <%= promotion.spinWinCount || 0 %>
+                            &middot; Claims <%= promotion.spinClaimCount || 0 %>
+                            <% if (promotion.spinClaimLimit !== null) { %>
+                                &middot; Limit <%= promotion.spinClaimLimit %>
+                            <% } %>
+                            <% if (promotion.spinInventoryRemaining !== null) { %>
+                                &middot; Remaining <%= promotion.spinInventoryRemaining %>
                             <% } %>
                         </p>
                         <% if (promotion.description) { %>

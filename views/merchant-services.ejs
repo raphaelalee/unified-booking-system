@@ -104,6 +104,17 @@
                         <% if (service.description) { %>
                             <p><%= service.description %></p>
                         <% } %>
+                        <% if ((service.routineGoalTags || []).length || (service.routineConcernTags || []).length || service.routineRecommendationNote) { %>
+                            <p class="muted">
+                                Routine Finder:
+                                <strong><%= [...(service.routineGoalTags || []), ...(service.routineConcernTags || [])].slice(0, 4).join(', ') || 'Note added' %></strong>
+                                <% if (service.routineRecommendationNote) { %>
+                                    &middot; <%= service.routineRecommendationNote %>
+                                <% } %>
+                            </p>
+                        <% } else { %>
+                            <p class="muted">Routine Finder tags not set yet.</p>
+                        <% } %>
                         <% if (service.inventoryProductId) { %>
                             <p class="muted">
                                 Linked inventory: <strong><%= service.inventoryProductName || 'Tracked product' %></strong>

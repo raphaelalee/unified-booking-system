@@ -1060,7 +1060,10 @@ function createMerchant(req, res) {
 
         return MerchantService.createMerchant({
             ...form,
-            passwordHash
+            passwordHash,
+            approvalStatus: 'approved',
+            reviewedByAdminId: req.session.user.id,
+            reviewReason: 'Created and approved by admin.'
         }, (createError, createdMerchant) => {
             if (createError) {
                 console.error(createError);
@@ -1094,6 +1097,55 @@ function createMerchant(req, res) {
             });
             return res.redirect('/admin/overview');
         });
+    });
+}
+
+function updateMerchantApproval(req, res) {
+    const salonId = Number(req.params.salonId);
+    const action = String(req.body.action || '').trim();
+    const reason = String(req.body.reason || '').trim();
+    const actionMap = {
+        approve: 'approved',
+        reject: 'rejected',
+        request_changes: 'changes_requested',
+        suspend: 'suspended',
+        reactivate: 'approved'
+    };
+    const status = actionMap[action];
+
+    if (!Number.isInteger(salonId) || salonId < 1 || !status) {
+        req.session.adminError = 'Invalid merchant approval action.';
+        return res.redirect('/admin/merchants');
+    }
+
+    if (['reject', 'request_changes', 'suspend'].includes(action) && reason.length < 3) {
+        req.session.adminError = 'Please provide a review reason for this action.';
+        return res.redirect('/admin/merchants');
+    }
+
+    return MerchantService.updateApprovalStatus(salonId, req.session.user.id, status, reason, (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.adminError = 'Merchant approval status could not be updated.';
+            return res.redirect('/admin/merchants');
+        }
+
+        if (!result?.affectedRows) {
+            req.session.adminError = 'Merchant approval status could not be updated.';
+            return res.redirect('/admin/merchants');
+        }
+
+        const statusLabel = status.replace(/_/g, ' ');
+        req.session.adminSuccess = `Merchant status updated to ${statusLabel}.`;
+        notifyMerchantUser(result.merchantUserId, {
+            actorUserId: req.session.user.id,
+            type: 'merchant_update',
+            title: `Merchant ${statusLabel}`,
+            message: reason || `Your merchant account status is now ${statusLabel}.`,
+            linkUrl: status === 'approved' ? '/merchant/dashboard' : '/merchant/onboarding',
+            dedupeKey: `merchant-approval-${salonId}-${status}-${Date.now()}`
+        });
+        return res.redirect('/admin/merchants');
     });
 }
 
@@ -2341,6 +2393,7 @@ module.exports = {
     showPlatformHealth,
     showNewMerchant,
     createMerchant,
+    updateMerchantApproval,
     updateMerchantCommission,
     featureMerchant,
     unfeatureMerchant,

@@ -5,6 +5,9 @@
         const safeCsrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
         const productFormActionBase = product ? `/merchant/products/${product.id}` : '/merchant/products';
         const productFormAction = `${productFormActionBase}?_csrf=${encodeURIComponent(safeCsrfToken)}`;
+        const selectedRoutineGoals = Array.isArray(form.routineGoalTags) ? form.routineGoalTags : [];
+        const selectedRoutineConcerns = Array.isArray(form.routineConcernTags) ? form.routineConcernTags : [];
+        const checkedTag = (collection, value) => collection.includes(value) ? 'checked' : '';
     %>
     <header class="merchant-products-hero">
         <div class="merchant-products-hero-copy">
@@ -80,6 +83,50 @@
                     Stock quantity
                     <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
                 </label>
+
+                <section class="merchant-product-routine-panel" aria-label="Routine Finder settings">
+                    <div>
+                        <p class="eyebrow">Routine Finder</p>
+                        <h2>Recommendation tags</h2>
+                        <p class="muted">Help customers discover this product as aftercare for their goals and concerns.</p>
+                    </div>
+                    <label>
+                        Recommendation note
+                        <input type="text" name="routineRecommendationNote" maxlength="255" value="<%= form.routineRecommendationNote || '' %>" placeholder="Best after hydrating facial">
+                    </label>
+                    <div class="merchant-service-editor-pair">
+                        <label>
+                            Budget minimum
+                            <input type="number" name="routineBudgetMin" value="<%= form.routineBudgetMin || '' %>" min="0" step="0.01" placeholder="20">
+                        </label>
+                        <label>
+                            Budget maximum
+                            <input type="number" name="routineBudgetMax" value="<%= form.routineBudgetMax || '' %>" min="0" step="0.01" placeholder="80">
+                        </label>
+                    </div>
+                    <div class="routine-merchant-tag-panel">
+                        <span>Goal tags</span>
+                        <div>
+                            <% (routineTagOptions || []).slice(0, 8).forEach((tag) => { %>
+                                <label>
+                                    <input type="checkbox" name="routineGoalTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineGoals, tag.value) %>>
+                                    <span><%= tag.label %></span>
+                                </label>
+                            <% }) %>
+                        </div>
+                    </div>
+                    <div class="routine-merchant-tag-panel">
+                        <span>Concern tags</span>
+                        <div>
+                            <% (routineTagOptions || []).slice(6).forEach((tag) => { %>
+                                <label>
+                                    <input type="checkbox" name="routineConcernTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineConcerns, tag.value) %>>
+                                    <span><%= tag.label %></span>
+                                </label>
+                            <% }) %>
+                        </div>
+                    </div>
+                </section>
 
                 <label>
                     Product photo

@@ -4,6 +4,7 @@
     const adminGroups = [
         {
             label: 'Users',
+            icon: 'U',
             active: isActive(['/admin/merchants', '/admin/users']),
             items: [
                 { label: 'Merchant Directory', href: '/admin/merchants' },
@@ -13,6 +14,7 @@
         },
         {
             label: 'Bookings',
+            icon: 'B',
             active: isActive(['/admin/bookings']),
             items: [
                 { label: 'Booking Operations', href: '/admin/bookings' }
@@ -20,6 +22,7 @@
         },
         {
             label: 'Marketplace',
+            icon: 'M',
             active: isActive(['/admin/services', '/admin/products', '/admin/promotions', '/admin/cashback']),
             items: [
                 { label: 'Services', href: '/admin/services' },
@@ -30,15 +33,16 @@
         },
         {
             label: 'Rewards',
-            active: isActive(['/admin/reward-shop', '/admin/rewards-game', '/admin/loyalty']),
+            icon: 'R',
+            active: isActive(['/admin/reward-shop', '/admin/loyalty']),
             items: [
                 { label: 'Reward Shop', href: '/admin/reward-shop' },
-                { label: 'Game Rewards', href: '/admin/rewards-game' },
                 { label: 'Loyalty Settings', href: '/admin/loyalty' }
             ]
         },
         {
             label: 'Analytics',
+            icon: 'A',
             active: isActive(['/admin/analytics', '/admin/platform-health']),
             items: [
                 { label: 'Platform Analytics', href: '/admin/analytics' },
@@ -47,6 +51,7 @@
         },
         {
             label: 'Moderation',
+            icon: 'Q',
             active: isActive(['/admin/reviews']),
             items: [
                 { label: 'Review Moderation', href: '/admin/reviews' }
@@ -54,6 +59,7 @@
         },
         {
             label: 'System',
+            icon: 'S',
             active: isActive(['/admin/audit-trail']),
             items: [
                 { label: 'Audit Trail', href: '/admin/audit-trail' }
@@ -63,17 +69,17 @@
 %>
 
 <aside class="admin-sidebar">
-    <a class="admin-sidebar-brand" href="/admin/overview">Vaniday Admin</a>
+    <a class="admin-sidebar-brand" href="/admin/overview"><span>V</span>Vaniday Admin</a>
     <nav aria-label="Admin primary navigation">
-        <a class="<%= activePath === '/admin/overview' || activePath === '/admin' ? 'active' : '' %>" href="/admin/overview">Overview</a>
+        <a class="<%= activePath === '/admin/overview' || activePath === '/admin' ? 'active' : '' %>" href="/admin/overview"><span class="admin-nav-icon">O</span>Overview</a>
         <% adminGroups.forEach((group, index) => { %>
             <div class="admin-sidebar-group">
                 <button class="admin-sidebar-group-toggle <%= group.active ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#admin-sidebar-group-<%= index %>" aria-expanded="<%= group.active ? 'true' : 'false' %>" aria-controls="admin-sidebar-group-<%= index %>">
-                    <%= group.label %>
+                    <span><span class="admin-nav-icon"><%= group.icon %></span><%= group.label %></span>
                 </button>
                 <div id="admin-sidebar-group-<%= index %>" class="collapse <%= group.active ? 'show' : '' %>">
                     <% group.items.forEach((item) => { %>
-                        <a class="<%= activePath === item.href ? 'active' : '' %>" href="<%= item.href %>"><%= item.label %></a>
+                        <a class="<%= activePath === item.href ? 'active' : '' %>" href="<%= item.href %>"><span class="admin-nav-icon">-</span><%= item.label %></a>
                     <% }) %>
                 </div>
             </div>

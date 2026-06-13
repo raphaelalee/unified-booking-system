@@ -163,6 +163,21 @@ function validateFeaturedDates(startDate, endDate) {
     };
 }
 
+function parseJsonArray(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return String(value)
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+    }
+}
+
 function normalizeFeaturedOrder(value) {
     const numeric = Number(value || 0);
     return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
@@ -224,6 +239,26 @@ function ensureProductSchema(callback) {
 
         if (!fields.has('featured_end_date')) {
             alters.push('ADD COLUMN featured_end_date DATE DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_goal_tags')) {
+            alters.push('ADD COLUMN routine_goal_tags JSON DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_concern_tags')) {
+            alters.push('ADD COLUMN routine_concern_tags JSON DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_recommendation_note')) {
+            alters.push('ADD COLUMN routine_recommendation_note VARCHAR(255) DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_budget_min')) {
+            alters.push('ADD COLUMN routine_budget_min DECIMAL(10,2) DEFAULT NULL');
+        }
+
+        if (!fields.has('routine_budget_max')) {
+            alters.push('ADD COLUMN routine_budget_max DECIMAL(10,2) DEFAULT NULL');
         }
 
         const continueSetup = () => ensureProductCategories(callback);
@@ -400,7 +435,12 @@ function mapRow(row) {
         isFeatured: Boolean(row.is_featured),
         featuredOrder: Number(row.featured_order || 0),
         featuredStartDate: row.featured_start_date || null,
-        featuredEndDate: row.featured_end_date || null
+        featuredEndDate: row.featured_end_date || null,
+        routineGoalTags: parseJsonArray(row.routine_goal_tags),
+        routineConcernTags: parseJsonArray(row.routine_concern_tags),
+        routineRecommendationNote: row.routine_recommendation_note || '',
+        routineBudgetMin: row.routine_budget_min === null || row.routine_budget_min === undefined ? null : Number(row.routine_budget_min),
+        routineBudgetMax: row.routine_budget_max === null || row.routine_budget_max === undefined ? null : Number(row.routine_budget_max)
     });
 }
 
@@ -430,10 +470,13 @@ function getAll(callback) {
                 products.image_url, products.description, products.ingredients,
                 products.how_to_use, products.is_featured, products.featured_order,
                 products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
+            WHERE salons.approval_status = 'approved'
             ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
@@ -462,12 +505,15 @@ function getAllByCategory(categoryName, callback) {
                 products.image_url, products.description, products.ingredients,
                 products.how_to_use, products.is_featured, products.featured_order,
                 products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE LOWER(categories.category_name) = ?
                 AND categories.category_scope = 'product'
+                AND salons.approval_status = 'approved'
             ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
         `;
 
@@ -495,6 +541,8 @@ function getAllMerchantProducts(callback) {
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             INNER JOIN salons ON salons.salon_id = products.salon_id
@@ -535,11 +583,14 @@ function findById(id, callback) {
                 products.image_url, products.description, products.ingredients,
                 products.how_to_use, products.is_featured, products.featured_order,
                 products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE products.product_id = ?
+                AND salons.approval_status = 'approved'
             LIMIT 1
         `;
 
@@ -574,6 +625,8 @@ function findMerchantProductById(id, callback) {
                 products.image_url, products.description, products.ingredients,
                 products.how_to_use, products.is_featured, products.featured_order,
                 products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
@@ -600,6 +653,8 @@ function getByMerchantUserId(userId, callback) {
                 products.image_url, products.description, products.ingredients,
                 products.how_to_use, products.is_featured, products.featured_order,
                 products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             INNER JOIN salons ON salons.salon_id = products.salon_id
@@ -624,6 +679,8 @@ function findForMerchant(userId, productId, callback) {
             products.image_url, products.description, products.ingredients,
             products.how_to_use, products.is_featured, products.featured_order,
             products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
             salons.salon_name, categories.category_name
         FROM products
         INNER JOIN salons ON salons.salon_id = products.salon_id
@@ -651,8 +708,11 @@ function createForMerchant(userId, product, callback) {
         }
 
         const sql = `
-            INSERT INTO products (salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use, category_id)
-            SELECT salon_id, ?, ?, ?, ?, ?, ?, ?, ?
+            INSERT INTO products (
+                salon_id, name, price, stock_quantity, image_url, description, ingredients, how_to_use, category_id,
+                routine_goal_tags, routine_concern_tags, routine_recommendation_note, routine_budget_min, routine_budget_max
+            )
+            SELECT salon_id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             FROM salons
             WHERE merchant_id = ?
             LIMIT 1
@@ -667,6 +727,11 @@ function createForMerchant(userId, product, callback) {
             product.ingredients,
             product.howToUse,
             product.categoryId !== undefined ? product.categoryId : null,
+            JSON.stringify(product.routineGoalTags || []),
+            JSON.stringify(product.routineConcernTags || []),
+            product.routineRecommendationNote || null,
+            product.routineBudgetMin,
+            product.routineBudgetMax,
             userId
         ], callback);
     });
@@ -714,7 +779,12 @@ function updateForMerchant(userId, productId, product, callback) {
                 products.description = ?,
                 products.ingredients = ?,
                 products.how_to_use = ?,
-                products.category_id = ?
+                products.category_id = ?,
+                products.routine_goal_tags = ?,
+                products.routine_concern_tags = ?,
+                products.routine_recommendation_note = ?,
+                products.routine_budget_min = ?,
+                products.routine_budget_max = ?
             WHERE products.product_id = ?
                 AND salons.merchant_id = ?
         `;
@@ -728,6 +798,11 @@ function updateForMerchant(userId, productId, product, callback) {
             product.ingredients,
             product.howToUse,
             product.categoryId !== undefined ? product.categoryId : null,
+            JSON.stringify(product.routineGoalTags || []),
+            JSON.stringify(product.routineConcernTags || []),
+            product.routineRecommendationNote || null,
+            product.routineBudgetMin,
+            product.routineBudgetMax,
             productId,
             userId
         ], callback);
@@ -823,11 +898,14 @@ function getFeaturedProducts(callback) {
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE ${getFeaturedWindowCondition('products')}
+                AND salons.approval_status = 'approved'
             ORDER BY products.featured_order, products.product_id DESC
         `;
 
@@ -861,12 +939,15 @@ function getFeaturedProductsByMerchant(merchantId, callback) {
                 products.stock_quantity, products.image_url, products.description,
                 products.ingredients, products.how_to_use, products.is_featured,
                 products.featured_order, products.featured_start_date, products.featured_end_date,
+                products.routine_goal_tags, products.routine_concern_tags, products.routine_recommendation_note,
+                products.routine_budget_min, products.routine_budget_max,
                 salons.salon_name, categories.category_name
             FROM products
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             LEFT JOIN categories ON categories.category_id = products.category_id
             WHERE products.salon_id = ?
                 AND ${getFeaturedWindowCondition('products')}
+                AND salons.approval_status = 'approved'
             ORDER BY products.featured_order, products.product_id DESC
         `;
 
@@ -994,3 +1075,4 @@ module.exports = {
     deleteAsAdmin,
     deleteForMerchant
 };
+

@@ -1,0 +1,359 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const isCustomer = currentUser && currentUser.role === 'customer';
+    const availableSpins = Number(tokenSummary.available || 0);
+    const canSpin = isCustomer && settings.isEnabled && availableSpins > 0;
+    const rewardList = Array.isArray(rewards) ? rewards : [];
+    const recentHistory = Array.isArray(history) ? history : [];
+    const rewardTypeLabel = (value) => String(value || '').replace(/_/g, ' ');
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleString('en-SG', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    };
+    const formatExpiry = (reward) => {
+        const expiresAt = reward?.payload?.expiresAt;
+        if (!expiresAt) return '';
+        const date = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+    const rewardIcon = (type) => {
+        if (type === 'cashback') return '$';
+        if (type === 'loyalty_points') return 'VG';
+        if (type === 'product_discount') return 'P';
+        if (type === 'service_discount') return 'S';
+        if (type === 'try_again') return '*';
+        return '%';
+    };
+    const shortTitle = (value, max = 26) => {
+        const text = String(value || '').trim();
+        return text.length > max ? `${text.slice(0, max - 1)}...` : text;
+    };
+    const rewardCategoryClass = (type) => `spin-category-${String(type || 'promotion').replace(/_/g, '-')}`;
+    const wheelRewards = rewardList.length
+        ? rewardList.slice(0, Math.min(10, rewardList.length))
+        : [
+            { rewardType: 'service_discount', sourceType: 'fallback', sourceId: 'service', title: 'Service Deals', description: 'Discover bookable offers from Vaniday merchants.', payload: {} },
+            { rewardType: 'product_discount', sourceType: 'fallback', sourceId: 'product', title: 'Product Perks', description: 'Find product discounts from marketplace sellers.', payload: {} },
+            { rewardType: 'cashback', sourceType: 'fallback', sourceId: 'cashback', title: 'Cashback', description: 'Earn wallet rewards for future purchases.', payload: {} },
+            { rewardType: 'loyalty_points', sourceType: 'fallback', sourceId: 'points', title: 'VaniGlints', description: 'Collect loyalty points for rewards.', payload: {} }
+        ];
+    const featuredRewards = rewardList.filter((reward) => reward.rewardType !== 'try_again').slice(0, 4);
+    const latestPromotions = rewardList.filter((reward) => ['promotion', 'service_discount'].includes(reward.rewardType)).slice(0, 4);
+    const popularDeals = rewardList.filter((reward) => ['product_discount', 'voucher', 'cashback'].includes(reward.rewardType)).slice(0, 4);
+    const rewardCategories = ['service_discount', 'product_discount', 'cashback', 'loyalty_points', 'promotion'].map((type) => ({
+        type,
+        label: rewardTypeLabel(type),
+        count: rewardList.filter((reward) => reward.rewardType === type).length
+    }));
+    const spinConfig = {
+        isCustomer,
+        canSpin,
+        loginUrl: '/login?returnTo=%2Fspin-discover',
+        segments: wheelRewards.map((reward, index) => ({
+            index,
+            rewardType: reward.rewardType,
+            sourceType: reward.sourceType,
+            sourceId: reward.sourceId,
+            title: reward.title,
+            merchantName: reward.payload?.salonName || reward.payload?.merchantName || '',
+            expiresAt: reward.payload?.expiresAt || '',
+            description: reward.description || ''
+        })),
+        fallbackResult: result || null
+    };
+%>
+
+<section class="page-title spin-discover-hero">
+    <div class="spin-discover-copy">
+        <p class="eyebrow">Marketplace Rewards</p>
+        <h1>Spin & Discover beauty deals.</h1>
+        <p>Turn completed bookings and product orders into live merchant rewards, beauty vouchers, cashback, and loyalty perks.</p>
+        <div class="spin-hero-actions">
+            <% if (isCustomer) { %>
+                <a class="button secondary" href="/profile#wallet">View wallet</a>
+                <a class="button secondary" href="/profile/history">Earn more spins</a>
+            <% } else { %>
+                <a class="button primary" href="/login?returnTo=%2Fspin-discover">Log in to spin</a>
+            <% } %>
+            <a class="button secondary" href="/promotions">Browse promotions</a>
+        </div>
+    </div>
+    <aside class="spin-hero-preview">
+        <div class="spin-preview-card">
+            <p class="eyebrow">Live reward pool</p>
+            <strong><%= rewardList.length %> rewards</strong>
+            <span>Merchant promos, vouchers, cashback, and VaniGlints</span>
+            <div class="spin-preview-chips">
+                <% rewardCategories.filter((category) => category.count > 0).slice(0, 4).forEach((category) => { %>
+                    <span class="<%= rewardCategoryClass(category.type) %>"><%= category.label %></span>
+                <% }) %>
+            </div>
+        </div>
+        <div class="spin-preview-metrics">
+            <div>
+                <span>Your spins</span>
+                <strong data-spin-count><%= isCustomer ? availableSpins : 'Log in' %></strong>
+            </div>
+            <div>
+                <span>Validity</span>
+                <strong><%= settings.tokenExpiryDays || 30 %> days</strong>
+            </div>
+        </div>
+    </aside>
+</section>
+
+<section class="section compact spin-discover-layout">
+    <div class="spin-stage-panel">
+        <% if (error) { %>
+            <div class="notice error" data-spin-error><p><%= error %></p></div>
+        <% } else { %>
+            <div class="notice error" data-spin-error hidden><p></p></div>
+        <% } %>
+
+        <div class="notice success spin-result-notice" data-spin-result-inline hidden>
+            <p class="eyebrow">You won</p>
+            <h2 data-spin-result-title></h2>
+            <p data-spin-result-description></p>
+        </div>
+
+        <div class="spin-wheel-card">
+            <div class="spin-wheel-wrap" aria-label="Spin reward wheel">
+                <div class="spin-wheel-ring" aria-hidden="true"></div>
+                <div class="spin-wheel" data-spin-wheel style="--segment-count:<%= wheelRewards.length %>;">
+                    <% wheelRewards.forEach((reward, index) => { %>
+                        <span class="spin-wheel-segment <%= rewardCategoryClass(reward.rewardType) %>" style="--i:<%= index %>;">
+                            <b><%= rewardIcon(reward.rewardType) %></b>
+                            <em><%= shortTitle(reward.title) %></em>
+                        </span>
+                    <% }) %>
+                </div>
+                <span class="spin-wheel-pointer" aria-hidden="true"></span>
+                <span class="spin-wheel-center">
+                    <strong>V</strong>
+                    <small>SPIN</small>
+                </span>
+            </div>
+
+            <div class="spin-action-panel">
+                <p class="eyebrow"><%= settings.isEnabled ? 'Ready to reveal' : 'Paused' %></p>
+                <h2>Discover live merchant rewards.</h2>
+                <p class="muted">The backend chooses and records the reward securely. The wheel animation only reveals the confirmed result.</p>
+                <div class="spin-status-strip" data-spin-status>
+                    <span><%= canSpin ? 'Tap spin to begin' : (isCustomer ? 'Complete bookings or orders to earn spins' : 'Log in to use spin chances') %></span>
+                </div>
+                <% if (isCustomer && !canSpin) { %>
+                    <div class="spin-no-chance-card">
+                        <strong>No spin chance available</strong>
+                        <p>Complete a paid booking or product order to unlock your next spin.</p>
+                        <a class="text-link" href="/services">Browse services</a>
+                    </div>
+                <% } %>
+                <form action="/spin-discover/spin" method="POST" data-spin-form>
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="returnTo" value="/spin-discover">
+                    <% if (isCustomer) { %>
+                        <button class="button primary full spin-submit-button" type="submit" <%= canSpin ? '' : 'disabled' %> data-spin-button>
+                            <span><%= canSpin ? 'Spin now' : 'No spin chance available' %></span>
+                        </button>
+                    <% } else { %>
+                        <button class="button primary full spin-submit-button" type="submit" data-spin-button>
+                            <span>Log in to spin</span>
+                        </button>
+                    <% } %>
+                </form>
+                <div class="spin-earn-card">
+                    <strong>How to earn more</strong>
+                    <p>Each completed booking or paid product order unlocks one spin chance. Unused chances expire after <%= settings.tokenExpiryDays || 30 %> days.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="spin-feature-grid">
+            <article>
+                <span>Secure</span>
+                <strong>Backend verified rewards</strong>
+                <p>Reward outcomes, token usage, and issued vouchers are recorded in MySQL before reveal.</p>
+            </article>
+            <article>
+                <span>Merchant powered</span>
+                <strong>Live marketplace campaigns</strong>
+                <p>Active merchant promotions and reward-shop vouchers automatically enter the discovery pool.</p>
+            </article>
+            <article>
+                <span>Fresh</span>
+                <strong>Expired deals are excluded</strong>
+                <p>Inactive and expired campaigns stay out of the wheel, keeping recommendations presentation-ready.</p>
+            </article>
+        </div>
+    </div>
+
+    <aside class="spin-side-panel">
+        <div class="portal-summary-panel dashboard-kpi-grid spin-kpi-grid">
+            <div class="portal-stat">
+                <span>Available</span>
+                <strong data-spin-count><%= isCustomer ? tokenSummary.available : 0 %></strong>
+                <small>Unused chances</small>
+            </div>
+            <div class="portal-stat">
+                <span>Used</span>
+                <strong data-spin-used><%= isCustomer ? tokenSummary.used : 0 %></strong>
+                <small>Recorded spins</small>
+            </div>
+            <div class="portal-stat">
+                <span>Expired</span>
+                <strong data-spin-expired><%= isCustomer ? tokenSummary.expired : 0 %></strong>
+                <small>Past validity</small>
+            </div>
+        </div>
+
+        <div class="dashboard-report-card spin-side-card">
+            <p class="eyebrow">Reward Categories</p>
+            <h2>What can appear</h2>
+            <div class="spin-category-list">
+                <% rewardCategories.forEach((category) => { %>
+                    <span class="<%= rewardCategoryClass(category.type) %>">
+                        <%= category.label %>
+                        <strong><%= category.count %></strong>
+                    </span>
+                <% }) %>
+            </div>
+        </div>
+
+        <div class="dashboard-report-card spin-side-card">
+            <p class="eyebrow">Spin History</p>
+            <h2>Recently won rewards</h2>
+            <% if (!isCustomer) { %>
+                <p class="muted">Log in to see your spin history and redemption status.</p>
+            <% } else if (recentHistory.length === 0) { %>
+                <p class="muted">No spins recorded yet.</p>
+            <% } else { %>
+                <div class="spin-history-list" data-spin-history>
+                    <% recentHistory.forEach((item) => { %>
+                        <article>
+                            <strong><%= item.title %></strong>
+                            <span><%= rewardTypeLabel(item.rewardType) %> - <%= formatDate(item.createdAt) %></span>
+                            <small><%= item.status === 'no_prize' ? 'No prize' : 'Saved to account' %></small>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </div>
+    </aside>
+</section>
+
+<section class="section compact spin-discover-sections">
+    <div class="spin-reward-section">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Featured Rewards</p>
+                <h2>Presentation-ready prizes from the live pool.</h2>
+            </div>
+        </div>
+        <div class="spin-market-grid">
+            <% (featuredRewards.length ? featuredRewards : wheelRewards).slice(0, 4).forEach((reward) => { %>
+                <article class="spin-market-card">
+                    <span class="spin-reward-icon <%= rewardCategoryClass(reward.rewardType) %>"><%= rewardIcon(reward.rewardType) %></span>
+                    <div class="spin-card-badge-row">
+                        <p class="eyebrow"><%= rewardTypeLabel(reward.rewardType) %></p>
+                        <span>Active</span>
+                    </div>
+                    <h3><%= reward.title %></h3>
+                    <p><%= reward.description %></p>
+                    <% if (reward.payload?.salonName || reward.payload?.merchantName) { %>
+                        <small><%= reward.payload.salonName || reward.payload.merchantName %></small>
+                    <% } %>
+                    <% if (formatExpiry(reward)) { %>
+                        <small>Valid until <%= formatExpiry(reward) %></small>
+                    <% } %>
+                </article>
+            <% }) %>
+        </div>
+    </div>
+
+    <div class="spin-reward-section">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Latest Promotions</p>
+                <h2>Fresh merchant campaigns in the wheel.</h2>
+            </div>
+            <a class="text-link" href="/promotions">View all promotions</a>
+        </div>
+        <div class="spin-promo-list">
+            <% if (latestPromotions.length === 0) { %>
+                <p class="muted">No active merchant promotions are available right now.</p>
+            <% } %>
+            <% latestPromotions.forEach((reward) => { %>
+                <article>
+                    <span class="<%= rewardCategoryClass(reward.rewardType) %>"><%= rewardTypeLabel(reward.rewardType) %><b>New</b></span>
+                    <strong><%= reward.title %></strong>
+                    <p><%= reward.description %></p>
+                    <small><%= reward.payload?.salonName || reward.payload?.merchantName || 'Vaniday marketplace' %><%= formatExpiry(reward) ? ` - expires ${formatExpiry(reward)}` : '' %></small>
+                </article>
+            <% }) %>
+        </div>
+    </div>
+
+    <div class="spin-reward-section">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Popular Merchant Deals</p>
+                <h2>Cashback, product, and voucher opportunities.</h2>
+            </div>
+        </div>
+        <div class="spin-promo-list compact">
+            <% if (popularDeals.length === 0) { %>
+                <p class="muted">More merchant deals will appear as merchants create active promotions.</p>
+            <% } %>
+            <% popularDeals.forEach((reward) => { %>
+                <article>
+                    <span class="<%= rewardCategoryClass(reward.rewardType) %>"><%= rewardTypeLabel(reward.rewardType) %><b>Limited</b></span>
+                    <strong><%= reward.title %></strong>
+                    <p><%= reward.description %></p>
+                </article>
+            <% }) %>
+        </div>
+    </div>
+</section>
+
+<div class="spin-reveal-modal" data-spin-modal hidden>
+    <div class="spin-reveal-backdrop" data-spin-close></div>
+    <article class="spin-reveal-card" role="dialog" aria-modal="true" aria-labelledby="spin-reveal-title">
+        <button class="spin-modal-close" type="button" data-spin-close aria-label="Close reward reveal">x</button>
+        <div class="spin-reveal-visual">
+            <span data-spin-modal-icon>%</span>
+        </div>
+        <p class="eyebrow" data-spin-modal-type>You won</p>
+        <h2 id="spin-reveal-title" data-spin-modal-title>Reward title</h2>
+        <p data-spin-modal-description></p>
+        <dl class="spin-reveal-details">
+            <div data-spin-modal-merchant-wrap hidden>
+                <dt>Merchant</dt>
+                <dd data-spin-modal-merchant></dd>
+            </div>
+            <div data-spin-modal-expiry-wrap hidden>
+                <dt>Expiry</dt>
+                <dd data-spin-modal-expiry></dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd data-spin-modal-status>Saved to your account</dd>
+            </div>
+        </dl>
+        <p class="muted" data-spin-modal-instructions>Your reward has been saved. View your wallet or vouchers to redeem it on an eligible booking or checkout.</p>
+        <div class="spin-modal-actions">
+            <a class="button primary" href="/profile#wallet">View rewards</a>
+            <a class="button secondary" href="/promotions">Discover more</a>
+        </div>
+    </article>
+    <div class="spin-confetti" data-spin-confetti aria-hidden="true"></div>
+</div>
+
+<script>
+    window.spinDiscoverConfig = <%- JSON.stringify(spinConfig) %>;
+</script>
+<script src="/js/spin-discover.js?v=2" defer></script>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,120 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const status = merchant.approvalStatus || 'pending_review';
+    const statusLabel = status.replace(/_/g, ' ');
+%>
+
+<section class="section compact merchant-onboarding-page">
+    <div class="merchant-onboarding-shell">
+        <header class="merchant-dashboard-hero">
+            <div>
+                <p class="eyebrow">Merchant Verification</p>
+                <h1>Complete your Vaniday merchant review.</h1>
+                <span>Your account can log in, but marketplace tools unlock after admin approval.</span>
+            </div>
+            <span class="merchant-approval-badge status-<%= status %>"><%= statusLabel %></span>
+        </header>
+
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
+        <section class="merchant-dashboard-lower-grid">
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Review Status</p>
+                        <h2><%= statusLabel %></h2>
+                    </div>
+                </div>
+                <% if (merchant.reviewReason) { %>
+                    <p><%= merchant.reviewReason %></p>
+                <% } else if (status === 'approved') { %>
+                    <p>Your merchant account is approved. You can access dashboard tools now.</p>
+                <% } else { %>
+                    <p>Submit accurate business details. Admin will review your application before your services, products, and promotions go live.</p>
+                <% } %>
+                <div class="merchant-inline-actions">
+                    <% if (status === 'approved') { %>
+                        <a class="button primary" href="/merchant/dashboard">Open dashboard</a>
+                    <% } %>
+                    <a class="button secondary" href="/help-center">Contact support</a>
+                </div>
+            </article>
+
+            <article class="merchant-alert-card">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">What Unlocks After Approval</p>
+                        <h2>Marketplace access</h2>
+                    </div>
+                </div>
+                <ul class="merchant-onboarding-list">
+                    <li>List and publish services</li>
+                    <li>Add products and stock</li>
+                    <li>Create promotions, vouchers, cashback, and Spin rewards</li>
+                    <li>Appear in Beauty Routine Finder and public search</li>
+                </ul>
+            </article>
+        </section>
+
+        <section class="merchant-alert-card">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">Business Application</p>
+                    <h2>Verification details</h2>
+                </div>
+            </div>
+            <form class="account-form" action="/merchant/onboarding" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <div class="form-grid">
+                    <label>
+                        Contact person name
+                        <input type="text" name="ownerName" value="<%= merchant.ownerName || '' %>" required>
+                    </label>
+                    <label>
+                        Contact phone
+                        <input type="tel" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" maxlength="8" required>
+                    </label>
+                    <label>
+                        Business name
+                        <input type="text" name="salonName" value="<%= merchant.name || '' %>" required>
+                    </label>
+                    <label>
+                        Business category
+                        <input type="text" name="businessCategory" value="<%= merchant.businessCategory || '' %>" placeholder="Spa, hair salon, nails" required>
+                    </label>
+                    <label>
+                        UEN / registration number
+                        <input type="text" name="uen" value="<%= merchant.uen || '' %>" required>
+                    </label>
+                    <label>
+                        Years in business
+                        <input type="number" name="yearsInBusiness" value="<%= merchant.yearsInBusiness || '' %>" min="0" max="100" required>
+                    </label>
+                    <label>
+                        Staff count
+                        <input type="number" name="staffCount" value="<%= merchant.staffCount || '' %>" min="1" max="5000" required>
+                    </label>
+                    <label>
+                        Business address
+                        <input type="text" name="address" value="<%= merchant.location === 'No address set' ? '' : merchant.location %>" required>
+                    </label>
+                    <label class="span-full">
+                        Business description
+                        <textarea name="description" rows="4" required><%= merchant.description || '' %></textarea>
+                    </label>
+                </div>
+                <div class="account-form-actions">
+                    <button class="button primary" type="submit">Submit for review</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

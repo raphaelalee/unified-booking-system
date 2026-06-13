@@ -1,0 +1,443 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const selectedGoals = Array.isArray(form.goals) ? form.goals : (form.goals ? [form.goals] : []);
+    const selectedConcerns = Array.isArray(form.concerns) ? form.concerns : (form.concerns ? [form.concerns] : []);
+    const selected = (name, value) => String(form[name] || '') === value ? 'selected' : '';
+    const checked = (values, value) => values.includes(value) ? 'checked' : '';
+    const serviceResults = results && Array.isArray(results.services) ? results.services : [];
+    const productResults = results && Array.isArray(results.products) ? results.products : [];
+    const merchantResults = results && Array.isArray(results.merchants) ? results.merchants : [];
+    const promotionResults = results && Array.isArray(results.promotions) ? results.promotions : [];
+    const routineSummary = results && results.summary ? results.summary : null;
+    const totalMatches = serviceResults.length + productResults.length + merchantResults.length + promotionResults.length;
+    const isCustomer = currentUser && currentUser.role === 'customer';
+    const bookingPath = (service) => `/booking/${service.salonId || service.merchantId}?serviceId=${encodeURIComponent(service.id)}`;
+    const routineBookingPath = (service) => `/routine-finder/book/${service.salonId || service.merchantId}?serviceId=${encodeURIComponent(service.id)}`;
+    const loginPath = (returnTo) => `/login?returnTo=${encodeURIComponent(returnTo)}`;
+    const productPath = (product) => `/products/${encodeURIComponent(product.id)}`;
+    const optionIcon = (value) => ({
+        glow: 'G', relax: 'R', hair: 'H', nails: 'N', grooming: 'M', event: 'E',
+        dry_skin: 'D', acne_pores: 'P', stress: 'S', damaged_hair: 'R', tired_body: 'B', maintenance: 'A'
+    }[value] || 'V');
+    const hiddenAnswers = () => {
+        const fields = [];
+        selectedGoals.forEach((goal) => fields.push({ name: 'goals', value: goal }));
+        selectedConcerns.forEach((concern) => fields.push({ name: 'concerns', value: concern }));
+        ['category', 'productNeed', 'budget', 'genderTarget', 'locationPreference'].forEach((field) => {
+            if (form[field]) fields.push({ name: field, value: form[field] });
+        });
+        return fields;
+    };
+%>
+
+<section class="page-title routine-finder-hero routine-finder-premium-hero">
+    <div class="routine-hero-copy">
+        <p class="eyebrow">Beauty Routine Finder</p>
+        <h1>Your personalised Vaniday beauty consultation.</h1>
+        <p>Answer a guided quiz and match with live services, merchants, products, and promotions from the marketplace.</p>
+        <div class="routine-hero-actions">
+            <a class="button primary" href="#routine-consultation">Start consultation</a>
+            <a class="button secondary" href="/promotions">Browse promotions</a>
+        </div>
+    </div>
+    <aside class="routine-hero-card" aria-label="Routine Finder highlights">
+        <div>
+            <span>01</span>
+            <strong>Goals</strong>
+            <p>Tell us what you want to improve.</p>
+        </div>
+        <div>
+            <span>02</span>
+            <strong>Match</strong>
+            <p>We score live services and products.</p>
+        </div>
+        <div>
+            <span>03</span>
+            <strong>Book</strong>
+            <p>Continue into the normal Vaniday flow.</p>
+        </div>
+    </aside>
+</section>
+
+<section id="routine-consultation" class="section compact routine-finder-layout routine-finder-upgrade">
+    <form class="routine-finder-panel routine-consultation-card" action="/routine-finder" method="POST" data-routine-form>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <% if (error) { %>
+            <div class="notice error"><p><%= error %></p></div>
+        <% } %>
+
+        <% if (success) { %>
+            <div class="notice success"><p><%= success %></p></div>
+        <% } %>
+
+        <div class="routine-progress-bar" aria-label="Routine Finder progress">
+            <span data-routine-step-label>Step 1 of 5</span>
+            <div><i data-routine-progress></i></div>
+        </div>
+
+        <div class="routine-step-shell">
+            <fieldset class="routine-step is-active" data-routine-step>
+                <legend>
+                    <span class="eyebrow">Step 1</span>
+                    <strong>What is your beauty goal?</strong>
+                    <small>Select one or more goals.</small>
+                </legend>
+                <div class="routine-option-grid routine-card-options">
+                    <% options.goals.forEach((option) => { %>
+                        <label class="routine-choice premium-choice">
+                            <input type="checkbox" name="goals" value="<%= option.value %>" <%= checked(selectedGoals, option.value) %>>
+                            <b><%= optionIcon(option.value) %></b>
+                            <span><%= option.label %></span>
+                        </label>
+                    <% }) %>
+                </div>
+            </fieldset>
+
+            <fieldset class="routine-step" data-routine-step>
+                <legend>
+                    <span class="eyebrow">Step 2</span>
+                    <strong>What should the routine focus on?</strong>
+                    <small>Choose the concerns you want addressed.</small>
+                </legend>
+                <div class="routine-option-grid routine-card-options">
+                    <% options.concerns.forEach((option) => { %>
+                        <label class="routine-choice premium-choice">
+                            <input type="checkbox" name="concerns" value="<%= option.value %>" <%= checked(selectedConcerns, option.value) %>>
+                            <b><%= optionIcon(option.value) %></b>
+                            <span><%= option.label %></span>
+                        </label>
+                    <% }) %>
+                </div>
+            </fieldset>
+
+            <fieldset class="routine-step" data-routine-step>
+                <legend>
+                    <span class="eyebrow">Step 3</span>
+                    <strong>Pick your service and product direction.</strong>
+                    <small>These help us balance treatment and aftercare recommendations.</small>
+                </legend>
+                <div class="routine-field-grid routine-polished-fields">
+                    <label>
+                        <span>Preferred service type</span>
+                        <select name="category">
+                            <% options.categories.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= selected('category', option.value) %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+
+                    <label>
+                        <span>Aftercare product need</span>
+                        <select name="productNeed">
+                            <% options.productNeeds.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= selected('productNeed', option.value) %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+                </div>
+            </fieldset>
+
+            <fieldset class="routine-step" data-routine-step>
+                <legend>
+                    <span class="eyebrow">Step 4</span>
+                    <strong>Set your comfort range.</strong>
+                    <small>Budget and service preference help improve relevance.</small>
+                </legend>
+                <div class="routine-field-grid routine-polished-fields">
+                    <label>
+                        <span>Budget</span>
+                        <select name="budget">
+                            <% options.budgets.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= selected('budget', option.value) %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+
+                    <label>
+                        <span>Service preference</span>
+                        <select name="genderTarget">
+                            <% options.genderTargets.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= selected('genderTarget', option.value) %>><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+                </div>
+            </fieldset>
+
+            <fieldset class="routine-step" data-routine-step>
+                <legend>
+                    <span class="eyebrow">Step 5</span>
+                    <strong>Where should we look?</strong>
+                    <small>Use a neighbourhood, mall, or area if you have one.</small>
+                </legend>
+                <label class="routine-location-field routine-polished-location">
+                    <span>Location preference</span>
+                    <input type="search" name="locationPreference" value="<%= form.locationPreference || '' %>" placeholder="Orchard, Tampines, Woodlands...">
+                </label>
+
+                <div class="routine-live-summary" data-routine-summary>
+                    <p class="eyebrow">Consultation summary</p>
+                    <strong>Your selected preferences will appear here.</strong>
+                    <span>We will use them to score live merchants, services, and products.</span>
+                </div>
+            </fieldset>
+        </div>
+
+        <div class="routine-form-actions routine-wizard-actions">
+            <button class="button secondary" type="button" data-routine-prev disabled>Back</button>
+            <button class="button secondary" type="button" data-routine-next>Next</button>
+            <button class="button primary" type="submit" data-routine-submit hidden>Find my routine</button>
+            <a class="button text" href="/services">Browse services</a>
+        </div>
+
+        <div class="routine-loading" data-routine-loading hidden>
+            <span></span>
+            <strong>Building your routine matches...</strong>
+            <p>Checking live services, products, merchant locations, availability, and promotions.</p>
+        </div>
+    </form>
+
+    <% if (results) { %>
+        <div class="routine-results routine-results-premium" id="routine-results">
+            <div class="routine-results-hero">
+                <div>
+                    <p class="eyebrow">Your consultation results</p>
+                    <h2><%= totalMatches %> live matches from Vaniday listings.</h2>
+                    <p>Results are ranked by your goals, concerns, budget, category, location, and live merchant data.</p>
+                </div>
+                <div class="routine-score-card">
+                    <span>Top match</span>
+                    <strong><%= serviceResults[0] ? `${serviceResults[0].matchScore}%` : 'Ready' %></strong>
+                    <p><%= serviceResults[0] ? serviceResults[0].name : 'Try broadening your preferences' %></p>
+                </div>
+            </div>
+
+            <% if (routineSummary) { %>
+                <section class="routine-summary-card">
+                    <div>
+                        <p class="eyebrow">Selected profile</p>
+                        <h3>Your routine brief</h3>
+                    </div>
+                    <div class="routine-summary-grid">
+                        <span><b>Goals</b><%= routineSummary.goals.length ? routineSummary.goals.join(', ') : 'Any' %></span>
+                        <span><b>Concerns</b><%= routineSummary.concerns.length ? routineSummary.concerns.join(', ') : 'Any' %></span>
+                        <span><b>Service</b><%= routineSummary.category %></span>
+                        <span><b>Product</b><%= routineSummary.productNeed %></span>
+                        <span><b>Budget</b><%= routineSummary.budget %></span>
+                        <span><b>Location</b><%= routineSummary.locationPreference %></span>
+                    </div>
+                    <div class="routine-save-actions">
+                        <% if (isCustomer) { %>
+                            <form action="/routine-finder/save" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <% hiddenAnswers().forEach((field) => { %>
+                                    <input type="hidden" name="<%= field.name %>" value="<%= field.value %>">
+                                <% }) %>
+                                <button class="button secondary" type="submit">Save Routine</button>
+                            </form>
+                        <% } else { %>
+                            <a class="button secondary" href="<%= loginPath('/routine-finder') %>">Log in to save</a>
+                        <% } %>
+                    </div>
+                </section>
+            <% } %>
+
+            <div class="routine-results-toolbar">
+                <div>
+                    <button class="routine-filter is-active" type="button" data-routine-filter="all">All</button>
+                    <button class="routine-filter" type="button" data-routine-filter="service">Services</button>
+                    <button class="routine-filter" type="button" data-routine-filter="product">Products</button>
+                    <button class="routine-filter" type="button" data-routine-filter="merchant">Merchants</button>
+                    <button class="routine-filter" type="button" data-routine-filter="promotion">Promotions</button>
+                </div>
+                <a class="text-link" href="/routine-finder">Retake quiz</a>
+            </div>
+
+            <section class="routine-result-section" data-routine-result-group="service">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Recommended Services</p>
+                        <h2>Start with these treatments.</h2>
+                    </div>
+                </div>
+
+                <% if (serviceResults.length === 0) { %>
+                    <div class="notice routine-empty-state">No service matches found yet. Try a broader goal, category, or budget.</div>
+                <% } else { %>
+                    <div class="routine-result-grid routine-premium-grid">
+                        <% serviceResults.forEach((service) => { %>
+                            <article class="routine-result-card routine-match-card">
+                                <div class="routine-card-topline">
+                                    <span class="tag"><%= service.category || 'Service' %></span>
+                                    <strong><%= service.matchScore || 60 %>% match</strong>
+                                </div>
+                                <h3><%= service.name %></h3>
+                                <p class="muted"><%= service.salonName %> - <%= service.salonAddress || 'Singapore' %></p>
+                                <p><%= service.description || service.shortDescription || 'Book this service through Vaniday.' %></p>
+                                <div class="routine-reasons">
+                                    <% (service.matchReasons || []).slice(0, 3).forEach((reason) => { %>
+                                        <span><%= reason %></span>
+                                    <% }) %>
+                                </div>
+                                <div class="service-meta-pills">
+                                    <span><%= service.duration || `${service.durationMins || 0} mins` %></span>
+                                    <span>$<%= Number(service.price || 0).toFixed(2) %></span>
+                                    <% if (service.genderTarget) { %><span><%= service.genderTarget %></span><% } %>
+                                </div>
+                                <% if (Array.isArray(service.relatedPromotions) && service.relatedPromotions.length > 0) { %>
+                                    <div class="routine-promo-strip">
+                                        <% service.relatedPromotions.slice(0, 2).forEach((promotion) => { %>
+                                            <span><%= promotion.discountLabel || 'Promotion' %>: <%= promotion.title %></span>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
+                                <% if (Array.isArray(service.slots) && service.slots.length > 0) { %>
+                                    <div class="availability-strip compact-slots">
+                                        <% service.slots.slice(0, 3).forEach((slot) => { %>
+                                            <span><%= slot %></span>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
+                                <div class="routine-card-actions">
+                                    <a class="button primary" href="<%= isCustomer ? bookingPath(service) : loginPath(routineBookingPath(service)) %>">Book Now</a>
+                                    <a class="button secondary" href="/merchants/<%= service.salonId || service.merchantId %>?from=routine-finder">View Merchant</a>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
+            <section class="routine-result-section" data-routine-result-group="product">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Recommended Products</p>
+                        <h2>Aftercare that supports your routine.</h2>
+                    </div>
+                </div>
+
+                <% if (productResults.length === 0) { %>
+                    <div class="notice routine-empty-state">No product matches found yet. New merchant products will appear automatically once they match your answers.</div>
+                <% } else { %>
+                    <div class="routine-result-grid routine-premium-grid">
+                        <% productResults.forEach((product) => { %>
+                            <article class="routine-result-card routine-match-card routine-product-card">
+                                <div class="routine-product-media">
+                                    <img src="<%= product.imageUrl || product.fallbackImageUrl || '/images/product-room-mist.svg' %>" alt="<%= product.name %>">
+                                    <strong><%= product.matchScore || 60 %>%</strong>
+                                </div>
+                                <span class="tag"><%= product.category || 'Product' %></span>
+                                <h3><%= product.name %></h3>
+                                <p class="muted"><%= product.salonName || 'Vaniday merchant' %></p>
+                                <p><%= product.description || 'Aftercare product available from a Vaniday merchant.' %></p>
+                                <div class="routine-reasons">
+                                    <% (product.matchReasons || []).slice(0, 3).forEach((reason) => { %>
+                                        <span><%= reason %></span>
+                                    <% }) %>
+                                </div>
+                                <div class="service-meta-pills">
+                                    <span>$<%= Number(product.price || 0).toFixed(2) %></span>
+                                    <span><%= Number(product.stockQuantity || 0) %> in stock</span>
+                                </div>
+                                <div class="routine-card-actions">
+                                    <a class="button secondary" href="<%= productPath(product) %>">View Product</a>
+                                    <% if (isCustomer) { %>
+                                        <form action="/cart/product/<%= product.id %>" method="POST">
+                                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                            <input type="hidden" name="productId" value="<%= product.id %>">
+                                            <button class="button primary" type="submit">Add to Cart</button>
+                                        </form>
+                                    <% } else { %>
+                                        <a class="button primary" href="<%= loginPath(productPath(product)) %>">Add to Cart</a>
+                                    <% } %>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
+            <section class="routine-result-section" data-routine-result-group="merchant">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Recommended Merchants</p>
+                        <h2>Merchants with the strongest fit.</h2>
+                    </div>
+                </div>
+
+                <% if (merchantResults.length === 0) { %>
+                    <div class="notice routine-empty-state">No merchant matches found yet.</div>
+                <% } else { %>
+                    <div class="routine-merchant-list">
+                        <% merchantResults.forEach((merchant) => { %>
+                            <article class="merchant-row routine-merchant-row routine-match-row">
+                                <div>
+                                    <p class="tag"><%= merchant.category || 'Beauty & Wellness' %></p>
+                                    <h3><%= merchant.name %></h3>
+                                    <p class="muted"><%= merchant.location || 'Singapore' %></p>
+                                    <p><%= merchant.matchedServices.length %> matched service<%= merchant.matchedServices.length === 1 ? '' : 's' %> from this merchant.</p>
+                                    <div class="routine-reasons">
+                                        <% (merchant.matchReasons || []).slice(0, 3).forEach((reason) => { %>
+                                            <span><%= reason %></span>
+                                        <% }) %>
+                                    </div>
+                                </div>
+                                <div class="merchant-actions">
+                                    <strong><%= merchant.matchScore || 60 %>% match</strong>
+                                    <a class="button primary" href="/merchants/<%= merchant.id %>?from=routine-finder">View Merchant</a>
+                                    <% if (merchant.matchedServices[0]) { %>
+                                        <a class="text-link" href="<%= isCustomer ? bookingPath(merchant.matchedServices[0]) : loginPath(routineBookingPath(merchant.matchedServices[0])) %>">Book top match</a>
+                                    <% } %>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
+            <section class="routine-result-section" data-routine-result-group="promotion">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Related Promotions</p>
+                        <h2>Deals connected to your routine.</h2>
+                    </div>
+                    <a class="text-link" href="/promotions">View all promotions</a>
+                </div>
+
+                <% if (promotionResults.length === 0) { %>
+                    <div class="notice routine-empty-state">No related active promotions match this routine right now.</div>
+                <% } else { %>
+                    <div class="routine-result-grid routine-premium-grid">
+                        <% promotionResults.forEach((promotion) => { %>
+                            <article class="routine-result-card routine-promotion-card">
+                                <div class="routine-card-topline">
+                                    <span class="tag"><%= promotion.type ? promotion.type.replace(/_/g, ' ') : 'Promotion' %></span>
+                                    <strong><%= promotion.discountLabel || 'Deal' %></strong>
+                                </div>
+                                <h3><%= promotion.title %></h3>
+                                <p class="muted"><%= promotion.salonName || 'Vaniday merchant' %> - <%= promotion.address || 'Singapore' %></p>
+                                <p><%= promotion.description || 'Active promotion from a Vaniday merchant.' %></p>
+                                <div class="service-meta-pills">
+                                    <% if (promotion.endDate) { %><span>Ends <%= new Date(promotion.endDate).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span><% } %>
+                                    <% if (promotion.redemptionCount !== undefined) { %><span><%= promotion.redemptionCount %> redeemed</span><% } %>
+                                </div>
+                                <div class="routine-card-actions">
+                                    <a class="button secondary" href="/promotions">View Promotion</a>
+                                    <% if (promotion.serviceId) { %>
+                                        <a class="button primary" href="<%= isCustomer ? `/booking/${promotion.salonId}?serviceId=${encodeURIComponent(promotion.serviceId)}&promotionId=${encodeURIComponent(promotion.id)}` : loginPath(`/routine-finder/book/${promotion.salonId}?serviceId=${encodeURIComponent(promotion.serviceId)}`) %>">Book Deal</a>
+                                    <% } %>
+                                </div>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+        </div>
+    <% } %>
+</section>
+
+<script src="/js/routine-finder.js?v=1" defer></script>
+
+<%- include('partials/footer') %>

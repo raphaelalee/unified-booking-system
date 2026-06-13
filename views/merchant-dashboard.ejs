@@ -57,19 +57,32 @@
         totalNetPayout: 0
     };
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const approvalStatus = merchant.approvalStatus || merchant.approval_status || 'approved';
+    const approvalLabel = String(approvalStatus).replace(/_/g, ' ');
+    const merchantInitials = String(merchant.name || merchant.salonName || merchant.salon_name || 'Vaniday')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join('')
+        .toUpperCase() || 'VD';
+    const merchantLogo = merchant.logo || merchant.logoUrl || merchant.logo_url || merchant.image || merchant.imageUrl || merchant.image_url || null;
     const totalBookings = Number(stats.bookingCount || 0);
     const checkedInBookings = (appointments.allBookings || []).filter((booking) => ['checked_in', 'completed'].includes(booking.status)).length;
     const pendingCheckIns = Math.max(0, totalBookings - checkedInBookings);
     const rewardRedemptions = appointments.rewardRedemptions || {};
     const trendBase = Math.max(totalBookings, 1);
     const makeSparkline = (seed) => [18, 28, 22, 36, 30, 44, 38].map((value, index) => Math.min(100, value + (seed * 3) + index));
+    const activePromotions = Array.isArray(promotions)
+        ? promotions.filter((promotion) => ['active', 'approved'].includes(String(promotion.status || 'active').toLowerCase())).length
+        : Number(stats.promotionCount || 0);
     const kpiCards = [
-        { label: "Today's Bookings", value: todayBookings.length, icon: 'TB', trend: todayBookings.length > 0 ? 12 : 0, detail: 'scheduled today', accent: 'green', sparkline: makeSparkline(todayBookings.length) },
-        { label: 'Monthly Revenue', value: '$' + formatCurrency(appointments.monthlyRevenue || 0), icon: '$', trend: Number(stats.growthPercent || 0).toFixed(1), detail: 'vs last 7 days', accent: 'orange', sparkline: makeSparkline(Math.round((appointments.monthlyRevenue || 0) / 50)) },
-        { label: 'Pending Appointments', value: pendingAppointments.length, icon: 'PA', trend: pendingAppointments.length > 0 ? -3 : 0, detail: 'need confirmation', accent: pendingAppointments.length > 0 ? 'yellow' : 'green', sparkline: makeSparkline(pendingAppointments.length) },
-        { label: 'Repeat Customers', value: appointments.repeatCustomers || 0, icon: 'RC', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: 'booked more than once', accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
-        { label: 'QR Walk-ins', value: appointments.qrWalkIns || 0, icon: 'QR', trend: checkedInBookings > 0 ? 7 : 0, detail: 'checked in today', accent: 'blue', sparkline: makeSparkline(checkedInBookings) },
-        { label: 'Reward Bookings', value: rewardRedemptions.rewardBookingCount || 0, icon: 'RB', trend: rewardRedemptions.rewardBookingCount > 0 ? 5 : 0, detail: 'used points', accent: 'green', sparkline: makeSparkline(rewardRedemptions.rewardBookingCount || 0) }
+        { label: "Today's Bookings", value: todayBookings.length, icon: 'B', trend: todayBookings.length > 0 ? 12 : 0, detail: 'scheduled today', accent: 'green', sparkline: makeSparkline(todayBookings.length) },
+        { label: 'Monthly Revenue', value: '$' + formatCurrency(appointments.monthlyRevenue || 0), icon: '$', trend: Number(stats.growthPercent || 0).toFixed(1), detail: 'vs recent sales', accent: 'orange', sparkline: makeSparkline(Math.round((appointments.monthlyRevenue || 0) / 50)) },
+        { label: 'Customers Served', value: stats.customerCount || 0, icon: 'C', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: `${appointments.repeatCustomers || 0} repeat customers`, accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
+        { label: 'Active Promotions', value: activePromotions, icon: 'P', trend: activePromotions > 0 ? 5 : 0, detail: `${stats.promotionCount || 0} total campaigns`, accent: 'yellow', sparkline: makeSparkline(activePromotions) },
+        { label: 'Products Sold', value: recentOrders.reduce((sum, order) => sum + Number(order.itemCount || 0), 0), icon: 'S', trend: recentOrders.length > 0 ? 7 : 0, detail: `${recentOrders.length} recent paid orders`, accent: 'blue', sparkline: makeSparkline(recentOrders.length) },
+        { label: 'Reward Bookings', value: rewardRedemptions.rewardBookingCount || 0, icon: 'R', trend: rewardRedemptions.rewardBookingCount > 0 ? 5 : 0, detail: 'used loyalty or rewards', accent: 'green', sparkline: makeSparkline(rewardRedemptions.rewardBookingCount || 0) }
     ];
     const statusLabels = {
         pending: 'pending',
@@ -130,15 +143,31 @@
     <% } %>
 
     <div class="merchant-analytics-shell">
-        <header class="merchant-dashboard-hero">
-            <div>
-                <p class="eyebrow">Merchant Dashboard</p>
-                <h1><%= merchant.name %></h1>
-                <span>Operational command center for bookings, revenue, customers, and alerts.</span>
+        <header class="merchant-dashboard-hero merchant-command-hero">
+            <div class="merchant-command-profile">
+                <div class="merchant-command-logo" aria-hidden="true">
+                    <% if (merchantLogo) { %>
+                        <img src="<%= merchantLogo %>" alt="">
+                    <% } else { %>
+                        <span><%= merchantInitials %></span>
+                    <% } %>
+                </div>
+                <div>
+                    <p class="eyebrow">Merchant Dashboard</p>
+                    <h1><%= merchant.name %></h1>
+                    <span>Manage bookings, sales, promotions, and customer signals from one polished workspace.</span>
+                    <div class="merchant-command-meta">
+                        <span class="merchant-approval-badge status-<%= approvalStatus %>"><%= approvalLabel %></span>
+                        <span><%= stats.serviceCount || 0 %> services</span>
+                        <span><%= stats.productCount || 0 %> products</span>
+                        <span><%= activePromotions %> active promotions</span>
+                    </div>
+                </div>
             </div>
             <div class="merchant-hero-actions">
                 <a class="button primary" href="/merchant/bookings">View appointments</a>
                 <a class="button secondary" href="/merchant/services/new">Add service</a>
+                <a class="button secondary" href="/merchant/products/new">Add product</a>
                 <a class="button secondary" href="/merchant/promotions/new">Create promotion</a>
             </div>
         </header>
@@ -171,7 +200,7 @@
                 <% }) %>
             </section>
 
-            <section class="merchant-payout-summary-grid" aria-label="Merchant payout summary">
+            <section class="merchant-payout-summary-grid merchant-executive-strip" aria-label="Merchant payout summary">
                 <article class="merchant-payout-summary-card">
                     <span>Gross sales</span>
                     <strong>$<%= formatCurrency(payoutSummary.grossOrderSales) %></strong>

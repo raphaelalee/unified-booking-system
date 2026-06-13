@@ -4,6 +4,7 @@
     const navGroups = [
         {
             label: 'Bookings',
+            icon: 'B',
             active: activePath === '/merchant/bookings' || activePath === '/merchant/schedule',
             items: [
                 { label: 'Approvals & Reschedules', href: '/merchant/bookings' },
@@ -12,6 +13,7 @@
         },
         {
             label: 'Services',
+            icon: 'S',
             active: isActive(['/merchant/services']),
             items: [
                 { label: 'Service Menu', href: '/merchant/services' },
@@ -20,6 +22,7 @@
         },
         {
             label: 'Products',
+            icon: 'P',
             active: isActive(['/merchant/products', '/merchant/orders']),
             items: [
                 { label: 'Inventory', href: '/merchant/products' },
@@ -29,17 +32,18 @@
         },
         {
             label: 'Promotions',
-            active: isActive(['/merchant/promotions', '/merchant/vouchers', '/merchant/rewards-game', '/merchant/loyalty', '/merchant/cashback']),
+            icon: 'C',
+            active: isActive(['/merchant/promotions', '/merchant/vouchers', '/merchant/loyalty', '/merchant/cashback']),
             items: [
                 { label: 'Campaigns', href: '/merchant/promotions' },
                 { label: 'Vouchers', href: '/merchant/vouchers' },
                 { label: 'Cashback', href: '/merchant/cashback' },
-                { label: 'Rewards Rules', href: '/merchant/loyalty' },
-                { label: 'Game Rewards', href: '/merchant/rewards-game' }
+                { label: 'Rewards Rules', href: '/merchant/loyalty' }
             ]
         },
         {
             label: 'Support',
+            icon: 'H',
             active: isActive(['/merchant/support', '/help-center']),
             items: [
                 { label: 'Support Overview', href: '/merchant/support' },
@@ -48,6 +52,7 @@
         },
         {
             label: 'Insights',
+            icon: 'I',
             active: isActive(['/merchant/customers', '/merchant/analytics']),
             items: [
                 { label: 'Customers', href: '/merchant/customers' },
@@ -64,11 +69,11 @@
 </button>
 
 <nav class="merchant-primary-nav" aria-label="Merchant primary navigation">
-    <a class="<%= activePath === '/merchant/dashboard' || activePath === '/merchant' ? 'active' : '' %>" href="/merchant/dashboard">Dashboard</a>
+    <a class="<%= activePath === '/merchant/dashboard' || activePath === '/merchant' ? 'active' : '' %>" href="/merchant/dashboard"><span class="merchant-nav-icon">D</span>Dashboard</a>
     <% navGroups.forEach((group, index) => { %>
         <div class="dropdown merchant-nav-dropdown">
             <button class="merchant-nav-link dropdown-toggle <%= group.active ? 'active' : '' %>" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <%= group.label %>
+                <span class="merchant-nav-icon"><%= group.icon %></span><%= group.label %>
             </button>
             <ul class="dropdown-menu">
                 <% group.items.forEach((item) => { %>

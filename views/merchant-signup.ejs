@@ -1,0 +1,98 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title auth-page-title merchant-application-hero">
+    <p class="eyebrow">Merchant Application</p>
+    <h1>Apply to join Vaniday.</h1>
+    <p>Submit your business details for admin review before publishing services, products, and promotions.</p>
+</section>
+
+<section class="section compact">
+    <div class="login-layout merchant-application-layout">
+        <form class="login-form service-admin-form merchant-application-form" action="/merchant/signup" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <% if (error) { %>
+                <div class="notice error"><p><%= error %></p></div>
+            <% } %>
+
+            <div>
+                <p class="eyebrow">Business Account</p>
+                <h2>Verification details</h2>
+            </div>
+
+            <label>
+                Contact person name
+                <input type="text" name="ownerName" value="<%= form.ownerName || '' %>" required>
+            </label>
+            <label>
+                Contact email
+                <input type="email" name="email" value="<%= form.email || '' %>" required>
+            </label>
+            <label>
+                Contact phone
+                <input type="tel" name="ownerPhone" value="<%= form.ownerPhone || '' %>" maxlength="8" required>
+            </label>
+            <label>
+                Password
+                <input type="password" name="password" required>
+            </label>
+            <label>
+                Confirm password
+                <input type="password" name="confirmPassword" required>
+            </label>
+
+            <label>
+                Business name
+                <input type="text" name="salonName" value="<%= form.salonName || '' %>" required>
+            </label>
+            <label>
+                Business category
+                <input type="text" name="businessCategory" value="<%= form.businessCategory || '' %>" placeholder="Spa, salon, barber, nails" required>
+            </label>
+            <label>
+                UEN / registration number
+                <input type="text" name="uen" value="<%= form.uen || '' %>" required>
+            </label>
+            <label>
+                Years in business
+                <input type="number" name="yearsInBusiness" value="<%= form.yearsInBusiness || '' %>" min="0" max="100" required>
+            </label>
+            <label>
+                Staff count
+                <input type="number" name="staffCount" value="<%= form.staffCount || '' %>" min="1" max="5000" required>
+            </label>
+            <label>
+                Business address
+                <input type="text" name="address" value="<%= form.address || '' %>" required>
+            </label>
+            <label>
+                Image URL
+                <input type="url" name="imageUrl" value="<%= form.imageUrl || '' %>" placeholder="https://example.com/business.jpg">
+            </label>
+            <label class="span-full">
+                Business description
+                <textarea name="description" rows="4" required><%= form.description || '' %></textarea>
+            </label>
+
+            <label class="auth-checkbox">
+                <input type="checkbox" name="termsAccepted" <%= form.termsAccepted ? 'checked' : '' %> required>
+                <span>I confirm this business information is accurate and agree to merchant verification.</span>
+            </label>
+
+            <button class="button primary full" type="submit">Submit application</button>
+            <p class="auth-switch">Already have an account? <a class="text-link" href="/login">Log in</a></p>
+        </form>
+
+        <aside class="login-benefits">
+            <p class="eyebrow">After Approval</p>
+            <h2>Start promoting your services.</h2>
+            <ul>
+                <li>Create bookable services and product listings</li>
+                <li>Join Beauty Routine Finder recommendations</li>
+                <li>Add Spin & Discover promotions</li>
+                <li>Track bookings, orders, reviews, and campaign performance</li>
+            </ul>
+        </aside>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

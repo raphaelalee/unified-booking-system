@@ -124,6 +124,53 @@ function isTruthyFormValue(value) {
     return ['1', 'on', 'true', 'yes'].includes(String(value || '').trim().toLowerCase());
 }
 
+const routineTagOptions = [
+    { value: 'glow', label: 'Healthy glow' },
+    { value: 'relax', label: 'Relaxation' },
+    { value: 'hair', label: 'Hair refresh' },
+    { value: 'nails', label: 'Nail care' },
+    { value: 'grooming', label: 'Grooming' },
+    { value: 'event', label: 'Event prep' },
+    { value: 'dry_skin', label: 'Dry skin' },
+    { value: 'oily_skin', label: 'Oily skin' },
+    { value: 'acne_pores', label: 'Acne or pores' },
+    { value: 'damaged_hair', label: 'Damaged hair' },
+    { value: 'hair_loss', label: 'Hair loss' },
+    { value: 'frizzy_hair', label: 'Frizzy hair' },
+    { value: 'stress', label: 'Stress' },
+    { value: 'anti_aging', label: 'Anti-aging' },
+    { value: 'brightening', label: 'Brightening' },
+    { value: 'maintenance', label: 'Maintenance' }
+];
+
+function asFormArray(value) {
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+
+    const normalized = String(value || '').trim();
+    return normalized ? [normalized] : [];
+}
+
+function normalizeTagList(value) {
+    const allowed = new Set(routineTagOptions.map((option) => option.value));
+    return Array.from(new Set(asFormArray(value).filter((item) => allowed.has(item)))).slice(0, 12);
+}
+
+function normalizeNullableMoney(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const amount = Number(raw);
+    return Number.isFinite(amount) ? Math.max(0, amount) : NaN;
+}
+
+function normalizeNullableInteger(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const amount = Number(raw);
+    return Number.isInteger(amount) ? Math.max(0, amount) : NaN;
+}
+
 function getFeaturedConfigForm(body = {}) {
     return {
         featuredOrder: String(body.featuredOrder || body.featured_order || '').trim(),
@@ -144,7 +191,12 @@ function getServiceForm(body = {}) {
         packageSessions: String(body.packageSessions || '').trim(),
         packagePrice: String(body.packagePrice || '').trim(),
         inventoryProductId: String(body.inventoryProductId || '').trim(),
-        inventoryQuantityRequired: String(body.inventoryQuantityRequired || '').trim()
+        inventoryQuantityRequired: String(body.inventoryQuantityRequired || '').trim(),
+        routineGoalTags: normalizeTagList(body.routineGoalTags || body.routine_goal_tags),
+        routineConcernTags: normalizeTagList(body.routineConcernTags || body.routine_concern_tags),
+        routineRecommendationNote: String(body.routineRecommendationNote || body.routine_recommendation_note || '').trim(),
+        routineBudgetMin: String(body.routineBudgetMin || body.routine_budget_min || '').trim(),
+        routineBudgetMax: String(body.routineBudgetMax || body.routine_budget_max || '').trim()
     };
 }
 
@@ -157,6 +209,8 @@ function validateServiceForm(form, products = []) {
     const packagePrice = Number(form.packagePrice);
     const inventoryProductId = form.inventoryProductId === '' ? null : Number(form.inventoryProductId);
     const inventoryQuantityRequired = form.inventoryQuantityRequired === '' ? 1 : Number(form.inventoryQuantityRequired);
+    const routineBudgetMin = normalizeNullableMoney(form.routineBudgetMin);
+    const routineBudgetMax = normalizeNullableMoney(form.routineBudgetMax);
     const slots = form.slots.split(',').map((slot) => slot.trim()).filter(Boolean);
     const validProductIds = new Set((products || []).map((product) => Number(product.id)));
 
@@ -200,6 +254,18 @@ function validateServiceForm(form, products = []) {
         }
     }
 
+    if (Number.isNaN(routineBudgetMin) || Number.isNaN(routineBudgetMax)) {
+        errors.push('Routine Finder budget range must use valid numbers.');
+    }
+
+    if (routineBudgetMin !== null && routineBudgetMax !== null && routineBudgetMin > routineBudgetMax) {
+        errors.push('Routine Finder minimum budget cannot be higher than maximum budget.');
+    }
+
+    if (form.routineRecommendationNote.length > 255) {
+        errors.push('Routine recommendation note must be 255 characters or less.');
+    }
+
     return errors;
 }
 
@@ -215,7 +281,12 @@ function buildServicePayload(form) {
         packageSessions: form.packageEnabled ? Number(form.packageSessions) : 0,
         packagePrice: form.packageEnabled ? Number(form.packagePrice) : 0,
         inventoryProductId: form.inventoryProductId ? Number(form.inventoryProductId) : null,
-        inventoryQuantityRequired: form.inventoryProductId ? Number(form.inventoryQuantityRequired || 1) : 0
+        inventoryQuantityRequired: form.inventoryProductId ? Number(form.inventoryQuantityRequired || 1) : 0,
+        routineGoalTags: form.routineGoalTags || [],
+        routineConcernTags: form.routineConcernTags || [],
+        routineRecommendationNote: form.routineRecommendationNote,
+        routineBudgetMin: normalizeNullableMoney(form.routineBudgetMin),
+        routineBudgetMax: normalizeNullableMoney(form.routineBudgetMax)
     };
 }
 
@@ -236,6 +307,7 @@ function renderServiceForm(res, {
         products,
         service,
         form,
+        routineTagOptions,
         errors
     });
 }
@@ -251,7 +323,12 @@ function getProductForm(body = {}, imageUrlOverride = null) {
             : String(body.imageUrl || body.image_url || body.currentImageUrl || '').trim(),
         description: String(body.description || '').trim(),
         ingredients: String(body.ingredients || '').trim(),
-        howToUse: String(body.howToUse || body.how_to_use || '').trim()
+        howToUse: String(body.howToUse || body.how_to_use || '').trim(),
+        routineGoalTags: normalizeTagList(body.routineGoalTags || body.routine_goal_tags),
+        routineConcernTags: normalizeTagList(body.routineConcernTags || body.routine_concern_tags),
+        routineRecommendationNote: String(body.routineRecommendationNote || body.routine_recommendation_note || '').trim(),
+        routineBudgetMin: String(body.routineBudgetMin || body.routine_budget_min || '').trim(),
+        routineBudgetMax: String(body.routineBudgetMax || body.routine_budget_max || '').trim()
     };
 }
 
@@ -259,9 +336,16 @@ function getPromotionForm(body = {}) {
     return {
         title: String(body.title || '').trim(),
         serviceId: String(body.serviceId || '').trim(),
+        productId: String(body.productId || '').trim(),
         type: String(body.type || '').trim(),
         discountType: String(body.discountType || '').trim(),
         discountValue: String(body.discountValue || '').trim(),
+        minimumSpend: String(body.minimumSpend || '').trim(),
+        usageLimit: String(body.usageLimit || '').trim(),
+        spinEligible: isTruthyFormValue(body.spinEligible),
+        spinRewardType: String(body.spinRewardType || '').trim(),
+        spinClaimLimit: String(body.spinClaimLimit || '').trim(),
+        spinInventoryRemaining: String(body.spinInventoryRemaining || '').trim(),
         startDate: String(body.startDate || '').trim(),
         endDate: String(body.endDate || '').trim(),
         slots: String(body.slots || '').trim(),
@@ -295,14 +379,20 @@ function isWeekday(date) {
     return day >= 1 && day <= 5;
 }
 
-function validatePromotionForm(form, merchant) {
+function validatePromotionForm(form, merchant, products = []) {
     const errors = [];
     const serviceId = form.serviceId ? Number(form.serviceId) : null;
+    const productId = form.productId ? Number(form.productId) : null;
     const discountValue = form.discountValue === '' ? null : Number(form.discountValue);
+    const minimumSpend = normalizeNullableMoney(form.minimumSpend);
+    const usageLimit = normalizeNullableInteger(form.usageLimit);
+    const spinClaimLimit = normalizeNullableInteger(form.spinClaimLimit);
+    const spinInventoryRemaining = normalizeNullableInteger(form.spinInventoryRemaining);
     const startDate = form.startDate ? new Date(form.startDate) : null;
     const endDate = form.endDate ? new Date(form.endDate) : null;
     const slots = parsePromotionSlots(form.slots);
     const merchantServiceIds = new Set((merchant.services || []).map((service) => Number(service.id)));
+    const merchantProductIds = new Set((products || []).map((product) => Number(product.id)));
 
     if (form.title.length < 2) {
         errors.push('Promotion title must be at least 2 characters.');
@@ -320,10 +410,34 @@ function validatePromotionForm(form, merchant) {
         errors.push('Please choose a valid service for this merchant.');
     }
 
+    if (productId !== null && (!Number.isInteger(productId) || !merchantProductIds.has(productId))) {
+        errors.push('Please choose a valid product for this merchant.');
+    }
+
+    if (serviceId !== null && productId !== null) {
+        errors.push('Choose either a linked service or a linked product, not both.');
+    }
+
     if (form.discountType !== 'tag_only') {
         if (!Number.isFinite(discountValue) || discountValue <= 0) {
             errors.push('Please enter a valid discount value.');
         }
+    }
+
+    if (Number.isNaN(minimumSpend) || Number.isNaN(usageLimit) || Number.isNaN(spinClaimLimit) || Number.isNaN(spinInventoryRemaining)) {
+        errors.push('Minimum spend and limits must use valid numbers.');
+    }
+
+    if (form.spinEligible && !Promotion.SPIN_REWARD_TYPES.includes(form.spinRewardType)) {
+        errors.push('Please choose a valid Spin & Discover reward type.');
+    }
+
+    if (form.spinEligible && form.spinRewardType === 'product_discount' && !productId) {
+        errors.push('Product discount Spin rewards must be linked to one of your products.');
+    }
+
+    if (form.spinEligible && ['service_discount', 'free_add_on'].includes(form.spinRewardType) && !serviceId) {
+        errors.push('Service Spin rewards must be linked to one of your services.');
     }
 
     if (!(startDate instanceof Date) || Number.isNaN(startDate?.getTime())) {
@@ -357,9 +471,16 @@ function buildPromotionPayload(form) {
     return {
         title: form.title,
         serviceId: form.serviceId ? Number(form.serviceId) : null,
+        productId: form.productId ? Number(form.productId) : null,
         type: form.type,
         discountType: form.discountType,
         discountValue: form.discountType === 'tag_only' || form.discountValue === '' ? null : Number(form.discountValue),
+        minimumSpend: normalizeNullableMoney(form.minimumSpend) || 0,
+        usageLimit: normalizeNullableInteger(form.usageLimit),
+        spinEligible: Boolean(form.spinEligible),
+        spinRewardType: form.spinEligible ? form.spinRewardType : null,
+        spinClaimLimit: normalizeNullableInteger(form.spinClaimLimit),
+        spinInventoryRemaining: normalizeNullableInteger(form.spinInventoryRemaining),
         startDate: form.startDate,
         endDate: form.endDate,
         allowedSlots: normalizePromotionSlots(form.slots),
@@ -373,6 +494,8 @@ function validateProductForm(form) {
     const errors = [];
     const price = Number(form.price);
     const stockQuantity = Number(form.stockQuantity);
+    const routineBudgetMin = normalizeNullableMoney(form.routineBudgetMin);
+    const routineBudgetMax = normalizeNullableMoney(form.routineBudgetMax);
 
     if (form.name.length < 2) {
         errors.push('Product name must be at least 2 characters.');
@@ -384,6 +507,18 @@ function validateProductForm(form) {
 
     if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
         errors.push('Please enter a valid stock quantity.');
+    }
+
+    if (Number.isNaN(routineBudgetMin) || Number.isNaN(routineBudgetMax)) {
+        errors.push('Routine Finder budget range must use valid numbers.');
+    }
+
+    if (routineBudgetMin !== null && routineBudgetMax !== null && routineBudgetMin > routineBudgetMax) {
+        errors.push('Routine Finder minimum budget cannot be higher than maximum budget.');
+    }
+
+    if (form.routineRecommendationNote.length > 255) {
+        errors.push('Routine recommendation note must be 255 characters or less.');
     }
 
     return errors;
@@ -411,7 +546,12 @@ function buildProductPayload(form) {
         categoryId: form.categoryId ? Number(form.categoryId) : null,
         description: form.description || `${form.name} from Vaniday merchant.`,
         ingredients: form.ingredients || 'Ingredients will be updated by the merchant.',
-        howToUse: form.howToUse || 'Use as directed by the merchant.'
+        howToUse: form.howToUse || 'Use as directed by the merchant.',
+        routineGoalTags: form.routineGoalTags || [],
+        routineConcernTags: form.routineConcernTags || [],
+        routineRecommendationNote: form.routineRecommendationNote,
+        routineBudgetMin: normalizeNullableMoney(form.routineBudgetMin),
+        routineBudgetMax: normalizeNullableMoney(form.routineBudgetMax)
     };
 }
 
@@ -1226,6 +1366,28 @@ const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
 const showOrders = renderPortalView('merchant-orders', 'Product Orders');
 
+function showOnboarding(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        const success = req.session.merchantSuccess;
+        const error = req.session.merchantError;
+        req.session.merchantSuccess = null;
+        req.session.merchantError = null;
+
+        return res.render('merchant-onboarding', {
+            title: 'Merchant Onboarding',
+            merchant,
+            success,
+            error
+        });
+    });
+}
+
 function updateOrderStatus(req, res) {
     const transactionId = Number(req.params.transactionId);
     const status = normalizeOrderDeliveryStatus(req.body.deliveryStatus);
@@ -1901,7 +2063,12 @@ function showEditService(req, res) {
                             packageSessions: service.packageSessions ? String(service.packageSessions) : '',
                             packagePrice: service.packagePrice ? String(service.packagePrice) : '',
                             inventoryProductId: service.inventoryProductId ? String(service.inventoryProductId) : '',
-                            inventoryQuantityRequired: service.inventoryQuantityRequired ? String(service.inventoryQuantityRequired) : ''
+                            inventoryQuantityRequired: service.inventoryQuantityRequired ? String(service.inventoryQuantityRequired) : '',
+                            routineGoalTags: service.routineGoalTags || [],
+                            routineConcernTags: service.routineConcernTags || [],
+                            routineRecommendationNote: service.routineRecommendationNote || '',
+                            routineBudgetMin: service.routineBudgetMin === null || service.routineBudgetMin === undefined ? '' : String(service.routineBudgetMin),
+                            routineBudgetMax: service.routineBudgetMax === null || service.routineBudgetMax === undefined ? '' : String(service.routineBudgetMax)
                         },
                         errors: []
                     });
@@ -2270,6 +2437,7 @@ function showNewProduct(req, res) {
                 categories,
                 product: null,
                 form: getProductForm(),
+                routineTagOptions,
                 errors: uploadError ? [uploadError] : []
             });
         });
@@ -2306,6 +2474,7 @@ function createProduct(req, res) {
                     categories,
                     product: null,
                     form,
+                    routineTagOptions,
                     errors
                 });
             }
@@ -2320,6 +2489,7 @@ function createProduct(req, res) {
                         categories,
                         product: null,
                         form,
+                        routineTagOptions,
                         errors: ['Product could not be created. Please try again.']
                     });
                 }
@@ -2419,8 +2589,14 @@ function showEditProduct(req, res) {
                         imageUrl: product.imageUrl || '',
                         description: product.description || '',
                         ingredients: product.ingredients || '',
-                        howToUse: product.howToUse || ''
+                        howToUse: product.howToUse || '',
+                        routineGoalTags: product.routineGoalTags || [],
+                        routineConcernTags: product.routineConcernTags || [],
+                        routineRecommendationNote: product.routineRecommendationNote || '',
+                        routineBudgetMin: product.routineBudgetMin === null || product.routineBudgetMin === undefined ? '' : String(product.routineBudgetMin),
+                        routineBudgetMax: product.routineBudgetMax === null || product.routineBudgetMax === undefined ? '' : String(product.routineBudgetMax)
                     },
+                    routineTagOptions,
                     errors: uploadError ? [uploadError] : []
                 });
             });
@@ -2484,6 +2660,7 @@ function updateProduct(req, res) {
                         categories,
                         product,
                         form,
+                        routineTagOptions,
                         errors
                     });
                 }
@@ -2499,6 +2676,7 @@ function updateProduct(req, res) {
                             categories,
                             product,
                             form,
+                            routineTagOptions,
                             errors: ['Product could not be updated. Please try again.']
                         });
                     }
@@ -2669,20 +2847,56 @@ function showNewPromotion(req, res) {
             return handled;
         }
 
-        return res.render('merchant-promotion-form', {
-            title: 'Add Promotion',
-            merchant,
-            promotion: null,
-            form: getPromotionForm({
-                status: 'draft',
-                discountType: 'percentage',
-                type: 'first_trial'
-            }),
-            promotionTypes: Promotion.PROMOTION_TYPES,
-            discountTypes: Promotion.DISCOUNT_TYPES,
-            statuses: Promotion.PROMOTION_STATUSES,
-            errors: []
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+            }
+
+            return res.render('merchant-promotion-form', {
+                title: 'Add Promotion',
+                merchant,
+                products: productError ? [] : products,
+                promotion: null,
+                form: getPromotionForm({
+                    status: 'draft',
+                    discountType: 'percentage',
+                    type: 'first_trial'
+                }),
+                promotionTypes: Promotion.PROMOTION_TYPES,
+                spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
+                discountTypes: Promotion.DISCOUNT_TYPES,
+                statuses: Promotion.PROMOTION_STATUSES,
+                errors: []
+            });
         });
+    });
+}
+
+function updateOnboarding(req, res) {
+    const form = getMerchantProfileForm(req.body);
+    const errors = validateMerchantProfileForm(form);
+
+    if (errors.length > 0) {
+        req.session.merchantError = errors.join(' ');
+        return res.redirect('/merchant/onboarding');
+    }
+
+    return MerchantService.updateMerchantProfile(req.session.user.id, {
+        ...form,
+        yearsInBusiness: Number(form.yearsInBusiness),
+        staffCount: Number(form.staffCount)
+    }, (error) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Merchant application could not be saved. Please try again.';
+            return res.redirect('/merchant/onboarding');
+        }
+
+        req.session.user.name = form.ownerName;
+        req.session.user.phone = form.ownerPhone;
+        req.session.user.merchantApprovalStatus = 'pending_review';
+        req.session.merchantSuccess = 'Business information saved and submitted for admin review.';
+        return res.redirect('/merchant/onboarding');
     });
 }
 
@@ -2694,31 +2908,41 @@ function createPromotion(req, res) {
             return handled;
         }
 
-        const form = getPromotionForm(req.body);
-        const errors = validatePromotionForm(form, merchant);
+        return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+            if (productError) {
+                console.error(productError);
+            }
 
-        if (errors.length > 0) {
-            return res.status(400).render('merchant-promotion-form', {
-                title: 'Add Promotion',
-                merchant,
-                promotion: null,
-                form,
-                promotionTypes: Promotion.PROMOTION_TYPES,
-                discountTypes: Promotion.DISCOUNT_TYPES,
-                statuses: Promotion.PROMOTION_STATUSES,
-                errors
-            });
-        }
+            const safeProducts = productError ? [] : products;
+            const form = getPromotionForm(req.body);
+            const errors = validatePromotionForm(form, merchant, safeProducts);
 
-        return Promotion.createForMerchant(req.session.user.id, buildPromotionPayload(form), (createError, result) => {
+            if (errors.length > 0) {
+                return res.status(400).render('merchant-promotion-form', {
+                    title: 'Add Promotion',
+                    merchant,
+                    products: safeProducts,
+                    promotion: null,
+                    form,
+                    promotionTypes: Promotion.PROMOTION_TYPES,
+                    spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
+                    discountTypes: Promotion.DISCOUNT_TYPES,
+                    statuses: Promotion.PROMOTION_STATUSES,
+                    errors
+                });
+            }
+
+            return Promotion.createForMerchant(req.session.user.id, buildPromotionPayload(form), (createError, result) => {
             if (createError) {
                 console.error(createError);
                 return res.status(500).render('merchant-promotion-form', {
                     title: 'Add Promotion',
                     merchant,
+                    products: safeProducts,
                     promotion: null,
                     form,
                     promotionTypes: Promotion.PROMOTION_TYPES,
+                    spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
                     discountTypes: Promotion.DISCOUNT_TYPES,
                     statuses: Promotion.PROMOTION_STATUSES,
                     errors: ['Promotion could not be created. Please try again.']
@@ -2758,6 +2982,7 @@ function createPromotion(req, res) {
                 dedupeKey: `admin-merchant-promotion-created-${result?.insertId || Date.now()}`
             });
             return res.redirect('/merchant/promotions');
+            });
         });
     });
 }
@@ -2786,27 +3011,42 @@ function showEditPromotion(req, res) {
                 });
             }
 
-            return res.render('merchant-promotion-form', {
-                title: 'Edit Promotion',
-                merchant,
-                promotion,
-                form: {
-                    title: promotion.title,
-                    serviceId: promotion.serviceId ? String(promotion.serviceId) : '',
-                    type: promotion.type,
-                    discountType: promotion.discountType,
-                    discountValue: promotion.discountValue === null ? '' : String(promotion.discountValue),
-                    startDate: formatDateInputValue(promotion.startDate),
-                    endDate: formatDateInputValue(promotion.endDate),
-                    slots: promotion.allowedSlots || '',
-                    status: promotion.status,
-                    description: promotion.description || '',
-                    terms: promotion.terms || ''
-                },
-                promotionTypes: Promotion.PROMOTION_TYPES,
-                discountTypes: Promotion.DISCOUNT_TYPES,
-                statuses: Promotion.PROMOTION_STATUSES,
-                errors: []
+            return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
+                }
+
+                return res.render('merchant-promotion-form', {
+                    title: 'Edit Promotion',
+                    merchant,
+                    products: productError ? [] : products,
+                    promotion,
+                    form: {
+                        title: promotion.title,
+                        serviceId: promotion.serviceId ? String(promotion.serviceId) : '',
+                        productId: promotion.productId ? String(promotion.productId) : '',
+                        type: promotion.type,
+                        discountType: promotion.discountType,
+                        discountValue: promotion.discountValue === null ? '' : String(promotion.discountValue),
+                        minimumSpend: promotion.minimumSpend ? String(promotion.minimumSpend) : '',
+                        usageLimit: promotion.usageLimit === null ? '' : String(promotion.usageLimit),
+                        spinEligible: promotion.spinEligible,
+                        spinRewardType: promotion.spinRewardType || '',
+                        spinClaimLimit: promotion.spinClaimLimit === null ? '' : String(promotion.spinClaimLimit),
+                        spinInventoryRemaining: promotion.spinInventoryRemaining === null ? '' : String(promotion.spinInventoryRemaining),
+                        startDate: formatDateInputValue(promotion.startDate),
+                        endDate: formatDateInputValue(promotion.endDate),
+                        slots: promotion.allowedSlots || '',
+                        status: promotion.status,
+                        description: promotion.description || '',
+                        terms: promotion.terms || ''
+                    },
+                    promotionTypes: Promotion.PROMOTION_TYPES,
+                    spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
+                    discountTypes: Promotion.DISCOUNT_TYPES,
+                    statuses: Promotion.PROMOTION_STATUSES,
+                    errors: []
+                });
             });
         });
     });
@@ -2836,31 +3076,41 @@ function updatePromotion(req, res) {
                 });
             }
 
-            const form = getPromotionForm(req.body);
-            const errors = validatePromotionForm(form, merchant);
+            return Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                if (productError) {
+                    console.error(productError);
+                }
 
-            if (errors.length > 0) {
-                return res.status(400).render('merchant-promotion-form', {
-                    title: 'Edit Promotion',
-                    merchant,
-                    promotion,
-                    form,
-                    promotionTypes: Promotion.PROMOTION_TYPES,
-                    discountTypes: Promotion.DISCOUNT_TYPES,
-                    statuses: Promotion.PROMOTION_STATUSES,
-                    errors
-                });
-            }
+                const safeProducts = productError ? [] : products;
+                const form = getPromotionForm(req.body);
+                const errors = validatePromotionForm(form, merchant, safeProducts);
 
-            return Promotion.updateForMerchant(req.session.user.id, promotion.id, buildPromotionPayload(form), (updateError, result) => {
+                if (errors.length > 0) {
+                    return res.status(400).render('merchant-promotion-form', {
+                        title: 'Edit Promotion',
+                        merchant,
+                        products: safeProducts,
+                        promotion,
+                        form,
+                        promotionTypes: Promotion.PROMOTION_TYPES,
+                        spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
+                        discountTypes: Promotion.DISCOUNT_TYPES,
+                        statuses: Promotion.PROMOTION_STATUSES,
+                        errors
+                    });
+                }
+
+                return Promotion.updateForMerchant(req.session.user.id, promotion.id, buildPromotionPayload(form), (updateError, result) => {
                 if (updateError) {
                     console.error(updateError);
                     return res.status(500).render('merchant-promotion-form', {
                         title: 'Edit Promotion',
                         merchant,
+                        products: safeProducts,
                         promotion,
                         form,
                         promotionTypes: Promotion.PROMOTION_TYPES,
+                        spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
                         discountTypes: Promotion.DISCOUNT_TYPES,
                         statuses: Promotion.PROMOTION_STATUSES,
                         errors: ['Promotion could not be updated. Please try again.']
@@ -2896,6 +3146,7 @@ function updatePromotion(req, res) {
                     });
                 }
                 return res.redirect('/merchant/promotions');
+                });
             });
         });
     });
@@ -3458,10 +3709,12 @@ module.exports = {
     showAnalytics,
     showSupport,
     showProfile,
+    showOnboarding,
     showOrders,
     showLoyaltySettings,
     updateLoyaltySettings,
     updateProfile,
+    updateOnboarding,
     showServices,
     generateQr,
     updateBookingStatus,

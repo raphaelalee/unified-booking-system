@@ -218,6 +218,10 @@ function matchesPublicSearch(search, values = []) {
     return values.some((value) => String(value || '').toLowerCase().includes(normalized));
 }
 
+function isApprovedMerchant(merchant) {
+    return merchant && String(merchant.approvalStatus || 'approved') === 'approved';
+}
+
 function mapSalonForPublic(row) {
     return {
         id: row.salon_id,
@@ -2018,7 +2022,7 @@ function showMerchant(req, res) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant you selected could not be found.'
@@ -2148,7 +2152,7 @@ function loadStorefrontMerchant(req, res, callback) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Storefront Not Found',
                 message: 'This merchant storefront could not be found.'
@@ -2187,7 +2191,7 @@ function showBookingPage(req, res) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant booking page could not be found.'
@@ -2208,7 +2212,7 @@ function showPublicMerchantBooking(req, res) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant booking page could not be found.'
@@ -2238,7 +2242,7 @@ function showSecureScanBooking(req, res) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant booking page could not be found.'
@@ -2266,7 +2270,7 @@ function saveQrBooking(req, res) {
             });
         }
 
-        if (!merchant) {
+        if (!merchant || !isApprovedMerchant(merchant)) {
             return res.status(404).render('error', {
                 title: 'Merchant Not Found',
                 message: 'The merchant booking page could not be found.'

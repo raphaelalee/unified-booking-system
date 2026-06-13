@@ -15,6 +15,9 @@
     });
     const pendingBookings = platformBookings.filter((booking) => String(booking.status || '').toLowerCase() === 'pending');
     const checkedInCount = platformBookings.filter((booking) => ['checked_in', 'completed'].includes(String(booking.status || '').toLowerCase())).length;
+    const approvedMerchants = safeMerchants.filter((merchant) => String(merchant.approval_status || 'approved') === 'approved');
+    const pendingReviewMerchants = safeMerchants.filter((merchant) => ['pending_review', 'changes_requested'].includes(String(merchant.approval_status || 'approved')));
+    const activeCustomerCount = stats.uniqueBookedCustomers || customerReport.bookedCustomers || 0;
     const categoryEntries = Object.entries(merchantReport.merchantCategories || {}).sort((left, right) => right[1] - left[1]);
     const recentActivity = [
         ...platformBookings.slice(0, 4).map((booking) => ({
@@ -31,25 +34,33 @@
 <section class="admin-dashboard-v2">
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
-        <header class="admin-dashboard-header">
+        <header class="admin-dashboard-header admin-command-hero">
             <div>
                 <p class="eyebrow">Platform Command Center</p>
                 <h1>Admin Overview</h1>
-                <p>Monitor marketplace performance, pending work, revenue, and system health.</p>
+                <p>Monitor marketplace performance, approval work, customer activity, revenue, and system health.</p>
             </div>
             <div class="admin-topbar-utilities">
                 <input type="search" placeholder="Search platform">
-                <a class="button primary" href="/admin/merchants/new">Quick create</a>
+                <a class="button primary" href="/admin/merchants">Review merchants</a>
+                <a class="button secondary" href="/admin/analytics">View analytics</a>
             </div>
         </header>
 
         <section class="admin-stat-grid">
-            <article class="admin-stat-card accent-green"><strong><%= stats.customerCount %></strong><span>Total users</span><small><%= customerReport.bookedCustomers %> booked users</small></article>
-            <article class="admin-stat-card accent-blue"><strong><%= stats.merchantCount %></strong><span>Merchants</span><small><%= stats.merchantUserCount %> merchant accounts</small></article>
-            <article class="admin-stat-card accent-orange"><strong><%= stats.bookingCount %></strong><span>Bookings</span><small><%= checkedInCount %> checked in/completed</small></article>
-            <article class="admin-stat-card accent-green"><strong>$<%= formatCurrency(stats.bookingRevenue) %></strong><span>Revenue</span><small>booking revenue</small></article>
-            <article class="admin-stat-card accent-red"><strong><%= pendingMerchants.length %></strong><span>Pending actions</span><small>merchant profiles need review</small></article>
-            <article class="admin-stat-card accent-yellow"><strong><%= safeSupportSummary.openCount || 0 %></strong><span>Open support</span><small><%= safeSupportSummary.pendingRefundCount || 0 %> refund issues</small></article>
+            <article class="admin-stat-card accent-blue"><div class="admin-stat-card-top"><span class="admin-stat-icon">M</span><span class="admin-trend positive">Live</span></div><strong><%= stats.merchantCount %></strong><span>Total merchants</span><small><%= approvedMerchants.length %> approved, <%= stats.merchantUserCount %> merchant accounts</small></article>
+            <article class="admin-stat-card accent-red"><div class="admin-stat-card-top"><span class="admin-stat-icon">A</span><span class="admin-trend <%= pendingReviewMerchants.length ? 'negative' : 'positive' %>"><%= pendingReviewMerchants.length ? 'Review' : 'Clear' %></span></div><strong><%= pendingReviewMerchants.length %></strong><span>Pending approvals</span><small>new or change-requested merchants</small></article>
+            <article class="admin-stat-card accent-green"><div class="admin-stat-card-top"><span class="admin-stat-icon">C</span><span class="admin-trend positive">Users</span></div><strong><%= stats.customerCount %></strong><span>Total customers</span><small><%= activeCustomerCount %> customers with bookings</small></article>
+            <article class="admin-stat-card accent-orange"><div class="admin-stat-card-top"><span class="admin-stat-icon">B</span><span class="admin-trend positive">Ops</span></div><strong><%= stats.bookingCount %></strong><span>Total bookings</span><small><%= checkedInCount %> checked in/completed</small></article>
+            <article class="admin-stat-card accent-green"><div class="admin-stat-card-top"><span class="admin-stat-icon">$</span><span class="admin-trend positive">SGD</span></div><strong>$<%= formatCurrency(stats.bookingRevenue) %></strong><span>Revenue</span><small>booking revenue from live records</small></article>
+            <article class="admin-stat-card accent-yellow"><div class="admin-stat-card-top"><span class="admin-stat-icon">S</span><span class="admin-trend <%= safeSupportSummary.openCount ? 'negative' : 'positive' %>">Support</span></div><strong><%= safeSupportSummary.openCount || 0 %></strong><span>Open support</span><small><%= safeSupportSummary.pendingRefundCount || 0 %> refund issues</small></article>
+        </section>
+
+        <section class="admin-overview-actions">
+            <a href="/admin/merchants"><strong>Merchant approvals</strong><span><%= pendingReviewMerchants.length %> waiting for review</span></a>
+            <a href="/admin/platform-health"><strong>Platform health</strong><span><%= validationReport.issues.length %> validation issue<%= validationReport.issues.length === 1 ? '' : 's' %></span></a>
+            <a href="/admin/bookings"><strong>Booking operations</strong><span><%= pendingBookings.length %> pending booking<%= pendingBookings.length === 1 ? '' : 's' %></span></a>
+            <a href="/admin/promotions"><strong>Campaign center</strong><span>Review marketplace promotions</span></a>
         </section>
 
         <section class="admin-grid">

@@ -1132,6 +1132,138 @@ function signupUser(req, res) {
     });
 }
 
+function getMerchantSignupForm(body = {}) {
+    return {
+        ownerName: String(body.ownerName || '').trim(),
+        email: String(body.email || '').trim().toLowerCase(),
+        ownerPhone: String(body.ownerPhone || '').trim(),
+        password: String(body.password || ''),
+        confirmPassword: String(body.confirmPassword || ''),
+        salonName: String(body.salonName || '').trim(),
+        businessCategory: String(body.businessCategory || '').trim(),
+        uen: String(body.uen || '').trim().toUpperCase(),
+        yearsInBusiness: String(body.yearsInBusiness || '').trim(),
+        staffCount: String(body.staffCount || '').trim(),
+        address: String(body.address || '').trim(),
+        description: String(body.description || '').trim(),
+        imageUrl: String(body.imageUrl || '').trim(),
+        termsAccepted: body.termsAccepted === 'on' || body.termsAccepted === 'true'
+    };
+}
+
+function validateMerchantSignupForm(form) {
+    const errors = [];
+
+    if (!form.termsAccepted) errors.push('Please agree to the merchant terms before applying.');
+    if (form.ownerName.length < 2) errors.push('Contact person name must be at least 2 characters.');
+    if (!isValidEmail(form.email)) errors.push('Please enter a valid contact email.');
+    if (!/^[689]\d{7}$/.test(form.ownerPhone)) errors.push('Please enter a valid 8-digit Singapore handphone number.');
+    if (form.salonName.length < 2) errors.push('Business name must be at least 2 characters.');
+    if (form.businessCategory.length < 2) errors.push('Please enter the business category.');
+    if (!/^[A-Z0-9-]{8,20}$/.test(form.uen)) errors.push('Please enter a valid UEN or registration number.');
+    if (!Number.isInteger(Number(form.yearsInBusiness)) || Number(form.yearsInBusiness) < 0 || Number(form.yearsInBusiness) > 100) {
+        errors.push('Years in business must be a whole number from 0 to 100.');
+    }
+    if (!Number.isInteger(Number(form.staffCount)) || Number(form.staffCount) < 1 || Number(form.staffCount) > 5000) {
+        errors.push('Staff count must be a whole number from 1 to 5000.');
+    }
+    if (form.address.length < 2) errors.push('Please enter the business address.');
+    if (form.description.length < 10) errors.push('Business description must be at least 10 characters.');
+
+    const passwordErrors = validateNewPassword(form.password);
+    if (passwordErrors.length > 0) errors.push(...passwordErrors);
+    if (form.password !== form.confirmPassword) errors.push('Password and confirmation must match.');
+
+    return errors;
+}
+
+function showMerchantSignup(req, res) {
+    if (req.session.user) {
+        return res.redirect(getDashboardPath(req.session.user.role));
+    }
+
+    const error = req.session.signupError;
+    const form = req.session.signupForm || getMerchantSignupForm();
+    req.session.signupError = null;
+    req.session.signupForm = null;
+
+    return res.render('merchant-signup', {
+        title: 'Merchant Application',
+        error,
+        form
+    });
+}
+
+function signupMerchant(req, res) {
+    const form = getMerchantSignupForm(req.body);
+    const errors = validateMerchantSignupForm(form);
+
+    if (errors.length > 0) {
+        req.session.signupError = errors.join(' ');
+        req.session.signupForm = { ...form, password: '', confirmPassword: '' };
+        return res.redirect('/merchant/signup');
+    }
+
+    return User.findByEmail(form.email, (lookupError, existingUser) => {
+        if (lookupError) {
+            console.error(lookupError);
+            req.session.signupError = 'Merchant application could not be created. Please try again.';
+            req.session.signupForm = { ...form, password: '', confirmPassword: '' };
+            return res.redirect('/merchant/signup');
+        }
+
+        if (existingUser) {
+            req.session.signupError = 'An account already exists with that email.';
+            req.session.signupForm = { ...form, password: '', confirmPassword: '' };
+            return res.redirect('/merchant/signup');
+        }
+
+        return bcrypt.hash(form.password, 12, (hashError, passwordHash) => {
+            if (hashError) {
+                console.error(hashError);
+                req.session.signupError = 'Merchant password could not be prepared. Please try again.';
+                req.session.signupForm = { ...form, password: '', confirmPassword: '' };
+                return res.redirect('/merchant/signup');
+            }
+
+            return MerchantService.createMerchant({
+                ...form,
+                passwordHash,
+                approvalStatus: 'pending_review',
+                reviewReason: 'Merchant application submitted.'
+            }, (createError, createdMerchant) => {
+                if (createError) {
+                    console.error(createError);
+                    req.session.signupError = createError.code === 'ER_DUP_ENTRY'
+                        ? 'An account already exists with that email.'
+                        : 'Merchant application could not be created. Please try again.';
+                    req.session.signupForm = { ...form, password: '', confirmPassword: '' };
+                    return res.redirect('/merchant/signup');
+                }
+
+                return setAuthenticatedSession(req, {
+                    user_id: createdMerchant.userId,
+                    name: form.ownerName,
+                    email: form.email,
+                    phone: form.ownerPhone,
+                    role: 'merchant',
+                    glints_balance: 0,
+                    account_status: 'active'
+                }, 'Merchant application submitted.', (sessionError) => {
+                    if (sessionError) {
+                        console.error(sessionError);
+                        req.session.signupError = 'Application was created, but login failed. Please log in.';
+                        return res.redirect('/login');
+                    }
+
+                    req.session.user.merchantApprovalStatus = 'pending_review';
+                    return res.redirect('/merchant/onboarding');
+                });
+            });
+        });
+    });
+}
+
 function showProfile(req, res) {
     if (!req.session.user) {
         return res.redirect('/login');
@@ -1507,6 +1639,8 @@ module.exports = {
     showSignup,
     openReferralSignup,
     signupUser,
+    showMerchantSignup,
+    signupMerchant,
     showProfile,
     showRewardShop,
     claimRewardShopDaily,
