@@ -17,6 +17,8 @@ const { getCartItemCount } = require('../utils/cart');
 const { getSafeReturnPath, rotateCsrfToken } = require('../middleware');
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 const { getProfileImagePath, deleteProfileImageFile } = require('../utils/profileUpload');
+const { sendLoginOtpEmail } = require('../utils/emailNotifications');
+const { sendSms } = require('../utils/smsNotifications');
 
 const membershipTiers = [
     { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
@@ -34,6 +36,9 @@ const genderOptions = [
 ];
 
 const allowedGenderValues = new Set(genderOptions.map((option) => option.value));
+const LOGIN_OTP_EXPIRY_MS = 10 * 60 * 1000;
+const LOGIN_OTP_RESEND_MS = 60 * 1000;
+const LOGIN_OTP_MAX_ATTEMPTS = 5;
 
 function logNotificationError(error) {
     if (error) {
@@ -705,6 +710,128 @@ function completeLogin(req, res, user, message = 'You are logged in.') {
     });
 }
 
+function isLoginOtpEnabled() {
+    return String(process.env.LOGIN_2FA_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+function generateOtpCode() {
+    return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtpCode(code) {
+    return crypto.createHash('sha256').update(String(code || '')).digest('hex');
+}
+
+function maskEmail(email) {
+    const [name, domain] = String(email || '').split('@');
+
+    if (!name || !domain) {
+        return 'your email';
+    }
+
+    const visibleName = name.length <= 2
+        ? `${name[0] || '*'}*`
+        : `${name.slice(0, 2)}${'*'.repeat(Math.min(name.length - 2, 4))}`;
+
+    return `${visibleName}@${domain}`;
+}
+
+function maskPhone(phone) {
+    const digits = String(phone || '').replace(/[^\d]/g, '');
+
+    if (digits.length < 4) {
+        return 'your phone';
+    }
+
+    return `${'*'.repeat(Math.max(digits.length - 4, 0))}${digits.slice(-4)}`;
+}
+
+function getOtpDestination(user, method) {
+    return method === 'sms'
+        ? maskPhone(user.phone)
+        : maskEmail(user.email);
+}
+
+function storePendingLoginOtp(req, user, method, code) {
+    req.session.pendingLoginOtp = {
+        userId: user.user_id,
+        method,
+        codeHash: hashOtpCode(code),
+        expiresAt: Date.now() + LOGIN_OTP_EXPIRY_MS,
+        resendAfter: Date.now() + LOGIN_OTP_RESEND_MS,
+        attempts: 0,
+        email: user.email,
+        phone: user.phone || '',
+        destination: getOtpDestination(user, method)
+    };
+}
+
+async function sendLoginOtp(user, method, code) {
+    if (method === 'sms') {
+        if (!user.phone) {
+            return { skipped: true, reason: 'missing_phone' };
+        }
+
+        return sendSms(user.phone, `Your Vaniday login code is ${code}. It expires in 10 minutes.`);
+    }
+
+    return sendLoginOtpEmail({
+        email: user.email,
+        name: user.name,
+        code
+    });
+}
+
+function sendAndStoreLoginOtp(req, user, method, callback) {
+    const code = generateOtpCode();
+
+    sendLoginOtp(user, method, code)
+        .then((result) => {
+            if (result?.skipped) {
+                callback(null, {
+                    sent: false,
+                    reason: result.reason || 'not_configured'
+                });
+                return;
+            }
+
+            storePendingLoginOtp(req, user, method, code);
+            callback(null, {
+                sent: true,
+                method,
+                destination: getOtpDestination(user, method)
+            });
+        })
+        .catch(callback);
+}
+
+function renderLoginOtp(req, res, override = {}) {
+    const pending = req.session.pendingLoginOtp;
+
+    if (!pending) {
+        req.session.loginError = 'Please log in again to receive a verification code.';
+        return res.redirect('/login');
+    }
+
+    const error = override.error ?? req.session.loginOtpError ?? null;
+    const success = override.success ?? req.session.loginOtpSuccess ?? null;
+    req.session.loginOtpError = null;
+    req.session.loginOtpSuccess = null;
+
+    return res.render('login-otp', {
+        title: 'Verify Login',
+        error,
+        success,
+        pending: {
+            method: pending.method,
+            destination: pending.destination,
+            canUseSms: Boolean(pending.phone),
+            canUseEmail: Boolean(pending.email),
+            secondsUntilResend: Math.max(0, Math.ceil((Number(pending.resendAfter || 0) - Date.now()) / 1000))
+        }
+    });
+}
+
 let googleAuthConfigured = false;
 
 function hasGoogleAuthConfig() {
@@ -893,7 +1020,141 @@ function loginUser(req, res) {
                 return res.redirect('/login');
             }
 
-            return completeLogin(req, res, user);
+            if (!isLoginOtpEnabled()) {
+                return completeLogin(req, res, user);
+            }
+
+            return sendAndStoreLoginOtp(req, user, 'email', (otpError, result) => {
+                if (otpError) {
+                    console.error(otpError);
+                    req.session.loginError = 'Your password was correct, but we could not send a verification code. Please try again.';
+                    req.session.loginForm = { email };
+                    return res.redirect('/login');
+                }
+
+                if (!result.sent) {
+                    req.session.loginError = 'Email verification is not configured yet. Please contact the administrator.';
+                    req.session.loginForm = { email };
+                    return res.redirect('/login');
+                }
+
+                req.session.loginOtpSuccess = `We sent a verification code to ${result.destination}.`;
+                return res.redirect('/login/verify-otp');
+            });
+        });
+    });
+}
+
+function showLoginOtp(req, res) {
+    if (req.session.user) {
+        return res.redirect(getDashboardPath(req.session.user.role));
+    }
+
+    return renderLoginOtp(req, res);
+}
+
+function verifyLoginOtp(req, res) {
+    const pending = req.session.pendingLoginOtp;
+    const code = String(req.body.code || '').replace(/[^\d]/g, '');
+
+    if (!pending) {
+        req.session.loginError = 'Please log in again to receive a verification code.';
+        return res.redirect('/login');
+    }
+
+    if (Date.now() > Number(pending.expiresAt || 0)) {
+        req.session.pendingLoginOtp = null;
+        req.session.loginError = 'Your verification code expired. Please log in again.';
+        return res.redirect('/login');
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+        return renderLoginOtp(req, res, {
+            error: 'Please enter the 6-digit code.'
+        });
+    }
+
+    pending.attempts = Number(pending.attempts || 0) + 1;
+
+    if (pending.attempts > LOGIN_OTP_MAX_ATTEMPTS) {
+        req.session.pendingLoginOtp = null;
+        req.session.loginError = 'Too many incorrect verification attempts. Please log in again.';
+        return res.redirect('/login');
+    }
+
+    if (hashOtpCode(code) !== pending.codeHash) {
+        req.session.pendingLoginOtp = pending;
+        return renderLoginOtp(req, res, {
+            error: 'That verification code is incorrect.'
+        });
+    }
+
+    return User.findById(pending.userId, (lookupError, user) => {
+        if (lookupError || !user) {
+            console.error(lookupError);
+            req.session.pendingLoginOtp = null;
+            req.session.loginError = 'Your account could not be loaded. Please log in again.';
+            return res.redirect('/login');
+        }
+
+        if (user.account_status === 'terminated') {
+            req.session.pendingLoginOtp = null;
+            req.session.loginError = 'This account has been terminated. Please contact support if you believe this is a mistake.';
+            return res.redirect('/login');
+        }
+
+        req.session.pendingLoginOtp = null;
+        return completeLogin(req, res, user, 'Login verified successfully.');
+    });
+}
+
+function changeLoginOtpMethod(req, res) {
+    const pending = req.session.pendingLoginOtp;
+    const requestedMethod = String(req.body.method || '').toLowerCase();
+
+    if (!pending) {
+        req.session.loginError = 'Please log in again to receive a verification code.';
+        return res.redirect('/login');
+    }
+
+    if (!['email', 'sms'].includes(requestedMethod)) {
+        return renderLoginOtp(req, res, {
+            error: 'Please choose a valid verification method.'
+        });
+    }
+
+    if (Date.now() < Number(pending.resendAfter || 0)) {
+        return renderLoginOtp(req, res, {
+            error: 'Please wait a moment before requesting another code.'
+        });
+    }
+
+    return User.findById(pending.userId, (lookupError, user) => {
+        if (lookupError || !user) {
+            console.error(lookupError);
+            req.session.pendingLoginOtp = null;
+            req.session.loginError = 'Your account could not be loaded. Please log in again.';
+            return res.redirect('/login');
+        }
+
+        return sendAndStoreLoginOtp(req, user, requestedMethod, (otpError, result) => {
+            if (otpError) {
+                console.error(otpError);
+                return renderLoginOtp(req, res, {
+                    error: 'We could not send a new verification code. Please try again.'
+                });
+            }
+
+            if (!result.sent) {
+                const message = requestedMethod === 'sms'
+                    ? 'SMS verification is unavailable for this account. Check that the phone number and SMS settings are configured.'
+                    : 'Email verification is not configured yet. Please contact the administrator.';
+
+                return renderLoginOtp(req, res, { error: message });
+            }
+
+            req.session.loginOtpSuccess = `We sent a new verification code to ${result.destination}.`;
+            return res.redirect('/login/verify-otp');
         });
     });
 }
@@ -1634,6 +1895,9 @@ function logoutUser(req, res) {
 module.exports = {
     showLogin,
     loginUser,
+    showLoginOtp,
+    verifyLoginOtp,
+    changeLoginOtpMethod,
     startGoogleLogin,
     handleGoogleCallback,
     showSignup,

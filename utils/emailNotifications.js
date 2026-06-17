@@ -289,6 +289,95 @@ function buildGiftCardEmailHtml(entry) {
     `;
 }
 
+function buildLoginOtpEmailText(entry) {
+    return [
+        `Hi ${entry.name || 'there'},`,
+        '',
+        'Use this one-time code to finish logging in to Vaniday:',
+        '',
+        entry.code,
+        '',
+        'This code expires in 10 minutes. If you did not try to log in, you can ignore this email.',
+        '',
+        'Thank you,',
+        'Vaniday'
+    ].join('\n');
+}
+
+function buildLoginOtpEmailHtml(entry) {
+    const escapeHtml = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    return `
+        <div style="margin:0;padding:0;background:#f5efe5;font-family:Arial,Helvetica,sans-serif;color:#241f1a;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f5efe5;padding:24px 0;">
+                <tr>
+                    <td align="center" style="padding:24px 12px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;border-collapse:collapse;background:#fffaf3;border:1px solid #ded2c3;border-radius:14px;overflow:hidden;">
+                            <tr>
+                                <td style="padding:24px 28px;background:#1f1812;color:#fffaf3;">
+                                    <strong style="font-size:22px;">Vaniday</strong>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:30px 28px;">
+                                    <p style="margin:0 0 10px;font-size:13px;text-transform:uppercase;font-weight:700;color:#7b6a56;">Login verification</p>
+                                    <h1 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.15;color:#241f1a;">Your one-time code</h1>
+                                    <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#5f5448;">Hi ${escapeHtml(entry.name || 'there')}, enter this code to finish logging in.</p>
+                                    <p style="margin:0;padding:18px 20px;background:#f8f1e8;border:1px solid #e5d8c8;border-radius:10px;text-align:center;font-size:32px;letter-spacing:8px;font-weight:700;color:#241f1a;">${escapeHtml(entry.code)}</p>
+                                    <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#7b6a56;">This code expires in 10 minutes. If you did not try to log in, you can ignore this email.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    `;
+}
+
+async function sendLoginOtpEmail(entry) {
+    const config = getEmailConfig();
+    const email = String(entry.email || '').trim();
+
+    if (!isConfigured(config) || !email || !entry.code) {
+        return { skipped: true };
+    }
+
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: {
+            user: config.user,
+            pass: config.pass
+        },
+        tls: {
+            rejectUnauthorized: config.rejectUnauthorized
+        }
+    });
+
+    try {
+        return await transporter.sendMail({
+            from: config.from,
+            to: email,
+            subject: 'Your Vaniday login code',
+            text: buildLoginOtpEmailText(entry),
+            html: buildLoginOtpEmailHtml(entry)
+        });
+    } catch (error) {
+        if (isSmtpAuthError(error)) {
+            console.error('Email OTP skipped: Gmail SMTP rejected the login. Use a Gmail app password in SMTP_PASS, not the normal account password.');
+            return { skipped: true, reason: 'smtp_auth_failed' };
+        }
+        throw error;
+    }
+}
+
 async function sendGiftCardEmail(entry) {
     const normalized = {
         email: entry.email,
@@ -339,5 +428,6 @@ async function sendGiftCardEmail(entry) {
 
 module.exports = {
     sendBookingConfirmationEmail,
-    sendGiftCardEmail
+    sendGiftCardEmail,
+    sendLoginOtpEmail
 };

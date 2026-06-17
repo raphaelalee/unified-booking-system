@@ -381,6 +381,9 @@ app.post('/rewards-game/flappy/finish', requireCustomer, (req, res) => res.statu
 }));
 app.get('/login', userController.showLogin);
 app.post('/login', authRateLimit, userController.loginUser);
+app.get('/login/verify-otp', userController.showLoginOtp);
+app.post('/login/verify-otp', authRateLimit, userController.verifyLoginOtp);
+app.post('/login/otp-method', authRateLimit, userController.changeLoginOtpMethod);
 app.get('/auth/google', userController.startGoogleLogin);
 app.get('/auth/google/callback', userController.handleGoogleCallback);
 app.get('/webhooks/whatsapp', whatsappController.getWebhook);
