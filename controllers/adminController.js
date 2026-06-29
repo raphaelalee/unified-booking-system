@@ -476,7 +476,8 @@ function getPromotionForm(body = {}) {
         slots: String(body.slots || '').trim(),
         status: String(body.status || '').trim(),
         description: String(body.description || '').trim(),
-        terms: String(body.terms || '').trim()
+        terms: String(body.terms || '').trim(),
+        showInFlashDeals: ['1', 'on', 'true', 'yes'].includes(String(body.showInFlashDeals || '').trim().toLowerCase())
     };
 }
 
@@ -582,7 +583,8 @@ function buildPromotionPayload(form) {
         allowedSlots: normalizePromotionSlots(form.slots),
         status: form.status,
         description: form.description,
-        terms: form.terms
+        terms: form.terms,
+        showInFlashDeals: Boolean(form.showInFlashDeals)
     };
 }
 
@@ -1817,7 +1819,8 @@ function showEditPromotion(req, res) {
                 slots: promotion.allowedSlots || '',
                 status: promotion.status,
                 description: promotion.description || '',
-                terms: promotion.terms || ''
+                terms: promotion.terms || '',
+                showInFlashDeals: promotion.showInFlashDeals
             }
         });
     });

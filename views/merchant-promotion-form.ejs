@@ -117,6 +117,19 @@
             </div>
         </section>
 
+        <section class="merchant-spin-settings-panel" aria-label="Homepage flash deal settings">
+            <div>
+                <p class="eyebrow">Homepage Visibility</p>
+                <h2>Flash Deals strip</h2>
+                <p class="muted">Turn this on to allow the homepage Flash Deals row to feature this promotion while it is active.</p>
+            </div>
+            <input type="hidden" name="showInFlashDeals" value="0">
+            <label class="merchant-package-toggle">
+                <input type="checkbox" name="showInFlashDeals" value="1" <%= form.showInFlashDeals ? 'checked' : '' %>>
+                Show this promotion in Flash Deals
+            </label>
+        </section>
+
         <label>
             Start date
             <input type="date" name="startDate" class="js-promotion-start" value="<%= form.startDate %>" required>

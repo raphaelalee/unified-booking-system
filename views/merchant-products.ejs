@@ -66,6 +66,7 @@
                     const displayImageUrl = product.imageUrl || product.fallbackImageUrl || '';
                     const productImageClass = displayImageUrl ? '' : 'product-skin';
                     const productImageStyle = displayImageUrl ? `background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.04), rgba(48, 68, 43, 0.16)), url('${displayImageUrl}')` : '';
+                    const recommendation = product.featuredRecommendation || null;
                 %>
                 <article class="merchant-product-row compact">
                     <div class="merchant-product-thumb <%= productImageClass %>" style="<%= productImageStyle %>"></div>
@@ -98,6 +99,10 @@
                         <% if (product.isFeatured) { %>
                             <strong>Priority #<%= Number(product.featuredOrder || 0) %></strong>
                             <span><%= product.featuredStartDate || 'No start' %> to <%= product.featuredEndDate || 'No end' %></span>
+                        <% } else if (recommendation) { %>
+                            <strong>Recommended #<%= recommendation.rank %></strong>
+                            <span><%= recommendation.reason %></span>
+                            <span><%= recommendation.canFeatureNow ? `Suggested priority ${recommendation.featuredOrder}` : 'Replace one existing featured product to use this recommendation.' %></span>
                         <% } else { %>
                             <span>Use this to push the product into featured storefront slots.</span>
                         <% } %>
@@ -113,16 +118,19 @@
                             <form class="merchant-featured-form" action="/merchant/products/<%= product.id %>/feature" method="POST">
                                 <label>
                                     <span>Priority</span>
-                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= Number(product.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
+                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= product.isFeatured ? Number(product.featuredOrder || 0) : Number(recommendation?.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
                                 </label>
                                 <label>
                                     <span>Start date</span>
-                                    <input type="date" name="featuredStartDate" value="<%= product.featuredStartDate || '' %>" aria-label="Featured start date">
+                                    <input type="date" name="featuredStartDate" value="<%= product.isFeatured ? (product.featuredStartDate || '') : (recommendation?.featuredStartDate || '') %>" aria-label="Featured start date">
                                 </label>
                                 <label>
                                     <span>End date</span>
-                                    <input type="date" name="featuredEndDate" value="<%= product.featuredEndDate || '' %>" aria-label="Featured end date">
+                                    <input type="date" name="featuredEndDate" value="<%= product.isFeatured ? (product.featuredEndDate || '') : (recommendation?.featuredEndDate || '') %>" aria-label="Featured end date">
                                 </label>
+                                <% if (!product.isFeatured && recommendation) { %>
+                                    <p class="muted">Recommended: <%= recommendation.reason %></p>
+                                <% } %>
                                 <button class="button secondary" type="submit"><%= product.isFeatured ? 'Save featured settings' : 'Mark as Featured' %></button>
                             </form>
                         </details>

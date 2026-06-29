@@ -47,6 +47,173 @@ const hitpayPendingStore = new Map();
 const NETS_STATUS_POLL_MS = 3000;
 const NETS_STATUS_TIMEOUT_MS = 5 * 60 * 1000;
 const CART_DELIVERY_FEE = 4.90;
+const FLASH_DEALS_BATCH_SIZE = 6;
+const FLASH_DEALS_ROTATION_MS = 6 * 60 * 60 * 1000;
+
+function normalizeText(value) {
+    return String(value || '').trim();
+}
+
+function formatFlashDealDiscount(discountType, discountValue) {
+    const numericValue = Number(discountValue || 0);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return 'Limited deal';
+    }
+
+    if (discountType === 'percentage') {
+        return `${Math.round(numericValue)}% off`;
+    }
+
+    if (discountType === 'fixed_amount') {
+        return `$${numericValue.toFixed(numericValue % 1 === 0 ? 0 : 2)} off`;
+    }
+
+    if (discountType === 'fixed_price') {
+        return `Now $${numericValue.toFixed(numericValue % 1 === 0 ? 0 : 2)}`;
+    }
+
+    return 'Flash deal';
+}
+
+function resolveFlashDealPricing(promotion, linkedItem) {
+    const basePrice = Number(linkedItem?.price || 0);
+    const discountValue = Number(promotion?.discountValue || 0);
+
+    if (!Number.isFinite(basePrice) || basePrice <= 0) {
+        return {
+            basePrice: null,
+            dealPrice: null
+        };
+    }
+
+    if (promotion.discountType === 'fixed_price' && discountValue > 0) {
+        return {
+            basePrice,
+            dealPrice: discountValue
+        };
+    }
+
+    if (promotion.discountType === 'fixed_amount' && discountValue > 0) {
+        return {
+            basePrice,
+            dealPrice: Math.max(0, basePrice - discountValue)
+        };
+    }
+
+    if (promotion.discountType === 'percentage' && discountValue > 0) {
+        return {
+            basePrice,
+            dealPrice: Math.max(0, basePrice * (1 - (discountValue / 100)))
+        };
+    }
+
+    return {
+        basePrice,
+        dealPrice: null
+    };
+}
+
+function rotateFlashDeals(items = [], cycleIndex = 0, batchSize = FLASH_DEALS_BATCH_SIZE) {
+    if (!Array.isArray(items) || items.length === 0) {
+        return [];
+    }
+
+    if (items.length <= batchSize) {
+        return items.slice(0, batchSize);
+    }
+
+    const offset = (cycleIndex * batchSize) % items.length;
+    const ordered = items.slice(offset).concat(items.slice(0, offset));
+    return ordered.slice(0, batchSize);
+}
+
+function buildFlashDeals(promotions = [], featuredProducts = [], featuredServices = []) {
+    const now = Date.now();
+    const cycleIndex = Math.floor(now / FLASH_DEALS_ROTATION_MS);
+    const nextRotationAt = new Date((cycleIndex + 1) * FLASH_DEALS_ROTATION_MS);
+    const productById = new Map(featuredProducts.map((product) => [String(product.id), product]));
+    const serviceById = new Map(featuredServices.map((service) => [String(service.id), service]));
+    const promotionDeals = promotions
+        .filter((promotion) => String(promotion.status || '').toLowerCase() === 'active' && Boolean(promotion.showInFlashDeals))
+        .map((promotion, index) => {
+            const linkedService = serviceById.get(String(promotion.serviceId || '')) || null;
+            const linkedProduct = productById.get(String(promotion.productId || '')) || null;
+            const linkedItem = linkedService || linkedProduct || null;
+            const isProductDeal = Boolean(linkedProduct) && !linkedService;
+            const targetName = normalizeText(linkedService?.name || linkedProduct?.name || promotion.serviceName || promotion.productName || promotion.title);
+            const { basePrice, dealPrice } = resolveFlashDealPricing(promotion, linkedItem);
+
+            return {
+                id: `promo-${promotion.id}`,
+                title: targetName || normalizeText(promotion.title) || 'Flash deal',
+                merchantName: normalizeText(promotion.salonName) || 'Vaniday merchant',
+                description: normalizeText(promotion.description) || normalizeText(promotion.title) || 'Limited-time marketplace offer.',
+                discountLabel: formatFlashDealDiscount(promotion.discountType, promotion.discountValue),
+                badge: isProductDeal ? 'Product deal' : 'Service deal',
+                href: linkedProduct
+                    ? `/products/${linkedProduct.id}?from=flash-deals`
+                    : (linkedService
+                        ? `/merchants/${promotion.salonId}?from=flash-deals`
+                        : '/promotions'),
+                imageUrl: normalizeText(linkedProduct?.imageUrl || linkedProduct?.fallbackImageUrl || linkedService?.imageUrl),
+                imageClass: isProductDeal ? 'home-product-image' : '',
+                endsAt: promotion.endDate || null,
+                basePrice,
+                dealPrice,
+                urgency: Number(promotion.totalRedemptions || 0) >= 10 ? 'Selling fast' : 'Limited time',
+                priority: index
+            };
+        });
+
+    if (promotionDeals.length > 0) {
+        const eligibleDeals = promotionDeals
+            .sort((left, right) => {
+                const leftEndsAt = left.endsAt ? new Date(left.endsAt).getTime() : Number.MAX_SAFE_INTEGER;
+                const rightEndsAt = right.endsAt ? new Date(right.endsAt).getTime() : Number.MAX_SAFE_INTEGER;
+
+                if (leftEndsAt !== rightEndsAt) {
+                    return leftEndsAt - rightEndsAt;
+                }
+
+                return left.priority - right.priority;
+            });
+        const deals = rotateFlashDeals(eligibleDeals, cycleIndex, FLASH_DEALS_BATCH_SIZE);
+        const earliestDealEnd = deals.reduce((soonest, deal) => {
+            const dealEnd = deal.endsAt ? new Date(deal.endsAt).getTime() : Number.MAX_SAFE_INTEGER;
+            return Math.min(soonest, dealEnd);
+        }, Number.MAX_SAFE_INTEGER);
+        const sectionEndsAt = new Date(Math.min(nextRotationAt.getTime(), earliestDealEnd));
+
+        return {
+            deals,
+            sectionEndsAt: Number.isFinite(sectionEndsAt.getTime()) ? sectionEndsAt.toISOString() : nextRotationAt.toISOString(),
+            cycleMs: FLASH_DEALS_ROTATION_MS
+        };
+    }
+
+    const fallbackDeals = rotateFlashDeals(featuredProducts, cycleIndex, FLASH_DEALS_BATCH_SIZE).map((product, index) => ({
+        id: `product-${product.id}`,
+        title: normalizeText(product.name) || 'Featured product',
+        merchantName: normalizeText(product.salonName) || 'Vaniday merchant',
+        description: normalizeText(product.description) || 'Featured aftercare pick from the marketplace.',
+        discountLabel: 'Featured now',
+        badge: 'Product pick',
+        href: `/products/${product.id}?from=flash-deals`,
+        imageUrl: normalizeText(product.imageUrl || product.fallbackImageUrl),
+        imageClass: 'home-product-image',
+        endsAt: null,
+        basePrice: null,
+        dealPrice: Number(product.price || 0),
+        urgency: index < 2 ? 'Trending now' : 'Just added'
+    }));
+
+    return {
+        deals: fallbackDeals,
+        sectionEndsAt: nextRotationAt.toISOString(),
+        cycleMs: FLASH_DEALS_ROTATION_MS
+    };
+}
 
 function normalizeFulfilment(value) {
     return String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup';
@@ -1455,22 +1622,34 @@ function showHome(req, res) {
                     console.error(productError);
                 }
 
-                res.render('home', {
-                    title: 'Vaniday',
-                    merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(publicMerchants, featuredMerchants)),
-                    favouriteIds,
-                    serviceCatalog,
-                    portalStats: getPortalStatsFromServices(serviceCatalog),
-                    search,
-                    success: req.session.success,
-                    featuredMerchants: featuredMerchants.slice(0, 6),
-                    featuredMerchantOfMonth: featuredMerchants.find((merchant) => merchant.featuredType === 'featured_month') || featuredMerchants[0] || null,
-                    trendingMerchants: featuredMerchants.filter((merchant) => merchant.featuredType === 'trending').slice(0, 6),
-                    featuredServices: featuredServices.slice(0, 6),
-                    featuredProducts: featuredProducts.slice(0, 6),
-                    showChatbot: true
+                return Promotion.getActivePublic((promotionError, activePromotions = []) => {
+                    if (promotionError) {
+                        console.error(promotionError);
+                    }
+
+                    const featuredServiceItems = featuredServices.slice(0, 6);
+                    const featuredProductItems = featuredProducts.slice(0, 6);
+                    const flashDealSection = buildFlashDeals(activePromotions, featuredProductItems, featuredServiceItems);
+
+                    res.render('home', {
+                        title: 'Vaniday',
+                        merchants: sortMerchantsByFeatured(mergeFeaturedMerchantRows(publicMerchants, featuredMerchants)),
+                        favouriteIds,
+                        serviceCatalog,
+                        portalStats: getPortalStatsFromServices(serviceCatalog),
+                        search,
+                        success: req.session.success,
+                        featuredMerchants: featuredMerchants.slice(0, 6),
+                        featuredMerchantOfMonth: featuredMerchants.find((merchant) => merchant.featuredType === 'featured_month') || featuredMerchants[0] || null,
+                        trendingMerchants: featuredMerchants.filter((merchant) => merchant.featuredType === 'trending').slice(0, 6),
+                        featuredServices: featuredServiceItems,
+                        featuredProducts: featuredProductItems,
+                        flashDeals: flashDealSection.deals,
+                        flashDealsSectionEndsAt: flashDealSection.sectionEndsAt,
+                        showChatbot: true
+                    });
+                    req.session.success = null;
                 });
-                req.session.success = null;
             });
         });
     });

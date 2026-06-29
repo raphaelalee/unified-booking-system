@@ -70,6 +70,10 @@ function ensurePromotionSchema(callback) {
             alters.push('ADD COLUMN spin_inventory_remaining INT DEFAULT NULL AFTER spin_claim_limit');
         }
 
+        if (!fields.has('show_in_flash_deals')) {
+            alters.push('ADD COLUMN show_in_flash_deals TINYINT(1) NOT NULL DEFAULT 0 AFTER spin_inventory_remaining');
+        }
+
         if (!alters.length) {
             callback(null);
             return;
@@ -110,6 +114,7 @@ function mapPromotion(row) {
         usageLimit: row.usage_limit === null || row.usage_limit === undefined ? null : Number(row.usage_limit),
         spinClaimLimit: row.spin_claim_limit === null || row.spin_claim_limit === undefined ? null : Number(row.spin_claim_limit),
         spinInventoryRemaining: row.spin_inventory_remaining === null || row.spin_inventory_remaining === undefined ? null : Number(row.spin_inventory_remaining),
+        showInFlashDeals: Boolean(Number(row.show_in_flash_deals || 0)),
         spinWinCount: Number(row.spin_win_count || 0),
         spinClaimCount: Number(row.spin_claim_count || 0),
         redemptionCount: Number(row.used_redemptions || 0),
@@ -140,6 +145,7 @@ function getAll(callback) {
             promotions.usage_limit,
             promotions.spin_claim_limit,
             promotions.spin_inventory_remaining,
+            promotions.show_in_flash_deals,
             services.service_name,
             products.name AS product_name,
             salons.salon_name,
@@ -189,6 +195,7 @@ function getActivePublic(callback) {
             promotions.usage_limit,
             promotions.spin_claim_limit,
             promotions.spin_inventory_remaining,
+            promotions.show_in_flash_deals,
             salons.salon_name,
             salons.address,
             salons.description AS salon_description,
@@ -248,6 +255,7 @@ function getByMerchantUserId(userId, callback) {
             promotions.usage_limit,
             promotions.spin_claim_limit,
             promotions.spin_inventory_remaining,
+            promotions.show_in_flash_deals,
             services.service_name,
             products.name AS product_name,
             COALESCE(spin_stats.spin_win_count, 0) AS spin_win_count,
@@ -297,6 +305,7 @@ function findById(promotionId, callback) {
             promotions.usage_limit,
             promotions.spin_claim_limit,
             promotions.spin_inventory_remaining,
+            promotions.show_in_flash_deals,
             services.service_name,
             products.name AS product_name,
             salons.salon_name,
@@ -347,6 +356,7 @@ function findForMerchant(userId, promotionId, callback) {
             promotions.usage_limit,
             promotions.spin_claim_limit,
             promotions.spin_inventory_remaining,
+            promotions.show_in_flash_deals,
             services.service_name,
             products.name AS product_name,
             COALESCE(spin_stats.spin_win_count, 0) AS spin_win_count,
@@ -396,9 +406,12 @@ function createForMerchant(userId, promotion, callback) {
             usage_limit,
             spin_claim_limit,
             spin_inventory_remaining
+            ,
+            show_in_flash_deals
         )
         SELECT
             salons.salon_id,
+            ?,
             ?,
             ?,
             ?,
@@ -441,6 +454,7 @@ function createForMerchant(userId, promotion, callback) {
         promotion.usageLimit || null,
         promotion.spinClaimLimit || null,
         promotion.spinInventoryRemaining ?? promotion.spinClaimLimit ?? null,
+        promotion.showInFlashDeals ? 1 : 0,
         userId
     ];
 
@@ -468,8 +482,9 @@ function createAsAdmin(promotion, callback) {
             minimum_spend,
             usage_limit,
             spin_claim_limit,
-            spin_inventory_remaining
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            spin_inventory_remaining,
+            show_in_flash_deals
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -491,7 +506,8 @@ function createAsAdmin(promotion, callback) {
         Number(promotion.minimumSpend || 0),
         promotion.usageLimit || null,
         promotion.spinClaimLimit || null,
-        promotion.spinInventoryRemaining ?? promotion.spinClaimLimit ?? null
+        promotion.spinInventoryRemaining ?? promotion.spinClaimLimit ?? null,
+        promotion.showInFlashDeals ? 1 : 0
     ];
 
     db.query(sql, params, callback);
@@ -519,7 +535,8 @@ function updateForMerchant(userId, promotionId, promotion, callback) {
             promotions.minimum_spend = ?,
             promotions.usage_limit = ?,
             promotions.spin_claim_limit = ?,
-            promotions.spin_inventory_remaining = ?
+            promotions.spin_inventory_remaining = ?,
+            promotions.show_in_flash_deals = ?
         WHERE promotions.promotion_id = ?
             AND salons.merchant_id = ?
     `;
@@ -543,6 +560,7 @@ function updateForMerchant(userId, promotionId, promotion, callback) {
         promotion.usageLimit || null,
         promotion.spinClaimLimit || null,
         promotion.spinInventoryRemaining ?? promotion.spinClaimLimit ?? null,
+        promotion.showInFlashDeals ? 1 : 0,
         promotionId,
         userId
     ];
@@ -572,7 +590,8 @@ function updateAsAdmin(promotionId, promotion, callback) {
             minimum_spend = ?,
             usage_limit = ?,
             spin_claim_limit = ?,
-            spin_inventory_remaining = ?
+            spin_inventory_remaining = ?,
+            show_in_flash_deals = ?
         WHERE promotion_id = ?
     `;
 
@@ -596,6 +615,7 @@ function updateAsAdmin(promotionId, promotion, callback) {
         promotion.usageLimit || null,
         promotion.spinClaimLimit || null,
         promotion.spinInventoryRemaining ?? promotion.spinClaimLimit ?? null,
+        promotion.showInFlashDeals ? 1 : 0,
         promotionId
     ];
 

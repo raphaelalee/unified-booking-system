@@ -98,6 +98,7 @@
         </div>
         <div class="merchant-service-list">
             <% services.forEach((service) => { %>
+                <% const recommendation = service.featuredRecommendation || null; %>
                 <article class="merchant-service-row js-merchant-service-card" data-category="<%= service.category || merchant.category %>">
                     <div class="merchant-service-main">
                         <h3><%= service.name %></h3>
@@ -143,6 +144,10 @@
                         <% if (service.isFeatured) { %>
                             <strong>Priority #<%= Number(service.featuredOrder || 0) %></strong>
                             <span><%= service.featuredStartDate || 'No start' %> to <%= service.featuredEndDate || 'No end' %></span>
+                        <% } else if (recommendation) { %>
+                            <strong>Recommended #<%= recommendation.rank %></strong>
+                            <span><%= recommendation.reason %></span>
+                            <span><%= recommendation.canFeatureNow ? `Suggested priority ${recommendation.featuredOrder}` : 'Replace one existing featured service to use this recommendation.' %></span>
                         <% } else { %>
                             <span>Use this to highlight the service on booking and marketplace surfaces.</span>
                         <% } %>
@@ -163,16 +168,19 @@
                             <form class="merchant-featured-form" action="/merchant/services/<%= service.id %>/feature" method="POST">
                                 <label>
                                     <span>Priority</span>
-                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= Number(service.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
+                                    <input type="number" name="featuredOrder" min="0" max="99" value="<%= service.isFeatured ? Number(service.featuredOrder || 0) : Number(recommendation?.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
                                 </label>
                                 <label>
                                     <span>Start date</span>
-                                    <input type="date" name="featuredStartDate" value="<%= service.featuredStartDate || '' %>" aria-label="Featured start date">
+                                    <input type="date" name="featuredStartDate" value="<%= service.isFeatured ? (service.featuredStartDate || '') : (recommendation?.featuredStartDate || '') %>" aria-label="Featured start date">
                                 </label>
                                 <label>
                                     <span>End date</span>
-                                    <input type="date" name="featuredEndDate" value="<%= service.featuredEndDate || '' %>" aria-label="Featured end date">
+                                    <input type="date" name="featuredEndDate" value="<%= service.isFeatured ? (service.featuredEndDate || '') : (recommendation?.featuredEndDate || '') %>" aria-label="Featured end date">
                                 </label>
+                                <% if (!service.isFeatured && recommendation) { %>
+                                    <p class="muted">Recommended: <%= recommendation.reason %></p>
+                                <% } %>
                                 <button class="button secondary" type="submit"><%= service.isFeatured ? 'Save featured settings' : 'Mark as Featured' %></button>
                             </form>
                         </details>

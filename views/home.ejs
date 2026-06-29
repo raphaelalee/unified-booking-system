@@ -146,6 +146,8 @@
     const recommendedMerchants = (Array.isArray(featuredMerchants) && featuredMerchants.length > 0 ? featuredMerchants : serviceMerchants).slice(0, 6);
     const featuredServiceItems = (Array.isArray(featuredServices) && featuredServices.length > 0 ? featuredServices : filteredServices.slice(0, 5));
     const featuredProductItems = Array.isArray(featuredProducts) ? featuredProducts : [];
+    const flashDealItems = Array.isArray(flashDeals) ? flashDeals.slice(0, 6) : [];
+    const flashDealsEndsAt = typeof flashDealsSectionEndsAt !== 'undefined' ? flashDealsSectionEndsAt : '';
     const featuredMonthMerchant = typeof featuredMerchantOfMonth !== 'undefined' ? featuredMerchantOfMonth : null;
     const trendingMerchantItems = Array.isArray(trendingMerchants) ? trendingMerchants : [];
     const heroSlides = [
@@ -284,6 +286,63 @@
     </div>
     <a class="button primary" href="/routine-finder">Find my routine</a>
 </section>
+
+<% if (flashDealItems.length > 0) { %>
+    <section class="home-section home-flash-section" aria-label="Flash deals">
+        <div class="home-flash-heading">
+            <div class="home-flash-title-wrap">
+                <p class="home-flash-title">Flash Deals</p>
+                <div class="home-flash-countdown" <% if (flashDealsEndsAt) { %>data-flash-section-ends-at="<%= flashDealsEndsAt %>"<% } %>>
+                    <span data-flash-countdown-unit="hours">00</span>
+                    <span data-flash-countdown-unit="minutes">00</span>
+                    <span data-flash-countdown-unit="seconds">00</span>
+                </div>
+            </div>
+            <a class="home-flash-link" href="/promotions">See All</a>
+        </div>
+
+        <div class="home-flash-carousel">
+            <button class="home-flash-arrow home-flash-arrow-left" type="button" data-home-flash-prev aria-label="Scroll flash deals left">&lsaquo;</button>
+            <div class="home-flash-strip" data-home-flash-track role="list">
+                <% flashDealItems.forEach((deal, index) => { %>
+                    <% const dealImageClass = deal.imageClass || (index % 2 === 0 ? 'home-service-facial' : 'home-service-spa'); %>
+                    <% const hasTimer = Boolean(deal.endsAt); %>
+                    <article class="home-flash-tile" role="listitem">
+                        <div class="home-flash-media">
+                            <div class="home-card-image <%= dealImageClass %>"<% if (deal.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= deal.imageUrl %>');"<% } %>></div>
+                            <span class="home-flash-badge"><%= index % 3 === 0 ? 'Preferred' : (deal.badge || 'Flash deal') %></span>
+                            <strong class="home-flash-discount"><%= deal.discountLabel %></strong>
+                        </div>
+                        <div class="home-flash-body">
+                            <p class="home-flash-merchant"><%= deal.merchantName %></p>
+                            <h3><%= deal.title %></h3>
+                            <p class="home-flash-description"><%= deal.description %></p>
+                            <div class="home-flash-pricing">
+                                <% if (deal.basePrice) { %>
+                                    <span class="home-flash-base">$<%= Number(deal.basePrice).toFixed(2) %></span>
+                                <% } %>
+                                <% if (deal.dealPrice !== null && deal.dealPrice !== undefined) { %>
+                                    <strong>$<%= Number(deal.dealPrice).toFixed(2) %></strong>
+                                <% } else { %>
+                                    <strong>View deal</strong>
+                                <% } %>
+                            </div>
+                            <a class="home-flash-card-link" href="<%= deal.href %>">Open deal</a>
+                        </div>
+                        <div class="home-flash-bar">
+                            <% if (hasTimer) { %>
+                                <span class="home-flash-timer" data-flash-deal-ends-at="<%= deal.endsAt %>">Ends soon</span>
+                            <% } else { %>
+                                <span class="home-flash-timer is-static"><%= deal.urgency || 'Live now' %></span>
+                            <% } %>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+            <button class="home-flash-arrow home-flash-arrow-right" type="button" data-home-flash-next aria-label="Scroll flash deals right">&rsaquo;</button>
+        </div>
+    </section>
+<% } %>
 
 <section class="home-section home-featured-section" aria-label="Featured carousel">
     <div class="home-section-heading">
@@ -587,29 +646,142 @@
         const dots = Array.from(document.querySelectorAll('[data-home-carousel-dot]'));
         const previous = document.querySelector('[data-home-carousel-prev]');
         const next = document.querySelector('[data-home-carousel-next]');
-
-        if (!carousel || !track || dots.length === 0) {
-            return;
-        }
-
         let activeIndex = 0;
 
-        const setActive = (index) => {
-            activeIndex = (index + dots.length) % dots.length;
-            const firstCard = track.querySelector('.home-carousel-card');
-            const gap = 16;
-            const cardWidth = firstCard ? firstCard.getBoundingClientRect().width + gap : 0;
-            track.scrollTo({ left: cardWidth * activeIndex, behavior: 'smooth' });
-            dots.forEach((dot, dotIndex) => {
-                dot.classList.toggle('is-active', dotIndex === activeIndex);
+        if (carousel && track && dots.length > 0) {
+            const setActive = (index) => {
+                activeIndex = (index + dots.length) % dots.length;
+                const firstCard = track.querySelector('.home-carousel-card');
+                const gap = 16;
+                const cardWidth = firstCard ? firstCard.getBoundingClientRect().width + gap : 0;
+                track.scrollTo({ left: cardWidth * activeIndex, behavior: 'smooth' });
+                dots.forEach((dot, dotIndex) => {
+                    dot.classList.toggle('is-active', dotIndex === activeIndex);
+                });
+            };
+
+            previous?.addEventListener('click', () => setActive(activeIndex - 1));
+            next?.addEventListener('click', () => setActive(activeIndex + 1));
+            dots.forEach((dot, index) => {
+                dot.addEventListener('click', () => setActive(index));
             });
+        }
+
+        const flashTimers = Array.from(document.querySelectorAll('[data-flash-deal-ends-at]'));
+        const flashCountdown = document.querySelector('[data-flash-section-ends-at]');
+        const flashTrack = document.querySelector('[data-home-flash-track]');
+        const flashPrevious = document.querySelector('[data-home-flash-prev]');
+        const flashNext = document.querySelector('[data-home-flash-next]');
+        const formatTimeRemaining = (endsAt) => {
+            const end = new Date(endsAt);
+            const remainingMs = end.getTime() - Date.now();
+
+            if (Number.isNaN(end.getTime()) || remainingMs <= 0) {
+                return 'Ending now';
+            }
+
+            const totalMinutes = Math.floor(remainingMs / 60000);
+            const days = Math.floor(totalMinutes / 1440);
+            const hours = Math.floor((totalMinutes % 1440) / 60);
+            const minutes = totalMinutes % 60;
+
+            if (days > 0) {
+                return `${days}d ${hours}h left`;
+            }
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m left`;
+            }
+
+            return `${Math.max(minutes, 1)}m left`;
         };
 
-        previous?.addEventListener('click', () => setActive(activeIndex - 1));
-        next?.addEventListener('click', () => setActive(activeIndex + 1));
-        dots.forEach((dot, index) => {
-            dot.addEventListener('click', () => setActive(index));
-        });
+        const getRemainingParts = (endsAt) => {
+            const end = new Date(endsAt);
+            const remainingMs = Math.max(0, end.getTime() - Date.now());
+            const totalSeconds = Math.floor(remainingMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            return {
+                hours: String(hours).padStart(2, '0'),
+                minutes: String(minutes).padStart(2, '0'),
+                seconds: String(seconds).padStart(2, '0')
+            };
+        };
+
+        const syncFlashTimers = () => {
+            flashTimers.forEach((timer) => {
+                timer.textContent = formatTimeRemaining(timer.dataset.flashDealEndsAt);
+            });
+
+            if (flashCountdown?.dataset.flashSectionEndsAt) {
+                const parts = getRemainingParts(flashCountdown.dataset.flashSectionEndsAt);
+                flashCountdown.querySelector('[data-flash-countdown-unit="hours"]').textContent = parts.hours;
+                flashCountdown.querySelector('[data-flash-countdown-unit="minutes"]').textContent = parts.minutes;
+                flashCountdown.querySelector('[data-flash-countdown-unit="seconds"]').textContent = parts.seconds;
+
+                const refreshAt = new Date(flashCountdown.dataset.flashSectionEndsAt).getTime();
+                if (!Number.isNaN(refreshAt) && Date.now() >= refreshAt) {
+                    window.location.reload();
+                }
+            }
+        };
+
+        if (flashTimers.length > 0 || flashCountdown) {
+            syncFlashTimers();
+            window.setInterval(syncFlashTimers, 1000);
+        }
+
+        if (flashTrack && flashPrevious && flashNext) {
+            const scrollFlashTrack = (direction) => {
+                const firstTile = flashTrack.querySelector('.home-flash-tile');
+                const gap = 18;
+                const tileWidth = firstTile ? firstTile.getBoundingClientRect().width + gap : flashTrack.clientWidth * 0.85;
+                flashTrack.scrollBy({
+                    left: tileWidth * direction,
+                    behavior: 'smooth'
+                });
+            };
+
+            flashPrevious.addEventListener('click', () => scrollFlashTrack(-1));
+            flashNext.addEventListener('click', () => scrollFlashTrack(1));
+
+            let isDraggingFlash = false;
+            let flashDragStartX = 0;
+            let flashDragStartScrollLeft = 0;
+
+            const stopFlashDrag = () => {
+                if (!isDraggingFlash) {
+                    return;
+                }
+
+                isDraggingFlash = false;
+                flashTrack.classList.remove('is-dragging');
+            };
+
+            flashTrack.addEventListener('pointerdown', (event) => {
+                isDraggingFlash = true;
+                flashDragStartX = event.clientX;
+                flashDragStartScrollLeft = flashTrack.scrollLeft;
+                flashTrack.classList.add('is-dragging');
+                flashTrack.setPointerCapture(event.pointerId);
+            });
+
+            flashTrack.addEventListener('pointermove', (event) => {
+                if (!isDraggingFlash) {
+                    return;
+                }
+
+                const deltaX = event.clientX - flashDragStartX;
+                flashTrack.scrollLeft = flashDragStartScrollLeft - deltaX;
+            });
+
+            flashTrack.addEventListener('pointerup', stopFlashDrag);
+            flashTrack.addEventListener('pointercancel', stopFlashDrag);
+            flashTrack.addEventListener('pointerleave', stopFlashDrag);
+        }
     })();
 </script>
 

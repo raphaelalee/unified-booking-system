@@ -116,6 +116,12 @@ function formatDateTimeInputValue(value) {
     return date.toISOString().slice(0, 16);
 }
 
+function addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+}
+
 function isTruthyFormValue(value) {
     if (Array.isArray(value)) {
         return value.some((item) => isTruthyFormValue(item));
@@ -169,6 +175,116 @@ function normalizeNullableInteger(value) {
     if (!raw) return null;
     const amount = Number(raw);
     return Number.isInteger(amount) ? Math.max(0, amount) : NaN;
+}
+
+function buildFeaturedWindowDefaults() {
+    const today = new Date();
+
+    return {
+        featuredStartDate: formatDateInputValue(today),
+        featuredEndDate: formatDateInputValue(addDays(today, 30))
+    };
+}
+
+function buildServiceFeaturedRecommendations(services = []) {
+    const featuredCount = services.filter((service) => service.isFeatured).length;
+    const defaults = buildFeaturedWindowDefaults();
+    const candidates = services
+        .filter((service) => !service.isFeatured)
+        .map((service) => {
+            const slotCount = Array.isArray(service.slots) ? service.slots.length : 0;
+            const routineTagCount = (service.routineGoalTags || []).length + (service.routineConcernTags || []).length;
+            const hasInventorySupport = !service.inventoryProductId || Number(service.inventoryStockQuantity || 0) > 0;
+            const score = (slotCount * 6)
+                + (service.description ? 12 : 0)
+                + (routineTagCount * 4)
+                + (service.packageEnabled ? 5 : 0)
+                + (hasInventorySupport ? 8 : 0)
+                + (Number(service.price || 0) > 0 ? 3 : 0);
+
+            let reason = 'Strong booking readiness across pricing, slots, and profile completeness.';
+
+            if (slotCount >= 4) {
+                reason = 'High slot coverage makes this service easier to convert from homepage traffic.';
+            } else if (routineTagCount >= 2) {
+                reason = 'Good Routine Finder tagging makes this service easier to merchandise.';
+            } else if (service.packageEnabled) {
+                reason = 'Package setup gives this service stronger revenue potential when featured.';
+            }
+
+            return {
+                ...service,
+                recommendationScore: score,
+                recommendationReason: reason
+            };
+        })
+        .sort((left, right) => right.recommendationScore - left.recommendationScore);
+
+    const recommendationMap = new Map();
+
+    candidates.forEach((service, index) => {
+        recommendationMap.set(String(service.id), {
+            featuredOrder: String(featuredCount + index + 1),
+            featuredStartDate: defaults.featuredStartDate,
+            featuredEndDate: defaults.featuredEndDate,
+            score: service.recommendationScore,
+            reason: service.recommendationReason,
+            canFeatureNow: featuredCount < 3,
+            rank: index + 1
+        });
+    });
+
+    return recommendationMap;
+}
+
+function buildProductFeaturedRecommendations(products = []) {
+    const featuredCount = products.filter((product) => product.isFeatured).length;
+    const defaults = buildFeaturedWindowDefaults();
+    const candidates = products
+        .filter((product) => !product.isFeatured)
+        .map((product) => {
+            const routineTagCount = (product.routineGoalTags || []).length + (product.routineConcernTags || []).length;
+            const hasImage = Boolean(product.imageUrl || product.fallbackImageUrl);
+            const stockQuantity = Number(product.stockQuantity || 0);
+            const score = (stockQuantity >= 10 ? 18 : stockQuantity > 0 ? 10 : 0)
+                + (hasImage ? 12 : 0)
+                + (product.description ? 10 : 0)
+                + (routineTagCount * 4)
+                + (Number(product.price || 0) > 0 ? 3 : 0);
+
+            let reason = 'Healthy stock and strong product detail make this a good featured candidate.';
+
+            if (stockQuantity >= 10) {
+                reason = 'Healthy stock supports sustained visibility without risking quick inventory blocks.';
+            } else if (hasImage && product.description) {
+                reason = 'Strong image and product copy make this item ready for featured placement.';
+            } else if (routineTagCount >= 2) {
+                reason = 'Routine Finder tagging improves product discoverability when featured.';
+            }
+
+            return {
+                ...product,
+                recommendationScore: score,
+                recommendationReason: reason
+            };
+        })
+        .sort((left, right) => right.recommendationScore - left.recommendationScore);
+
+    const recommendationMap = new Map();
+
+    candidates.forEach((product, index) => {
+        recommendationMap.set(String(product.id), {
+            featuredOrder: String(featuredCount + index + 1),
+            featuredStartDate: defaults.featuredStartDate,
+            featuredEndDate: defaults.featuredEndDate,
+            score: product.recommendationScore,
+            reason: product.recommendationReason,
+            canFeatureNow: featuredCount < 3,
+            rank: index + 1
+        });
+    });
+
+    return recommendationMap;
 }
 
 function getFeaturedConfigForm(body = {}) {
@@ -346,6 +462,7 @@ function getPromotionForm(body = {}) {
         spinRewardType: String(body.spinRewardType || '').trim(),
         spinClaimLimit: String(body.spinClaimLimit || '').trim(),
         spinInventoryRemaining: String(body.spinInventoryRemaining || '').trim(),
+        showInFlashDeals: isTruthyFormValue(body.showInFlashDeals),
         startDate: String(body.startDate || '').trim(),
         endDate: String(body.endDate || '').trim(),
         slots: String(body.slots || '').trim(),
@@ -481,6 +598,7 @@ function buildPromotionPayload(form) {
         spinRewardType: form.spinEligible ? form.spinRewardType : null,
         spinClaimLimit: normalizeNullableInteger(form.spinClaimLimit),
         spinInventoryRemaining: normalizeNullableInteger(form.spinInventoryRemaining),
+        showInFlashDeals: Boolean(form.showInFlashDeals),
         startDate: form.startDate,
         endDate: form.endDate,
         allowedSlots: normalizePromotionSlots(form.slots),
@@ -1323,10 +1441,18 @@ function renderMerchantServices(req, res, merchant, options = {}) {
     const error = options.error !== undefined ? options.error : req.session.merchantError;
     req.session.merchantSuccess = null;
     req.session.merchantError = null;
+    const recommendationMap = buildServiceFeaturedRecommendations(merchant.services || []);
+    const merchantWithRecommendations = {
+        ...merchant,
+        services: (merchant.services || []).map((service) => ({
+            ...service,
+            featuredRecommendation: recommendationMap.get(String(service.id)) || null
+        }))
+    };
 
     return res.status(options.status || 200).render('merchant-services', {
         title: 'My Services',
-        merchant,
+        merchant: merchantWithRecommendations,
         success,
         error
     });
@@ -2367,11 +2493,16 @@ function listProducts(req, res) {
             const error = req.session.merchantError;
             req.session.merchantSuccess = null;
             req.session.merchantError = null;
+            const recommendationMap = buildProductFeaturedRecommendations(products || []);
+            const productsWithRecommendations = (products || []).map((product) => ({
+                ...product,
+                featuredRecommendation: recommendationMap.get(String(product.id)) || null
+            }));
 
             return res.render('merchant-products', {
                 title: 'Merchant Products',
                 merchant,
-                products,
+                products: productsWithRecommendations,
                 success,
                 error
             });
@@ -3034,6 +3165,7 @@ function showEditPromotion(req, res) {
                         spinRewardType: promotion.spinRewardType || '',
                         spinClaimLimit: promotion.spinClaimLimit === null ? '' : String(promotion.spinClaimLimit),
                         spinInventoryRemaining: promotion.spinInventoryRemaining === null ? '' : String(promotion.spinInventoryRemaining),
+                        showInFlashDeals: promotion.showInFlashDeals,
                         startDate: formatDateInputValue(promotion.startDate),
                         endDate: formatDateInputValue(promotion.endDate),
                         slots: promotion.allowedSlots || '',
