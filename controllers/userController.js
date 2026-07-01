@@ -706,12 +706,17 @@ function completeLogin(req, res, user, message = 'You are logged in.') {
         }
 
         req.session.loginReturnTo = null;
+        req.session.pendingLoginOtp = null;
         return res.redirect(redirectPath);
     });
 }
 
 function isLoginOtpEnabled() {
     return String(process.env.LOGIN_2FA_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+function requiresLoginOtp(user) {
+    return isLoginOtpEnabled() && !['admin', 'merchant'].includes(user.role);
 }
 
 function generateOtpCode() {
@@ -1020,7 +1025,7 @@ function loginUser(req, res) {
                 return res.redirect('/login');
             }
 
-            if (!isLoginOtpEnabled()) {
+            if (!requiresLoginOtp(user)) {
                 return completeLogin(req, res, user);
             }
 
