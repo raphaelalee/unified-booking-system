@@ -15,8 +15,10 @@ const findCustomerByPhone = promisify(User.findCustomerByPhone);
 const getAvailableSlots = promisify(Booking.getAvailableSlots);
 const autoConfirmBooking = promisify(Booking.autoConfirmBooking);
 const cancelForCustomer = promisify(Booking.cancelForCustomer);
+const createRescheduleRequest = promisify(Booking.createRescheduleRequest);
 const getNextManageableByUserId = promisify(Booking.getNextManageableByUserId);
 const markConfirmedForCustomer = promisify(Booking.markConfirmedForCustomer);
+const updateScheduleForCustomer = promisify(Booking.updateScheduleForCustomer);
 
 function cleanupSessions() {
     const now = Date.now();
@@ -175,6 +177,16 @@ function extractIncomingMessages(body = {}) {
     });
 }
 
+function isStatusCallback(body = {}) {
+    return Boolean(body.MessageStatus || body.SmsStatus || body.MessageSid || body.SmsSid)
+        && body.Body === undefined
+        && !Array.isArray(body.entry);
+}
+
+function getWebhookBodyKeys(body = {}) {
+    return Object.keys(body || {}).slice(0, 12).join(', ') || 'none';
+}
+
 function getWebhook(req, res) {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -319,7 +331,11 @@ async function handleCancelBooking(phone) {
         return sendReply(phone, 'There is no upcoming booking to cancel. Reply BOOK to make a new booking.');
     }
 
-    await cancelForCustomer(booking.id, user.user_id, 'Cancelled by WhatsApp reply', 'customer_cancelled_review');
+    const result = await cancelForCustomer(booking.id, user.user_id, 'Cancelled by WhatsApp reply', 'customer_cancelled_review');
+
+    if (!result?.affectedRows) {
+        return sendReply(phone, 'This booking could not be cancelled. It may have already changed or been completed.');
+    }
 
     Notification.create({
         recipientUserId: user.user_id,
@@ -368,13 +384,126 @@ async function handleRescheduleBooking(phone) {
         return sendReply(phone, 'There is no upcoming booking to reschedule. Reply BOOK to make a new booking.');
     }
 
+    const session = await getSession(phone);
+    session.step = 'reschedule_date';
+    session.user = user;
+    session.booking = booking;
+    session.availableSlots = [];
+    await persistSession(phone, session);
+
     return sendReply(phone, [
         'Reschedule request started.',
         formatBookingSummary(booking),
         '',
-        'To avoid double-booking, Vaniday checks live slots in the app before changing your appointment.',
-        'Open your profile, choose this booking, and tap Reschedule:',
-        `${process.env.APP_BASE_URL || 'http://localhost:3000'}/profile#bookings`
+        'Reply with your new date in YYYY-MM-DD format.'
+    ].join('\n'));
+}
+
+async function handleRescheduleDateStep(phone, text, session) {
+    const bookingDate = normalizeDate(text);
+
+    if (!bookingDate) {
+        return sendReply(phone, 'Please enter a valid new date in YYYY-MM-DD format, from today up to 2 months ahead.');
+    }
+
+    const booking = session.booking;
+    const slots = await getAvailableSlots(
+        booking.salon_id,
+        booking.service_id,
+        bookingDate,
+        { excludeBookingId: booking.id, durationMins: booking.duration_mins }
+    );
+
+    if (!slots.length) {
+        return sendReply(phone, 'No available slots for that date. Please reply with another date.');
+    }
+
+    session.step = 'reschedule_time';
+    session.bookingDate = bookingDate;
+    session.availableSlots = slots;
+    await persistSession(phone, session);
+
+    return sendReply(phone, [
+        `Date selected: ${bookingDate}.`,
+        `Reply with one of these times: ${slots.join(', ')}`
+    ].join('\n'));
+}
+
+async function handleRescheduleTimeStep(phone, text, session) {
+    const bookingTime = normalizeTime(text);
+    const slots = (session.availableSlots || []).map(normalizeTime).filter(Boolean);
+
+    if (!bookingTime || !slots.includes(bookingTime)) {
+        return sendReply(phone, slots.length
+            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}`
+            : 'No available slots are currently selected. Reply RESCHEDULE to start again.');
+    }
+
+    const booking = session.booking;
+    const result = await updateScheduleForCustomer(
+        booking.id,
+        session.user.user_id,
+        session.bookingDate,
+        bookingTime
+    );
+
+    if (!result?.affectedRows) {
+        resetSession(phone);
+        return sendReply(phone, 'This booking could not be rescheduled. It may have already changed or been cancelled.');
+    }
+
+    await createRescheduleRequest({
+        bookingId: booking.id,
+        userId: session.user.user_id,
+        merchantId: booking.salon_id,
+        serviceId: booking.service_id,
+        oldBookingDate: toDateOnly(booking.booking_date),
+        oldBookingTime: booking.booking_time,
+        requestedBookingDate: session.bookingDate,
+        requestedBookingTime: bookingTime,
+        status: 'auto_approved',
+        confidenceLevel: 'high',
+        confidenceScore: 100,
+        decisionReason: 'Customer rescheduled through WhatsApp after choosing an available slot.',
+        reviewNotes: 'Saved by WhatsApp automation.'
+    }).catch((error) => {
+        console.error('WhatsApp reschedule history could not be saved:', error);
+    });
+
+    Notification.create({
+        recipientUserId: session.user.user_id,
+        recipientRole: 'customer',
+        type: 'booking_reschedule_auto_approved',
+        title: 'Booking rescheduled via WhatsApp',
+        message: `${booking.service_name} at ${booking.merchant_name} was moved to ${session.bookingDate} at ${bookingTime}.`,
+        linkUrl: '/profile#bookings',
+        dedupeKey: `whatsapp-reschedule-customer-${booking.id}-${session.bookingDate}-${bookingTime}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    Notification.create({
+        recipientUserId: booking.merchant_user_id,
+        recipientRole: 'merchant',
+        actorUserId: session.user.user_id,
+        type: 'booking_reschedule_auto_approved',
+        title: 'Customer rescheduled via WhatsApp',
+        message: `${session.user.name || 'A customer'} moved ${booking.service_name} to ${session.bookingDate} at ${bookingTime}.`,
+        linkUrl: '/merchant/bookings',
+        dedupeKey: `whatsapp-reschedule-merchant-${booking.id}-${session.bookingDate}-${bookingTime}`,
+        metadata: { bookingId: booking.id }
+    }, (error) => {
+        if (error) console.error(error);
+    });
+
+    resetSession(phone);
+
+    return sendReply(phone, [
+        'Your booking has been rescheduled in Vaniday.',
+        `${booking.service_name} at ${booking.merchant_name}`,
+        `${session.bookingDate} at ${bookingTime}`,
+        `Booking ID: ${booking.id}`
     ].join('\n'));
 }
 
@@ -436,7 +565,7 @@ async function handleTimeStep(phone, text, session) {
         durationMins: session.service.durationMins
     });
 
-    if (!confirmation?.confirmed) {
+    if (!confirmation?.created) {
         return sendReply(phone, confirmation?.message || 'That slot is unavailable. Please reply with another time.');
     }
 
@@ -450,6 +579,30 @@ async function handleTimeStep(phone, text, session) {
         bookingDate: session.bookingDate,
         bookingTime
     };
+
+    if (!confirmation.confirmed) {
+        Notification.create({
+            recipientUserId: session.user.user_id,
+            recipientRole: 'customer',
+            type: 'booking',
+            title: 'WhatsApp booking pending review',
+            message: `${booking.serviceName} at ${booking.merchantName} was saved for ${booking.bookingDate} at ${booking.bookingTime} and is waiting for merchant review.`,
+            linkUrl: '/profile#bookings',
+            dedupeKey: `whatsapp-booking-pending-customer-${bookingId}`,
+            metadata: { bookingId }
+        }, (error) => {
+            if (error) console.error(error);
+        });
+
+        resetSession(phone);
+
+        return sendReply(phone, [
+            'Your booking request has been saved in Vaniday and is pending merchant review.',
+            `${booking.serviceName} at ${booking.merchantName}`,
+            `${booking.bookingDate} at ${booking.bookingTime}`,
+            `Booking ID: ${bookingId}`
+        ].join('\n'));
+    }
 
     Notification.create({
         recipientUserId: session.user.user_id,
@@ -581,12 +734,32 @@ async function handleIncomingMessage(message) {
         return;
     }
 
+    if (session.step === 'reschedule_date') {
+        await handleRescheduleDateStep(phone, text, session);
+        return;
+    }
+
+    if (session.step === 'reschedule_time') {
+        await handleRescheduleTimeStep(phone, text, session);
+        return;
+    }
+
     await sendReply(phone, 'Reply BOOK to start a Vaniday booking.');
 }
 
 function postWebhook(req, res) {
     const messages = extractIncomingMessages(req.body);
     res.sendStatus(200);
+
+    if (!messages.length) {
+        if (isStatusCallback(req.body)) {
+            console.log(`WhatsApp status callback received: ${req.body.MessageStatus || req.body.SmsStatus || 'unknown'}`);
+            return;
+        }
+
+        console.warn(`WhatsApp webhook received no inbound message. Body keys: ${getWebhookBodyKeys(req.body)}`);
+        return;
+    }
 
     messages.forEach((message) => {
         handleIncomingMessage(message).catch((error) => {

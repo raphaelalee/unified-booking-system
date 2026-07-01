@@ -1180,7 +1180,6 @@ function getByUserId(userId, callback) {
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         WHERE bookings.user_id = ?
-            AND (bookings.transaction_id IS NOT NULL OR bookings.status IN ('confirmed', 'paid', 'checked_in', 'completed'))
         ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
     `;
 
