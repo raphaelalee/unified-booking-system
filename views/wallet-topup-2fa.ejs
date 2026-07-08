@@ -1,0 +1,61 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">E-wallet security</p>
+    <h1>Verify top-up request</h1>
+    <p>Enter the 6-digit sample code printed in the server terminal before continuing.</p>
+</section>
+
+<section class="section compact wallet-page">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
+
+    <div class="wallet-shell">
+        <div class="wallet-grid">
+            <form class="account-panel wallet-topup-card" method="POST" action="/profile/wallet/topup/verify">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
+                <div>
+                    <p class="eyebrow">Sample 2FA</p>
+                    <h2>One more step</h2>
+                    <p class="muted">Top-up amount: <strong>$<%= Number(amount || 0).toFixed(2) %></strong></p>
+                    <p class="muted">Payment method: <strong><%= paymentMethodLabel %></strong></p>
+                    <p class="muted">Code expires in about <strong><%= Number(expiresInSeconds || 0) %>s</strong>.</p>
+                </div>
+
+                <label>
+                    Verification code
+                    <input
+                        type="text"
+                        name="topup2faCode"
+                        inputmode="numeric"
+                        pattern="[0-9]{6}"
+                        minlength="6"
+                        maxlength="6"
+                        autocomplete="one-time-code"
+                        placeholder="123456"
+                        required
+                    >
+                </label>
+
+                <button class="button primary" type="submit">Verify and continue</button>
+                <a class="button secondary" href="/profile/wallet">Cancel</a>
+            </form>
+
+            <div class="account-panel wallet-support-card">
+                <p class="eyebrow">Demo note</p>
+                <ul>
+                    <li>This is a sample 2FA flow for testing.</li>
+                    <li>The code is printed to your Node server terminal.</li>
+                    <li>After verification, payment provider checkout starts.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

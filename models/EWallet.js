@@ -133,11 +133,7 @@ function createPendingTopup(payload, callback) {
             const balanceBefore = Number(wallet.balance || 0);
             const description = String(payload.description || 'Wallet top-up created').slice(0, 255);
 
-            db.query(`
-                INSERT INTO e_wallet_transactions
-                    (wallet_id, user_id, transaction_type, payment_method, amount, balance_before, balance_after, status, reference_id, description, payment_attempt_id)
-                VALUES (?, ?, 'TOPUP', ?, ?, ?, ?, 'PENDING', ?, ?, ?)
-            `, [
+            const insertParams = [
                 wallet.walletId,
                 payload.userId,
                 normalizePaymentMethodForStorage(payload.paymentMethod || 'SYSTEM'),
@@ -147,8 +143,15 @@ function createPendingTopup(payload, callback) {
                 payload.referenceId || null,
                 description,
                 payload.paymentAttemptId || null
-            ], (error, result) => {
+            ];
+
+            db.query(`
+                INSERT INTO e_wallet_transactions
+                    (wallet_id, user_id, transaction_type, payment_method, amount, balance_before, balance_after, status, reference_id, description, payment_attempt_id)
+                VALUES (?, ?, 'TOPUP', ?, ?, ?, ?, 'PENDING', ?, ?, ?)
+            `, insertParams, (error, result) => {
                 if (error) {
+                    console.error('EWallet.createPendingTopup INSERT ERROR', { error: String(error), params: insertParams });
                     callback(error);
                     return;
                 }
@@ -237,11 +240,7 @@ function debitWalletForPayment(payload, callback) {
                                 return;
                             }
 
-                            connection.query(`
-                                INSERT INTO e_wallet_transactions
-                                    (wallet_id, user_id, transaction_type, payment_method, amount, balance_before, balance_after, status, reference_id, description, payment_attempt_id)
-                                VALUES (?, ?, 'PAYMENT', ?, ?, ?, ?, 'COMPLETED', ?, ?, ?)
-                            `, [
+                            const paymentInsertParams = [
                                 wallet.walletId,
                                 payload.userId,
                                 normalizePaymentMethodForStorage(payload.paymentMethod || 'EWALLET'),
@@ -251,8 +250,122 @@ function debitWalletForPayment(payload, callback) {
                                 referenceId || null,
                                 description,
                                 payload.paymentAttemptId || null
-                            ], (insertError, result) => {
+                            ];
+
+                            connection.query(`
+                                INSERT INTO e_wallet_transactions
+                                    (wallet_id, user_id, transaction_type, payment_method, amount, balance_before, balance_after, status, reference_id, description, payment_attempt_id)
+                                VALUES (?, ?, 'PAYMENT', ?, ?, ?, ?, 'COMPLETED', ?, ?, ?)
+                            `, paymentInsertParams, (insertError, result) => {
                                 if (insertError) {
+                                    console.error('EWallet.debitWalletForPayment INSERT ERROR', { error: String(insertError), params: paymentInsertParams });
+                                    connection.rollback(() => connection.release());
+                                    callback(insertError);
+                                    return;
+                                }
+
+                                connection.commit((commitError) => {
+                                    if (commitError) {
+                                        connection.rollback(() => connection.release());
+                                        callback(commitError);
+                                        return;
+                                    }
+
+                                    connection.query('SELECT * FROM e_wallet_transactions WHERE transaction_id = ? LIMIT 1', [result.insertId], (selectError, rows = []) => {
+                                        connection.release();
+                                        if (selectError) {
+                                            callback(selectError);
+                                            return;
+                                        }
+
+                                        callback(null, mapTransaction(rows[0]));
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
+function createAdjustment(payload, callback) {
+    ensureTransactionColumn((columnError) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        ensureWalletForUser(payload.userId, (walletError, wallet) => {
+            if (walletError) {
+                callback(walletError);
+                return;
+            }
+
+            const amount = Number(payload.amount || 0);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                callback(new Error('Invalid wallet adjustment amount.'));
+                return;
+            }
+
+            const balanceBefore = Number(wallet.balance || 0);
+            const balanceAfter = balanceBefore + amount;
+            const description = String(payload.description || 'Wallet adjustment').slice(0, 255);
+            const referenceId = String(payload.referenceId || '').slice(0, 255);
+
+            db.getConnection((connectError, connection) => {
+                if (connectError) {
+                    callback(connectError);
+                    return;
+                }
+
+                connection.beginTransaction((txError) => {
+                    if (txError) {
+                        connection.release();
+                        callback(txError);
+                        return;
+                    }
+
+                    connection.query('SELECT * FROM e_wallets WHERE wallet_id = ? AND user_id = ? FOR UPDATE', [wallet.walletId, payload.userId], (walletSelectError, walletRows = []) => {
+                        if (walletSelectError) {
+                            connection.rollback(() => connection.release());
+                            callback(walletSelectError);
+                            return;
+                        }
+
+                        if (!walletRows[0]) {
+                            connection.rollback(() => connection.release());
+                            callback(new Error('Wallet not found.'));
+                            return;
+                        }
+
+                        connection.query('UPDATE e_wallets SET balance = ? WHERE wallet_id = ? AND user_id = ?', [balanceAfter, wallet.walletId, payload.userId], (updateError) => {
+                            if (updateError) {
+                                connection.rollback(() => connection.release());
+                                callback(updateError);
+                                return;
+                            }
+
+                            const adjustParams = [
+                                wallet.walletId,
+                                payload.userId,
+                                normalizePaymentMethodForStorage(payload.paymentMethod || 'SYSTEM'),
+                                amount,
+                                balanceBefore,
+                                balanceAfter,
+                                referenceId || null,
+                                description,
+                                payload.paymentAttemptId || null
+                            ];
+
+                            connection.query(`
+                                INSERT INTO e_wallet_transactions
+                                    (wallet_id, user_id, transaction_type, payment_method, amount, balance_before, balance_after, status, reference_id, description, payment_attempt_id)
+                                VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, 'COMPLETED', ?, ?, ?)
+                            `, adjustParams, (insertError, result) => {
+                                if (insertError) {
+                                    console.error('EWallet.createAdjustment INSERT ERROR', { error: String(insertError), params: adjustParams });
                                     connection.rollback(() => connection.release());
                                     callback(insertError);
                                     return;
@@ -434,6 +547,7 @@ module.exports = {
     getWalletSummary,
     createPendingTopup,
     debitWalletForPayment,
+    createAdjustment,
     completePendingTransaction,
     updateTransactionStatus,
     getTransactionById

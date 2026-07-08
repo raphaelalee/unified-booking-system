@@ -1196,6 +1196,7 @@
                             .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
                         const recentWalletTransactions = walletTransactions.slice(0, 6);
                         const recentWalletReceipts = walletReceipts.slice(0, 4);
+                        const walletTypeLabel = (value) => String(value || '').replace(/_/g, ' ').toLowerCase();
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -1293,6 +1294,24 @@
                                 <span><strong><%= loyalty.wallet.lifetimePoints %></strong> lifetime points</span>
                             </div>
 
+                            <div class="profile-wallet-toolbar" data-wallet-toolbar>
+                                <label class="profile-wallet-search" for="wallet-search-input">
+                                    <span>Search wallet history</span>
+                                    <input id="wallet-search-input" type="search" placeholder="Try receipt, merchant, points, cashback, or date" data-wallet-search>
+                                </label>
+                                <label class="profile-wallet-scope" for="wallet-scope-select">
+                                    <span>Show</span>
+                                    <select id="wallet-scope-select" data-wallet-scope>
+                                        <option value="all">Everything</option>
+                                        <option value="activity">Wallet activity</option>
+                                        <option value="points">Points changes</option>
+                                        <option value="cashback">Cashback changes</option>
+                                        <option value="receipts">Paid receipts</option>
+                                    </select>
+                                </label>
+                                <button class="button secondary compact" type="button" data-wallet-clear>Reset</button>
+                            </div>
+
                             <div class="profile-wallet-grid">
                                 <section class="profile-wallet-block">
                                     <div class="wallet-section-heading">
@@ -1300,7 +1319,7 @@
                                             <p class="eyebrow">Activity</p>
                                             <h3>Recent wallet activity</h3>
                                         </div>
-                                        <span><%= walletTransactions.length %> total</span>
+                                        <span><span data-wallet-activity-count><%= recentWalletTransactions.length %></span> of <%= walletTransactions.length %> total</span>
                                     </div>
 
                                     <% if (!recentWalletTransactions.length) { %>
@@ -1309,7 +1328,23 @@
                                         <div class="profile-wallet-list">
                                             <% recentWalletTransactions.forEach((entry) => { %>
                                                 <% const linkedReceipt = entry.sourceReceiptId ? walletReceiptMap[String(entry.sourceReceiptId)] : null; %>
-                                                <article class="profile-wallet-row">
+                                                <% const activitySearch = [
+                                                    entry.description,
+                                                    linkedReceipt ? linkedReceipt.itemNames : '',
+                                                    linkedReceipt ? linkedReceipt.merchantName : '',
+                                                    walletTypeLabel(entry.type),
+                                                    new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }),
+                                                    `${entry.pointsDelta || 0} points`,
+                                                    `${Number(entry.cashbackDelta || 0).toFixed(2)} cashback`
+                                                ].filter(Boolean).join(' ').toLowerCase(); %>
+                                                <% const activityKinds = [
+                                                    Number(entry.pointsDelta || 0) !== 0 ? 'points' : '',
+                                                    Number(entry.cashbackDelta || 0) !== 0 ? 'cashback' : ''
+                                                ].filter(Boolean).join(' '); %>
+                                                <article class="profile-wallet-row"
+                                                    data-wallet-transaction-row
+                                                    data-wallet-kinds="<%= activityKinds || 'activity' %>"
+                                                    data-wallet-search="<%= activitySearch %>">
                                                     <div>
                                                         <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
                                                         <strong><%= entry.description %></strong>
@@ -1324,6 +1359,7 @@
                                                 </article>
                                             <% }) %>
                                         </div>
+                                        <p class="muted" data-wallet-empty="activity" hidden>No activity matches your current search.</p>
                                     <% } %>
                                 </section>
 
@@ -1333,7 +1369,7 @@
                                             <p class="eyebrow">Receipts</p>
                                             <h3>Recent paid receipts</h3>
                                         </div>
-                                        <a class="text-button" href="#history" data-profile-tab-link="history">View all</a>
+                                        <span><span data-wallet-receipt-count><%= recentWalletReceipts.length %></span> shown</span>
                                     </div>
 
                                     <% if (!recentWalletReceipts.length) { %>
@@ -1341,7 +1377,18 @@
                                     <% } else { %>
                                         <div class="profile-wallet-list">
                                             <% recentWalletReceipts.forEach((receipt) => { %>
-                                                <a class="profile-wallet-row" href="/receipt/<%= receipt.receiptId %>">
+                                                <% const receiptSearch = [
+                                                    receipt.type,
+                                                    `receipt ${receipt.id}`,
+                                                    receipt.itemNames,
+                                                    receipt.merchantName,
+                                                    Number(receipt.totalAmount || 0).toFixed(2),
+                                                    new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' })
+                                                ].filter(Boolean).join(' ').toLowerCase(); %>
+                                                <a class="profile-wallet-row"
+                                                    href="/receipt/<%= receipt.receiptId %>"
+                                                    data-wallet-receipt-row
+                                                    data-wallet-search="<%= receiptSearch %>">
                                                     <div>
                                                         <span><%= receipt.type %></span>
                                                         <strong>Receipt <%= receipt.id %></strong>
@@ -1354,6 +1401,8 @@
                                                 </a>
                                             <% }) %>
                                         </div>
+                                        <p class="muted" data-wallet-empty="receipts" hidden>No receipts match your current search.</p>
+                                        <a class="text-button profile-wallet-history-link" href="#history" data-profile-tab-link="history">Open full purchase history</a>
                                     <% } %>
                                 </section>
                             </div>
@@ -1553,6 +1602,96 @@
 
         showPanel(hash === 'to-rate' ? 'history' : (hash || defaultPanel));
         showReviewPanel(hash === 'to-rate' ? 'to-rate' : defaultReviewPanel);
+    })();
+
+    (() => {
+        const walletPanel = document.querySelector('#wallet[data-profile-panel="wallet"]');
+        if (!walletPanel) {
+            return;
+        }
+
+        const searchInput = walletPanel.querySelector('[data-wallet-search]');
+        const scopeSelect = walletPanel.querySelector('[data-wallet-scope]');
+        const clearButton = walletPanel.querySelector('[data-wallet-clear]');
+        const transactionRows = Array.from(walletPanel.querySelectorAll('[data-wallet-transaction-row]'));
+        const receiptRows = Array.from(walletPanel.querySelectorAll('[data-wallet-receipt-row]'));
+        const activityCount = walletPanel.querySelector('[data-wallet-activity-count]');
+        const receiptCount = walletPanel.querySelector('[data-wallet-receipt-count]');
+        const activityEmpty = walletPanel.querySelector('[data-wallet-empty="activity"]');
+        const receiptsEmpty = walletPanel.querySelector('[data-wallet-empty="receipts"]');
+
+        if (!searchInput || !scopeSelect || (!transactionRows.length && !receiptRows.length)) {
+            return;
+        }
+
+        const rowMatchesSearch = (row, query) => {
+            if (!query) {
+                return true;
+            }
+
+            return String(row.dataset.walletSearch || '').includes(query);
+        };
+
+        const rowMatchesScope = (row, scope) => {
+            if (scope === 'all' || scope === 'activity') {
+                return true;
+            }
+
+            const kinds = ` ${String(row.dataset.walletKinds || '')} `;
+            return kinds.includes(` ${scope} `);
+        };
+
+        const applyWalletFilters = () => {
+            const query = searchInput.value.trim().toLowerCase();
+            const scope = scopeSelect.value;
+            const showTransactions = scope !== 'receipts';
+            const showReceipts = scope === 'all' || scope === 'receipts';
+            let shownTransactions = 0;
+            let shownReceipts = 0;
+
+            transactionRows.forEach((row) => {
+                const visible = showTransactions && rowMatchesSearch(row, query) && rowMatchesScope(row, scope);
+                row.hidden = !visible;
+                if (visible) {
+                    shownTransactions += 1;
+                }
+            });
+
+            receiptRows.forEach((row) => {
+                const visible = showReceipts && rowMatchesSearch(row, query);
+                row.hidden = !visible;
+                if (visible) {
+                    shownReceipts += 1;
+                }
+            });
+
+            if (activityCount) {
+                activityCount.textContent = String(shownTransactions);
+            }
+
+            if (receiptCount) {
+                receiptCount.textContent = String(shownReceipts);
+            }
+
+            if (activityEmpty) {
+                activityEmpty.hidden = !(showTransactions && transactionRows.length && shownTransactions === 0);
+            }
+
+            if (receiptsEmpty) {
+                receiptsEmpty.hidden = !(showReceipts && receiptRows.length && shownReceipts === 0);
+            }
+        };
+
+        searchInput.addEventListener('input', applyWalletFilters);
+        scopeSelect.addEventListener('change', applyWalletFilters);
+        clearButton?.addEventListener('click', () => {
+            searchInput.value = '';
+            scopeSelect.value = 'all';
+            applyWalletFilters();
+            searchInput.focus();
+        });
+
+        applyWalletFilters();
     })();
 
     (() => {

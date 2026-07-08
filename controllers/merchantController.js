@@ -3527,22 +3527,58 @@ async function handleWalletCheckout(req, res, payment) {
             ...payment,
             paymentMethod: 'wallet'
         });
-        const receiptId = await completeTrustedPayment(req, {
-            ...payment,
-            paymentAttemptId: durablePayment.paymentAttemptId,
-            paymentMethod: 'wallet'
-        }, 'E-wallet');
 
-        await new Promise((resolve, reject) => {
+        const debitPaymentAttempt = await new Promise((resolve, reject) => {
             EWallet.debitWalletForPayment({
                 userId,
                 amount: amountDue,
                 paymentMethod: 'wallet',
                 description: 'Checkout payment via E-wallet',
-                referenceId: receiptId,
+                referenceId: durablePayment.paymentAttemptId,
                 paymentAttemptId: durablePayment.paymentAttemptId
             }, (error, result) => error ? reject(error) : resolve(result));
         });
+
+        let receiptId;
+        try {
+            receiptId = await completeTrustedPayment(req, {
+                ...payment,
+                paymentAttemptId: durablePayment.paymentAttemptId,
+                paymentMethod: 'wallet'
+            }, 'E-wallet');
+
+            await new Promise((resolve, reject) => {
+                EWallet.updateTransactionStatus(debitPaymentAttempt.transactionId, userId, 'COMPLETED', 'Checkout payment via E-wallet', receiptId, (error) => error ? reject(error) : resolve());
+            });
+        } catch (completionError) {
+            console.error('Wallet checkout completion failed after debit', {
+                paymentAttemptId: durablePayment.paymentAttemptId,
+                receiptId: payment.receiptId || payment.checkoutId || payment.bookingId || '',
+                amountDue,
+                message: completionError?.message || String(completionError)
+            });
+            await new Promise((resolve) => {
+                EWallet.createAdjustment({
+                    userId,
+                    amount: amountDue,
+                    paymentMethod: 'wallet',
+                    description: 'Refund for failed wallet checkout',
+                    referenceId: durablePayment.paymentAttemptId,
+                    paymentAttemptId: durablePayment.paymentAttemptId
+                }, () => resolve());
+            });
+
+            try {
+                const durableAttempt = await findPaymentAttemptById(durablePayment.paymentAttemptId);
+                if (durableAttempt?.status === 'completed' && durableAttempt.receiptId) {
+                    return res.redirect(`/receipt/${encodeURIComponent(durableAttempt.receiptId)}`);
+                }
+            } catch (attemptLookupError) {
+                console.error('Wallet checkout attempt lookup failed', attemptLookupError);
+            }
+
+            throw completionError;
+        }
 
         return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
     } catch (error) {

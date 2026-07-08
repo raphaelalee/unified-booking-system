@@ -3288,16 +3288,20 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-wallet-hero {
-    grid-template-columns: minmax(220px, 0.75fr) minmax(280px, 1fr) minmax(240px, 0.8fr);
+    grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1fr) minmax(240px, 0.85fr);
     padding: 0;
+    gap: 0;
     overflow: hidden;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 14px;
+    background: #f7faef;
 }
 
 .profile-wallet-balance,
 .profile-wallet-action,
 .profile-wallet-cashback {
     min-width: 0;
-    padding: 20px;
+    padding: 22px;
 }
 
 .profile-wallet-balance {
@@ -3315,7 +3319,7 @@ body:has(.admin-nav-toggle) .nav {
 .profile-wallet-cashback strong {
     display: block;
     color: inherit;
-    font-size: clamp(2.3rem, 5vw, 4.4rem);
+    font-size: clamp(2rem, 4vw, 3.4rem);
     line-height: 0.95;
 }
 
@@ -3333,6 +3337,11 @@ body:has(.admin-nav-toggle) .nav {
     background: #fff;
 }
 
+.profile-wallet-action h3,
+.profile-wallet-cashback h3 {
+    margin: 0;
+}
+
 .profile-wallet-action label {
     display: grid;
     gap: 7px;
@@ -3341,7 +3350,7 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-wallet-action input {
-    max-width: 220px;
+    max-width: 100%;
 }
 
 .profile-wallet-cashback {
@@ -3354,6 +3363,72 @@ body:has(.admin-nav-toggle) .nav {
 
 .profile-wallet-cashback form {
     margin: 4px 0 0;
+}
+
+.profile-wallet-toolbar {
+    margin-top: 16px;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: 10px;
+    align-items: end;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 12px;
+    background: #f8faf3;
+}
+
+.profile-wallet-search,
+.profile-wallet-scope {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.profile-wallet-search span,
+.profile-wallet-scope span {
+    color: #51604c;
+    font-size: 0.73rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.profile-wallet-search input,
+.profile-wallet-scope select {
+    height: 42px;
+    padding: 10px 12px;
+    border: 1px solid rgba(44, 55, 42, 0.16);
+    border-radius: 10px;
+    background: #fff;
+    color: #253225;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.profile-wallet-search input:focus,
+.profile-wallet-scope select:focus {
+    outline: none;
+    border-color: #4f6647;
+    box-shadow: 0 0 0 3px rgba(79, 102, 71, 0.16);
+}
+
+.profile-wallet-toolbar .button {
+    min-height: 42px;
+}
+
+.profile-wallet-row {
+    transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.profile-wallet-row:hover {
+    border-color: rgba(44, 55, 42, 0.2);
+    box-shadow: 0 8px 20px rgba(44, 55, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+.profile-wallet-history-link {
+    margin-top: 10px;
+    display: inline-flex;
 }
 
 .profile-wallet-row .positive {
@@ -3376,6 +3451,15 @@ body:has(.admin-nav-toggle) .nav {
         justify-content: flex-start;
     }
 
+    .profile-wallet-toolbar {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .profile-wallet-toolbar .button {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
     .profile-rewards-metrics,
     .profile-wallet-rules {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3394,6 +3478,10 @@ body:has(.admin-nav-toggle) .nav {
     .profile-wallet-row > div:last-child {
         justify-items: start;
         text-align: left;
+    }
+
+    .profile-wallet-toolbar {
+        grid-template-columns: 1fr;
     }
 
     .profile-rewards-actions .button,
