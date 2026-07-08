@@ -2,8 +2,8 @@
 
 <section class="page-title cart-title">
     <p class="eyebrow">Cart</p>
-    <h1>Your cart.</h1>
-    <p>Choose the items to checkout, then pick how you want to receive them.</p>
+    <h1>Your beauty & wellness basket</h1>
+    <p>Review items, apply rewards, and checkout in one streamlined flow.</p>
 </section>
 
 <section class="section compact cart-page cart-workspace">
@@ -30,22 +30,36 @@
 
         <div class="cart-layout cart-organized-layout">
             <div class="cart-list cart-main-panel">
-                <div class="cart-toolbar cart-control-bar">
-                    <label class="cart-select-all">
-                        <input type="checkbox" id="select-all" checked>
-                        <span>Select all</span>
-                    </label>
+                <header class="cart-toolbar cart-control-bar">
+                    <div class="cart-toolbar-left">
+                        <label class="cart-select-all">
+                            <input type="checkbox" id="select-all" checked>
+                            <span>Select all items</span>
+                        </label>
+                        <p class="muted">Toggle the items you want to checkout now.</p>
+                    </div>
                     <div class="cart-toolbar-counts">
-                        <span><%= itemCount %> total item<%= itemCount === 1 ? '' : 's' %></span>
+                        <span><%= itemCount %> item<%= itemCount === 1 ? '' : 's' %></span>
                         <% if (serviceCount > 0) { %><span><%= serviceCount %> service<%= serviceCount === 1 ? '' : 's' %></span><% } %>
                         <% if (productCount > 0) { %><span><%= productCount %> product<%= productCount === 1 ? '' : 's' %></span><% } %>
                         <% if (giftCardCount > 0) { %><span><%= giftCardCount %> gift card<%= giftCardCount === 1 ? '' : 's' %></span><% } %>
                     </div>
+                </header>
+
+                <div class="cart-list-head" aria-hidden="true">
+                    <span>Item</span>
+                    <span>Quantity</span>
+                    <span>Unit</span>
+                    <span>Subtotal</span>
+                    <span>Actions</span>
                 </div>
 
                 <div class="cart-item-stack">
                     <% cart.forEach((item) => { %>
                         <% const bookingPath = item.merchantId ? `/booking/${item.merchantId}/${item.merchantQrToken}?serviceId=${item.serviceId}` : ''; %>
+                        <% const itemImage = item.imageUrl || item.image || item.thumbnail || item.photoUrl || ''; %>
+                        <% const itemType = item.type || 'Service'; %>
+                        <% const placeholderLabel = String(itemType || 'Item').charAt(0).toUpperCase(); %>
                         <article class="cart-item compact cart-line-item">
                             <input
                                 type="checkbox"
@@ -61,25 +75,26 @@
                                 checked
                                 aria-label="Select <%= item.serviceName %>">
 
+                            <div class="cart-item-thumbnail" aria-hidden="true">
+                                <% if (itemImage) { %>
+                                    <img src="<%= itemImage %>" alt="">
+                                <% } else { %>
+                                    <span><%= placeholderLabel %></span>
+                                <% } %>
+                            </div>
+
                             <div class="cart-item-copy">
                                 <div class="cart-item-labels">
-                                    <span class="eyebrow"><%= item.type || 'Service' %><% if (item.merchantName) { %> &middot; <%= item.merchantName %><% } %></span>
+                                    <span class="eyebrow"><%= itemType %><% if (item.merchantName) { %> &middot; <%= item.merchantName %><% } %></span>
                                     <h2><%= item.serviceName %></h2>
-                                </div>
-                                <% if (item.type !== 'Product' && item.type !== 'Gift Card' && item.duration) { %>
-                                    <p class="muted"><%= item.duration %></p>
-                                <% } %>
-                                <div class="cart-item-meta">
-                                    <span>Qty: <strong><%= Number(item.quantity || 1) %></strong></span>
-                                    <span>Unit price: <strong>$<%= Number(item.price || 0).toFixed(2) %></strong></span>
-                                    <strong>$<%= Number(item.lineTotal).toFixed(2) %></strong>
+                                    <% if (item.type !== 'Product' && item.type !== 'Gift Card' && item.duration) { %>
+                                        <p class="muted"><%= item.duration %></p>
+                                    <% } %>
                                 </div>
                             </div>
 
-                            <div class="cart-item-actions">
-                                <% if (item.merchantId && item.type !== 'Product') { %>
-                                    <a class="button secondary" href="<%= bookingPath %>">Book time</a>
-                                <% } else if (item.type === 'Product') { %>
+                            <div class="cart-line-qty" data-label="Quantity">
+                                <% if (item.type === 'Product') { %>
                                     <form class="cart-quantity-form" action="/cart/update/<%= item.id %>" method="POST">
                                         <div class="cart-quantity-controls" aria-label="Edit quantity for <%= item.serviceName %>">
                                             <button class="quantity-button" type="submit" name="quantityDelta" value="-1" aria-label="Decrease quantity">-</button>
@@ -87,6 +102,22 @@
                                             <button class="quantity-button" type="submit" name="quantityDelta" value="1" aria-label="Increase quantity">+</button>
                                         </div>
                                     </form>
+                                <% } else { %>
+                                    <span class="cart-static-qty">Qty <strong><%= Number(item.quantity || 1) %></strong></span>
+                                <% } %>
+                            </div>
+
+                            <div class="cart-line-price" data-label="Unit">
+                                <span>$<%= Number(item.price || 0).toFixed(2) %></span>
+                            </div>
+
+                            <div class="cart-line-total" data-label="Subtotal">
+                                <strong>$<%= Number(item.lineTotal).toFixed(2) %></strong>
+                            </div>
+
+                            <div class="cart-item-actions" data-label="Actions">
+                                <% if (item.merchantId && item.type !== 'Product') { %>
+                                    <a class="button secondary compact" href="<%= bookingPath %>">Book time</a>
                                 <% } %>
 
                                 <form class="remove-icon-form" action="/cart/remove/<%= item.id %>" method="POST">
@@ -122,21 +153,22 @@
                         const campaignCashbackTotal = Number(campaignCashbackView.total || 0);
                     %>
 
-                    <section class="cart-voucher-section">
+                    <section class="cart-rewards-section">
                         <div class="cart-voucher-heading">
                             <div>
-                                <strong>Choose voucher</strong>
-                                <small>Select one voucher before continuing to payment.</small>
+                                <strong>Rewards</strong>
+                                <small>Choose a voucher and decide whether to use wallet cashback.</small>
                             </div>
-                            <span><%= cartVoucherList.length %> available</span>
+                            <span><%= cartVoucherList.length %> voucher<%= cartVoucherList.length === 1 ? '' : 's' %></span>
                         </div>
+
                         <% if (cartVoucherList.length) { %>
                             <div class="cart-voucher-choice-list">
                                 <label class="cart-voucher-choice">
                                     <input type="radio" name="selectedVoucherId" value="none" data-discount-type="none" required>
                                     <span>
                                         <strong>Do not use a voucher</strong>
-                                        <small>Continue without a voucher.</small>
+                                        <small>No discount applied.</small>
                                     </span>
                                 </label>
                                 <% cartVoucherList.forEach((voucher) => { %>
@@ -161,25 +193,25 @@
                             <input type="hidden" name="selectedVoucherId" value="none">
                             <p class="muted">No eligible vouchers for the selected cart items.</p>
                         <% } %>
-                    </section>
 
-                    <div class="loyalty-redemption-card cart-cashback-card">
-                        <% if (cashbackBalance > 0) { %>
-                            <label>
-                                <input id="cart-use-cashback" type="checkbox" name="redeemCashback" value="on" data-cashback-balance="<%= cashbackBalance.toFixed(2) %>" checked>
+                        <div class="loyalty-redemption-card cart-cashback-card">
+                            <% if (cashbackBalance > 0) { %>
+                                <label>
+                                    <input id="cart-use-cashback" type="checkbox" name="redeemCashback" value="on" data-cashback-balance="<%= cashbackBalance.toFixed(2) %>" checked>
+                                    <span>
+                                        <strong>Use cashback rewards</strong>
+                                        <small>Available $<%= cashbackBalance.toFixed(2) %>. Applying <span id="cart-cashback-copy">$<%= cashbackApplied.toFixed(2) %></span>.</small>
+                                    </span>
+                                </label>
+                                <button class="button secondary compact" type="submit" formaction="/customer/checkout/apply-cashback" formmethod="POST">Apply cashback</button>
+                            <% } else { %>
                                 <span>
-                                    <strong>Use cashback rewards</strong>
-                                    <small>Available $<%= cashbackBalance.toFixed(2) %>. Applying <span id="cart-cashback-copy">$<%= cashbackApplied.toFixed(2) %></span>.</small>
+                                    <strong>No cashback available yet</strong>
+                                    <small>Complete this checkout to earn rewards for your next purchase.</small>
                                 </span>
-                            </label>
-                            <button class="button secondary compact" type="submit" formaction="/customer/checkout/apply-cashback" formmethod="POST">Apply cashback</button>
-                        <% } else { %>
-                            <span>
-                                <strong>No cashback available yet</strong>
-                                <small>Complete this checkout to earn rewards for your next purchase.</small>
-                            </span>
-                        <% } %>
-                    </div>
+                            <% } %>
+                        </div>
+                    </section>
 
                     <div class="cart-totals cart-summary-totals">
                         <p><span>Items subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
@@ -193,8 +225,15 @@
                         <p class="cart-total-line"><span>Total due</span><strong id="cart-due-value">$<%= Math.max(Number(total || 0) - cashbackApplied, 0).toFixed(2) %></strong></p>
                     </div>
 
+                    <div class="cart-payment-badges" aria-label="Accepted payment methods">
+                        <span class="cart-payment-chip">VISA</span>
+                        <span class="cart-payment-chip">Mastercard</span>
+                        <span class="cart-payment-chip">PayPal</span>
+                        <span class="cart-payment-chip">NETS</span>
+                    </div>
+
                     <input type="hidden" name="_totalAmount" value="<%= Number(total).toFixed(2) %>">
-                    <button class="button primary full cart-checkout-button" type="submit">Checkout</button>
+                    <button class="button primary full cart-checkout-button" type="submit">Continue to checkout</button>
                 </form>
 
                 <div class="cart-summary-links">

@@ -3118,6 +3118,8 @@ function showCart(req, res) {
             console.error(walletError);
         }
 
+        const eWallet = await getEWalletView(req.session.user.id);
+
         const availableVouchers = hasProductItems
             ? await getEligibleProductVouchers(req.session.user.id, {
                 kind: 'order',
@@ -3234,6 +3236,8 @@ function checkout(req, res) {
             console.error(walletError);
         }
 
+        const eWallet = await getEWalletView(req.session.user.id);
+
         const availableVouchers = selectedItems.some((item) => item.type === 'Product')
             ? await getEligibleProductVouchers(req.session.user.id, req.session.pendingPayments[checkoutId])
             : [];
@@ -3269,6 +3273,7 @@ function checkout(req, res) {
             campaignCashback,
             redeemPointsRequested: 0,
             loyalty: walletError ? null : loyalty,
+            eWallet,
             error: null
         }));
     });
@@ -3393,6 +3398,7 @@ async function showPayment(req, res) {
         }
 
         const loyalty = await getLoyaltyView(req.session.user.id);
+        const eWallet = await getEWalletView(req.session.user.id);
         const availableVouchers = await getActiveBookingVouchers(req.session.user.id);
         const birthdayPromotion = buildBirthdayPromotion(req.session.user, availableVouchers);
         const rewardRedemption = await getRewardRedemptionView(
@@ -3452,6 +3458,7 @@ async function showPayment(req, res) {
             smartVoucherMessage: smartVoucher.message,
             birthdayPromotion,
             loyalty,
+            eWallet,
             rewardRedemption,
             campaignCashback,
             featuredProductsUpsell,
@@ -3600,6 +3607,7 @@ function getPaymentViewModel(payment) {
         rewardRedemption: null,
         campaignCashback: null,
         loyalty: null,
+        eWallet: null,
         error: null,
         ...payment
     };
@@ -4009,6 +4017,7 @@ function renderPaymentForm(res, payment, error = null) {
         voucherRecommendation: payment.voucherRecommendation || null,
         birthdayPromotion: payment.birthdayPromotion || null,
         loyalty: null,
+        eWallet: payment.eWallet || null,
         ...payment,
         error
     }));
@@ -4024,6 +4033,20 @@ function getLoyaltyView(userId) {
             }
 
             resolve(loyalty);
+        });
+    });
+}
+
+function getEWalletView(userId) {
+    return new Promise((resolve) => {
+        EWallet.getWalletSummary(userId, (error, summary) => {
+            if (error) {
+                console.error(error);
+                resolve(null);
+                return;
+            }
+
+            resolve(summary?.wallet || null);
         });
     });
 }

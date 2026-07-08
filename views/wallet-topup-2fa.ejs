@@ -2,8 +2,8 @@
 
 <section class="page-title">
     <p class="eyebrow">E-wallet security</p>
-    <h1>Verify top-up request</h1>
-    <p>Enter the 6-digit sample code printed in the server terminal before continuing.</p>
+    <h1>Verify your top-up</h1>
+    <p>Enter the 6-digit sample code shown in your server terminal.</p>
 </section>
 
 <section class="section compact wallet-page">
@@ -15,13 +15,13 @@
     <% } %>
 
     <div class="wallet-shell">
-        <div class="wallet-grid">
+        <div class="wallet-grid" style="grid-template-columns: minmax(280px, 520px); justify-content: center;">
             <form class="account-panel wallet-topup-card" method="POST" action="/profile/wallet/topup/verify">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
                 <div>
                     <p class="eyebrow">Sample 2FA</p>
-                    <h2>One more step</h2>
+                    <h2>Security check</h2>
                     <p class="muted">Top-up amount: <strong>$<%= Number(amount || 0).toFixed(2) %></strong></p>
                     <p class="muted">Payment method: <strong><%= paymentMethodLabel %></strong></p>
                     <p class="muted">Code expires in about <strong><%= Number(expiresInSeconds || 0) %>s</strong>.</p>
@@ -42,18 +42,11 @@
                     >
                 </label>
 
-                <button class="button primary" type="submit">Verify and continue</button>
-                <a class="button secondary" href="/profile/wallet">Cancel</a>
+                <div class="hero-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;">
+                    <button class="button primary" type="submit">Verify and continue</button>
+                    <a class="button secondary" href="/profile/wallet">Cancel</a>
+                </div>
             </form>
-
-            <div class="account-panel wallet-support-card">
-                <p class="eyebrow">Demo note</p>
-                <ul>
-                    <li>This is a sample 2FA flow for testing.</li>
-                    <li>The code is printed to your Node server terminal.</li>
-                    <li>After verification, payment provider checkout starts.</li>
-                </ul>
-            </div>
         </div>
     </div>
 </section>
