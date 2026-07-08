@@ -18,6 +18,7 @@ const FavouriteMerchant = require('../models/FavouriteMerchant');
 const CustomerAddress = require('../models/CustomerAddress');
 const PaymentAttempt = require('../models/PaymentAttempt');
 const CustomerCart = require('../models/CustomerCart');
+const EWallet = require('../models/EWallet');
 const { getCartItemCount, getCartLineTotal, getCartQuantity } = require('../utils/cart');
 const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/emailNotifications');
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
@@ -3494,13 +3495,60 @@ function getPaymentPayload(body = {}) {
 function getPaymentMethodLabel(method) {
     const labels = {
         apple_pay: 'Apple Pay',
+        wallet: 'E-wallet',
         paypal: 'PayPal',
         nets: 'NETS QR',
         stripe: 'Stripe',
+        paynow: 'PayNow',
         card: 'Card payment'
     };
 
     return labels[method] || labels.card;
+}
+
+async function handleWalletCheckout(req, res, payment) {
+    const userId = payment.userId || req.session.user?.id;
+    if (!userId) {
+        return renderPaymentForm(res, payment, 'Please log in to pay with your e-wallet.');
+    }
+
+    try {
+        const walletSummary = await new Promise((resolve, reject) => {
+            EWallet.getWalletSummary(userId, (error, result) => error ? reject(error) : resolve(result));
+        });
+        const balance = Number(walletSummary?.wallet?.balance || 0);
+        const amountDue = Number(payment.amount || 0);
+
+        if (balance < amountDue) {
+            return renderPaymentForm(res, payment, 'Your e-wallet balance is not enough for this payment. Please top up first.');
+        }
+
+        const durablePayment = await savePaymentAttempt('wallet', `${payment.receiptId || payment.bookingId || payment.checkoutId || 'wallet'}-${Date.now()}`, {
+            ...payment,
+            paymentMethod: 'wallet'
+        });
+        const receiptId = await completeTrustedPayment(req, {
+            ...payment,
+            paymentAttemptId: durablePayment.paymentAttemptId,
+            paymentMethod: 'wallet'
+        }, 'E-wallet');
+
+        await new Promise((resolve, reject) => {
+            EWallet.debitWalletForPayment({
+                userId,
+                amount: amountDue,
+                paymentMethod: 'wallet',
+                description: 'Checkout payment via E-wallet',
+                referenceId: receiptId,
+                paymentAttemptId: durablePayment.paymentAttemptId
+            }, (error, result) => error ? reject(error) : resolve(result));
+        });
+
+        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+    } catch (error) {
+        console.error(error);
+        return renderPaymentForm(res, payment, error.message || 'Your e-wallet payment could not be completed.');
+    }
 }
 
 function getPaymentViewModel(payment) {
@@ -4930,7 +4978,14 @@ async function confirmPayment(req, res) {
         }
     }
 
-    const selectedPaymentMethod = req.body.paymentMethod || 'card';
+    const selectedPaymentMethod = req.body.paymentMethod || 'wallet';
+
+    if (selectedPaymentMethod === 'wallet') {
+        return handleWalletCheckout(req, res, {
+            ...trustedPayment,
+            redeemPointsRequested: payment.redeemPoints || trustedPayment.redeemPointsRequested || 0
+        });
+    }
 
     if (selectedPaymentMethod === 'paypal') {
         return renderPaymentForm(res, getPaymentViewModel({

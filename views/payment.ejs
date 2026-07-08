@@ -391,9 +391,9 @@
                 <legend class="eyebrow">Choose payment</legend>
                 <div class="payment-method-grid">
                     <label class="payment-method-card is-selected">
-                        <span class="payment-method-icon">AP</span>
-                        <span><strong>Apple Pay</strong><small>Fast wallet checkout</small></span>
-                        <input type="radio" name="paymentMethod" value="apple_pay" checked>
+                        <span class="payment-method-icon">EW</span>
+                        <span><strong>E-wallet</strong><small>Pay instantly from your available balance</small></span>
+                        <input type="radio" name="paymentMethod" value="wallet" checked>
                     </label>
                     <label class="payment-method-card">
                         <span class="payment-method-icon">PP</span>
@@ -415,37 +415,8 @@
                         <span><strong>PayNow</strong><small>Instant bank transfer</small></span>
                         <input type="radio" name="paymentMethod" value="paynow">
                     </label>
-                    <label class="payment-method-card">
-                        <span class="payment-method-icon">CC</span>
-                        <span><strong>Card payment</strong><small>Enter card details manually</small></span>
-                        <input type="radio" name="paymentMethod" value="card">
-                    </label>
                 </div>
             </fieldset>
-
-            <div id="card-payment-fields" class="payment-card-fields">
-                <p class="eyebrow">Card details</p>
-                <label>
-                    Cardholder name
-                    <input type="text" name="cardholderName" placeholder="Mary Tan">
-                </label>
-
-                <label>
-                    Card number
-                    <input type="text" name="cardNumber" placeholder="4242 4242 4242 4242" maxlength="19">
-                </label>
-
-                <div class="form-row">
-                    <label>
-                        Expiry
-                        <input type="text" name="expiry" placeholder="MM/YY" maxlength="5">
-                    </label>
-                    <label>
-                        CVV
-                        <input type="password" name="cvv" placeholder="123" maxlength="3">
-                    </label>
-                </div>
-            </div>
 
             <p id="nets-payment-note" class="muted payment-note" style="display:none;">
                 Continue to generate a NETS QR code for this payment.
@@ -454,7 +425,7 @@
                 Continue to secure HitPay checkout to complete this PayNow payment.
             </p>
             <p id="wallet-payment-note" class="muted payment-note">
-                Continue to complete this prototype wallet payment.
+                Pay directly from your available e-wallet balance.
             </p>
             <p id="stripe-payment-note" class="muted payment-note" style="display:none;">
                 Continue to complete this prototype Stripe payment.
@@ -462,7 +433,7 @@
             <div id="paypal-message" class="notice error" style="display:none;"></div>
             <div id="paypal-button-container" style="display:none;"></div>
 
-            <button id="payment-submit-button" class="button primary full" type="submit">Continue with Apple Pay</button>
+            <button id="payment-submit-button" class="button primary full" type="submit">Pay with E-wallet</button>
         </form>
 
         <aside class="login-benefits payment-summary-card">
@@ -512,7 +483,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('.payment-form');
     const methodField = document.querySelector('[name="paymentMethod"]');
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
-    const cardFields = document.getElementById('card-payment-fields');
     const netsNote = document.getElementById('nets-payment-note');
     const paynowNote = document.getElementById('paynow-payment-note');
     const walletNote = document.getElementById('wallet-payment-note');
@@ -719,27 +689,25 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncPaymentMethod() {
-        const selected = methodInputs.find((input) => input.checked)?.value || methodField?.value || 'apple_pay';
+        const selected = methodInputs.find((input) => input.checked)?.value || methodField?.value || 'wallet';
         document.querySelectorAll('.payment-method-card').forEach((card) => {
             const input = card.querySelector('input[name="paymentMethod"]');
             card.classList.toggle('is-selected', input && input.checked);
         });
         const isPaypal = selected === 'paypal';
-        if (cardFields) cardFields.style.display = selected === 'card' ? '' : 'none';
         if (netsNote) netsNote.style.display = selected === 'nets' ? '' : 'none';
         if (paynowNote) paynowNote.style.display = selected === 'paynow' ? '' : 'none';
         if (stripeNote) stripeNote.style.display = selected === 'stripe' ? '' : 'none';
-        if (walletNote) walletNote.style.display = ['apple_pay'].includes(selected) ? '' : 'none';
+        if (walletNote) walletNote.style.display = selected === 'wallet' ? '' : 'none';
         if (paypalButtonContainer) paypalButtonContainer.style.display = isPaypal ? '' : 'none';
         if (submitButton) submitButton.style.display = isPaypal ? 'none' : '';
         if (submitButton) {
             const labels = {
-                apple_pay: 'Continue with Apple Pay',
+                wallet: 'Pay with E-wallet',
                 paypal: 'Continue with PayPal',
                 stripe: 'Continue with Stripe',
                 nets: 'Generate NETS QR',
-                paynow: 'Continue with PayNow',
-                card: 'Continue card payment'
+                paynow: 'Continue with PayNow'
             };
             submitButton.textContent = labels[selected] || 'Continue payment';
         }

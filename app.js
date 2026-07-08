@@ -13,6 +13,7 @@ const spinDiscoverController = require('./controllers/spinDiscoverController');
 const receiptController = require('./controllers/receiptController');
 const profileController = require('./controllers/profileController');
 const loyaltyController = require('./controllers/loyaltyController');
+const walletController = require('./controllers/walletController');
 const merchantDashboardController = require('./controllers/merchantDashboardController');
 const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
@@ -745,6 +746,12 @@ app.post('/nets/complete-fail', requireCustomer, merchantController.failNetsPaym
 app.get('/nets-qr/fail', requireCustomer, merchantController.showNetsFail);
 app.get('/sse/payment-status/:txnRetrievalRef', requireCustomer, merchantController.streamNetsPaymentStatus);
 
+app.get('/profile/wallet', requireCustomer, walletController.showWallet);
+app.post('/profile/wallet/topup', requireCustomer, walletController.topupWallet);
+app.get('/profile/wallet/success', requireCustomer, walletController.handleWalletSuccess);
+app.get('/profile/wallet/cancel', requireCustomer, walletController.handleWalletCancel);
+app.post('/profile/wallet/nets/complete', requireCustomer, walletController.completeNetsTopup);
+app.post('/profile/wallet/nets/fail', requireCustomer, walletController.failNetsTopup);
 app.get('/wallet', requireCustomer, loyaltyController.showWallet);
 app.get('/customer/wallet', requireCustomer, loyaltyController.showWallet);
 app.post('/wallet/redeem', requireCustomer, loyaltyController.redeemPoints);

@@ -1,0 +1,128 @@
+<%- include('partials/header', { title }) %>
+
+<section class="page-title">
+    <p class="eyebrow">E-wallet</p>
+    <h1>Your real-money balance.</h1>
+    <p>Top up your balance securely and review every transaction in one place.</p>
+</section>
+
+<section class="section compact wallet-page">
+    <% if (success) { %>
+        <div class="notice success"><%= success %></div>
+    <% } %>
+    <% if (error) { %>
+        <div class="notice error"><%= error %></div>
+    <% } %>
+
+    <div class="wallet-shell">
+        <div class="wallet-hero">
+            <div class="account-panel wallet-hero-copy">
+                <p class="eyebrow">E-wallet</p>
+                <h1>Keep your spending simple.</h1>
+                <p>Top up once, pay instantly for bookings and orders, and keep every movement in one calm history view.</p>
+                <div class="wallet-hero-actions">
+                    <a class="button primary" href="#wallet-topup">Top up now</a>
+                    <a class="button secondary" href="/profile">Back to profile</a>
+                </div>
+            </div>
+
+            <article class="account-panel wallet-balance-card">
+                <p class="eyebrow">Available balance</p>
+                <div class="wallet-balance-amount">$<%= Number(wallet && wallet.balance || 0).toFixed(2) %></div>
+                <div class="wallet-balance-meta">
+                    <span>Currency</span>
+                    <strong><%= wallet && wallet.currency ? wallet.currency : 'SGD' %></strong>
+                </div>
+            </article>
+        </div>
+
+        <div class="wallet-grid">
+            <form id="wallet-topup" class="account-panel wallet-topup-card" action="/profile/wallet/topup" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <div>
+                    <p class="eyebrow">Top up</p>
+                    <h2>Add funds in seconds</h2>
+                    <p class="muted">Choose your preferred provider and continue with a secure checkout. Minimum top-up is $1.00.</p>
+                </div>
+
+                <label>
+                    Amount (SGD)
+                    <input type="number" name="amount" min="1" step="0.01" value="10.00" required>
+                </label>
+
+                <label>
+                    Payment method
+                    <select name="payment_method" required>
+                        <% paymentProviders.forEach((provider) => { %>
+                            <option value="<%= provider.key %>"><%= provider.label %></option>
+                        <% }) %>
+                    </select>
+                </label>
+
+                <button class="button primary" type="submit">Continue to payment</button>
+            </form>
+
+            <div class="account-panel wallet-support-card">
+                <p class="eyebrow">How it works</p>
+                <ul>
+                    <li>Top up with Stripe, PayPal, PayNow or NETS QR.</li>
+                    <li>Use your balance for future bookings and orders.</li>
+                    <li>Every top-up and spend stays in the same history list.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="account-panel loyalty-rules-panel">
+        <div class="account-panel-header">
+            <div>
+                <p class="eyebrow">Supported methods</p>
+                <h2>Choose the quickest path for your top-up</h2>
+            </div>
+            <a class="button secondary" href="/profile">Back to profile</a>
+        </div>
+        <div class="wallet-method-strip">
+            <p><span>Stripe</span><strong>Cards and local wallets</strong></p>
+            <p><span>PayPal</span><strong>Fast checkout</strong></p>
+            <p><span>PayNow / HitPay</span><strong>Bank transfer and PayNow</strong></p>
+            <p><span>NETS QR</span><strong>Scan with your banking app</strong></p>
+        </div>
+    </div>
+
+    <div class="section-heading profile-heading">
+        <p class="eyebrow">History</p>
+        <h2>Recent transactions</h2>
+    </div>
+
+    <% const safeTransactions = Array.isArray(transactions) ? transactions : []; %>
+    <% if (!safeTransactions.length) { %>
+        <div class="notice">No wallet transactions yet.</div>
+    <% } else { %>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                        <th>Method</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% safeTransactions.forEach((entry) => { %>
+                        <tr>
+                            <td><%= entry.createdLabel %></td>
+                            <td><span class="sync-pill <%= entry.badgeClass %>"><%= entry.statusLabel %></span></td>
+                            <td><%= entry.description || 'Wallet transaction' %></td>
+                            <td><%= entry.paymentMethod || 'System' %></td>
+                            <td><%= entry.amountLabel %></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+</section>
+
+<%- include('partials/footer') %>

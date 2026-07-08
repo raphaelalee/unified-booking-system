@@ -53,6 +53,8 @@
     const profileContactMethodLabel = profileContactMethodLabels[profile.preferredContactMethod] || 'Not set';
     const profilePurchaseHistory = typeof walletHistory !== 'undefined' && Array.isArray(walletHistory) ? walletHistory : [];
     const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
+    const profileEWallet = typeof eWallet !== 'undefined' && eWallet ? eWallet : { balance: 0, currency: 'SGD' };
+    const profileEWalletTransactions = typeof eWalletTransactions !== 'undefined' && Array.isArray(eWalletTransactions) ? eWalletTransactions : [];
     const formatProfileDate = (value) => {
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-SG', { dateStyle: 'medium' });
@@ -263,7 +265,7 @@
 
         <div class="profile-hero-actions">
             <% if (isCustomer) { %>
-                <a class="button secondary full" href="#wallet">Wallet</a>
+                <a class="button secondary full" href="/profile/wallet">E-wallet</a>
                 <a class="button secondary full" href="#vouchers">Vouchers</a>
                 <a class="button secondary full" href="#membership">Rewards</a>
             <% } else { %>
@@ -831,7 +833,7 @@
                                 <p class="eyebrow">Tier progress</p>
                                 <h3><%= member.next > 0 ? `${member.next} points to Platinum` : 'Maximum tier reached' %></h3>
                                 <div class="membership-progress" aria-label="Membership progress">
-                                    <span style="width:<%= member.progress %>%"></span>
+                                    <span style="width: <%= member.progress %>%"></span>
                                 </div>
                                 <div class="profile-rewards-progress-labels">
                                     <span>Bronze</span>
@@ -1201,6 +1203,53 @@
                             <h2>Loyalty wallet</h2>
                         </div>
                         <a class="button secondary" href="#history" data-profile-tab-link="history">Purchase history</a>
+                    </div>
+
+                    <div class="profile-wallet-dashboard">
+                        <div class="profile-wallet-hero">
+                            <section class="profile-wallet-balance">
+                                <p class="eyebrow">Real-money balance</p>
+                                <strong>$<%= Number(profileEWallet.balance || 0).toFixed(2) %></strong>
+                                <span><%= profileEWallet.currency || 'SGD' %></span>
+                            </section>
+                            <section class="profile-wallet-action">
+                                <p class="eyebrow">Top up</p>
+                                <h3>Add funds</h3>
+                                <p class="muted">Use Stripe, PayPal, PayNow/HitPay, or NETS QR.</p>
+                                <div class="hero-actions">
+                                    <a class="button primary" href="/profile/wallet">Top up</a>
+                                    <a class="button secondary" href="/profile/wallet">View wallet</a>
+                                </div>
+                            </section>
+                        </div>
+                        <% if (profileEWalletTransactions.length) { %>
+                            <div class="profile-wallet-block">
+                                <div class="wallet-section-heading">
+                                    <div>
+                                        <p class="eyebrow">Recent activity</p>
+                                        <h3>Latest top-ups</h3>
+                                    </div>
+                                    <a class="text-button" href="/profile/wallet">View all</a>
+                                </div>
+                                <div class="profile-wallet-list">
+                                    <% profileEWalletTransactions.forEach((entry) => { %>
+                                        <article class="profile-wallet-row">
+                                            <div>
+                                                <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                <strong><%= entry.description || 'Wallet transaction' %></strong>
+                                                <small><%= entry.paymentMethod || 'SYSTEM' %></small>
+                                            </div>
+                                            <div>
+                                                <strong>$<%= Number(entry.amount || 0).toFixed(2) %></strong>
+                                                <small><%= String(entry.status || '').toUpperCase() %></small>
+                                            </div>
+                                        </article>
+                                    <% }) %>
+                                </div>
+                            </div>
+                        <% } else { %>
+                            <p class="muted">You have no wallet transactions yet.</p>
+                        <% } %>
                     </div>
 
                     <% if (loyalty) { %>

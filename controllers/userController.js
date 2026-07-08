@@ -13,6 +13,7 @@ const User = require('../models/User');
 const Loyalty = require('../models/Loyalty');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Notification = require('../models/Notification');
+const EWallet = require('../models/EWallet');
 const { getCartItemCount } = require('../utils/cart');
 const { getSafeReturnPath, rotateCsrfToken } = require('../middleware');
 const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
@@ -279,9 +280,10 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let walletHistory = [];
     let reviewableBookings = [];
     let reviewedBookings = [];
-        let bookingAvailability = {};
-        let userVouchers = [];
-        let birthdayPromotion = buildBirthdayPromotion(accountUser, []);
+    let bookingAvailability = {};
+    let userVouchers = [];
+    let birthdayPromotion = buildBirthdayPromotion(accountUser, []);
+    let eWalletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] };
 
     function finishWithWallet(walletError, loyalty = null) {
         const wallet = loyalty?.wallet || {};
@@ -289,46 +291,56 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
             ? 0
             : Number(wallet.pointsBalance || 0);
         const member = buildMember(rewardPoints);
-        User.getReferralStats(referralCode, (statsError, referralStats = {}) => {
-            if (statsError) {
-                console.error(statsError);
+        EWallet.getWalletSummary(accountUser.user_id, (eWalletError, walletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] }) => {
+            if (eWalletError) {
+                console.error(eWalletError);
+            } else {
+                eWalletSummary = walletSummary;
             }
 
-            const customerExtras = {
-                favourites,
-                cartItemCount,
-                rewardPoints,
-                cashbackBalance: walletError
-                    ? '0.00'
-                    : Number(wallet.cashbackBalance || 0).toFixed(2),
-                member,
-                loyalty,
-                walletHistory,
-                userVouchers,
-                referral: buildCustomerReferral(member, referralCode, referralStats),
-                referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
-                birthdayPromotion,
-                upcomingBookings,
-                pastBookings,
-                cancelledBookings,
-                bookingAvailability,
-                reviewableBookings,
-                reviewedBookings
-            };
+            User.getReferralStats(referralCode, (statsError, referralStats = {}) => {
+                if (statsError) {
+                    console.error(statsError);
+                }
 
-            if (accountUser.referral_code) {
-                callback(walletError, customerExtras);
-                return;
-            }
+                const customerExtras = {
+                    favourites,
+                    cartItemCount,
+                    rewardPoints,
+                    cashbackBalance: walletError
+                        ? '0.00'
+                        : Number(wallet.cashbackBalance || 0).toFixed(2),
+                    member,
+                    loyalty,
+                    walletHistory,
+                    eWallet: eWalletSummary.wallet || { balance: 0, currency: 'SGD' },
+                    eWalletTransactions: eWalletSummary.recentTransactions || eWalletSummary.transactions || [],
+                    userVouchers,
+                    referral: buildCustomerReferral(member, referralCode, referralStats),
+                    referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
+                    birthdayPromotion,
+                    upcomingBookings,
+                    pastBookings,
+                    cancelledBookings,
+                    bookingAvailability,
+                    reviewableBookings,
+                    reviewedBookings
+                };
 
-            User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
-                if (error) {
-                    callback(error, customerExtras);
+                if (accountUser.referral_code) {
+                    callback(walletError, customerExtras);
                     return;
                 }
 
-                req.session.user.referralCode = referralCode;
-                callback(walletError, customerExtras);
+                User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
+                    if (error) {
+                        callback(error, customerExtras);
+                        return;
+                    }
+
+                    req.session.user.referralCode = referralCode;
+                    callback(walletError, customerExtras);
+                });
             });
         });
     }
@@ -568,7 +580,9 @@ function getEmptyCustomerExtras() {
         cancelledBookings: [],
         bookingAvailability: {},
         reviewableBookings: [],
-        reviewedBookings: []
+        reviewedBookings: [],
+        eWallet: { balance: 0, currency: 'SGD' },
+        eWalletTransactions: []
     };
 }
 
@@ -1581,6 +1595,8 @@ function showProfile(req, res) {
                 member: customerExtras.member,
                 loyalty: customerExtras.loyalty,
                 walletHistory: customerExtras.walletHistory,
+                eWallet: customerExtras.eWallet,
+                eWalletTransactions: customerExtras.eWalletTransactions,
                 userVouchers: customerExtras.userVouchers,
                 referral: customerExtras.referral,
                 referralVoucherStatus: customerExtras.referralVoucherStatus,
