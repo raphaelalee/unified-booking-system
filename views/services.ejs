@@ -113,9 +113,9 @@
 <section class="page-title services-unified-hero services-shop-hero">
     <div class="services-hero-copy">
         <p class="eyebrow">Services</p>
-        <h1>Book beauty treatments like a curated shop.</h1>
+        <h1>Book trusted beauty services in one place.</h1>
         <p>
-            Browse trusted merchants, compare prices at a glance, and jump straight into the booking flow.
+            Compare service details clearly, shortlist merchants quickly, and confirm your slot in fewer steps.
         </p>
         <form class="portal-search services-search" action="/services" method="GET">
             <input
@@ -203,7 +203,6 @@
                     const serviceOptions = Array.isArray(service.options) ? service.options : [];
                     const visibleOptions = serviceOptions.slice(0, 3);
                     const remainingOptions = serviceOptions.length - visibleOptions.length;
-                    const serviceSlots = Array.isArray(service.slots) ? service.slots : [];
                     const campaignCashbackTotal = Number(service.campaignCashback?.total || 0);
                 %>
                 <article
@@ -284,14 +283,6 @@
                     </div>
 
                     <div class="service-card-footer">
-                        <div>
-                            <span class="service-card-label">Next openings</span>
-                            <div class="availability-strip compact-slots">
-                                <% serviceSlots.slice(0, 3).forEach((slot) => { %>
-                                    <span><%= slot %></span>
-                                <% }) %>
-                            </div>
-                        </div>
                         <div class="service-shopping-actions">
                             <a class="button primary full" href="<%= protectedHref(serviceBookingPath) %>">Book now</a>
                             <% if (service.packageEnabled) { %>
