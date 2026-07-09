@@ -1406,17 +1406,6 @@ function validateBooking(merchant, form) {
         errors.push('Please select an available time slot for the selected service.');
     }
 
-    if (normalizedBookingTime && service) {
-        const configuredSlots = (serviceSelection.bookableItem?.slots || service.slots || [])
-            .map(normalizeBookingTime)
-            .filter(Boolean);
-        const currentlyBookableSlots = Booking.filterSlotsForBookingDate(configuredSlots, form.bookingDate).slots;
-
-        if (!currentlyBookableSlots.includes(normalizedBookingTime)) {
-            errors.push('This time slot is no longer available. Please choose another time.');
-        }
-    }
-
     const serviceName = serviceSelection.selectedOption
         ? `${service.name} - ${serviceSelection.selectedOption.name}`
         : service?.name;
