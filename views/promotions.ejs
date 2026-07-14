@@ -102,10 +102,12 @@
                     data-region="<%= offer.merchantLocation %>"
                     data-campaign="<%= offer.campaignLabel %>"
                     data-category="<%= offer.serviceCategory %>"
+                    data-availability="<%= offer.isAvailable ? 'active' : 'ended' %>"
                 >
                     <div class="promotion-offer-image promotion-offer-image-<%= offer.merchantId %>">
                         <span class="promotion-badge"><%= offer.cashbackPercent %>% cashback</span>
                         <span class="promotion-badge secondary">-<%= offer.discountPercent %>%</span>
+                        <% if (!offer.isAvailable) { %><span class="promotion-badge promotion-status-badge"><%= offer.availabilityLabel %></span><% } %>
                     </div>
 
                     <div class="promotion-offer-content">
@@ -127,7 +129,11 @@
                                 <p class="muted">Singapore &middot; <%= offer.merchantCategory %></p>
                                 <p class="promotion-rating">&#9733;&#9733;&#9733;&#9733;&#9733; <span>(<%= offer.merchantRating %>)</span></p>
                             </div>
-                            <a class="button primary" href="<%= offer.serviceBookingPath %>">Book now</a>
+                            <% if (offer.isAvailable) { %>
+                                <a class="button primary" href="<%= offer.serviceBookingPath %>">Book now</a>
+                            <% } else { %>
+                                <span class="button secondary promotion-unavailable" aria-disabled="true"><%= offer.availabilityLabel %></span>
+                            <% } %>
                         </div>
 
                         <div class="promotion-offer-tags">
@@ -140,8 +146,13 @@
                 </article>
             <% }) %>
         </div>
-        <div class="notice promotions-empty-state is-hidden" data-promotions-empty>
-            No promotions match the selected filters.
+        <div class="notice promotions-empty-state <%= offers.length > 0 ? 'is-hidden' : '' %>" data-promotions-empty <%= offers.length > 0 ? 'hidden' : '' %>>
+            <h2><%= offers.length > 0 ? 'No matching promotions' : 'Fresh promotions are on the way' %></h2>
+            <p><%= offers.length > 0 ? 'Try clearing a filter or increasing the maximum price.' : 'There are no active promotions today. Browse services and products while merchants prepare their next offers.' %></p>
+            <div class="promotions-empty-actions">
+                <a class="button primary" href="/services">Browse services</a>
+                <a class="button secondary" href="/products">Browse products</a>
+            </div>
         </div>
     </div>
 </section>

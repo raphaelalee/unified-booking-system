@@ -1139,3 +1139,57 @@ body:has(.admin-primary-nav) .admin-sidebar {
         width: 100%;
     }
 }
+.merchant-product-sales {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    margin: 0.25rem 0 0;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    background: #edf4e8;
+    color: #3d5d3d;
+    font-size: 0.76rem;
+}
+
+.merchant-sales-recommendations {
+    margin: 18px 0;
+    padding: 22px;
+    border: 1px solid rgba(67, 82, 60, 0.18);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.merchant-sales-recommendations > h2 {
+    margin: 4px 0 3px;
+    color: #182618;
+    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+.merchant-sales-recommendations > p:not(.eyebrow) { color: #667362; }
+
+.merchant-sales-recommendation-list { display: grid; gap: 12px; margin-top: 18px; }
+
+.merchant-sales-recommendation-card {
+    padding: 16px;
+    border: 1px solid rgba(91, 108, 77, 0.18);
+    border-radius: 16px;
+    background: linear-gradient(120deg, #fffdf8, #f7f1e8);
+    box-shadow: 0 8px 22px rgba(43, 52, 38, 0.05);
+}
+
+.merchant-sales-rank {
+    display: inline-flex;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #eee5d8;
+    color: #806b50;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.merchant-sales-recommendation-card h3 { margin: 8px 0 3px; font-family: "Playfair Display", serif; }
+.merchant-sales-recommendation-card p { margin: 0; color: #687566; }
+.merchant-sales-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.merchant-sales-metrics span { padding: 7px 10px; border: 1px solid rgba(67, 82, 60, 0.12); border-radius: 999px; background: #fff; font-size: 0.8rem; }
+.merchant-sales-recommendation-card form .button { width: 100%; }
+.merchant-sales-recommendation-card form .button:disabled { cursor: not-allowed; opacity: 0.58; }

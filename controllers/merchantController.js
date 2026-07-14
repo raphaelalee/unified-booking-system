@@ -135,6 +135,94 @@ function rotateFlashDeals(items = [], cycleIndex = 0, batchSize = FLASH_DEALS_BA
     return ordered.slice(0, batchSize);
 }
 
+function getFlashDealDiscountPercent(item, cycleIndex) {
+    const identity = `${item?.flashItemType || 'item'}-${item?.id || 0}-${cycleIndex}`;
+    let hash = 0;
+
+    for (let index = 0; index < identity.length; index += 1) {
+        hash = ((hash * 31) + identity.charCodeAt(index)) >>> 0;
+    }
+
+    return 10 + (hash % 11);
+}
+
+function createFlashDealToken(itemType, itemId, cycleIndex, discountPercent) {
+    const payload = `${itemType}:${itemId}:${cycleIndex}:${discountPercent}`;
+    const secret = process.env.SESSION_SECRET || process.env.FLASH_DEAL_SECRET || 'vaniday-flash-deals';
+    return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+function verifyFlashDealRequest(itemType, itemId, cycleIndex, discountPercent, token) {
+    const numericCycle = Number(cycleIndex);
+    const currentCycle = Math.floor(Date.now() / FLASH_DEALS_ROTATION_MS);
+    const numericDiscount = Number(discountPercent);
+
+    if (!Number.isInteger(numericCycle) || numericCycle !== currentCycle || !Number.isInteger(numericDiscount) || numericDiscount < 10 || numericDiscount > 20) {
+        return false;
+    }
+
+    const expected = createFlashDealToken(itemType, itemId, numericCycle, numericDiscount);
+    const supplied = String(token || '');
+    return supplied.length === expected.length && crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+}
+
+function selectLowSellingItems(items = [], salesCounts = {}, limit = 12) {
+    const ranked = items
+        .filter((item) => Number(item.price || 0) > 0)
+        .map((item) => ({
+            ...item,
+            salesCount: Number(salesCounts[Number(item.id)] || 0)
+        }))
+        .sort((left, right) => left.salesCount - right.salesCount || Number(left.id) - Number(right.id));
+
+    if (ranked.length === 0) {
+        return [];
+    }
+
+    const averageSales = ranked.reduce((total, item) => total + item.salesCount, 0) / ranked.length;
+    const underperformers = ranked.filter((item) => item.salesCount <= averageSales);
+    return (underperformers.length > 0 ? underperformers : ranked.slice(0, Math.ceil(ranked.length / 2))).slice(0, limit);
+}
+
+function loadLowSellingFlashInventory(callback) {
+    let products = [];
+    let services = [];
+    let productSales = {};
+    let serviceSales = {};
+    let pending = 4;
+
+    const finish = () => {
+        pending -= 1;
+        if (pending > 0) return;
+
+        callback({
+            products: selectLowSellingItems(products.filter((product) => Number(product.stockQuantity || 0) > 0), productSales),
+            services: selectLowSellingItems(services, serviceSales)
+        });
+    };
+
+    Product.getAll((error, rows = []) => {
+        if (error) console.error(error);
+        products = rows;
+        finish();
+    });
+    MerchantService.getAllServices((error, rows = []) => {
+        if (error) console.error(error);
+        services = rows;
+        finish();
+    });
+    PurchaseHistory.getProductSalesCounts((error, counts = {}) => {
+        if (error) console.error(error);
+        productSales = counts;
+        finish();
+    });
+    Booking.getServiceSalesCounts((error, counts = {}) => {
+        if (error) console.error(error);
+        serviceSales = counts;
+        finish();
+    });
+}
+
 function buildFlashDeals(promotions = [], featuredProducts = [], featuredServices = []) {
     const now = Date.now();
     const cycleIndex = Math.floor(now / FLASH_DEALS_ROTATION_MS);
@@ -150,6 +238,10 @@ function buildFlashDeals(promotions = [], featuredProducts = [], featuredService
             const isProductDeal = Boolean(linkedProduct) && !linkedService;
             const targetName = normalizeText(linkedService?.name || linkedProduct?.name || promotion.serviceName || promotion.productName || promotion.title);
             const { basePrice, dealPrice } = resolveFlashDealPricing(promotion, linkedItem);
+
+            if (!linkedItem) {
+                return null;
+            }
 
             return {
                 id: `promo-${promotion.id}`,
@@ -171,7 +263,8 @@ function buildFlashDeals(promotions = [], featuredProducts = [], featuredService
                 urgency: Number(promotion.totalRedemptions || 0) >= 10 ? 'Selling fast' : 'Limited time',
                 priority: index
             };
-        });
+        })
+        .filter(Boolean);
 
     if (promotionDeals.length > 0) {
         const eligibleDeals = promotionDeals
@@ -199,21 +292,47 @@ function buildFlashDeals(promotions = [], featuredProducts = [], featuredService
         };
     }
 
-    const fallbackDeals = rotateFlashDeals(featuredProducts, cycleIndex, FLASH_DEALS_BATCH_SIZE).map((product, index) => ({
-        id: `product-${product.id}`,
-        title: normalizeText(product.name) || 'Featured product',
-        merchantName: normalizeText(product.salonName) || 'Vaniday merchant',
-        description: normalizeText(product.description) || 'Featured aftercare pick from the marketplace.',
-        discountLabel: 'Featured now',
-        badge: 'Product pick',
-        href: `/products/${product.id}?from=flash-deals`,
-        imageUrl: normalizeText(product.imageUrl || product.fallbackImageUrl),
-        imageClass: 'home-product-image',
-        endsAt: null,
-        basePrice: null,
-        dealPrice: Number(product.price || 0),
-        urgency: index < 2 ? 'Trending now' : 'Just added'
-    }));
+    const lowSellingInventory = [
+        ...featuredProducts.map((product) => ({ ...product, flashItemType: 'product' })),
+        ...featuredServices.map((service) => ({ ...service, flashItemType: 'service' }))
+    ].sort((left, right) => Number(left.salesCount || 0) - Number(right.salesCount || 0));
+    const fallbackDeals = rotateFlashDeals(lowSellingInventory, cycleIndex, FLASH_DEALS_BATCH_SIZE).map((item) => {
+        const isProduct = item.flashItemType === 'product';
+        const basePrice = Number(item.price || 0);
+        const discountPercent = getFlashDealDiscountPercent(item, cycleIndex);
+        const dealPrice = Math.round((basePrice * (1 - (discountPercent / 100))) * 100) / 100;
+        const flashToken = createFlashDealToken(item.flashItemType, item.id, cycleIndex, discountPercent);
+        const serviceBookingHref = `/merchants/${item.salonId || item.merchantId}?${new URLSearchParams({
+            serviceId: String(item.id),
+            from: 'flash-deals',
+            flashDealCycle: String(cycleIndex),
+            flashDiscountPercent: String(discountPercent),
+            flashDealToken: flashToken
+        }).toString()}#storefront-services`;
+        return {
+            id: `${item.flashItemType}-${item.id}`,
+            title: normalizeText(item.name) || (isProduct ? 'Product deal' : 'Service deal'),
+            merchantName: normalizeText(item.salonName || item.merchantName) || 'Vaniday merchant',
+            description: normalizeText(item.description || item.shortDescription) || 'A limited marketplace offer that deserves more attention.',
+            discountLabel: `${discountPercent}% off`,
+            badge: isProduct ? 'Product deal' : 'Service deal',
+            href: isProduct
+                ? `/products/${item.id}?from=flash-deals`
+                : serviceBookingHref,
+            imageUrl: normalizeText(item.imageUrl || item.fallbackImageUrl),
+            imageClass: isProduct ? 'home-product-image' : '',
+            endsAt: null,
+            basePrice,
+            dealPrice,
+            discountPercent,
+            flashDealCycle: cycleIndex,
+            flashToken,
+            isProductDeal: isProduct,
+            itemId: item.id,
+            merchantId: item.salonId || item.merchantId,
+            urgency: Number(item.salesCount || 0) === 0 ? 'New discovery' : 'Needs a boost'
+        };
+    });
 
     return {
         deals: fallbackDeals,
@@ -495,6 +614,10 @@ function getOrderVoucherEligibleAmount(voucher, payment = {}) {
     return items.reduce((sum, item) => {
         if (String(item.type || '') !== 'Product') {
             return sum;
+        }
+
+        if (voucher.sourceType !== 'reward_shop_merchant') {
+            return sum + Number(item.lineTotal || 0);
         }
 
         if (voucher.merchantId && String(voucher.merchantId) !== String(item.merchantId || item.salonId || '')) {
@@ -1301,7 +1424,31 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
         home: { url: '/', label: 'Back to home' },
         profile: { url: '/profile', label: 'Back to profile' }
     };
-    const backLink = backLinks[source] || backLinks.services;
+    const backLink = backLinks[source] || (source === 'flash-deals' ? backLinks.home : backLinks.services);
+    const flashServiceId = Number(req.query.serviceId || 0);
+    const flashDiscountPercent = Number(req.query.flashDiscountPercent || 0);
+    const hasValidServiceFlashDeal = verifyFlashDealRequest(
+        'service',
+        flashServiceId,
+        req.query.flashDealCycle,
+        flashDiscountPercent,
+        req.query.flashDealToken
+    );
+    const detailMerchant = hasValidServiceFlashDeal
+        ? {
+            ...merchant,
+            services: (merchant.services || []).map((service) => String(service.id) === String(flashServiceId)
+                ? {
+                    ...service,
+                    originalPrice: Number(service.price || 0),
+                    price: Math.round((Number(service.price || 0) * (1 - (flashDiscountPercent / 100))) * 100) / 100,
+                    flashDealDiscountPercent: flashDiscountPercent,
+                    flashDealCycle: Number(req.query.flashDealCycle),
+                    flashDealToken: String(req.query.flashDealToken || '')
+                }
+                : service)
+        }
+        : merchant;
 
     return Review.getSummaryByMerchantId(merchant.id, (summaryError, reviewSummary) => {
         if (summaryError) {
@@ -1333,8 +1480,8 @@ function renderMerchantDetail(req, res, merchant, options = {}) {
                 return res.status(options.status || 200).render('merchant-detail', {
                     title: merchant.name,
                     merchant: {
-                        ...merchant,
-                        services: sortServicesByFeatured(merchant.services || [])
+                        ...detailMerchant,
+                        services: sortServicesByFeatured(detailMerchant.services || [])
                     },
                     products: merchantProducts,
                     featuredServices,
@@ -1625,7 +1772,8 @@ function showHome(req, res) {
 
                     const featuredServiceItems = featuredServices.slice(0, 6);
                     const featuredProductItems = featuredProducts.slice(0, 6);
-                    const flashDealSection = buildFlashDeals(activePromotions, featuredProductItems, featuredServiceItems);
+                    return loadLowSellingFlashInventory(({ products: lowSellingProducts, services: lowSellingServices }) => {
+                    const flashDealSection = buildFlashDeals(activePromotions, lowSellingProducts, lowSellingServices);
 
                     res.render('home', {
                         title: 'Vaniday',
@@ -1645,6 +1793,7 @@ function showHome(req, res) {
                         showChatbot: true
                     });
                     req.session.success = null;
+                    });
                 });
             });
         });
@@ -1804,6 +1953,12 @@ function getPromotionLabel(type) {
 
 function buildPublicPromotionOffer(promotion, service) {
     const pricing = calculatePromotionPrice(service.price, promotion);
+    const now = Date.now();
+    const startsAt = promotion.startDate ? new Date(promotion.startDate).getTime() : Number.NEGATIVE_INFINITY;
+    const endsAt = promotion.endDate ? new Date(promotion.endDate).getTime() : Number.POSITIVE_INFINITY;
+    const isAvailable = String(promotion.status || '').toLowerCase() === 'active'
+        && startsAt <= now
+        && endsAt >= now;
 
     return {
         id: promotion.id,
@@ -1822,6 +1977,9 @@ function buildPublicPromotionOffer(promotion, service) {
         discountPercent: pricing.discountPercent,
         cashbackPercent: getCashbackPercent(promotion.id),
         campaignLabel: getPromotionLabel(promotion.type),
+        isAvailable,
+        availabilityLabel: isAvailable ? 'Available now' : (startsAt > now ? 'Coming soon' : 'Ended'),
+        endDate: promotion.endDate || null,
         priceTier: pricing.price < 30 ? '$' : pricing.price < 55 ? '$$' : pricing.price < 80 ? '$$$' : '$$$$',
         regions: [promotion.address || 'No address set', service.category || service.name],
         serviceBookingPath: appendQueryParams(
@@ -1860,7 +2018,7 @@ function getPromotionServiceForSalon(promotion, servicesBySalon) {
 }
 
 function loadPublicPromotionOffers(callback) {
-    return Promotion.getActivePublic((promotionError, promotions) => {
+    return Promotion.getActivePublic({ includeExpired: true }, (promotionError, promotions) => {
         if (promotionError) {
             console.error(promotionError);
             callback(null, buildPromotionOffers());
@@ -2953,6 +3111,18 @@ function addToCart(req, res) {
         });
     }
 
+    const hasValidFlashDeal = verifyFlashDealRequest(
+        'service',
+        service.id,
+        req.body.flashDealCycle,
+        req.body.flashDiscountPercent,
+        req.body.flashDealToken
+    );
+    const flashDiscountPercent = hasValidFlashDeal ? Number(req.body.flashDiscountPercent) : 0;
+    const cartPrice = hasValidFlashDeal
+        ? Math.round((Number(service.price || 0) * (1 - (flashDiscountPercent / 100))) * 100) / 100
+        : Number(service.price || 0);
+
     req.session.cart = req.session.cart || [];
     const cartItem = {
         id: Date.now(),
@@ -2962,7 +3132,8 @@ function addToCart(req, res) {
         serviceId: service.id,
         serviceName: service.name,
         duration: service.duration,
-        price: service.price
+        price: cartPrice,
+        flashDealDiscountPercent: flashDiscountPercent
     };
     req.session.cart.push(cartItem);
 
@@ -2987,11 +3158,27 @@ function addProductToCart(req, res) {
             });
         }
 
+        const hasValidFlashDeal = verifyFlashDealRequest(
+            'product',
+            product.id,
+            req.body.flashDealCycle,
+            req.body.flashDiscountPercent,
+            req.body.flashDealToken
+        );
+        const flashDiscountPercent = hasValidFlashDeal ? Number(req.body.flashDiscountPercent) : 0;
+        const cartPrice = hasValidFlashDeal
+            ? Math.round((Number(product.price || 0) * (1 - (flashDiscountPercent / 100))) * 100) / 100
+            : Number(product.price || 0);
+
         req.session.cart = req.session.cart || [];
         const existingProduct = req.session.cart.find((item) => item.type === 'Product' && String(item.serviceId) === String(product.id));
 
         if (existingProduct) {
             existingProduct.quantity = Math.min(Number(existingProduct.quantity || 1) + 1, 99);
+            if (hasValidFlashDeal) {
+                existingProduct.price = cartPrice;
+                existingProduct.flashDealDiscountPercent = flashDiscountPercent;
+            }
         } else {
             req.session.cart.push({
                 id: Date.now(),
@@ -3001,7 +3188,8 @@ function addProductToCart(req, res) {
                 serviceId: product.id,
                 serviceName: product.name,
                 duration: product.description,
-                price: product.price,
+                price: cartPrice,
+                flashDealDiscountPercent: flashDiscountPercent,
                 quantity: 1
             });
         }
@@ -4098,7 +4286,7 @@ function getActiveBookingVouchers(userId) {
                     return;
                 }
 
-                resolve(vouchers.filter((voucher) => voucher.bookingOnly && voucher.sourceType !== 'reward_shop_merchant'));
+                resolve(vouchers.filter((voucher) => voucher.sourceType !== 'reward_shop_merchant'));
             });
 
             if (!user) {
@@ -4160,7 +4348,7 @@ function getActiveProductVouchers(userId) {
                 return;
             }
 
-            resolve(vouchers.filter((voucher) => voucher.bookingOnly === false && voucher.sourceType !== 'reward_shop_merchant'));
+            resolve(vouchers.filter((voucher) => voucher.sourceType !== 'reward_shop_merchant'));
         });
     });
 }
@@ -4270,72 +4458,69 @@ async function getSmartVoucherRecommendationDetails(userId, payment) {
 }
 
 async function applyVoucherRedemption(req, payment) {
-    const rawSelectedVoucherId = String(req.body.selectedVoucherId || payment.selectedVoucherId || '').trim();
-    const voucherDisabled = rawSelectedVoucherId === 'none';
-    const selectedVoucherId = voucherDisabled ? 0 : Number(rawSelectedVoucherId || 0);
+    const submittedVoucherValue = Object.prototype.hasOwnProperty.call(req.body || {}, 'selectedVoucherId')
+        ? req.body.selectedVoucherId
+        : payment.selectedVoucherId;
+    const rawSelectedVoucherId = String(submittedVoucherValue || '').trim();
     const fallbackVoucherId = Number(payment.voucherRecommendation?.voucher?.id || 0);
-    const effectiveVoucherId = voucherDisabled ? 0 : (selectedVoucherId || fallbackVoucherId);
+    const selectedVoucherIds = rawSelectedVoucherId === 'none' ? [] : rawSelectedVoucherId
+        .split(',')
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value > 0);
+    const effectiveVoucherIds = Array.from(new Set([
+        ...(fallbackVoucherId ? [fallbackVoucherId] : []),
+        ...selectedVoucherIds
+    ]));
 
-    if (!effectiveVoucherId) {
+    if (!effectiveVoucherIds.length) {
         return {
             ...payment,
-            selectedVoucherId: voucherDisabled ? 'none' : (selectedVoucherId ? String(selectedVoucherId) : '')
+            selectedVoucherId: selectedVoucherIds.join(',')
         };
     }
-
-    const voucher = await new Promise((resolve, reject) => {
-        UserVoucher.findByIdForUser(effectiveVoucherId, req.session.user.id, (error, row) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-
-            resolve(row);
-        });
-    });
 
     const validator = payment.kind === 'order'
         ? UserVoucher.validateForOrder
         : UserVoucher.validateForBooking;
+    const appliedVouchers = [];
+    let remainingAmount = Number(payment.amount || 0);
 
-    if (payment.kind === 'booking' && selectedVoucherId && voucher?.sourceType === 'reward_shop_merchant') {
-        throw new Error('Only platform vouchers can be used at this checkout.');
-    }
-
-    if (payment.kind === 'order' && selectedVoucherId && voucher?.sourceType === 'reward_shop_merchant') {
-        throw new Error('Only platform vouchers can be used at this checkout.');
-    }
-
-    const validatedVoucher = await new Promise((resolve, reject) => {
-        validator(voucher, payment, (error, row) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-
-            resolve(row || voucher);
+    for (const voucherId of effectiveVoucherIds) {
+        const voucher = await new Promise((resolve, reject) => {
+            UserVoucher.findByIdForUser(voucherId, req.session.user.id, (error, row) => error ? reject(error) : resolve(row));
         });
-    });
+        const validatedVoucher = await new Promise((resolve, reject) => {
+            validator(voucher, payment, (error, row) => error ? reject(error) : resolve(row || voucher));
+        });
+        const eligibleAmount = Math.min(getVoucherEligibleAmount(validatedVoucher, payment), remainingAmount);
+        const discount = calculateVoucherDiscount(validatedVoucher, eligibleAmount);
 
-    const voucherEligibleAmount = getVoucherEligibleAmount(validatedVoucher, payment);
-    const voucherDiscount = calculateVoucherDiscount(validatedVoucher, voucherEligibleAmount);
+        if (discount > 0) {
+            appliedVouchers.push({ voucher: validatedVoucher, discount });
+            remainingAmount = Math.max(0, Math.round((remainingAmount - discount) * 100) / 100);
+        }
+    }
+
+    const voucherDiscount = appliedVouchers.reduce((total, entry) => total + Number(entry.discount || 0), 0);
 
     if (voucherDiscount <= 0) {
         return payment;
     }
 
+    const primaryVoucher = appliedVouchers[0].voucher;
+
     return {
         ...payment,
-        selectedVoucherId: voucherDisabled ? 'none' : (selectedVoucherId ? String(selectedVoucherId) : ''),
-        voucherId: validatedVoucher.id,
-        voucherCode: validatedVoucher.code,
-        voucherTitle: validatedVoucher.title,
-        voucherDiscountType: validatedVoucher.discountType || 'fixed',
-        voucherDiscountPercent: Number(validatedVoucher.discountPercent || 0),
-        voucherEligibleAmount,
+        selectedVoucherId: selectedVoucherIds.join(','),
+        voucherIds: appliedVouchers.map((entry) => entry.voucher.id),
+        voucherId: primaryVoucher.id,
+        voucherCode: appliedVouchers.map((entry) => entry.voucher.code).filter(Boolean).join(', '),
+        voucherTitle: appliedVouchers.map((entry) => entry.voucher.title).join(' + '),
+        voucherDiscountType: appliedVouchers.length > 1 ? 'stacked' : (primaryVoucher.discountType || 'fixed'),
+        voucherDiscountPercent: Number(primaryVoucher.discountPercent || 0),
         originalAmount: Number(payment.originalAmount || payment.amount || 0),
         voucherDiscount,
-        amount: Math.max(0, Math.round((Number(payment.amount || 0) - voucherDiscount) * 100) / 100)
+        amount: remainingAmount
     };
 }
 
@@ -4835,9 +5020,10 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
         });
     }
 
-    if (Number(paidPayment.voucherId || 0) > 0) {
+    const redeemedVoucherIds = Array.from(new Set((paidPayment.voucherIds || [paidPayment.voucherId]).map(Number).filter((id) => id > 0)));
+    for (const voucherId of redeemedVoucherIds) {
         await new Promise((resolve, reject) => {
-            UserVoucher.markRedeemed(paidPayment.voucherId, {
+            UserVoucher.markRedeemed(voucherId, {
                 bookingId: paidPayment.kind === 'booking' ? paidPayment.bookingId || null : null,
                 transactionId: paidPayment.transactionId || null
             }, (error) => error ? reject(error) : resolve());

@@ -77,7 +77,7 @@ function buildBirthdayVoucherData(userId, birthday, now = new Date()) {
         sourceType: 'birthday',
         sourceReference: getBirthdayVoucherSourceReference(context.rewardYear),
         title: '20% OFF Birthday Month Voucher',
-        detail: `20% off eligible beauty and wellness service bookings. Valid until ${context.monthEndLabel}.`,
+        detail: `20% off eligible beauty and wellness services or products. Valid until ${context.monthEndLabel}.`,
         bookingOnly: true,
         discountType: 'percentage',
         discountPercent: 20,

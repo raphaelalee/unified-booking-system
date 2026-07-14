@@ -16962,11 +16962,81 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 }
 
 .home-flash-card-link {
+    display: inline-flex;
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
     text-align: center;
     color: var(--sage-strong);
     font-size: 0.78rem;
     font-weight: 700;
     text-decoration: none;
+}
+
+.home-flash-tile[data-flash-card-action] {
+    position: relative;
+    cursor: pointer;
+}
+
+.home-flash-card-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: transparent;
+    cursor: pointer;
+}
+
+.home-flash-strip {
+    cursor: grab;
+    touch-action: pan-y;
+}
+
+.home-flash-strip.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+    scroll-behavior: auto;
+}
+
+.home-flash-arrow {
+    z-index: 10;
+}
+
+.home-flash-card-overlay:focus-visible {
+    outline: 3px solid rgba(74, 111, 67, 0.5);
+    outline-offset: 3px;
+}
+
+.home-flash-tile[data-flash-card-action]:focus-visible {
+    outline: 3px solid rgba(74, 111, 67, 0.4);
+    outline-offset: 3px;
+}
+
+.storefront-service-card.is-flash-deal {
+    border-color: #78956f !important;
+    background: linear-gradient(145deg, #f3f8ed, #fffdf8) !important;
+    box-shadow: 0 12px 28px rgba(72, 102, 64, 0.12) !important;
+}
+
+.storefront-service-card.is-flash-deal del {
+    margin-right: 4px;
+    color: #879184;
+    font-size: 0.78em;
+    font-weight: 500;
+}
+
+.home-flash-cart-form {
+    width: 100%;
+    margin: 0;
 }
 
 .home-flash-bar {
@@ -16990,6 +17060,18 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 .home-flash-timer.is-static {
     background: linear-gradient(90deg, var(--clay) 0%, #cfb296 18%, #f2e6d7 18%, #f7efe4 100%);
     color: var(--sage-ink);
+}
+
+.home-flash-action {
+    border: 0;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.home-flash-action:hover,
+.home-flash-action:focus-visible {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
 }
 
 @media (max-width: 640px) {

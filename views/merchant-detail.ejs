@@ -11,7 +11,19 @@
     const slotCount = detailServices.reduce((total, service) => total + (Array.isArray(service.slots) ? service.slots.length : 0), 0);
     const categories = [...new Set(detailServices.map((service) => service.name).filter(Boolean))];
     const firstBookableService = detailServices[0] || null;
-    const bookPath = (service) => `/booking/${merchant.id}${service ? `?serviceId=${encodeURIComponent(service.id)}` : ''}`;
+    const bookPath = (service) => {
+        if (!service) return `/booking/${merchant.id}`;
+        const params = new URLSearchParams({ serviceId: String(service.id) });
+        if (service.flashDealDiscountPercent) {
+            params.set('source', 'promotions');
+            params.set('promoCampaign', 'Flash Deal');
+            params.set('promoTitle', `${service.flashDealDiscountPercent}% off ${service.name}`);
+            params.set('promoPrice', Number(service.price).toFixed(2));
+            params.set('promoOriginalPrice', Number(service.originalPrice).toFixed(2));
+            params.set('promoDiscountPercent', String(service.flashDealDiscountPercent));
+        }
+        return `/booking/${merchant.id}?${params.toString()}`;
+    };
     const locationQuery = encodeURIComponent(`${merchant.name} ${merchant.location || 'Singapore'}`);
     const ratingCopy = averageRating ? averageRating.toFixed(1) : 'New';
     const statusCopy = 'Open today';
@@ -102,15 +114,18 @@
                             <% const shortDescription = Array.isArray(service.options) && service.options.length > 0
                                 ? service.options.map((option) => option.name).slice(0, 3).join(', ')
                                 : `${merchant.category || 'Beauty'} appointment at ${merchant.name}`; %>
-                            <article class="storefront-service-card">
+                            <article class="storefront-service-card <%= service.flashDealDiscountPercent ? 'is-flash-deal' : '' %>">
                                 <div>
-                                    <span class="tag"><%= merchant.category || 'Service' %></span>
+                                    <span class="tag"><%= service.flashDealDiscountPercent ? `Flash Deal · ${service.flashDealDiscountPercent}% OFF` : (merchant.category || 'Service') %></span>
                                     <h3><%= service.name %></h3>
                                     <p><%= shortDescription %></p>
                                 </div>
                                 <div class="storefront-service-meta">
                                     <span><%= service.duration || '60 mins' %></span>
-                                    <strong>$<%= Number(service.price || 0).toFixed(2) %></strong>
+                                    <strong>
+                                        <% if (service.flashDealDiscountPercent) { %><del>$<%= Number(service.originalPrice || 0).toFixed(2) %></del> <% } %>
+                                        $<%= Number(service.price || 0).toFixed(2) %>
+                                    </strong>
                                 </div>
                                 <% if (Array.isArray(service.slots) && service.slots.length > 0) { %>
                                     <div class="availability-strip compact-slots">

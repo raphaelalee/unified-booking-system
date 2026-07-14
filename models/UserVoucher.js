@@ -793,12 +793,14 @@ function validateForBooking(voucher, payment, callback) {
         return;
     }
 
-    if (voucher.merchantId && String(voucher.merchantId) !== String(payment.merchantId || '')) {
+    const isMerchantVoucher = voucher.sourceType === 'reward_shop_merchant';
+
+    if (isMerchantVoucher && voucher.merchantId && String(voucher.merchantId) !== String(payment.merchantId || '')) {
         callback(new Error('This voucher is only valid for another merchant.'));
         return;
     }
 
-    if (voucher.linkedItemType === 'service' && voucher.linkedItemId && String(voucher.linkedItemId) !== String(payment.serviceId || '')) {
+    if (isMerchantVoucher && voucher.linkedItemType === 'service' && voucher.linkedItemId && String(voucher.linkedItemId) !== String(payment.serviceId || '')) {
         callback(new Error('This voucher is only valid for another service.'));
         return;
     }
@@ -834,6 +836,10 @@ function getEligibleOrderProductTotal(voucher, payment) {
     return items.reduce((sum, item) => {
         if (String(item.type || '') !== 'Product') {
             return sum;
+        }
+
+        if (voucher.sourceType !== 'reward_shop_merchant') {
+            return sum + Number(item.lineTotal || 0);
         }
 
         if (voucher.merchantId && String(voucher.merchantId) !== String(item.merchantId || item.salonId || '')) {
@@ -878,12 +884,12 @@ function validateForOrder(voucher, payment, callback) {
         return;
     }
 
-    if (voucher.bookingOnly === true) {
+    if (voucher.bookingOnly === true && voucher.sourceType === 'reward_shop_merchant') {
         callback(new Error('This voucher can only be used on service bookings.'));
         return;
     }
 
-    if (voucher.linkedItemType && voucher.linkedItemType !== 'product') {
+    if (voucher.sourceType === 'reward_shop_merchant' && voucher.linkedItemType && voucher.linkedItemType !== 'product') {
         callback(new Error('This voucher is not valid for product checkout.'));
         return;
     }

@@ -165,10 +165,10 @@
                         <% if (cartVoucherList.length) { %>
                             <div class="cart-voucher-choice-list">
                                 <label class="cart-voucher-choice">
-                                    <input type="radio" name="selectedVoucherId" value="none" data-discount-type="none" required>
+                                    <input type="radio" name="selectedVoucherId" value="none" data-discount-type="none" checked required>
                                     <span>
-                                        <strong>Do not use a voucher</strong>
-                                        <small>No discount applied.</small>
+                                        <strong>No platform voucher</strong>
+                                        <small>Merchant vouchers are applied automatically at checkout.</small>
                                     </span>
                                 </label>
                                 <% cartVoucherList.forEach((voucher) => { %>

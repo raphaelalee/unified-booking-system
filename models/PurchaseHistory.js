@@ -487,12 +487,47 @@ function markPickupCollected(receiptId, callback) {
     });
 }
 
+function getProductSalesCounts(callback) {
+    ensureTable((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        db.query(
+            `SELECT items_json
+             FROM purchase_history
+             WHERE purchase_type = 'product'
+               AND LOWER(COALESCE(payment_status, 'paid')) IN ('paid', 'completed')
+               AND LOWER(COALESCE(refund_status, 'none')) NOT IN ('refunded', 'completed')`,
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                const counts = {};
+                rows.forEach((row) => {
+                    parseItems(row.items_json).forEach((item) => {
+                        const productId = Number(item.productId || item.serviceId || 0);
+                        if (Number.isInteger(productId) && productId > 0) {
+                            counts[productId] = (counts[productId] || 0) + Math.max(1, Number(item.quantity || 1));
+                        }
+                    });
+                });
+                callback(null, counts);
+            }
+        );
+    });
+}
+
 module.exports = {
     getByReceiptId,
     getByReceiptIdAny,
     getSupportOrderForCustomer,
     getSupportOrdersByUserId,
     getByUserId,
+    getProductSalesCounts,
     markPickupCollected,
     mapReceipt,
     recordRefund,

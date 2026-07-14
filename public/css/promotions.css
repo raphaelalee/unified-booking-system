@@ -1,4 +1,5 @@
 .promotions-page-title {
+    margin-top: 96px !important;
     min-height: 320px !important;
     padding-top: 70px !important;
     padding-bottom: 56px !important;
@@ -6,6 +7,27 @@
         radial-gradient(circle at 82% 24%, rgba(143, 161, 130, 0.26), transparent 24%),
         linear-gradient(135deg, #f8fbf6 0%, #edf4e9 52%, #dfe9d8 100%) !important;
     color: #334633 !important;
+}
+
+.promotions-empty-state {
+    padding: clamp(30px, 5vw, 64px) !important;
+    text-align: center;
+    border: 1px solid rgba(64, 84, 63, 0.18) !important;
+    border-radius: 12px !important;
+    background: rgba(251, 253, 249, 0.96) !important;
+}
+
+.promotions-empty-state h2 {
+    margin: 0 0 10px;
+    color: #2f4330 !important;
+}
+
+.promotions-empty-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 22px;
 }
 
 .promotions-page-title h1 {
@@ -141,6 +163,20 @@
     color: #2f4330 !important;
 }
 
+.promotion-status-badge {
+    background: #fff8eb !important;
+    color: #77551c !important;
+}
+
+.promotion-offer-card[data-availability="ended"] {
+    opacity: 0.78;
+}
+
+.promotion-unavailable {
+    cursor: not-allowed;
+    white-space: nowrap;
+}
+
 .promotion-offer-content {
     padding: 22px !important;
     display: grid !important;
@@ -235,6 +271,9 @@
 }
 
 @media (max-width: 620px) {
+    .promotions-page-title {
+        margin-top: 76px !important;
+    }
     .promotion-offer-topline,
     .promotion-offer-meta {
         display: grid !important;

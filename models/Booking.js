@@ -2340,6 +2340,26 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
     });
 }
 
+function getServiceSalesCounts(callback) {
+    db.query(
+        `SELECT service_id, COUNT(*) AS sales_count
+         FROM bookings
+         WHERE status IN ('paid', 'checked_in', 'completed')
+         GROUP BY service_id`,
+        (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows.reduce((counts, row) => {
+                counts[Number(row.service_id)] = Number(row.sales_count || 0);
+                return counts;
+            }, {}));
+        }
+    );
+}
+
 module.exports = {
     attachTransaction,
     autoConfirmBooking,
@@ -2367,6 +2387,7 @@ module.exports = {
     getNextManageableByUserId,
     getSupportBookingsByUserId,
     getSingaporeTodayKey,
+    getServiceSalesCounts,
     getUpcomingByUserId,
     filterSlotsForBookingDate,
     getWhatsAppReminderCandidates,

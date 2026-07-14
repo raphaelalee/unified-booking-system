@@ -438,40 +438,135 @@
     grid-column: 1 / -1;
     margin-top: 0.25rem;
     padding: 0;
-    border: 1px solid var(--checkout-border);
-    border-radius: 12px;
-    background: #fff;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
 }
 
 .payment-cashback-card .cart-voucher-options {
     display: grid;
-    gap: 0;
+    gap: 0.55rem;
 }
 
 .payment-cashback-card .cart-voucher-option {
-    min-height: 74px;
-    padding: 0.66rem 0.72rem;
+    min-height: 82px;
+    padding: 0.85rem 0.9rem;
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr);
     gap: 0.78rem;
     align-items: start;
-    border: 0;
-    border-radius: 0;
-    background: #fff;
+    border: 1px solid #cdddc8;
+    border-radius: 14px;
+    background: #f0f7e9;
+    box-shadow: inset 3px 0 0 #557a4c;
+    cursor: pointer;
 }
 
 .payment-cashback-card .cart-voucher-option + .cart-voucher-option {
-    border-top: 1px solid var(--checkout-border);
+    border-top: 1px solid #d5dfd9;
 }
 
 .payment-cashback-card .cart-voucher-option:hover,
 .payment-cashback-card .cart-voucher-option:focus-within {
-    background: #f7fcf9;
+    border-color: #8caf86;
+    background: #f5faef;
 }
 
-.payment-cashback-card .cart-voucher-option:has(input[type="radio"]:checked) {
-    background: #eaf8f1;
-    box-shadow: inset 3px 0 0 #5e9f86;
+.payment-cashback-card .cart-voucher-option:has(input[data-platform-voucher]:checked) {
+    border-color: #557a4c;
+    background: #f0f7e9;
+    box-shadow: 0 8px 20px rgba(45, 91, 70, 0.1), inset 3px 0 0 #557a4c;
+}
+
+.payment-cashback-card .cart-voucher-option input[data-platform-voucher] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.payment-cashback-card .cart-voucher-option::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0;
+    border: 2px solid #9aaca2;
+    border-radius: 50%;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.payment-cashback-card .cart-voucher-option:has(input[data-platform-voucher]:checked)::before {
+    border: 5px solid #39775e;
+}
+
+.payment-smart-voucher-note {
+    grid-column: 1 / -1;
+    margin: 0.6rem 0 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: 10px;
+    background: #edf7f1;
+    color: #315b49;
+    font-size: 0.8rem;
+}
+
+.payment-auto-merchant-voucher {
+    grid-column: 1 / -1;
+    min-height: 82px;
+    padding: 0.9rem 1rem;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.8rem;
+    border: 1px solid #cdddc8;
+    border-radius: 14px;
+    background: #f0f7e9;
+    box-shadow: inset 3px 0 0 #557a4c;
+}
+
+.payment-auto-merchant-voucher[hidden] {
+    display: none !important;
+}
+
+.payment-auto-voucher-radio {
+    width: 18px;
+    height: 18px;
+    border: 5px solid #3f5f45;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.payment-auto-voucher-copy {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.payment-auto-voucher-copy strong {
+    color: #173e24;
+    font-size: 1rem;
+}
+
+.payment-auto-voucher-copy small {
+    color: #5f735f;
+    font-size: 0.78rem;
+}
+
+.payment-auto-merchant-voucher b {
+    align-self: start;
+    color: #173e24;
+    font-size: 1rem;
+    white-space: nowrap;
+}
+
+.payment-platform-voucher-clear {
+    margin-top: 0.55rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #526c60;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .payment-cashback-card .cart-voucher-option-copy {
@@ -481,16 +576,16 @@
 }
 
 .payment-cashback-card .cart-voucher-option-copy strong {
-    color: var(--checkout-text);
-    font-size: 0.89rem;
+    color: #173e24;
+    font-size: 1rem;
 }
 
 .payment-cashback-card .payment-voucher-value {
     grid-column: 2;
     grid-row: 1;
     margin: 0;
-    color: #0d664a;
-    font-size: 0.92rem;
+    color: #173e24;
+    font-size: 1rem;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -498,8 +593,8 @@
 .payment-cashback-card .payment-voucher-meta {
     grid-column: 1 / -1;
     margin: 0;
-    color: var(--checkout-muted);
-    font-size: 0.75rem;
+    color: #5f735f;
+    font-size: 0.78rem;
 }
 
 .payment-selected-voucher {

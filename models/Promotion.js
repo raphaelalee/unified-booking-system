@@ -172,7 +172,18 @@ function getAll(callback) {
     });
 }
 
-function getActivePublic(callback) {
+function getActivePublic(options, callback) {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+
+    const includeExpired = Boolean(options?.includeExpired);
+    const publicDateCondition = includeExpired
+        ? ''
+        : `AND promotions.status = 'active'
+            AND promotions.start_date <= NOW()
+            AND promotions.end_date >= NOW()`;
     const sql = `
         SELECT
             promotions.promotion_id,
@@ -211,10 +222,8 @@ function getActivePublic(callback) {
         LEFT JOIN products ON products.product_id = promotions.product_id
         ${REDEMPTION_JOIN}
         ${SPIN_RESULTS_JOIN}
-        WHERE promotions.status = 'active'
-            AND promotions.start_date <= NOW()
-            AND promotions.end_date >= NOW()
-            AND salons.approval_status = 'approved'
+        WHERE salons.approval_status = 'approved'
+            ${publicDateCondition}
         ORDER BY promotions.type, promotions.start_date DESC, promotions.promotion_id DESC
     `;
 

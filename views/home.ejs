@@ -307,7 +307,12 @@
                 <% flashDealItems.forEach((deal, index) => { %>
                     <% const dealImageClass = deal.imageClass || (index % 2 === 0 ? 'home-service-facial' : 'home-service-spa'); %>
                     <% const hasTimer = Boolean(deal.endsAt); %>
-                    <article class="home-flash-tile" role="listitem">
+                    <article class="home-flash-tile" role="listitem" tabindex="0" data-flash-card-action="<%= deal.isProductDeal ? 'cart' : 'service' %>" <% if (!deal.isProductDeal) { %>data-flash-card-href="<%= deal.href %>"<% } %>>
+                        <% if (deal.isProductDeal) { %>
+                            <button class="home-flash-card-overlay" type="submit" form="flash-cart-form-<%= index %>" aria-label="Add <%= deal.title %> to cart"></button>
+                        <% } else { %>
+                            <a class="home-flash-card-overlay" href="<%= deal.href %>" draggable="false" aria-label="View and book <%= deal.title %>"></a>
+                        <% } %>
                         <div class="home-flash-media">
                             <div class="home-card-image <%= dealImageClass %>"<% if (deal.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= deal.imageUrl %>');"<% } %>></div>
                             <span class="home-flash-badge"><%= index % 3 === 0 ? 'Preferred' : (deal.badge || 'Flash deal') %></span>
@@ -327,13 +332,21 @@
                                     <strong>View deal</strong>
                                 <% } %>
                             </div>
-                            <a class="home-flash-card-link" href="<%= deal.href %>">Open deal</a>
+                            <% if (hasTimer) { %><a class="home-flash-card-link" href="<%= deal.href %>">Open deal</a><% } %>
                         </div>
                         <div class="home-flash-bar">
                             <% if (hasTimer) { %>
                                 <span class="home-flash-timer" data-flash-deal-ends-at="<%= deal.endsAt %>">Ends soon</span>
+                            <% } else if (deal.isProductDeal) { %>
+                                <form id="flash-cart-form-<%= index %>" class="home-flash-cart-form product-add-form" action="/cart/product/<%= deal.itemId %>" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <input type="hidden" name="flashDealCycle" value="<%= deal.flashDealCycle %>">
+                                    <input type="hidden" name="flashDiscountPercent" value="<%= deal.discountPercent %>">
+                                    <input type="hidden" name="flashDealToken" value="<%= deal.flashToken %>">
+                                    <button class="home-flash-timer is-static home-flash-action" type="submit">Click here</button>
+                                </form>
                             <% } else { %>
-                                <span class="home-flash-timer is-static"><%= deal.urgency || 'Live now' %></span>
+                                <a class="home-flash-timer is-static home-flash-action" href="<%= deal.href %>">Click here</a>
                             <% } %>
                         </div>
                     </article>
@@ -724,6 +737,8 @@
 
                 const refreshAt = new Date(flashCountdown.dataset.flashSectionEndsAt).getTime();
                 if (!Number.isNaN(refreshAt) && Date.now() >= refreshAt) {
+                    // A refresh asks the server for the next low-selling batch.
+                    // It never deletes or mutates products, services, or promotions.
                     window.location.reload();
                 }
             }
@@ -748,39 +763,43 @@
             flashPrevious.addEventListener('click', () => scrollFlashTrack(-1));
             flashNext.addEventListener('click', () => scrollFlashTrack(1));
 
-            let isDraggingFlash = false;
-            let flashDragStartX = 0;
-            let flashDragStartScrollLeft = 0;
-
-            const stopFlashDrag = () => {
-                if (!isDraggingFlash) {
-                    return;
-                }
-
-                isDraggingFlash = false;
-                flashTrack.classList.remove('is-dragging');
-            };
+            let dragStartX = 0;
+            let dragStartScrollLeft = 0;
+            let isPointerDown = false;
+            let didDrag = false;
 
             flashTrack.addEventListener('pointerdown', (event) => {
-                isDraggingFlash = true;
-                flashDragStartX = event.clientX;
-                flashDragStartScrollLeft = flashTrack.scrollLeft;
-                flashTrack.classList.add('is-dragging');
-                flashTrack.setPointerCapture(event.pointerId);
+                if (event.button !== 0) return;
+                isPointerDown = true;
+                didDrag = false;
+                dragStartX = event.clientX;
+                dragStartScrollLeft = flashTrack.scrollLeft;
             });
 
             flashTrack.addEventListener('pointermove', (event) => {
-                if (!isDraggingFlash) {
-                    return;
-                }
-
-                const deltaX = event.clientX - flashDragStartX;
-                flashTrack.scrollLeft = flashDragStartScrollLeft - deltaX;
+                if (!isPointerDown) return;
+                const deltaX = event.clientX - dragStartX;
+                if (Math.abs(deltaX) < 6 && !didDrag) return;
+                didDrag = true;
+                flashTrack.classList.add('is-dragging');
+                flashTrack.scrollLeft = dragStartScrollLeft - deltaX;
+                event.preventDefault();
             });
 
-            flashTrack.addEventListener('pointerup', stopFlashDrag);
-            flashTrack.addEventListener('pointercancel', stopFlashDrag);
-            flashTrack.addEventListener('pointerleave', stopFlashDrag);
+            const finishDrag = () => {
+                isPointerDown = false;
+                flashTrack.classList.remove('is-dragging');
+            };
+
+            flashTrack.addEventListener('pointerup', finishDrag);
+            flashTrack.addEventListener('pointercancel', finishDrag);
+            flashTrack.addEventListener('pointerleave', finishDrag);
+            flashTrack.addEventListener('click', (event) => {
+                if (!didDrag) return;
+                event.preventDefault();
+                event.stopPropagation();
+                didDrag = false;
+            }, true);
         }
     })();
 </script>

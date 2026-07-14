@@ -4,6 +4,10 @@
     const totalStock = products.reduce((sum, product) => sum + Number(product.stockQuantity || 0), 0);
     const lowStockCount = products.filter((product) => Number(product.stockQuantity || 0) <= 5).length;
     const featuredCount = products.filter((product) => product.isFeatured).length;
+    const recommendedProducts = products.filter((product) => !product.isFeatured && product.featuredRecommendation)
+        .sort((left, right) => left.featuredRecommendation.rank - right.featuredRecommendation.rank)
+        .slice(0, 3);
+    const currentMonthLabel = new Date().toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
 %>
 
 <section class="section compact merchant-products-page">
@@ -44,6 +48,34 @@
         </article>
     </div>
 
+    <% if (recommendedProducts.length > 0) { %>
+        <section class="merchant-sales-recommendations" aria-labelledby="product-recommendations-title">
+            <p class="eyebrow">Recommendation</p>
+            <h2 id="product-recommendations-title">Recommended Products To Be Featured In <%= currentMonthLabel %></h2>
+            <p>Top product candidates based primarily on paid sales, with stock and listing readiness used as tie-breakers.</p>
+            <div class="merchant-sales-recommendation-list">
+                <% recommendedProducts.forEach((product) => { const recommendation = product.featuredRecommendation; %>
+                    <article class="merchant-sales-recommendation-card">
+                        <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
+                        <h3><%= product.name %></h3>
+                        <p><%= recommendation.reason %></p>
+                        <div class="merchant-sales-metrics">
+                            <span><strong><%= Number(product.salesCount || 0) %></strong> paid units sold</span>
+                            <span><strong><%= Number(product.stockQuantity || 0) %></strong> in stock</span>
+                            <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
+                        </div>
+                        <form action="/merchant/products/<%= product.id %>/feature" method="POST">
+                            <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
+                            <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
+                            <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
+                            <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured products already selected' %></button>
+                        </form>
+                    </article>
+                <% }) %>
+            </div>
+        </section>
+    <% } %>
+
     <% if (products.length === 0) { %>
         <div class="merchant-products-empty">
             <p class="eyebrow">Products</p>
@@ -73,6 +105,7 @@
                     <div class="merchant-product-main">
                         <h2><%= product.name %></h2>
                         <p class="muted"><%= product.salonName %></p>
+                        <p class="merchant-product-sales"><strong><%= Number(product.salesCount || 0) %></strong> paid unit<%= Number(product.salesCount || 0) === 1 ? '' : 's' %> sold</p>
                         <% if ((product.routineGoalTags || []).length || (product.routineConcernTags || []).length || product.routineRecommendationNote) { %>
                             <p class="muted">
                                 Routine Finder:
@@ -101,6 +134,7 @@
                             <span><%= product.featuredStartDate || 'No start' %> to <%= product.featuredEndDate || 'No end' %></span>
                         <% } else if (recommendation) { %>
                             <strong>Recommended #<%= recommendation.rank %></strong>
+                            <span>Sales score: <%= Number(recommendation.score || 0).toFixed(0) %></span>
                             <span><%= recommendation.reason %></span>
                             <span><%= recommendation.canFeatureNow ? `Suggested priority ${recommendation.featuredOrder}` : 'Replace one existing featured product to use this recommendation.' %></span>
                         <% } else { %>

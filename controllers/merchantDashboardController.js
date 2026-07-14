@@ -2,6 +2,7 @@ const QRCode = require('qrcode');
 const MerchantService = require('../models/MerchantService');
 const Booking = require('../models/Booking');
 const Product = require('../models/Product');
+const PurchaseHistory = require('../models/PurchaseHistory');
 const Promotion = require('../models/Promotion');
 const RewardVoucher = require('../models/RewardVoucher');
 const CashbackCampaign = require('../models/CashbackCampaign');
@@ -187,34 +188,31 @@ function buildFeaturedWindowDefaults() {
     };
 }
 
-function buildServiceFeaturedRecommendations(services = []) {
+function buildServiceFeaturedRecommendations(services = [], salesCounts = {}) {
     const featuredCount = services.filter((service) => service.isFeatured).length;
     const defaults = buildFeaturedWindowDefaults();
     const candidates = services
         .filter((service) => !service.isFeatured)
         .map((service) => {
+            const salesCount = Number(salesCounts[Number(service.id)] || 0);
             const slotCount = Array.isArray(service.slots) ? service.slots.length : 0;
             const routineTagCount = (service.routineGoalTags || []).length + (service.routineConcernTags || []).length;
             const hasInventorySupport = !service.inventoryProductId || Number(service.inventoryStockQuantity || 0) > 0;
-            const score = (slotCount * 6)
+            const score = (salesCount * 100)
+                + (slotCount * 6)
                 + (service.description ? 12 : 0)
                 + (routineTagCount * 4)
                 + (service.packageEnabled ? 5 : 0)
                 + (hasInventorySupport ? 8 : 0)
                 + (Number(service.price || 0) > 0 ? 3 : 0);
 
-            let reason = 'Strong booking readiness across pricing, slots, and profile completeness.';
-
-            if (slotCount >= 4) {
-                reason = 'High slot coverage makes this service easier to convert from homepage traffic.';
-            } else if (routineTagCount >= 2) {
-                reason = 'Good Routine Finder tagging makes this service easier to merchandise.';
-            } else if (service.packageEnabled) {
-                reason = 'Package setup gives this service stronger revenue potential when featured.';
-            }
+            const reason = salesCount > 0
+                ? `${salesCount} paid booking${salesCount === 1 ? '' : 's'} shows proven customer demand for this service.`
+                : 'No paid bookings yet; ranked by available slots and listing readiness until sales data is available.';
 
             return {
                 ...service,
+                salesCount,
                 recommendationScore: score,
                 recommendationReason: reason
             };
@@ -229,6 +227,7 @@ function buildServiceFeaturedRecommendations(services = []) {
             featuredStartDate: defaults.featuredStartDate,
             featuredEndDate: defaults.featuredEndDate,
             score: service.recommendationScore,
+            salesCount: service.salesCount,
             reason: service.recommendationReason,
             canFeatureNow: featuredCount < 3,
             rank: index + 1
@@ -238,33 +237,34 @@ function buildServiceFeaturedRecommendations(services = []) {
     return recommendationMap;
 }
 
-function buildProductFeaturedRecommendations(products = []) {
+function buildProductFeaturedRecommendations(products = [], salesCounts = {}) {
     const featuredCount = products.filter((product) => product.isFeatured).length;
     const defaults = buildFeaturedWindowDefaults();
     const candidates = products
         .filter((product) => !product.isFeatured)
         .map((product) => {
+            const salesCount = Number(salesCounts[Number(product.id)] || 0);
             const routineTagCount = (product.routineGoalTags || []).length + (product.routineConcernTags || []).length;
             const hasImage = Boolean(product.imageUrl || product.fallbackImageUrl);
             const stockQuantity = Number(product.stockQuantity || 0);
-            const score = (stockQuantity >= 10 ? 18 : stockQuantity > 0 ? 10 : 0)
+            const score = (salesCount * 100)
+                + (stockQuantity >= 10 ? 18 : stockQuantity > 0 ? 10 : 0)
                 + (hasImage ? 12 : 0)
                 + (product.description ? 10 : 0)
                 + (routineTagCount * 4)
                 + (Number(product.price || 0) > 0 ? 3 : 0);
 
-            let reason = 'Healthy stock and strong product detail make this a good featured candidate.';
+            let reason = salesCount > 0
+                ? `${salesCount} paid unit${salesCount === 1 ? '' : 's'} sold gives this product strong customer demand.`
+                : 'No paid sales yet; ranked by stock and listing readiness until sales data is available.';
 
-            if (stockQuantity >= 10) {
-                reason = 'Healthy stock supports sustained visibility without risking quick inventory blocks.';
-            } else if (hasImage && product.description) {
-                reason = 'Strong image and product copy make this item ready for featured placement.';
-            } else if (routineTagCount >= 2) {
-                reason = 'Routine Finder tagging improves product discoverability when featured.';
+            if (salesCount > 0 && stockQuantity <= 0) {
+                reason = `${salesCount} paid unit${salesCount === 1 ? '' : 's'} sold, but restock is needed before featuring.`;
             }
 
             return {
                 ...product,
+                salesCount,
                 recommendationScore: score,
                 recommendationReason: reason
             };
@@ -279,6 +279,7 @@ function buildProductFeaturedRecommendations(products = []) {
             featuredStartDate: defaults.featuredStartDate,
             featuredEndDate: defaults.featuredEndDate,
             score: product.recommendationScore,
+            salesCount: product.salesCount,
             reason: product.recommendationReason,
             canFeatureNow: featuredCount < 3,
             rank: index + 1
@@ -1457,11 +1458,13 @@ function renderMerchantServices(req, res, merchant, options = {}) {
     const error = options.error !== undefined ? options.error : req.session.merchantError;
     req.session.merchantSuccess = null;
     req.session.merchantError = null;
-    const recommendationMap = buildServiceFeaturedRecommendations(merchant.services || []);
+    const salesCounts = options.salesCounts || {};
+    const recommendationMap = buildServiceFeaturedRecommendations(merchant.services || [], salesCounts);
     const merchantWithRecommendations = {
         ...merchant,
         services: (merchant.services || []).map((service) => ({
             ...service,
+            salesCount: Number(salesCounts[Number(service.id)] || 0),
             featuredRecommendation: recommendationMap.get(String(service.id)) || null
         }))
     };
@@ -1482,7 +1485,13 @@ function showServices(req, res) {
             return handled;
         }
 
-        return renderMerchantServices(req, res, merchant);
+        return Booking.getServiceSalesCounts((salesError, salesCounts = {}) => {
+            if (salesError) {
+                console.error(salesError);
+            }
+
+            return renderMerchantServices(req, res, merchant, { salesCounts });
+        });
     });
 }
 
@@ -2509,18 +2518,25 @@ function listProducts(req, res) {
             const error = req.session.merchantError;
             req.session.merchantSuccess = null;
             req.session.merchantError = null;
-            const recommendationMap = buildProductFeaturedRecommendations(products || []);
-            const productsWithRecommendations = (products || []).map((product) => ({
-                ...product,
-                featuredRecommendation: recommendationMap.get(String(product.id)) || null
-            }));
+            return PurchaseHistory.getProductSalesCounts((salesError, salesCounts = {}) => {
+                if (salesError) {
+                    console.error(salesError);
+                }
 
-            return res.render('merchant-products', {
-                title: 'Merchant Products',
-                merchant,
-                products: productsWithRecommendations,
-                success,
-                error
+                const recommendationMap = buildProductFeaturedRecommendations(products || [], salesCounts);
+                const productsWithRecommendations = (products || []).map((product) => ({
+                    ...product,
+                    salesCount: Number(salesCounts[Number(product.id)] || 0),
+                    featuredRecommendation: recommendationMap.get(String(product.id)) || null
+                }));
+
+                return res.render('merchant-products', {
+                    title: 'Merchant Products',
+                    merchant,
+                    products: productsWithRecommendations,
+                    success,
+                    error
+                });
             });
         });
     });

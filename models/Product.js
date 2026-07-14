@@ -662,7 +662,7 @@ function getByMerchantUserId(userId, callback) {
         ORDER BY products.is_featured DESC, products.featured_order, products.product_id DESC
     `;
 
-    db.query(sql, [userId], (error, rows) => {
+    db.query(sql, (error, rows) => {
         if (error) {
             callback(error);
             return;

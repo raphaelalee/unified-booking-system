@@ -6,6 +6,10 @@
     const slotCount = services.reduce((total, service) => total + (Array.isArray(service.slots) ? service.slots.length : 0), 0);
     const packageCount = services.filter((service) => service.packageEnabled).length;
     const featuredCount = services.filter((service) => service.isFeatured).length;
+    const recommendedServices = services.filter((service) => !service.isFeatured && service.featuredRecommendation)
+        .sort((left, right) => left.featuredRecommendation.rank - right.featuredRecommendation.rank)
+        .slice(0, 3);
+    const currentMonthLabel = new Date().toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
     const averagePrice = services.length > 0
         ? services.reduce((total, service) => total + Number(service.price || 0), 0) / services.length
         : 0;
@@ -52,6 +56,34 @@
             <small>homepage and marketplace priority</small>
         </article>
     </div>
+
+    <% if (recommendedServices.length > 0) { %>
+        <section class="merchant-sales-recommendations" aria-labelledby="service-recommendations-title">
+            <p class="eyebrow">Recommendation</p>
+            <h2 id="service-recommendations-title">Recommended Services To Be Featured In <%= currentMonthLabel %></h2>
+            <p>Top service candidates based primarily on paid bookings, with availability and listing readiness used as tie-breakers.</p>
+            <div class="merchant-sales-recommendation-list">
+                <% recommendedServices.forEach((service) => { const recommendation = service.featuredRecommendation; %>
+                    <article class="merchant-sales-recommendation-card">
+                        <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
+                        <h3><%= service.name %></h3>
+                        <p><%= recommendation.reason %></p>
+                        <div class="merchant-sales-metrics">
+                            <span><strong><%= Number(service.salesCount || 0) %></strong> paid bookings</span>
+                            <span><strong><%= Array.isArray(service.slots) ? service.slots.length : 0 %></strong> slots</span>
+                            <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
+                        </div>
+                        <form action="/merchant/services/<%= service.id %>/feature" method="POST">
+                            <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
+                            <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
+                            <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
+                            <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured services already selected' %></button>
+                        </form>
+                    </article>
+                <% }) %>
+            </div>
+        </section>
+    <% } %>
 
     <div class="merchant-service-toolbar">
         <div>
