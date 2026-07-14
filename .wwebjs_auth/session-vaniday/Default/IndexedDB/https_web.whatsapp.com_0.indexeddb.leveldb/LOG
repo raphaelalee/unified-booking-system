@@ -1,0 +1,64 @@
+2026/07/14-23:25:14.034 3d0 Reusing MANIFEST C:\Users\angel\OneDrive\Desktop\FYP\fyp code\unified-booking-system\.wwebjs_auth\session-vaniday\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/07/14-23:25:14.036 3d0 Recovering log #1198
+2026/07/14-23:25:14.084 3d0 Reusing old log C:\Users\angel\OneDrive\Desktop\FYP\fyp code\unified-booking-system\.wwebjs_auth\session-vaniday\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/001198.log 
+2026/07/14-23:25:14.085 3d0 Delete type=2 #1191
+2026/07/14-23:25:14.085 3d0 Delete type=2 #1192
+2026/07/14-23:25:14.085 3d0 Delete type=2 #1200
+2026/07/14-23:25:30.911 3d0 Level-0 table #1215: started
+2026/07/14-23:25:30.930 3d0 Level-0 table #1215: 1117157 bytes OK
+2026/07/14-23:25:30.933 3d0 Delete type=0 #1198
+2026/07/14-23:25:30.960 3d0 Compacting 1@0 + 0@1 files
+2026/07/14-23:25:30.978 3d0 Generated table #1216@0: 22270 keys, 322971 bytes
+2026/07/14-23:25:30.984 3d0 Generated table #1217@0: 637 keys, 46345 bytes
+2026/07/14-23:25:30.992 3d0 Generated table #1218@0: 7495 keys, 207912 bytes
+2026/07/14-23:25:30.992 3d0 Compacted 1@0 + 0@1 files => 577228 bytes
+2026/07/14-23:25:30.995 3d0 compacted to: files[ 0 3 37 0 0 0 0 ]
+2026/07/14-23:25:30.995 3d0 Delete type=2 #1215
+2026/07/14-23:25:31.007 3d0 Compacting 1@1 + 7@2 files
+2026/07/14-23:25:31.034 3d0 Generated table #1219@1: 2716 keys, 2156569 bytes
+2026/07/14-23:25:31.087 3d0 Generated table #1220@1: 30205 keys, 2217236 bytes
+2026/07/14-23:25:31.160 3d0 Generated table #1221@1: 25333 keys, 2277048 bytes
+2026/07/14-23:25:31.239 3d0 Generated table #1222@1: 25232 keys, 2274691 bytes
+2026/07/14-23:25:31.309 3d0 Generated table #1223@1: 26247 keys, 2265936 bytes
+2026/07/14-23:25:31.389 3d0 Generated table #1224@1: 18432 keys, 2238263 bytes
+2026/07/14-23:25:31.395 3d0 Generated table #1225@1: 18 keys, 4397 bytes
+2026/07/14-23:25:31.395 3d0 Compacted 1@1 + 7@2 files => 13434140 bytes
+2026/07/14-23:25:31.397 3d0 compacted to: files[ 0 2 37 0 0 0 0 ]
+2026/07/14-23:25:33.590 3d0 Compacting 1@1 + 9@2 files
+2026/07/14-23:25:33.667 3d0 Generated table #1226@1: 20110 keys, 2262018 bytes
+2026/07/14-23:25:33.698 3d0 Generated table #1227@1: 6163 keys, 2126197 bytes
+2026/07/14-23:25:33.734 3d0 Generated table #1228@1: 7982 keys, 2130053 bytes
+2026/07/14-23:25:33.810 3d0 Generated table #1229@1: 91305 keys, 2237857 bytes
+2026/07/14-23:25:33.892 3d0 Generated table #1230@1: 105191 keys, 2255721 bytes
+2026/07/14-23:25:33.972 3d0 Generated table #1231@1: 104838 keys, 2256782 bytes
+2026/07/14-23:25:34.054 3d0 Generated table #1232@1: 105023 keys, 2255084 bytes
+2026/07/14-23:25:34.137 3d0 Generated table #1233@1: 104940 keys, 2255153 bytes
+2026/07/14-23:25:34.186 3d0 Generated table #1234@1: 59886 keys, 1443652 bytes
+2026/07/14-23:25:34.186 3d0 Compacted 1@1 + 9@2 files => 19222517 bytes
+2026/07/14-23:25:34.189 3d0 compacted to: files[ 0 1 37 0 0 0 0 ]
+2026/07/14-23:25:34.189 3d0 Delete type=2 #1128
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1149
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1193
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1194
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1195
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1196
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1197
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1202
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1203
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1204
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1205
+2026/07/14-23:25:34.190 3d0 Delete type=2 #1206
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1207
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1208
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1209
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1210
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1217
+2026/07/14-23:25:34.191 3d0 Delete type=2 #1218
+2026/07/14-23:25:54.804 3d0 Compacting 1@1 + 2@2 files
+2026/07/14-23:25:54.871 3d0 Generated table #1235@1: 59406 keys, 2233953 bytes
+2026/07/14-23:25:54.906 3d0 Generated table #1236@1: 10714 keys, 1855179 bytes
+2026/07/14-23:25:54.906 3d0 Compacted 1@1 + 2@2 files => 4089132 bytes
+2026/07/14-23:25:54.907 3d0 compacted to: files[ 0 0 37 0 0 0 0 ]
+2026/07/14-23:25:54.908 3d0 Delete type=2 #1211
+2026/07/14-23:25:54.908 3d0 Delete type=2 #1212
+2026/07/14-23:25:54.908 3d0 Delete type=2 #1216

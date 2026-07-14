@@ -28,6 +28,7 @@ const { uploadProductImage } = require('./utils/productUpload');
 const { uploadProfileImage } = require('./utils/profileUpload');
 const { startSmsReminderScheduler } = require('./services/smsAutomation');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
+const { startWhatsAppWebClient } = require('./services/whatsappWebClient');
 const {
     allowGuestOrCustomer,
     allowBookingViewer,
@@ -811,6 +812,9 @@ initializeDatabaseSchemas((schemaError) => {
 
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
+        startWhatsAppWebClient({ onMessage: whatsappController.handleIncomingMessage }).catch((error) => {
+            console.error('WhatsApp Web client startup failed:', error.message || error);
+        });
         startWhatsAppReminderScheduler();
         startSmsReminderScheduler();
     });

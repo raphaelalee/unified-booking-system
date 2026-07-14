@@ -1,5 +1,11 @@
+const { sendWhatsAppWebText } = require('../services/whatsappWebClient');
+
 function isWhatsAppEnabled() {
     return String(process.env.WHATSAPP_NOTIFICATIONS_ENABLED || process.env.WHATSAPP_AUTOMATION_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+function getProvider() {
+    return String(process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
 }
 
 function getConfig() {
@@ -91,10 +97,16 @@ function buildCancellationMessage(booking) {
 }
 
 async function sendWhatsAppText(phone, message) {
+    const provider = getProvider();
+    const body = String(message || '').trim();
+
+    if (provider === 'whatsapp_web' || provider === 'whatsapp-web' || provider === 'web') {
+        return sendWhatsAppWebText(phone, body);
+    }
+
     const config = getConfig();
     const to = formatWhatsAppAddress(phone);
     const from = formatWhatsAppAddress(config.from);
-    const body = String(message || '').trim();
 
     if (!isWhatsAppEnabled() || !config.accountSid || !config.authToken || !from || !to || !body) {
         return { skipped: true };

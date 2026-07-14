@@ -770,6 +770,7 @@ function postWebhook(req, res) {
 }
 
 module.exports = {
+    handleIncomingMessage,
     getWebhook,
     postWebhook
 };
