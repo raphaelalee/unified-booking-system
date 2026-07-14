@@ -1,5 +1,11 @@
 const db = require('../db');
 const Loyalty = require('./Loyalty');
+const {
+    formatPaymentBreakdown,
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 
 function ensureTable(callback) {
     const sql = `
@@ -95,6 +101,30 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00');
             }
 
+            if (!fields.has('payment_provider')) {
+                alters.push('ADD COLUMN payment_provider VARCHAR(40) DEFAULT NULL');
+            }
+
+            if (!fields.has('payment_method_label')) {
+                alters.push('ADD COLUMN payment_method_label VARCHAR(120) DEFAULT NULL');
+            }
+
+            if (!fields.has('payment_breakdown_json')) {
+                alters.push('ADD COLUMN payment_breakdown_json LONGTEXT DEFAULT NULL');
+            }
+
+            if (!fields.has('payment_transaction_id')) {
+                alters.push('ADD COLUMN payment_transaction_id INT DEFAULT NULL');
+            }
+
+            if (!fields.has('provider_payment_reference')) {
+                alters.push('ADD COLUMN provider_payment_reference VARCHAR(190) DEFAULT NULL');
+            }
+
+            if (!fields.has('remaining_paid_amount')) {
+                alters.push('ADD COLUMN remaining_paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -121,16 +151,35 @@ function save(receipt, callback) {
 
         const items = Array.isArray(receipt.items) ? receipt.items : [];
         const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
+        const paymentMethod = normalizePaymentMethod(receipt.paymentMethod || 'card');
+        const paymentProvider = normalizePaymentProvider(receipt.paymentProvider, paymentMethod);
+        const paidAmount = Number(receipt.paidAmount || receipt.totalAmount || 0);
+        const refundedAmount = Number(receipt.refundedAmount || 0);
+        const paymentBreakdown = receipt.paymentBreakdown?.length
+            ? receipt.paymentBreakdown
+            : formatPaymentBreakdown([], {
+                paymentMethod,
+                paymentProvider,
+                amount: paidAmount,
+                refundedAmount
+            });
         const sql = `
             INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 item_names = VALUES(item_names),
                 items_json = VALUES(items_json),
                 total_amount = VALUES(total_amount),
                 payment_method = VALUES(payment_method),
                 payment_status = VALUES(payment_status),
+                payment_provider = VALUES(payment_provider),
+                payment_method_label = VALUES(payment_method_label),
+                payment_breakdown_json = VALUES(payment_breakdown_json),
+                payment_transaction_id = VALUES(payment_transaction_id),
+                provider_payment_reference = VALUES(provider_payment_reference),
+                refunded_amount = VALUES(refunded_amount),
+                remaining_paid_amount = VALUES(remaining_paid_amount),
                 fulfilment = VALUES(fulfilment),
                 pickup_merchant_id = VALUES(pickup_merchant_id),
                 pickup_merchant_name = VALUES(pickup_merchant_name),
@@ -151,7 +200,7 @@ function save(receipt, callback) {
             itemNames,
             JSON.stringify(items),
             Number(receipt.totalAmount || 0),
-            receipt.paymentMethod || 'paid',
+            paymentMethod,
             receipt.paymentStatus || 'paid',
             receipt.paidAt ? new Date(receipt.paidAt) : new Date(),
             receipt.fulfilment || null,
@@ -164,7 +213,14 @@ function save(receipt, callback) {
             Number(receipt.pointsRedeemed || 0),
             Number(receipt.pointsDiscount || 0),
             Number(receipt.itemSubtotal || 0),
-            Number(receipt.shippingFee || 0)
+            Number(receipt.shippingFee || 0),
+            paymentProvider,
+            receipt.paymentMethodLabel || formatPaymentMethod(paymentMethod, paymentProvider),
+            JSON.stringify(paymentBreakdown),
+            receipt.transactionId || null,
+            receipt.paymentTransactionReference || receipt.providerPaymentId || receipt.providerSessionId || '',
+            refundedAmount,
+            Math.max(paidAmount - refundedAmount, 0)
         ], callback);
     });
 }
@@ -252,16 +308,18 @@ function getSupportOrdersByUserId(userId, callback) {
                 item_names,
                 total_amount,
                 payment_method,
+                payment_provider,
                 payment_status,
                 delivery_status,
                 refund_status,
                 refunded_amount,
+                remaining_paid_amount,
                 refunded_at,
                 created_at
             FROM purchase_history
             WHERE user_id = ?
                 AND purchase_type = 'product'
-                AND payment_status = 'paid'
+                AND payment_status IN ('paid', 'partially_refunded', 'refunded')
             ORDER BY created_at DESC, history_id DESC
         `;
 
@@ -284,9 +342,11 @@ function getSupportOrdersByUserId(userId, callback) {
                 totalAmount: Number(row.total_amount || 0),
                 paymentStatus: row.payment_status || 'paid',
                 paymentMethod: row.payment_method || 'card',
+                paymentProvider: row.payment_provider || '',
                 deliveryStatus: row.delivery_status || 'processing',
                 refundStatus: row.refund_status || 'none',
                 refundedAmount: Number(row.refunded_amount || 0),
+                remainingPaidAmount: Number(row.remaining_paid_amount || 0),
                 refundedAt: row.refunded_at,
                 createdAt: row.created_at
             })));
@@ -390,10 +450,17 @@ function mapReceipt(row) {
         cashbackRedeemed: Number(row.cashback_used || 0),
         pointsRedeemed: Number(row.points_redeemed || 0),
         pointsDiscount: Number(row.points_discount || 0),
-        paymentMethod: row.payment_method || 'paid',
+        paymentMethod: row.payment_method || 'card',
+        paymentProvider: row.payment_provider || '',
+        paymentMethodLabel: row.payment_method_label || formatPaymentMethod(row.payment_method || 'card', row.payment_provider || ''),
+        paymentBreakdown: parseItems(row.payment_breakdown_json),
+        transactionId: row.payment_transaction_id || null,
+        paymentTransactionReference: row.provider_payment_reference || '',
         paymentStatus: row.payment_status || 'paid',
         deliveryStatus: row.delivery_status || 'processing',
         refundStatus: row.refund_status || 'none',
+        refundedAmount: Number(row.refunded_amount || 0),
+        remainingPaidAmount: Number(row.remaining_paid_amount || Math.max(Number(row.total_amount || 0) - Number(row.refunded_amount || 0), 0)),
         fulfilment: row.fulfilment || '',
         pickupMerchantId: row.pickup_merchant_id || '',
         pickupMerchantName: row.pickup_merchant_name || '',

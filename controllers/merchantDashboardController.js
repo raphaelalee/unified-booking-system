@@ -10,6 +10,7 @@ const Notification = require('../models/Notification');
 const Review = require('../models/Review');
 const Loyalty = require('../models/Loyalty');
 const AuditLog = require('../models/AuditLog');
+const SupportRequest = require('../models/SupportRequest');
 const {
     getProductImagePath,
     deleteProductImageFile
@@ -1390,8 +1391,16 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                             const error = options.error !== undefined ? options.error : req.session.merchantError;
                             req.session.merchantSuccess = null;
                             req.session.merchantError = null;
+                            const defaultRefundStats = {
+                                pendingCount: 0,
+                                approvedCount: 0,
+                                processingCount: 0,
+                                refundedCount: 0,
+                                rejectedCount: 0,
+                                failedCount: 0
+                            };
 
-                            const renderView = (qrPayload = {}) => res.status(options.status || 200).render(options.viewName || 'merchant-dashboard', {
+                            const renderView = (qrPayload = {}, refundStats = defaultRefundStats) => res.status(options.status || 200).render(options.viewName || 'merchant-dashboard', {
                                 title: options.title || 'Merchant Dashboard',
                                 merchant: qrPayload.merchant || { ...merchant, slug: getMerchantStorefrontSlug(merchant) },
                                 success,
@@ -1401,6 +1410,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 customerReport: reports.customerReport,
                                 appointmentReport: reports.appointmentReport,
                                 rescheduleAutomation: reports.rescheduleAutomation,
+                                refundStats,
                                 merchantReport: reports.merchantReport,
                                 salesReport: reports.salesReport,
                                 validationReport: reports.validationReport,
@@ -1413,17 +1423,23 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 qrDebug: options.qrDebug || qrPayload.qrDebug || null
                             });
 
-                            if (options.qrImage || options.qrCodeDataUrl) {
-                                return renderView();
-                            }
-
-                            return buildStorefrontQrPayload(req, merchant, (qrError, qrPayload) => {
-                                if (qrError) {
-                                    console.error(qrError);
-                                    return renderView();
+                            return SupportRequest.getMerchantRefundStats(req.session.user.id, (refundStatsError, refundStats = defaultRefundStats) => {
+                                if (refundStatsError) {
+                                    console.error(refundStatsError);
                                 }
 
-                                return renderView(qrPayload);
+                                if (options.qrImage || options.qrCodeDataUrl) {
+                                    return renderView({}, refundStatsError ? defaultRefundStats : refundStats);
+                                }
+
+                                return buildStorefrontQrPayload(req, merchant, (qrError, qrPayload) => {
+                                    if (qrError) {
+                                        console.error(qrError);
+                                        return renderView({}, refundStatsError ? defaultRefundStats : refundStats);
+                                    }
+
+                                    return renderView(qrPayload, refundStatsError ? defaultRefundStats : refundStats);
+                                });
                             });
                                     });
                                 });

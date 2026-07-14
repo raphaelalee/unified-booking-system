@@ -551,8 +551,11 @@
                                         <small><%= formatBookingDateTime(entry.createdAt) %></small>
                                     </div>
                                     <div>
-                                        <strong><%= formatMoney(entry.totalAmount) %></strong>
-                                        <small><%= entry.paymentStatus || entry.paymentMethod || 'paid' %></small>
+                                        <strong><%= formatMoney(Number(entry.remainingPaidAmount || entry.totalAmount || 0)) %></strong>
+                                        <small><%= entry.paymentMethodLabel || entry.paymentMethod || 'Payment' %> · <%= entry.paymentStatusLabel || entry.paymentStatus || 'paid' %></small>
+                                        <% if (Number(entry.refundedAmount || 0) > 0) { %>
+                                            <small>Refunded <%= formatMoney(entry.refundedAmount) %></small>
+                                        <% } %>
                                     </div>
                                 </a>
                             <% }) %>
@@ -1478,7 +1481,7 @@
         <p class="muted" data-cancel-summary></p>
         <div class="profile-policy-box">
             <strong>Cancellation policy</strong>
-            <span>Cancel at least 24 hours before your appointment for standard refund eligibility. Later cancellations may need merchant or admin review.</span>
+            <span>Cancel at least 24 hours before your appointment for standard refund eligibility. Later cancellations may need merchant review.</span>
         </div>
         <div class="profile-policy-box">
             <strong>Refund eligibility</strong>
@@ -1815,7 +1818,7 @@
             const hours = (appointment.getTime() - Date.now()) / 3600000;
             output.textContent = hours >= 24
                 ? 'Eligible for standard refund review.'
-                : 'Late cancellation: refund may require merchant or admin review.';
+                : 'Late cancellation: refund may require merchant review.';
         };
 
         document.querySelectorAll('[data-open-reschedule]').forEach((button) => {

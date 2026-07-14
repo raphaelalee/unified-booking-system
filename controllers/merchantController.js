@@ -25,6 +25,12 @@ const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publ
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const { formatAppointmentDateTime } = require('../utils/dateTimeFormat');
+const {
+    formatPaymentBreakdown,
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
 const nets = require('../services/nets');
@@ -4442,25 +4448,36 @@ async function prepareTrustedPayment(req, payment) {
 }
 
 function persistPaidTransaction(payment, paymentMethod) {
-    const normalizedMethod = String(paymentMethod || '').trim().toLowerCase();
-    const inferredProvider = payment.paymentProvider
-        || (normalizedMethod.includes('stripe') ? 'stripe'
-            : normalizedMethod.includes('paypal') ? 'paypal'
-                : normalizedMethod.includes('paynow') || normalizedMethod.includes('hitpay') ? 'hitpay'
-                    : normalizedMethod.includes('nets') ? 'nets'
-                        : 'direct');
+    const canonicalMethod = normalizePaymentMethod(payment.paymentMethod || paymentMethod || 'card');
+    const canonicalProvider = normalizePaymentProvider(payment.paymentProvider, canonicalMethod);
+    const cashbackUsed = Number(payment.cashbackRedeemed || 0);
+    const walletAmountUsed = canonicalMethod === 'wallet' ? Number(payment.amount || 0) : Number(payment.walletAmountUsed || 0);
 
     return new Promise((resolve, reject) => {
-        Transaction.createPaidTransaction(payment.userId, payment.amount, paymentMethod, payment.items || [], {
+        Transaction.createPaidTransaction(payment.userId, payment.amount, canonicalMethod, payment.items || [], {
             originalAmount: Number(payment.originalAmount || payment.amount || 0),
-            cashbackUsed: Number(payment.cashbackRedeemed || 0),
+            cashbackUsed,
+            cashbackAmountUsed: cashbackUsed,
+            walletAmountUsed,
+            voucherDiscountAmount: Number(payment.voucherDiscount || 0),
+            loyaltyPointsUsed: Number(payment.pointsRedeemed || 0),
+            loyaltyPointsValue: Number(payment.pointsDiscount || 0),
             bookingId: payment.kind === 'booking' ? payment.bookingId || payment.receiptId : null,
             createOrder: payment.kind === 'order',
             currency: payment.currency || 'SGD',
-            paymentProvider: inferredProvider,
+            paymentProvider: canonicalProvider,
             providerPaymentId: payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || null,
             providerSessionId: payment.providerSessionId || payment.stripeSessionId || payment.paypalOrderId || null,
-            providerCaptureId: payment.providerCaptureId || payment.paypalCaptureId || null
+            providerCaptureId: payment.providerCaptureId || payment.paypalCaptureId || null,
+            providerTransactionId: payment.providerTransactionId || payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || null,
+            providerOrderId: payment.providerOrderId || payment.paypalOrderId || null,
+            providerMetadata: {
+                method: canonicalMethod,
+                provider: canonicalProvider,
+                hitpayStatus: payment.hitpayStatus || null,
+                paypalPayerEmail: payment.paypalPayerEmail || null,
+                netsRetrievalRef: payment.txnRetrievalRef || null
+            }
         }, (error, result) => {
             if (error) {
                 reject(error);
@@ -4593,6 +4610,17 @@ async function notifyPaymentCompleted(req, paidPayment, transactionId) {
 
 function savePaidReceipt(req, payment, paymentMethod) {
     const receiptId = String(payment.receiptId);
+    const canonicalMethod = normalizePaymentMethod(payment.paymentMethod || paymentMethod || 'card');
+    const canonicalProvider = normalizePaymentProvider(payment.paymentProvider, canonicalMethod);
+    const paidAmount = Number(payment.amount || 0);
+    const cashbackUsed = Number(payment.cashbackRedeemed || 0);
+    const walletAmountUsed = canonicalMethod === 'wallet' ? paidAmount : Number(payment.walletAmountUsed || 0);
+    const paymentBreakdown = formatPaymentBreakdown([], {
+        paymentMethod: canonicalMethod,
+        paymentProvider: canonicalProvider,
+        amount: paidAmount,
+        refundedAmount: 0
+    });
 
     req.session.receipts = req.session.receipts || {};
     const receipt = {
@@ -4618,8 +4646,21 @@ function savePaidReceipt(req, payment, paymentMethod) {
         pointsRedeemed: Number(payment.pointsRedeemed || 0),
         pointsDiscount: Number(payment.pointsDiscount || 0),
         cashbackRedeemed: Number(payment.cashbackRedeemed || 0),
-        paymentMethod,
+        paymentMethod: canonicalMethod,
+        paymentProvider: canonicalProvider,
+        paymentMethodLabel: formatPaymentMethod(canonicalMethod, canonicalProvider),
+        paymentBreakdown,
         paymentStatus: 'paid',
+        paidAmount,
+        refundedAmount: 0,
+        remainingPaidAmount: paidAmount,
+        remainingRefundableAmount: paidAmount,
+        walletAmountUsed,
+        cashbackAmountUsed: cashbackUsed,
+        externalPaymentAmount: canonicalMethod === 'wallet' ? 0 : paidAmount,
+        providerPaymentId: payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || '',
+        providerSessionId: payment.providerSessionId || payment.stripeSessionId || payment.paypalOrderId || '',
+        providerCaptureId: payment.providerCaptureId || payment.paypalCaptureId || '',
         paidAt: new Date().toISOString(),
         bookingDate: payment.bookingDate,
         bookingTime: payment.bookingTime,

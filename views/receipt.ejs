@@ -4,6 +4,9 @@
     const safeViewerRole = typeof viewerRole !== 'undefined' ? viewerRole : 'customer';
     const returnPath = safeViewerRole === 'admin' ? '/admin/bookings' : (safeViewerRole === 'merchant' ? '/merchant/schedule' : '/services');
     const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
+    const paymentLabel = receipt.paymentMethodLabel || receipt.paymentMethod || 'Payment';
+    const paymentBreakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
+    const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 %>
 
 <section class="page-title receipt-title">
@@ -18,8 +21,8 @@
     <% } else { %>
         <p>
             <strong><%= receipt.userName %></strong> paid
-            <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
-            by <strong><%= receipt.paymentMethod %></strong>.
+            <strong>$<%= Number(receipt.paidAmount || receipt.totalAmount || 0).toFixed(2) %></strong>
+            by <strong><%= paymentLabel %></strong>.
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
                 Wallet cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
             <% } %>
@@ -76,6 +79,9 @@
                     <p><span>Status</span><strong><%= receipt.statusLabel || receipt.status %></strong></p>
                     <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
                     <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
+                    <p><span>Payment method</span><strong><%= paymentLabel %></strong></p>
+                    <p><span>Payment status</span><strong><%= formatStatus(receipt.paymentStatus) %></strong></p>
+                    <p><span>Refund status</span><strong><%= formatStatus(receipt.refundStatus) %></strong></p>
                     <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
                     <p><span>Appointment</span><strong><%= appointmentLabel || '-' %></strong></p>
                     <% if (receipt.checkedInAt) { %>
@@ -84,7 +90,10 @@
                 <% } else { %>
                     <p><span>User</span><strong><%= receipt.userName %></strong></p>
                     <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
-                    <p><span>Payment method</span><strong><%= receipt.paymentMethod %></strong></p>
+                    <p><span>Payment method</span><strong><%= paymentLabel %></strong></p>
+                    <p><span>Payment provider</span><strong><%= receipt.paymentProvider || '-' %></strong></p>
+                    <p><span>Payment status</span><strong><%= formatStatus(receipt.paymentStatus) %></strong></p>
+                    <p><span>Refund status</span><strong><%= formatStatus(receipt.refundStatus) %></strong></p>
                     <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
                 <% } %>
                 <% if (isProductPickup) { %>
@@ -144,6 +153,44 @@
                 <div class="receipt-total">
                     <span>Total amount</span>
                     <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (paymentBreakdown.length > 0) { %>
+                <div class="receipt-total">
+                    <span>Payment breakdown</span>
+                    <strong><%= paymentBreakdown.length %> source<%= paymentBreakdown.length === 1 ? '' : 's' %></strong>
+                </div>
+                <% paymentBreakdown.forEach((paymentSource) => { %>
+                    <div class="receipt-total">
+                        <span><%= paymentSource.label %></span>
+                        <strong>$<%= Number(paymentSource.amount || 0).toFixed(2) %></strong>
+                    </div>
+                <% }) %>
+            <% } %>
+            <div class="receipt-total">
+                <span>Total paid</span>
+                <strong>$<%= Number(receipt.paidAmount || receipt.totalAmount || 0).toFixed(2) %></strong>
+            </div>
+            <% if (Number(receipt.refundedAmount || 0) > 0) { %>
+                <div class="receipt-total">
+                    <span>Refunded</span>
+                    <strong>-$<%= Number(receipt.refundedAmount || 0).toFixed(2) %></strong>
+                </div>
+                <div class="receipt-total">
+                    <span>Net amount retained</span>
+                    <strong>$<%= Number(receipt.remainingPaidAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (receipt.paymentTransactionReference) { %>
+                <div class="receipt-total">
+                    <span>Payment reference</span>
+                    <strong><%= receipt.paymentTransactionReference %></strong>
+                </div>
+            <% } %>
+            <% if (receipt.providerRefundReference) { %>
+                <div class="receipt-total">
+                    <span>Refund reference</span>
+                    <strong><%= receipt.providerRefundReference %></strong>
                 </div>
             <% } %>
             <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>

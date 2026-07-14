@@ -1,6 +1,11 @@
 const db = require('../db');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Review = require('../models/Review');
+const {
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 
 function queryRows(sql, values = []) {
     return new Promise((resolve, reject) => {
@@ -35,6 +40,31 @@ function formatHistoryDate(value) {
         dateStyle: 'medium',
         timeStyle: 'short'
     });
+}
+
+function formatStatus(value) {
+    return String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function buildPaymentHistoryFields(row = {}) {
+    const method = normalizePaymentMethod(row.payment_method || row.paymentMethod || 'card');
+    const provider = normalizePaymentProvider(row.payment_provider || row.paymentProvider || '', method);
+    const paidAmount = Number(row.paid_amount || row.total_amount || row.totalAmount || 0);
+    const refundedAmount = Number(row.refunded_amount || row.refundedAmount || 0);
+
+    return {
+        paymentMethod: method,
+        paymentProvider: provider,
+        paymentMethodLabel: row.payment_method_label || formatPaymentMethod(method, provider),
+        paymentStatus: row.payment_status || row.paymentStatus || (refundedAmount > 0 ? 'partially_refunded' : 'paid'),
+        paymentStatusLabel: formatStatus(row.payment_status || row.paymentStatus || 'paid'),
+        refundStatus: row.refund_status || row.refundStatus || (refundedAmount > 0 ? 'partially_refunded' : 'none'),
+        refundStatusLabel: formatStatus(row.refund_status || row.refundStatus || 'none'),
+        refundedAmount,
+        remainingPaidAmount: Math.max(paidAmount - refundedAmount, 0)
+    };
 }
 
 function normalizeReviewRating(value) {
@@ -113,6 +143,10 @@ async function getBookingHistory(userId) {
             services.service_name AS item_names,
             services.price AS total_amount,
             COALESCE(transactions.payment_method, 'Not paid') AS payment_method,
+            COALESCE(transactions.payment_provider, '') AS payment_provider,
+            COALESCE(transactions.paid_amount, transactions.total_amount, services.price) AS paid_amount,
+            COALESCE(transactions.refund_status, bookings.refund_status, 'none') AS refund_status,
+            COALESCE(transactions.refunded_amount, 0) AS refunded_amount,
             COALESCE(transactions.payment_status, bookings.status, 'pending') AS payment_status,
             COALESCE(transactions.created_at, bookings.booking_date) AS created_at
         FROM bookings
@@ -153,8 +187,7 @@ async function getBookingHistory(userId) {
         type: 'booking',
         itemNames: row.item_names,
         totalAmount: Number(row.total_amount || 0),
-        paymentMethod: row.payment_method || 'Not paid',
-        paymentStatus: row.payment_status || 'pending',
+        ...buildPaymentHistoryFields(row),
         createdAt: row.created_at,
         createdAtLabel: formatHistoryDate(row.created_at)
     }));
@@ -169,6 +202,10 @@ async function getProductHistory(userId) {
             GROUP_CONCAT(CONCAT(order_items.product_id, '::', products.name, '::', order_items.quantity, '::', COALESCE(products.salon_id, '')) ORDER BY order_items.order_item_id SEPARATOR '||') AS item_payload,
             transactions.total_amount,
             transactions.payment_method,
+            transactions.payment_provider,
+            transactions.paid_amount,
+            transactions.refund_status,
+            transactions.refunded_amount,
             transactions.payment_status,
             transactions.delivery_status,
             transactions.pickup_status,
@@ -181,6 +218,10 @@ async function getProductHistory(userId) {
             transactions.transaction_id,
             transactions.total_amount,
             transactions.payment_method,
+            transactions.payment_provider,
+            transactions.paid_amount,
+            transactions.refund_status,
+            transactions.refunded_amount,
             transactions.payment_status,
             transactions.delivery_status,
             transactions.pickup_status,
@@ -197,8 +238,7 @@ async function getProductHistory(userId) {
         itemNames: row.item_names || 'Product order',
         items: parseProductHistoryItems(row.item_payload),
         totalAmount: Number(row.total_amount || 0),
-        paymentMethod: row.payment_method || 'card',
-        paymentStatus: row.payment_status || 'paid',
+        ...buildPaymentHistoryFields(row),
         deliveryStatus: row.delivery_status || 'processing',
         pickupStatus: row.pickup_status || '',
         createdAt: row.created_at,
@@ -221,8 +261,7 @@ function getPersistentHistory(userId) {
                 itemNames: row.item_names,
                 items: PurchaseHistory.mapReceipt(row)?.items || [],
                 totalAmount: Number(row.total_amount || 0),
-                paymentMethod: row.payment_method || 'paid',
-                paymentStatus: row.payment_status || 'paid',
+                ...buildPaymentHistoryFields(row),
                 fulfilment: row.fulfilment || '',
                 deliveryStatus: row.delivery_status || 'processing',
                 pickupStatus: row.pickup_status || '',

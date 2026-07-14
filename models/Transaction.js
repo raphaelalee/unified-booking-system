@@ -1,10 +1,17 @@
 const db = require('../db');
 const Loyalty = require('./Loyalty');
+const {
+    formatPaymentBreakdown,
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 
 let fulfilmentSchemaReady = false;
 const DEFAULT_COMMISSION_RATE = 15;
 let merchantCommissionSchemaReady = false;
 let orderRefundSchemaReady = false;
+let paymentAllocationSchemaReady = false;
 
 function normalizeCommissionRate(value) {
     const numeric = Number(value);
@@ -116,6 +123,48 @@ function ensureFulfilmentSchema(callback) {
         if (!fields.has('refunded_by')) {
             alters.push('ADD COLUMN refunded_by INT DEFAULT NULL');
         }
+        if (!fields.has('gross_amount')) {
+            alters.push('ADD COLUMN gross_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('discount_amount')) {
+            alters.push('ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('voucher_discount_amount')) {
+            alters.push('ADD COLUMN voucher_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('wallet_amount_used')) {
+            alters.push('ADD COLUMN wallet_amount_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('cashback_amount_used')) {
+            alters.push('ADD COLUMN cashback_amount_used DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('loyalty_points_used')) {
+            alters.push('ADD COLUMN loyalty_points_used INT NOT NULL DEFAULT 0');
+        }
+        if (!fields.has('loyalty_points_value')) {
+            alters.push('ADD COLUMN loyalty_points_value DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('external_payment_amount')) {
+            alters.push('ADD COLUMN external_payment_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('paid_amount')) {
+            alters.push('ADD COLUMN paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('payment_date')) {
+            alters.push('ADD COLUMN payment_date DATETIME DEFAULT NULL');
+        }
+        if (!fields.has('provider_transaction_id')) {
+            alters.push('ADD COLUMN provider_transaction_id VARCHAR(190) DEFAULT NULL');
+        }
+        if (!fields.has('provider_order_id')) {
+            alters.push('ADD COLUMN provider_order_id VARCHAR(190) DEFAULT NULL');
+        }
+        if (!fields.has('provider_charge_id')) {
+            alters.push('ADD COLUMN provider_charge_id VARCHAR(190) DEFAULT NULL');
+        }
+        if (!fields.has('provider_metadata_json')) {
+            alters.push('ADD COLUMN provider_metadata_json LONGTEXT DEFAULT NULL');
+        }
 
         if (alters.length === 0) {
             fulfilmentSchemaReady = true;
@@ -131,6 +180,119 @@ function ensureFulfilmentSchema(callback) {
             callback(alterError);
         });
     });
+}
+
+function ensurePaymentAllocationSchema(callback) {
+    if (paymentAllocationSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    const sql = `
+        CREATE TABLE IF NOT EXISTS payment_allocations (
+            allocation_id INT NOT NULL AUTO_INCREMENT,
+            transaction_id INT NOT NULL,
+            source_type ENUM('external','wallet','cashback','loyalty_points','voucher','discount') NOT NULL,
+            payment_method VARCHAR(50) DEFAULT NULL,
+            payment_provider VARCHAR(40) DEFAULT NULL,
+            source_reference_id VARCHAR(190) DEFAULT NULL,
+            allocated_amount DECIMAL(10,2) NOT NULL,
+            refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            remaining_refundable_amount DECIMAL(10,2) GENERATED ALWAYS AS (GREATEST(allocated_amount - refunded_amount, 0.00)) STORED,
+            metadata_json LONGTEXT DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (allocation_id),
+            UNIQUE KEY uq_payment_allocation_source (transaction_id, source_type, source_reference_id),
+            KEY idx_payment_allocations_transaction (transaction_id),
+            CONSTRAINT fk_payment_allocations_transaction
+                FOREIGN KEY (transaction_id) REFERENCES transactions (transaction_id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(sql, (error) => {
+        if (!error) paymentAllocationSchemaReady = true;
+        callback(error);
+    });
+}
+
+function buildPaymentAllocations(transactionId, paymentMethod, paymentProvider, amount, options = {}) {
+    const allocations = [];
+    const paidAmount = Math.round(Number(amount || 0) * 100) / 100;
+    const cashback = Math.round(Number(options.cashbackUsed || options.cashbackAmountUsed || 0) * 100) / 100;
+    const wallet = Math.round(Number(options.walletAmountUsed || 0) * 100) / 100;
+    const pointsValue = Math.round(Number(options.loyaltyPointsValue || options.pointsDiscount || 0) * 100) / 100;
+    const voucher = Math.round(Number(options.voucherDiscountAmount || options.voucherDiscount || 0) * 100) / 100;
+    const gross = Math.round(Number(options.originalAmount || paidAmount + cashback + wallet + pointsValue + voucher) * 100) / 100;
+    const method = normalizePaymentMethod(paymentMethod);
+    const provider = normalizePaymentProvider(paymentProvider, method);
+    const walletPaid = method === 'wallet' ? paidAmount : wallet;
+    const externalPaid = method === 'wallet' ? 0 : paidAmount;
+
+    if (externalPaid > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'external',
+            paymentMethod: method,
+            paymentProvider: provider,
+            sourceReferenceId: options.providerPaymentId || options.providerCaptureId || options.providerSessionId || `external-${transactionId}`,
+            allocatedAmount: externalPaid
+        });
+    }
+    if (walletPaid > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'wallet',
+            paymentMethod: 'wallet',
+            paymentProvider: 'internal_wallet',
+            sourceReferenceId: options.walletReferenceId || `wallet-${transactionId}`,
+            allocatedAmount: walletPaid
+        });
+    }
+    if (cashback > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'cashback',
+            paymentMethod: 'cashback_wallet',
+            paymentProvider: 'internal_wallet',
+            sourceReferenceId: `cashback-${transactionId}`,
+            allocatedAmount: cashback
+        });
+    }
+    if (pointsValue > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'loyalty_points',
+            paymentMethod: 'loyalty_points',
+            paymentProvider: 'internal_wallet',
+            sourceReferenceId: `points-${transactionId}`,
+            allocatedAmount: pointsValue
+        });
+    }
+    if (voucher > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'voucher',
+            paymentMethod: 'voucher',
+            paymentProvider: 'internal_discount',
+            sourceReferenceId: options.voucherId ? `voucher-${options.voucherId}` : `voucher-${transactionId}`,
+            allocatedAmount: voucher
+        });
+    }
+
+    const discount = Math.max(0, Math.round((gross - paidAmount - cashback - walletPaid - pointsValue - voucher) * 100) / 100);
+    if (discount > 0) {
+        allocations.push({
+            transactionId,
+            sourceType: 'discount',
+            paymentMethod: 'discount',
+            paymentProvider: 'internal_discount',
+            sourceReferenceId: `discount-${transactionId}`,
+            allocatedAmount: discount
+        });
+    }
+
+    return allocations;
 }
 
 function ensureOrderRefundSchema(callback) {
@@ -228,12 +390,28 @@ function normalizePickupStatus(status, deliveryStatus) {
 function createPaidTransaction(userId, amount, paymentMethod, items, options = {}, callback) {
     const done = typeof options === 'function' ? options : callback;
     const transactionOptions = typeof options === 'function' ? {} : options || {};
+    const normalizedMethod = normalizePaymentMethod(paymentMethod || transactionOptions.paymentMethod || 'card');
+    const normalizedProvider = normalizePaymentProvider(transactionOptions.paymentProvider, normalizedMethod);
+    const paidAmount = Number(amount || 0);
+    const originalAmount = Number(transactionOptions.originalAmount || amount || 0);
+    const cashbackUsed = Number(transactionOptions.cashbackUsed || 0);
+    const walletAmountUsed = normalizedMethod === 'wallet' ? paidAmount : Number(transactionOptions.walletAmountUsed || 0);
+    const externalPaymentAmount = normalizedMethod === 'wallet' ? 0 : paidAmount;
+    const voucherDiscountAmount = Number(transactionOptions.voucherDiscountAmount || transactionOptions.voucherDiscount || 0);
+    const loyaltyPointsUsed = Number(transactionOptions.loyaltyPointsUsed || transactionOptions.pointsRedeemed || 0);
+    const loyaltyPointsValue = Number(transactionOptions.loyaltyPointsValue || transactionOptions.pointsDiscount || 0);
 
     ensureFulfilmentSchema((schemaError) => {
         if (schemaError) {
             done(schemaError);
             return;
         }
+
+        ensurePaymentAllocationSchema((allocationSchemaError) => {
+            if (allocationSchemaError) {
+                done(allocationSchemaError);
+                return;
+            }
 
         db.getConnection((connectionError, connection) => {
         if (connectionError) {
@@ -261,23 +439,50 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     payment_provider,
                     provider_payment_id,
                     provider_session_id,
-                    provider_capture_id
+                    provider_capture_id,
+                    gross_amount,
+                    discount_amount,
+                    voucher_discount_amount,
+                    wallet_amount_used,
+                    cashback_amount_used,
+                    loyalty_points_used,
+                    loyalty_points_value,
+                    external_payment_amount,
+                    paid_amount,
+                    payment_date,
+                    provider_transaction_id,
+                    provider_order_id,
+                    provider_charge_id,
+                    provider_metadata_json
                 )
-                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
                 userId,
                 amount,
-                paymentMethod || 'card',
+                normalizedMethod,
                 transactionOptions.bookingId || null,
-                Number(transactionOptions.originalAmount || amount || 0),
-                Number(transactionOptions.cashbackUsed || 0),
+                originalAmount,
+                cashbackUsed,
                 transactionOptions.currency || 'SGD',
-                transactionOptions.paymentProvider || null,
+                normalizedProvider || null,
                 transactionOptions.providerPaymentId || null,
                 transactionOptions.providerSessionId || null,
-                transactionOptions.providerCaptureId || null
+                transactionOptions.providerCaptureId || null,
+                originalAmount,
+                voucherDiscountAmount + loyaltyPointsValue,
+                voucherDiscountAmount,
+                walletAmountUsed,
+                cashbackUsed,
+                loyaltyPointsUsed,
+                loyaltyPointsValue,
+                externalPaymentAmount,
+                paidAmount,
+                transactionOptions.providerTransactionId || transactionOptions.providerPaymentId || null,
+                transactionOptions.providerOrderId || transactionOptions.paypalOrderId || null,
+                transactionOptions.providerChargeId || null,
+                transactionOptions.providerMetadata ? JSON.stringify(transactionOptions.providerMetadata) : null
             ], (insertError, transactionResult) => {
                 if (insertError) {
                     return connection.rollback(() => {
@@ -291,9 +496,55 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                         && Number.isInteger(Number(item.serviceId))
                         && Number(item.serviceId) > 0);
 
-                const commitTransaction = () => connection.commit((commitError) => {
-                    connection.release();
-                    done(commitError, transactionResult);
+                const transactionId = transactionResult.insertId;
+                const allocations = buildPaymentAllocations(transactionId, normalizedMethod, normalizedProvider, paidAmount, {
+                    ...transactionOptions,
+                    providerPaymentId: transactionOptions.providerPaymentId,
+                    providerCaptureId: transactionOptions.providerCaptureId,
+                    providerSessionId: transactionOptions.providerSessionId,
+                    originalAmount,
+                    cashbackUsed,
+                    walletAmountUsed,
+                    voucherDiscountAmount,
+                    loyaltyPointsUsed,
+                    loyaltyPointsValue
+                });
+
+                const insertAllocations = (callback) => {
+                    if (!allocations.length) {
+                        callback(null);
+                        return;
+                    }
+
+                    const sql = `
+                        INSERT IGNORE INTO payment_allocations
+                            (transaction_id, source_type, payment_method, payment_provider, source_reference_id, allocated_amount)
+                        VALUES ?
+                    `;
+                    const values = allocations.map((allocation) => [
+                        allocation.transactionId,
+                        allocation.sourceType,
+                        allocation.paymentMethod,
+                        allocation.paymentProvider,
+                        allocation.sourceReferenceId,
+                        allocation.allocatedAmount
+                    ]);
+
+                    connection.query(sql, [values], callback);
+                };
+
+                const commitTransaction = () => insertAllocations((allocationError) => {
+                    if (allocationError) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            done(allocationError);
+                        });
+                    }
+
+                    connection.commit((commitError) => {
+                        connection.release();
+                        done(commitError, transactionResult);
+                    });
                 });
 
                 const decrementProductStock = (index, callback) => {
@@ -413,7 +664,230 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                 );
             });
         });
+        });
     });
+    });
+}
+
+function getPaymentSummary(transactionId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        ensurePaymentAllocationSchema((allocationSchemaError) => {
+            if (allocationSchemaError) {
+                callback(allocationSchemaError);
+                return;
+            }
+
+            const transactionSql = `
+                SELECT
+                    t.transaction_id,
+                    t.user_id,
+                    t.booking_id,
+                    t.order_id,
+                    t.total_amount,
+                    t.original_amount,
+                    t.gross_amount,
+                    t.discount_amount,
+                    t.voucher_discount_amount,
+                    t.wallet_amount_used,
+                    t.cashback_amount_used,
+                    t.loyalty_points_used,
+                    t.loyalty_points_value,
+                    t.external_payment_amount,
+                    t.paid_amount,
+                    t.refunded_amount,
+                    t.currency,
+                    t.payment_status,
+                    t.refund_status,
+                    t.payment_method,
+                    t.payment_provider,
+                    t.provider_payment_id,
+                    t.provider_session_id,
+                    t.provider_capture_id,
+                    t.provider_transaction_id,
+                    t.provider_order_id,
+                    t.provider_charge_id,
+                    t.payment_date,
+                    t.created_at,
+                    t.updated_at,
+                    COALESCE(SUM(CASE
+                        WHEN pr.refund_status IN ('succeeded', 'refunded', 'manual_required')
+                            THEN pr.refund_amount
+                        ELSE 0
+                    END), 0) AS successful_refunded_amount,
+                    MAX(CASE
+                        WHEN pr.refund_status IN ('succeeded', 'refunded', 'manual_required')
+                            THEN COALESCE(pr.processed_at, pr.updated_at, pr.created_at)
+                        ELSE NULL
+                    END) AS last_refunded_at,
+                    GROUP_CONCAT(DISTINCT CASE
+                        WHEN pr.refund_status IN ('succeeded', 'refunded', 'manual_required')
+                            THEN pr.provider_refund_id
+                        ELSE NULL
+                    END SEPARATOR ', ') AS provider_refund_refs
+                FROM transactions t
+                LEFT JOIN payment_refunds pr ON pr.transaction_id = t.transaction_id
+                WHERE t.transaction_id = ?
+                GROUP BY
+                    t.transaction_id,
+                    t.user_id,
+                    t.booking_id,
+                    t.order_id,
+                    t.total_amount,
+                    t.original_amount,
+                    t.gross_amount,
+                    t.discount_amount,
+                    t.voucher_discount_amount,
+                    t.wallet_amount_used,
+                    t.cashback_amount_used,
+                    t.loyalty_points_used,
+                    t.loyalty_points_value,
+                    t.external_payment_amount,
+                    t.paid_amount,
+                    t.refunded_amount,
+                    t.currency,
+                    t.payment_status,
+                    t.refund_status,
+                    t.payment_method,
+                    t.payment_provider,
+                    t.provider_payment_id,
+                    t.provider_session_id,
+                    t.provider_capture_id,
+                    t.provider_transaction_id,
+                    t.provider_order_id,
+                    t.provider_charge_id,
+                    t.payment_date,
+                    t.created_at,
+                    t.updated_at
+                LIMIT 1
+            `;
+
+            db.query(transactionSql, [transactionId], (transactionError, transactionRows = []) => {
+                if (transactionError) {
+                    callback(transactionError);
+                    return;
+                }
+
+                const row = transactionRows[0];
+                if (!row) {
+                    callback(null, null);
+                    return;
+                }
+
+                const allocationSql = `
+                    SELECT
+                        source_type,
+                        payment_method,
+                        payment_provider,
+                        source_reference_id,
+                        allocated_amount,
+                        refunded_amount,
+                        remaining_refundable_amount
+                    FROM payment_allocations
+                    WHERE transaction_id = ?
+                    ORDER BY FIELD(source_type, 'wallet', 'cashback', 'loyalty_points', 'voucher', 'discount', 'external'), allocation_id ASC
+                `;
+
+                db.query(allocationSql, [transactionId], (allocationError, allocationRows = []) => {
+                    if (allocationError) {
+                        callback(allocationError);
+                        return;
+                    }
+
+                    const paidAmount = Number(row.paid_amount || row.total_amount || 0);
+                    const storedRefunded = Number(row.refunded_amount || 0);
+                    const successfulRefunded = Math.max(Number(row.successful_refunded_amount || 0), storedRefunded);
+                    const remainingRefundable = Math.max(paidAmount - successfulRefunded, 0);
+                    const paymentMethod = normalizePaymentMethod(row.payment_method || 'card');
+                    const paymentProvider = normalizePaymentProvider(row.payment_provider, paymentMethod);
+                    const allocations = allocationRows.length
+                        ? allocationRows.map((allocation) => ({
+                            sourceType: allocation.source_type,
+                            paymentMethod: normalizePaymentMethod(allocation.payment_method || paymentMethod),
+                            paymentProvider: normalizePaymentProvider(allocation.payment_provider || paymentProvider, allocation.payment_method || paymentMethod),
+                            sourceReferenceId: allocation.source_reference_id || '',
+                            allocatedAmount: Number(allocation.allocated_amount || 0),
+                            refundedAmount: Number(allocation.refunded_amount || 0),
+                            remainingRefundableAmount: Number(allocation.remaining_refundable_amount || 0)
+                        }))
+                        : buildPaymentAllocations(transactionId, paymentMethod, paymentProvider, paidAmount, {
+                            originalAmount: Number(row.original_amount || row.gross_amount || paidAmount),
+                            cashbackUsed: Number(row.cashback_amount_used || 0),
+                            walletAmountUsed: Number(row.wallet_amount_used || 0),
+                            voucherDiscountAmount: Number(row.voucher_discount_amount || 0),
+                            loyaltyPointsValue: Number(row.loyalty_points_value || 0),
+                            loyaltyPointsUsed: Number(row.loyalty_points_used || 0),
+                            providerPaymentId: row.provider_payment_id,
+                            providerCaptureId: row.provider_capture_id,
+                            providerSessionId: row.provider_session_id
+                        }).map((allocation) => ({
+                            sourceType: allocation.sourceType,
+                            paymentMethod: allocation.paymentMethod,
+                            paymentProvider: allocation.paymentProvider,
+                            sourceReferenceId: allocation.sourceReferenceId,
+                            allocatedAmount: allocation.allocatedAmount,
+                            refundedAmount: 0,
+                            remainingRefundableAmount: allocation.allocatedAmount
+                        }));
+
+                    const paymentBreakdown = formatPaymentBreakdown(allocations, {
+                        paymentMethod,
+                        paymentProvider,
+                        amount: paidAmount
+                    });
+                    const providerReference = row.provider_transaction_id
+                        || row.provider_capture_id
+                        || row.provider_payment_id
+                        || row.provider_session_id
+                        || row.provider_order_id
+                        || '';
+
+                    callback(null, {
+                        transactionId: row.transaction_id,
+                        userId: row.user_id,
+                        bookingId: row.booking_id,
+                        orderId: row.order_id,
+                        currency: row.currency || 'SGD',
+                        grossAmount: Number(row.gross_amount || row.original_amount || row.total_amount || 0),
+                        discountAmount: Number(row.discount_amount || 0),
+                        voucherDiscountAmount: Number(row.voucher_discount_amount || 0),
+                        walletAmountUsed: Number(row.wallet_amount_used || 0),
+                        cashbackAmountUsed: Number(row.cashback_amount_used || 0),
+                        loyaltyPointsUsed: Number(row.loyalty_points_used || 0),
+                        loyaltyPointsValue: Number(row.loyalty_points_value || 0),
+                        externalPaymentAmount: Number(row.external_payment_amount || 0),
+                        paidAmount,
+                        refundedAmount: successfulRefunded,
+                        remainingRefundableAmount: remainingRefundable,
+                        remainingPaidAmount: remainingRefundable,
+                        paymentStatus: row.payment_status || (successfulRefunded > 0 ? 'partially_refunded' : 'paid'),
+                        refundStatus: row.refund_status || (successfulRefunded > 0 ? 'partially_refunded' : 'none'),
+                        paymentMethod,
+                        paymentProvider,
+                        paymentMethodLabel: formatPaymentMethod(paymentMethod, paymentProvider, {
+                            cardBrand: row.card_brand,
+                            cardLast4: row.card_last4
+                        }),
+                        paymentBreakdown,
+                        providerPaymentId: row.provider_payment_id || '',
+                        providerSessionId: row.provider_session_id || '',
+                        providerCaptureId: row.provider_capture_id || '',
+                        providerTransactionId: providerReference,
+                        providerOrderId: row.provider_order_id || '',
+                        providerChargeId: row.provider_charge_id || '',
+                        providerRefundReference: row.provider_refund_refs || '',
+                        paymentDate: row.payment_date || row.created_at,
+                        lastRefundedAt: row.last_refunded_at || null,
+                        createdAt: row.created_at,
+                        updatedAt: row.updated_at
+                    });
+                });
+            });
+        });
     });
 }
 
@@ -449,6 +923,10 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.payment_provider,
+                transactions.refund_status,
+                transactions.refunded_amount,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.shipped_at,
                 transactions.delivered_at,
@@ -487,6 +965,10 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 totalAmount: Number(first.total_amount || 0),
                 paymentStatus: first.payment_status || 'paid',
                 paymentMethod: first.payment_method || 'card',
+                paymentProvider: first.payment_provider || '',
+                refundStatus: first.refund_status || 'none',
+                refundedAmount: Number(first.refunded_amount || 0),
+                providerRefundId: first.provider_refund_id || '',
                 deliveryStatus: first.delivery_status || 'processing',
                 shippedAt: first.shipped_at,
                 deliveredAt: first.delivered_at,
@@ -519,6 +1001,10 @@ function getPickupVerificationById(transactionId, callback) {
                 transactions.total_amount,
                 transactions.payment_status,
                 transactions.payment_method,
+                transactions.payment_provider,
+                transactions.refund_status,
+                transactions.refunded_amount,
+                transactions.provider_refund_id,
                 transactions.delivery_status,
                 transactions.pickup_status,
                 transactions.collected_at,
@@ -563,6 +1049,10 @@ function getPickupVerificationById(transactionId, callback) {
                 totalAmount: Number(first.total_amount || 0),
                 paymentStatus: first.payment_status || 'paid',
                 paymentMethod: first.payment_method || 'card',
+                paymentProvider: first.payment_provider || '',
+                refundStatus: first.refund_status || 'none',
+                refundedAmount: Number(first.refunded_amount || 0),
+                providerRefundId: first.provider_refund_id || '',
                 deliveryStatus: first.delivery_status || 'processing',
                 pickupStatus: normalizePickupStatus(first.pickup_status, first.delivery_status),
                 collectedAt: first.collected_at,
@@ -801,7 +1291,7 @@ function getCustomerOrders(userId, callback) {
             INNER JOIN products ON products.product_id = order_items.product_id
             LEFT JOIN salons ON salons.salon_id = products.salon_id
             WHERE transactions.user_id = ?
-                AND transactions.payment_status = 'paid'
+                AND transactions.payment_status IN ('paid', 'partially_refunded', 'refunded')
             GROUP BY
                 transactions.transaction_id,
                 transactions.user_id,
@@ -1062,8 +1552,19 @@ function recordRefund(transactionId, amount, options = {}, callback) {
         const sql = `
             UPDATE transactions
             SET
-                refund_status = ?,
-                refunded_amount = ?,
+                refunded_amount = LEAST(COALESCE(paid_amount, total_amount), COALESCE(refunded_amount, 0) + ?),
+                refund_status = CASE
+                    WHEN ? IN ('manual_required', 'manual_refund_required') THEN 'manual_refund_required'
+                    WHEN LEAST(COALESCE(paid_amount, total_amount), COALESCE(refunded_amount, 0) + ?) >= COALESCE(paid_amount, total_amount) THEN 'refunded'
+                    WHEN LEAST(COALESCE(paid_amount, total_amount), COALESCE(refunded_amount, 0) + ?) > 0 THEN 'partially_refunded'
+                    ELSE ?
+                END,
+                payment_status = CASE
+                    WHEN ? IN ('manual_required', 'manual_refund_required') THEN payment_status
+                    WHEN LEAST(COALESCE(paid_amount, total_amount), COALESCE(refunded_amount, 0) + ?) >= COALESCE(paid_amount, total_amount) THEN 'refunded'
+                    WHEN LEAST(COALESCE(paid_amount, total_amount), COALESCE(refunded_amount, 0) + ?) > 0 THEN 'partially_refunded'
+                    ELSE payment_status
+                END,
                 refunded_at = CURRENT_TIMESTAMP,
                 delivery_status = CASE
                     WHEN ? IN ('refunded', 'partially_refunded', 'manual_required') THEN 'cancelled'
@@ -1091,7 +1592,13 @@ function recordRefund(transactionId, amount, options = {}, callback) {
         });
 
         executor.query(sql, [
+            refundedAmount,
             refundStatus,
+            refundedAmount,
+            refundedAmount,
+            refundStatus,
+            refundStatus,
+            refundedAmount,
             refundedAmount,
             refundStatus,
             providerRefundId,
@@ -1119,8 +1626,19 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                         WHEN ? = 'manual_required' THEN 'refund_pending'
                         ELSE order_status
                     END,
-                    refund_status = ?,
-                    refunded_amount = ?,
+                    refunded_amount = LEAST(COALESCE(total_amount, 0), COALESCE(refunded_amount, 0) + ?),
+                    refund_status = CASE
+                        WHEN ? IN ('manual_required', 'manual_refund_required') THEN 'manual_refund_required'
+                        WHEN LEAST(COALESCE(total_amount, 0), COALESCE(refunded_amount, 0) + ?) >= COALESCE(total_amount, 0) THEN 'refunded'
+                        WHEN LEAST(COALESCE(total_amount, 0), COALESCE(refunded_amount, 0) + ?) > 0 THEN 'partially_refunded'
+                        ELSE ?
+                    END,
+                    payment_status = CASE
+                        WHEN ? IN ('manual_required', 'manual_refund_required') THEN payment_status
+                        WHEN LEAST(COALESCE(total_amount, 0), COALESCE(refunded_amount, 0) + ?) >= COALESCE(total_amount, 0) THEN 'refunded'
+                        WHEN LEAST(COALESCE(total_amount, 0), COALESCE(refunded_amount, 0) + ?) > 0 THEN 'partially_refunded'
+                        ELSE payment_status
+                    END,
                     refunded_at = CURRENT_TIMESTAMP,
                     provider_refund_id = COALESCE(?, provider_refund_id),
                     refund_reason = COALESCE(?, refund_reason),
@@ -1139,7 +1657,13 @@ function recordRefund(transactionId, amount, options = {}, callback) {
             executor.query(orderSql, [
                 refundStatus,
                 refundStatus,
+                refundedAmount,
                 refundStatus,
+                refundedAmount,
+                refundedAmount,
+                refundStatus,
+                refundStatus,
+                refundedAmount,
                 refundedAmount,
                 providerRefundId,
                 refundReason,
@@ -1158,20 +1682,37 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                     changedRows: orderResult?.changedRows
                 });
 
-                if (refundOptions.skipLoyaltyReverse) {
-                    done(null, result);
-                    return;
-                }
+                const allocationSql = `
+                    UPDATE payment_allocations
+                    SET refunded_amount = LEAST(allocated_amount, refunded_amount + ?)
+                    WHERE transaction_id = ?
+                        AND source_type IN ('external', 'wallet', 'cashback')
+                        AND refunded_amount < allocated_amount
+                    ORDER BY FIELD(source_type, 'external', 'wallet', 'cashback'), allocation_id ASC
+                    LIMIT 1
+                `;
 
-                Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
-                if (reverseError) {
-                    console.error('[refund:loyalty:reverse:error]', reverseError);
-                    done(reverseError);
-                    return;
-                }
+                executor.query(allocationSql, [refundedAmount, transactionId], (allocationError) => {
+                    if (allocationError) {
+                        done(allocationError);
+                        return;
+                    }
 
-                done(null, result);
-            });
+                    if (refundOptions.skipLoyaltyReverse) {
+                        done(null, result);
+                        return;
+                    }
+
+                    Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
+                        if (reverseError) {
+                            console.error('[refund:loyalty:reverse:error]', reverseError);
+                            done(reverseError);
+                            return;
+                        }
+
+                        done(null, result);
+                    });
+                });
             });
         });
         });
@@ -1257,6 +1798,7 @@ module.exports = {
     getCustomerOrders,
     getOrderForCustomer,
     getOrderReceiptById,
+    getPaymentSummary,
     getPickupVerificationById,
     getPaidSpendByUserId,
     markPickupCollected,

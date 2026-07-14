@@ -22,6 +22,14 @@
     const autoApprovedReschedules = Array.isArray(rescheduleTools.autoApproved) ? rescheduleTools.autoApproved : [];
     const pendingRescheduleReviews = Array.isArray(rescheduleTools.pendingReviews) ? rescheduleTools.pendingReviews : [];
     const rescheduleRecommendations = Array.isArray(rescheduleTools.recommendations) ? rescheduleTools.recommendations : [];
+    const refunds = typeof refundStats !== 'undefined' && refundStats ? refundStats : {
+        pendingCount: 0,
+        approvedCount: 0,
+        processingCount: 0,
+        refundedCount: 0,
+        rejectedCount: 0,
+        failedCount: 0
+    };
     const storefrontQrImage = typeof qrImage !== 'undefined' && qrImage ? qrImage : (typeof qrCodeDataUrl !== 'undefined' ? qrCodeDataUrl : null);
     const serviceFilterOptions = [...new Set(allCalendarBookings.map((booking) => booking.serviceName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
     const recentOrders = salesReport?.recentOrders || [];
@@ -81,6 +89,7 @@
         { label: 'Monthly Revenue', value: '$' + formatCurrency(appointments.monthlyRevenue || 0), icon: '$', trend: Number(stats.growthPercent || 0).toFixed(1), detail: 'vs recent sales', accent: 'orange', sparkline: makeSparkline(Math.round((appointments.monthlyRevenue || 0) / 50)) },
         { label: 'Customers Served', value: stats.customerCount || 0, icon: 'C', trend: appointments.repeatCustomers > 0 ? 9 : 0, detail: `${appointments.repeatCustomers || 0} repeat customers`, accent: 'blue', sparkline: makeSparkline(appointments.repeatCustomers || 0) },
         { label: 'Active Promotions', value: activePromotions, icon: 'P', trend: activePromotions > 0 ? 5 : 0, detail: `${stats.promotionCount || 0} total campaigns`, accent: 'yellow', sparkline: makeSparkline(activePromotions) },
+        { label: 'Pending Refunds', value: refunds.pendingCount || 0, icon: 'F', trend: (refunds.failedCount || 0) > 0 ? -5 : 0, detail: `${refunds.processingCount || 0} processing, ${refunds.failedCount || 0} failed`, accent: 'orange', sparkline: makeSparkline(refunds.pendingCount || 0) },
         { label: 'Products Sold', value: recentOrders.reduce((sum, order) => sum + Number(order.itemCount || 0), 0), icon: 'S', trend: recentOrders.length > 0 ? 7 : 0, detail: `${recentOrders.length} recent paid orders`, accent: 'blue', sparkline: makeSparkline(recentOrders.length) },
         { label: 'Reward Bookings', value: rewardRedemptions.rewardBookingCount || 0, icon: 'R', trend: rewardRedemptions.rewardBookingCount > 0 ? 5 : 0, detail: 'used loyalty or rewards', accent: 'green', sparkline: makeSparkline(rewardRedemptions.rewardBookingCount || 0) }
     ];

@@ -17,6 +17,12 @@ const {
     formatAppointmentDateTime,
     formatDateTime
 } = require('../utils/dateTimeFormat');
+const {
+    formatPaymentBreakdown,
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
@@ -319,8 +325,15 @@ function mapBookingReceipt(row, req) {
             }
         ],
         totalAmount: Number(row.service_price || 0),
-        paymentMethod: row.payment_status === 'paid' ? 'Paid booking' : 'No payment required',
+        paymentMethod: row.payment_method || 'card',
+        paymentProvider: row.payment_provider || '',
         paymentStatus: row.payment_status || row.status,
+        refundStatus: row.refund_status || 'none',
+        refundedAmount: Number(row.refunded_amount || 0),
+        providerPaymentId: row.provider_payment_id || '',
+        providerSessionId: row.provider_session_id || '',
+        providerCaptureId: row.provider_capture_id || '',
+        providerRefundId: row.provider_refund_id || '',
         paidAt: row.paid_at || row.checked_in_at || null,
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
@@ -346,7 +359,12 @@ function mapOrderReceipt(order) {
         items: order.items,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
+        paymentProvider: order.paymentProvider || '',
         paymentStatus: order.paymentStatus,
+        refundStatus: order.refundStatus || 'none',
+        refundedAmount: Number(order.refundedAmount || 0),
+        providerRefundId: order.providerRefundId || '',
+        transactionId: order.id,
         deliveryStatus: order.deliveryStatus,
         merchantUserIds: order.merchantUserIds || [],
         fulfilment: 'pickup',
@@ -507,6 +525,85 @@ function verifyPickupToken(orderId, token) {
     }
 }
 
+function getPaymentSummary(transactionId) {
+    return new Promise((resolve, reject) => {
+        if (!transactionId) {
+            resolve(null);
+            return;
+        }
+
+        Transaction.getPaymentSummary(transactionId, (error, summary) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(summary || null);
+        });
+    });
+}
+
+async function enrichReceiptPayment(receipt) {
+    if (!receipt) {
+        return receipt;
+    }
+
+    const transactionId = receipt.transactionId
+        || (receipt.type === 'order' ? getOrderId(receipt) : null);
+    let summary = null;
+
+    try {
+        summary = await getPaymentSummary(transactionId);
+    } catch (error) {
+        console.error('Receipt payment summary failed:', error.message || error);
+    }
+
+    const paymentMethod = normalizePaymentMethod(summary?.paymentMethod || receipt.paymentMethod || 'card');
+    const paymentProvider = normalizePaymentProvider(summary?.paymentProvider || receipt.paymentProvider, paymentMethod);
+    const paidAmount = Number(summary?.paidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0);
+    const refundedAmount = Number(summary?.refundedAmount ?? receipt.refundedAmount ?? 0);
+    const remainingPaidAmount = Math.max(paidAmount - refundedAmount, 0);
+    const paymentBreakdown = summary?.paymentBreakdown?.length
+        ? summary.paymentBreakdown
+        : formatPaymentBreakdown(receipt.paymentBreakdown || [], {
+            paymentMethod,
+            paymentProvider,
+            amount: paidAmount,
+            refundedAmount
+        });
+
+    return {
+        ...receipt,
+        transactionId: transactionId || summary?.transactionId || receipt.transactionId || null,
+        currency: summary?.currency || receipt.currency || 'SGD',
+        paymentMethod,
+        paymentProvider,
+        paymentMethodLabel: summary?.paymentMethodLabel || formatPaymentMethod(paymentMethod, paymentProvider),
+        paymentBreakdown,
+        paidAmount,
+        originalAmount: Number(summary?.grossAmount ?? receipt.originalAmount ?? receipt.totalAmount ?? paidAmount),
+        discountAmount: Number(summary?.discountAmount ?? receipt.discountAmount ?? 0),
+        voucherDiscount: Number(summary?.voucherDiscountAmount ?? receipt.voucherDiscount ?? 0),
+        walletAmountUsed: Number(summary?.walletAmountUsed ?? receipt.walletAmountUsed ?? 0),
+        cashbackAmountUsed: Number(summary?.cashbackAmountUsed ?? receipt.cashbackAmountUsed ?? receipt.cashbackRedeemed ?? 0),
+        loyaltyPointsUsed: Number(summary?.loyaltyPointsUsed ?? receipt.pointsRedeemed ?? 0),
+        loyaltyPointsValue: Number(summary?.loyaltyPointsValue ?? receipt.pointsDiscount ?? 0),
+        externalPaymentAmount: Number(summary?.externalPaymentAmount ?? receipt.externalPaymentAmount ?? paidAmount),
+        refundedAmount,
+        remainingPaidAmount,
+        remainingRefundableAmount: Number(summary?.remainingRefundableAmount ?? remainingPaidAmount),
+        paymentStatus: summary?.paymentStatus || receipt.paymentStatus || 'paid',
+        refundStatus: summary?.refundStatus || receipt.refundStatus || (refundedAmount > 0 ? 'partially_refunded' : 'none'),
+        paymentTransactionReference: summary?.providerTransactionId || receipt.providerPaymentId || receipt.providerSessionId || '',
+        providerPaymentId: summary?.providerPaymentId || receipt.providerPaymentId || '',
+        providerSessionId: summary?.providerSessionId || receipt.providerSessionId || '',
+        providerCaptureId: summary?.providerCaptureId || receipt.providerCaptureId || '',
+        providerRefundReference: summary?.providerRefundReference || receipt.providerRefundId || '',
+        paidAt: summary?.paymentDate || receipt.paidAt,
+        refundedAt: summary?.lastRefundedAt || receipt.refundedAt || null
+    };
+}
+
 async function loadReceipt(req, id) {
     const user = req.session.user;
     const merchant = user?.role === 'merchant' ? await getMerchantForUser(user.id) : null;
@@ -562,36 +659,37 @@ async function buildReceiptViewModel(req, id) {
         return null;
     }
 
+    const enrichedReceipt = await enrichReceiptPayment(loadedReceipt);
     const campaignCashback = await new Promise((resolve) => {
-        Loyalty.getCampaignCashbackForReceipt(loadedReceipt.id, (error, result) => {
+        Loyalty.getCampaignCashbackForReceipt(enrichedReceipt.id, (error, result) => {
             if (error) {
                 console.error(error);
-                resolve({ earned: Number(loadedReceipt.campaignCashbackEarned || 0), reversed: 0, net: Number(loadedReceipt.campaignCashbackEarned || 0), transactions: [] });
+                resolve({ earned: Number(enrichedReceipt.campaignCashbackEarned || 0), reversed: 0, net: Number(enrichedReceipt.campaignCashbackEarned || 0), transactions: [] });
                 return;
             }
 
             resolve(result || { earned: 0, reversed: 0, net: 0, transactions: [] });
         });
     });
-    const receiptMode = getReceiptMode(loadedReceipt);
+    const receiptMode = getReceiptMode(enrichedReceipt);
     const appointmentLabel = receiptMode.isBooking
-        ? formatAppointmentDateTime(loadedReceipt.bookingDate, loadedReceipt.bookingTime)
+        ? formatAppointmentDateTime(enrichedReceipt.bookingDate, enrichedReceipt.bookingTime)
         : '';
     const receipt = receiptMode.isBooking
         ? {
-            ...loadedReceipt,
-            statusLabel: formatStatusLabel(loadedReceipt.status || 'confirmed'),
+            ...enrichedReceipt,
+            statusLabel: formatStatusLabel(enrichedReceipt.status || 'confirmed'),
             campaignCashback,
             campaignCashbackEarned: campaignCashback.earned,
             campaignCashbackReversed: campaignCashback.reversed,
             appointmentLabel,
-            items: (loadedReceipt.items || []).map((item) => ({
+            items: (enrichedReceipt.items || []).map((item) => ({
                 ...item,
                 detail: appointmentLabel || item.detail
             }))
         }
         : {
-            ...loadedReceipt,
+            ...enrichedReceipt,
             campaignCashback,
             campaignCashbackEarned: campaignCashback.earned,
             campaignCashbackReversed: campaignCashback.reversed
@@ -810,9 +908,11 @@ function buildFallbackPdf(data) {
             const metaBoxWidth = (contentWidth - 18) / 2;
             const metaRows = [
                 ['Customer', receipt.userName],
-                ['Payment', receipt.paymentMethod],
+                ['Payment', receipt.paymentMethodLabel || receipt.paymentMethod],
                 ['Date/time', data.paidAtLabel],
-                ['Status', data.isProductPickup ? data.pickupStatusLabel : (receipt.statusLabel || receipt.paymentStatus || receipt.status || 'paid')]
+                ['Payment status', formatStatusLabel(receipt.paymentStatus || 'paid')],
+                ['Refund status', formatStatusLabel(receipt.refundStatus || 'none')],
+                ['Reference', receipt.paymentTransactionReference || receipt.providerPaymentId || '-']
             ];
 
             metaRows.forEach(([label, value], index) => {
@@ -873,16 +973,46 @@ function buildFallbackPdf(data) {
                 );
             }
 
-            doc.roundedRect(left + contentWidth - 210, totalY, 210, 58, 8).fill(sage);
-            doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text('TOTAL AMOUNT', left + contentWidth - 190, totalY + 13);
+            const summaryLines = [
+                ['Original total', Number(receipt.totalAmount || receipt.originalAmount || 0)],
+                ['Total paid', Number(receipt.paidAmount || receipt.totalAmount || 0)],
+                ['Refunded', -Number(receipt.refundedAmount || 0)],
+                ['Net retained', Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0)]
+            ];
+            let summaryY = totalY;
+            summaryLines.forEach(([label, value]) => {
+                doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text(label.toUpperCase(), left + contentWidth - 210, summaryY);
+                doc.fillColor(ink).font('Helvetica-Bold').fontSize(12).text(
+                    `${value < 0 ? '-' : ''}$${Math.abs(Number(value || 0)).toFixed(2)}`,
+                    left + contentWidth - 90,
+                    summaryY,
+                    { width: 90, align: 'right' }
+                );
+                summaryY += 18;
+            });
+
+            const breakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
+            breakdown.slice(0, 4).forEach((source) => {
+                doc.fillColor(muted).font('Helvetica').fontSize(9).text(source.label, left + contentWidth - 210, summaryY, { width: 120, ellipsis: true });
+                doc.fillColor(ink).font('Helvetica').fontSize(9).text(
+                    `$${Number(source.amount || 0).toFixed(2)}`,
+                    left + contentWidth - 90,
+                    summaryY,
+                    { width: 90, align: 'right' }
+                );
+                summaryY += 16;
+            });
+
+            doc.roundedRect(left + contentWidth - 210, summaryY + 4, 210, 58, 8).fill(sage);
+            doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text('NET AMOUNT RETAINED', left + contentWidth - 190, summaryY + 17);
             doc.fillColor(brandGreen).font('Helvetica-Bold').fontSize(22).text(
-                `$${Number(receipt.totalAmount || 0).toFixed(2)}`,
+                `$${Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0).toFixed(2)}`,
                 left + contentWidth - 190,
-                totalY + 28,
+                summaryY + 32,
                 { width: 170, align: 'right' }
             );
 
-            const qrTop = totalY + 92;
+            const qrTop = Math.max(totalY + 92, summaryY + 90);
             doc.roundedRect(left, qrTop, contentWidth, 188, 10).fill(paleSage);
             doc.fillColor(ink).font('Times-Bold').fontSize(20).text(data.qrLabel, left + 24, qrTop + 24);
             doc.fillColor(muted).font('Helvetica').fontSize(10).text(

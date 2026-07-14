@@ -20,7 +20,7 @@ const SHIPPED_STATUSES = ['shipped', 'delivered'];
 const ORDER_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
 const REFUND_REQUEST_TYPES = ['order_refund', 'booking_refund'];
 const REFUND_TERMS_VERSION = 'refund-policy-2026-05';
-const RESOLVED_REQUEST_STATUSES = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+const RESOLVED_REQUEST_STATUSES = ['refunded', 'rejected', 'cancelled', 'closed'];
 
 const requestLabels = {
     order_refund: 'Order refund',
@@ -28,12 +28,12 @@ const requestLabels = {
 };
 
 const statusLabels = {
-    pending_admin_review: 'Pending admin review',
-    pending_merchant_review: 'Waiting for merchant',
-    merchant_approved: 'Merchant approved',
-    merchant_declined: 'Merchant declined',
-    resolved_approved: 'Approved',
-    resolved_rejected: 'Rejected',
+    pending_merchant_review: 'Pending merchant review',
+    approved: 'Approved',
+    refund_processing: 'Refund processing',
+    refunded: 'Refunded',
+    rejected: 'Rejected',
+    refund_failed: 'Refund failed',
     cancelled: 'Cancelled',
     closed: 'Closed'
 };
@@ -62,9 +62,10 @@ const createSupportRequest = promisify(SupportRequest.create);
 const findSupportRequest = promisify(SupportRequest.findById);
 const hasActiveRequest = promisify(SupportRequest.hasActiveRequest);
 const countOpenByCustomer = promisify(SupportRequest.countOpenByCustomer);
-const sendSupportToMerchant = promisify(SupportRequest.adminSendToMerchant);
-const merchantRespondToRequest = promisify(SupportRequest.merchantRespond);
-const adminResolveRequest = promisify(SupportRequest.adminResolve);
+const markMerchantApproved = promisify(SupportRequest.markMerchantApproved);
+const markRefundSucceeded = promisify(SupportRequest.markRefundSucceeded);
+const markRefundFailed = promisify(SupportRequest.markRefundFailed);
+const merchantRejectRequest = promisify(SupportRequest.merchantReject);
 const createSupportMessage = promisify(SupportRequest.createMessage);
 const getSupportMessagesForRequests = promisify(SupportRequest.getMessagesForRequests);
 
@@ -301,8 +302,8 @@ function getRoleCopy(role) {
     if (role === 'admin') {
         return {
             eyebrow: 'Vaniday admin support',
-            heading: 'Refund approval desk',
-            description: 'Review customer refund submissions, ask the merchant for approval, and issue the final refund only after the policy checks pass.'
+            heading: 'Refund monitoring',
+            description: 'Monitor merchant refund decisions, failed refunds, disputes, and audit history across the platform.'
         };
     }
 
@@ -310,15 +311,132 @@ function getRoleCopy(role) {
         return {
             eyebrow: 'Merchant support',
             heading: 'Merchant refund review',
-            description: 'Review refund requests that Vaniday admin sends to you, then approve or decline with a clear note.'
+            description: 'Review refund requests sent directly to your business, then approve or reject with a clear decision.'
         };
     }
 
     return {
         eyebrow: 'Customer Help Center',
         heading: 'Refund requests',
-        description: 'Submit refund requests for paid orders or bookings. Vaniday reviews the case first, then asks the merchant before any refund is issued.'
+        description: 'Submit refund requests for paid orders or bookings. Your request goes directly to the merchant linked to the purchase.'
     };
+}
+
+async function processMerchantApprovedRefund(request, merchantUserId, merchantNote) {
+    const approvedRefundAmount = getApprovedRefundAmount(request);
+
+    if (approvedRefundAmount <= 0) {
+        throw new Error('Approved refund amount must be greater than zero.');
+    }
+
+    let refundOutcome = null;
+
+    if (request.requestType === 'order_refund') {
+        const transactionId = parseOrderTransactionId(request.targetId || request.paymentTransactionId);
+        let order = transactionId ? await getOrderById(transactionId) : null;
+
+        if (!order) {
+            order = await getHistoryOrderForCustomer(
+                request.customerUserId,
+                request.receiptId || (transactionId ? `order-${transactionId}` : request.targetId)
+            );
+        }
+
+        if (!order) {
+            throw new Error('The order could not be found.');
+        }
+
+        if (transactionId && !order.merchantUserIds.includes(Number(merchantUserId))) {
+            throw new Error('This order does not belong to your merchant account.');
+        }
+
+        if (SHIPPED_STATUSES.includes(order.deliveryStatus)) {
+            throw new Error('This order has already shipped and cannot be refunded through this workflow.');
+        }
+
+        if (order.refundStatus === 'refunded' || Number(order.refundedAmount || 0) >= Number(order.totalAmount || 0)) {
+            throw new Error('This order has already been refunded.');
+        }
+
+        if (transactionId) {
+            refundOutcome = await refundTransaction(transactionId, {
+                amount: approvedRefundAmount,
+                reason: merchantNote || request.reason || request.customerNote || 'Merchant approved order refund',
+                refundedBy: merchantUserId,
+                merchantId: merchantUserId,
+                orderId: transactionId
+            });
+
+            await updateDeliveryStatus(transactionId, 'cancelled', { merchantUserId });
+
+            if (request.receiptId) {
+                await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
+                if (!refundOutcome.manualRequired) {
+                    await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                }
+                await reverseCampaignCashback(request.receiptId);
+            }
+        } else {
+            await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
+            refundOutcome = {
+                amount: approvedRefundAmount,
+                refundStatus: 'manual_required',
+                provider: 'manual',
+                providerRefundId: '',
+                manualRequired: true
+            };
+        }
+
+        return refundOutcome;
+    }
+
+    if (request.targetType === 'booking') {
+        const booking = await findBookingForCustomer(request.targetId, request.customerUserId);
+
+        if (!booking) {
+            throw new Error('The booking could not be found.');
+        }
+
+        if (String(booking.merchant_user_id) !== String(merchantUserId)) {
+            throw new Error('This booking does not belong to your merchant account.');
+        }
+
+        if (booking.status === 'cancelled') {
+            throw new Error('This booking is already cancelled.');
+        }
+
+        if (booking.transaction_id) {
+            refundOutcome = await refundTransaction(booking.transaction_id, {
+                amount: approvedRefundAmount,
+                reason: merchantNote || request.reason || request.customerNote || 'Merchant approved booking refund',
+                refundedBy: merchantUserId,
+                merchantId: merchantUserId,
+                bookingId: request.targetId
+            });
+        } else {
+            refundOutcome = {
+                amount: approvedRefundAmount,
+                refundStatus: 'manual_required',
+                provider: 'manual',
+                providerRefundId: '',
+                manualRequired: true
+            };
+        }
+
+        await markBookingCancelled(request.targetId);
+        await markBookingRefundStatus(request.targetId, refundOutcome.refundStatus);
+        await reverseCampaignCashback(String(request.targetId));
+        await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+            console.error('WhatsApp cancellation notification failed:', error.message);
+        });
+        await sendSmsCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
+            console.error('SMS cancellation notification failed:', error.message);
+        });
+
+        return refundOutcome;
+    }
+
+    throw new Error('This refund target type is not supported.');
 }
 
 async function attachMessages(requests = []) {
@@ -535,11 +653,14 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         targetType: 'order',
         targetId: String(transactionId || parseOrderTransactionId(order.receiptId) || order.targetId || order.id),
         receiptId: order.receiptId,
-        status: 'pending_admin_review',
+        targetLabel: order.itemNames || 'Product order',
+        paymentMethod: order.paymentMethod || order.paymentProvider || '',
+        status: 'pending_merchant_review',
         reason: cleanText(body.reason, 160),
         customerNote: cleanText(body.customerNote),
         refundAmount: Number(order.totalAmount || 0),
         approvedRefundAmount: Number(order.totalAmount || 0),
+        paymentTransactionId: transactionId || null,
         customerTermsAccepted: true,
         customerTermsVersion: REFUND_TERMS_VERSION,
         deliveryStatus: order.deliveryStatus
@@ -592,12 +713,15 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         targetType: 'booking',
         targetId: String(booking.id),
         receiptId: String(booking.id),
-        status: 'pending_admin_review',
+        targetLabel: booking.service_name || 'Booking service',
+        paymentMethod: booking.transaction_id ? 'original payment transaction' : 'booking payment',
+        status: 'pending_merchant_review',
         reason: cleanText(body.reason, 160),
         customerNote: cleanText(body.customerNote),
         requestedChange: null,
         refundAmount,
         approvedRefundAmount: Math.max(0, refundAmount - (isLateCancellation ? calculateLateFee(refundAmount) : 0)),
+        paymentTransactionId: booking.transaction_id || null,
         lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0,
         isLateCancellation,
         customerTermsAccepted: true,
@@ -685,19 +809,28 @@ async function createRequest(req, res) {
 
         notifyUser(req.session.user, {
             type: 'support_request',
-            title: 'Support request submitted',
-            message: `${label} #${requestId} has been submitted and is pending admin review. We will notify you at each next step.`,
+            title: 'Refund request submitted',
+            message: `${label} #${requestId} was sent directly to the merchant for review. We will notify you when the merchant decides.`,
             linkUrl,
             dedupeKey: `support-customer-created-${requestId}`
+        });
+
+        notifyMerchant(data.merchantUserId, {
+            actorUserId: req.session.user.id,
+            type: 'support_request',
+            title: 'New refund request needs review',
+            message: `${req.session.user.name || 'A customer'} submitted ${label.toLowerCase()} #${requestId} for ${data.receiptId || data.targetId}.`,
+            linkUrl,
+            dedupeKey: `support-merchant-created-${requestId}`
         });
 
         notifyAdmins({
             actorUserId: req.session.user.id,
             type: 'support_request',
-            title: 'New customer support request',
-            message: `${req.session.user.name || 'A customer'} submitted ${label.toLowerCase()} #${requestId}.`,
+            title: 'New merchant refund review',
+            message: `${req.session.user.name || 'A customer'} submitted ${label.toLowerCase()} #${requestId}; it is now with the merchant.`,
             linkUrl,
-            dedupeKey: `support-admin-created-${requestId}`
+            dedupeKey: `support-admin-monitor-${requestId}`
         });
 
         return sendSupportResponse(req, res, {
@@ -731,8 +864,8 @@ async function adminSendToMerchant(req, res) {
             throw new Error('This request is already closed or cannot be updated.');
         }
 
-        if (!isRefundRequest(request.requestType) || request.status !== 'pending_admin_review') {
-            throw new Error('Only new refund requests can be sent to the merchant.');
+        if (!isRefundRequest(request.requestType) || request.status !== 'pending_merchant_review') {
+            throw new Error('Refund requests are sent directly to the merchant when the customer submits them.');
         }
 
         if (!request.merchantUserId) {
@@ -776,50 +909,142 @@ async function adminSendToMerchant(req, res) {
 }
 
 async function merchantRespond(req, res) {
+    let request = null;
+    let refundOutcome = null;
+    let processingStarted = false;
+
     try {
-        const request = await findSupportRequest(req.params.requestId);
+        request = await findSupportRequest(req.params.requestId);
 
         if (!request || String(request.merchantUserId) !== String(req.session.user.id)) {
             throw new Error('Support request not found for your merchant account.');
         }
 
-        const decision = req.body.decision === 'approved' ? 'approved' : 'declined';
-        const note = cleanText(req.body.merchantNote);
+        const decision = req.body.decision === 'approved' ? 'approved' : 'rejected';
+        const merchantNote = cleanText(req.body.merchantNote);
+        const rejectionReason = cleanText(req.body.rejectionReason || req.body.merchantNote);
+        const internalNotes = cleanText(req.body.internalNotes);
 
         if (!isRefundRequest(request.requestType)) {
             throw new Error('Only refund requests can be reviewed here.');
         }
 
-        if (note.length < 8) {
-            throw new Error('Please add a short merchant note for the refund decision.');
+        if (request.status !== 'pending_merchant_review') {
+            throw new Error('This refund request is not waiting for merchant review.');
         }
 
-        const result = await merchantRespondToRequest(request.id, req.session.user.id, decision, note);
+        if (decision === 'rejected') {
+            if (rejectionReason.length < 8) {
+                throw new Error('Please add a rejection reason for the customer.');
+            }
 
-        if (!result.affectedRows) {
+            const rejectResult = await merchantRejectRequest(request.id, req.session.user.id, rejectionReason, internalNotes);
+
+            if (!rejectResult.affectedRows) {
+                throw new Error('This request is not ready for a merchant decision.');
+            }
+
+            notifyCustomer(request.customerUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Merchant rejected your refund request',
+                message: `${requestLabels[request.requestType]} #${request.id} was rejected by the merchant. Reason: ${rejectionReason}`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-customer-merchant-${request.id}-rejected`
+            });
+
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Merchant rejected refund request',
+                message: `${req.session.user.name || 'Merchant'} rejected ${(requestLabels[request.requestType] || 'support request').toLowerCase()} #${request.id}.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-admin-merchant-${request.id}-rejected`
+            });
+
+            setFlash(req, 'success', `Request #${request.id} was rejected.`);
+            return res.redirect('/help-center');
+        }
+
+        const approveResult = await markMerchantApproved(request.id, req.session.user.id, internalNotes || merchantNote);
+
+        if (!approveResult.affectedRows) {
             throw new Error('This request is not ready for a merchant decision.');
         }
-
-        notifyAdmins({
-            actorUserId: req.session.user.id,
-            type: 'support_request',
-            title: 'Merchant responded to support request',
-            message: `${req.session.user.name || 'Merchant'} ${decision} ${(requestLabels[request.requestType] || 'support request').toLowerCase()} #${request.id}.`,
-            linkUrl: '/help-center',
-            dedupeKey: `support-admin-merchant-${request.id}-${decision}`
-        });
+        processingStarted = true;
 
         notifyCustomer(request.customerUserId, {
             actorUserId: req.session.user.id,
             type: 'support_request',
-            title: decision === 'approved' ? 'Merchant approved your request' : 'Merchant declined your request',
-            message: `The merchant ${decision} refund request #${request.id}. Vaniday admin will complete the final decision.`,
+            title: 'Merchant approved your refund request',
+            message: `${requestLabels[request.requestType]} #${request.id} for ${request.receiptId || request.targetId} was approved for $${getApprovedRefundAmount(request).toFixed(2)}. The refund is now processing.`,
             linkUrl: '/help-center',
-            dedupeKey: `support-customer-merchant-${request.id}-${decision}`
+            dedupeKey: `support-customer-merchant-${request.id}-approved`
         });
 
-        setFlash(req, 'success', `Request #${request.id} was ${decision}.`);
+        refundOutcome = await processMerchantApprovedRefund(request, req.session.user.id, merchantNote || internalNotes);
+        await markRefundSucceeded(request.id, req.session.user.id, refundOutcome);
+
+        const completed = !refundOutcome.manualRequired;
+        const finalMessage = completed
+            ? `Refund request #${request.id} was completed for $${refundOutcome.amount.toFixed(2)}.`
+            : `Refund request #${request.id} requires manual merchant action through ${refundOutcome.provider || 'the original payment provider'}.`;
+
+        notifyCustomer(request.customerUserId, {
+            actorUserId: req.session.user.id,
+            type: 'support_request',
+            title: completed ? 'Refund completed' : 'Refund requires manual processing',
+            message: completed
+                ? `${requestLabels[request.requestType]} #${request.id} for ${request.receiptId || request.targetId} has been refunded for $${refundOutcome.amount.toFixed(2)}.`
+                : `${requestLabels[request.requestType]} #${request.id} was approved, but this payment method needs manual merchant processing.`,
+            linkUrl: '/help-center',
+            dedupeKey: `support-customer-refund-${request.id}-${completed ? 'refunded' : 'manual'}`
+        });
+
+        notifyMerchant(request.merchantUserId, {
+            actorUserId: req.session.user.id,
+            type: 'support_request',
+            title: completed ? 'Refund completed' : 'Manual refund action required',
+            message: finalMessage,
+            linkUrl: '/help-center',
+            dedupeKey: `support-merchant-refund-${request.id}-${completed ? 'refunded' : 'manual'}`
+        });
+
+        notifyAdmins({
+            actorUserId: req.session.user.id,
+            type: 'support_request',
+            title: completed ? 'Merchant refund completed' : 'Merchant refund pending manual action',
+            message: `${req.session.user.name || 'Merchant'} approved ${(requestLabels[request.requestType] || 'support request').toLowerCase()} #${request.id}.`,
+            linkUrl: '/help-center',
+            dedupeKey: `support-admin-merchant-${request.id}-approved`
+        });
+
+        setFlash(req, 'success', finalMessage);
     } catch (error) {
+        if (processingStarted && request?.id) {
+            await markRefundFailed(request.id, req.session.user.id, error.message || 'Refund provider failed.').catch((markError) => {
+                console.error('Refund failure status could not be saved:', markError);
+            });
+
+            notifyCustomer(request.customerUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Refund processing failed',
+                message: `${requestLabels[request.requestType]} #${request.id} could not be processed automatically. The merchant has been notified to follow up.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-customer-refund-${request.id}-failed`
+            });
+
+            notifyMerchant(request.merchantUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Refund processing failed',
+                message: `Refund request #${request.id} failed during processing. Review the payment provider record and contact support if needed.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-merchant-refund-${request.id}-failed`
+            });
+        }
+
         setFlash(req, 'error', error.message || 'The merchant response could not be saved.');
     }
 
@@ -1083,8 +1308,6 @@ async function updateOrderDeliveryStatus(req, res) {
 }
 
 module.exports = {
-    adminResolve,
-    adminSendToMerchant,
     createRequest,
     merchantRespond,
     replyToRequest,

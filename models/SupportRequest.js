@@ -1,4 +1,9 @@
 const db = require('../db');
+const {
+    formatPaymentMethod,
+    normalizePaymentMethod,
+    normalizePaymentProvider
+} = require('../utils/paymentDisplay');
 
 let schemaReady = false;
 let schemaPending = false;
@@ -7,7 +12,8 @@ let messageSchemaReady = false;
 let messageSchemaPending = false;
 let messageSchemaQueue = [];
 
-const RESOLVED_STATUSES = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+const ACTIVE_STATUSES = ['pending_merchant_review', 'approved', 'refund_processing', 'refund_failed'];
+const RESOLVED_STATUSES = ['refunded', 'rejected', 'cancelled', 'closed'];
 
 function flushMessageSchemaQueue(error) {
     const queue = messageSchemaQueue;
@@ -94,7 +100,9 @@ function ensureSchema(callback) {
             target_type VARCHAR(20) NOT NULL,
             target_id VARCHAR(80) NOT NULL,
             receipt_id VARCHAR(80) DEFAULT NULL,
-            status VARCHAR(40) NOT NULL DEFAULT 'pending_admin_review',
+            target_label VARCHAR(255) DEFAULT NULL,
+            payment_method VARCHAR(40) DEFAULT NULL,
+            status VARCHAR(40) NOT NULL DEFAULT 'pending_merchant_review',
             merchant_decision VARCHAR(30) NOT NULL DEFAULT 'pending',
             admin_decision VARCHAR(30) NOT NULL DEFAULT 'pending',
             reason VARCHAR(160) DEFAULT NULL,
@@ -104,6 +112,12 @@ function ensureSchema(callback) {
             admin_note TEXT,
             refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
             approved_refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            payment_transaction_id INT DEFAULT NULL,
+            reviewed_by INT DEFAULT NULL,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            provider_refund_id VARCHAR(190) DEFAULT NULL,
+            refunded_at TIMESTAMP NULL DEFAULT NULL,
+            failure_reason TEXT DEFAULT NULL,
             late_fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
             is_late_cancellation TINYINT(1) NOT NULL DEFAULT 0,
             customer_terms_accepted TINYINT(1) NOT NULL DEFAULT 0,
@@ -138,24 +152,81 @@ function ensureSchema(callback) {
             if (!fields.has('approved_refund_amount')) {
                 alters.push('ADD COLUMN approved_refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER refund_amount');
             }
+            if (!fields.has('target_label')) {
+                alters.push('ADD COLUMN target_label VARCHAR(255) DEFAULT NULL AFTER receipt_id');
+            }
+            if (!fields.has('payment_method')) {
+                alters.push('ADD COLUMN payment_method VARCHAR(40) DEFAULT NULL AFTER target_label');
+            }
             if (!fields.has('customer_terms_accepted')) {
                 alters.push('ADD COLUMN customer_terms_accepted TINYINT(1) NOT NULL DEFAULT 0 AFTER is_late_cancellation');
             }
             if (!fields.has('customer_terms_version')) {
                 alters.push('ADD COLUMN customer_terms_version VARCHAR(40) DEFAULT NULL AFTER customer_terms_accepted');
             }
+            if (!fields.has('payment_transaction_id')) {
+                alters.push('ADD COLUMN payment_transaction_id INT DEFAULT NULL AFTER approved_refund_amount');
+            }
+            if (!fields.has('reviewed_by')) {
+                alters.push('ADD COLUMN reviewed_by INT DEFAULT NULL AFTER payment_transaction_id');
+            }
+            if (!fields.has('reviewed_at')) {
+                alters.push('ADD COLUMN reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER reviewed_by');
+            }
+            if (!fields.has('provider_refund_id')) {
+                alters.push('ADD COLUMN provider_refund_id VARCHAR(190) DEFAULT NULL AFTER reviewed_at');
+            }
+            if (!fields.has('refunded_at')) {
+                alters.push('ADD COLUMN refunded_at TIMESTAMP NULL DEFAULT NULL AFTER provider_refund_id');
+            }
+            if (!fields.has('failure_reason')) {
+                alters.push('ADD COLUMN failure_reason TEXT DEFAULT NULL AFTER refunded_at');
+            }
+
+            const finish = () => {
+                const migrationSql = `
+                    UPDATE support_requests
+                    SET status = CASE
+                            WHEN status IN ('pending_admin_review', 'forwarded_to_merchant') THEN 'pending_merchant_review'
+                            WHEN status = 'merchant_approved' THEN 'approved'
+                            WHEN status = 'merchant_declined' THEN 'rejected'
+                            WHEN status = 'resolved_approved' THEN 'refunded'
+                            WHEN status = 'resolved_rejected' THEN 'rejected'
+                            ELSE status
+                        END,
+                        admin_decision = CASE
+                            WHEN status IN ('pending_admin_review', 'forwarded_to_merchant', 'merchant_approved', 'merchant_declined') THEN 'not_required'
+                            ELSE admin_decision
+                        END
+                    WHERE status IN (
+                        'pending_admin_review',
+                        'forwarded_to_merchant',
+                        'merchant_approved',
+                        'merchant_declined',
+                        'resolved_approved',
+                        'resolved_rejected'
+                    )
+                `;
+
+                db.query(migrationSql, (migrationError) => {
+                    if (!migrationError) {
+                        schemaReady = true;
+                    }
+                    flushSchemaQueue(migrationError);
+                });
+            };
 
             if (!alters.length) {
-                schemaReady = true;
-                flushSchemaQueue(null);
+                finish();
                 return;
             }
 
             db.query(`ALTER TABLE support_requests ${alters.join(', ')}`, (alterError) => {
-                if (!alterError) {
-                    schemaReady = true;
+                if (alterError) {
+                    flushSchemaQueue(alterError);
+                    return;
                 }
-                flushSchemaQueue(alterError);
+                finish();
             });
         });
     });
@@ -174,6 +245,19 @@ function mapRow(row = {}) {
         targetType: row.target_type,
         targetId: row.target_id,
         receiptId: row.receipt_id,
+        targetLabel: row.target_label || '',
+        paymentMethod: normalizePaymentMethod(row.original_payment_method || row.payment_method || ''),
+        paymentProvider: normalizePaymentProvider(row.original_payment_provider || '', row.original_payment_method || row.payment_method || ''),
+        paymentMethodLabel: row.original_payment_method
+            ? formatPaymentMethod(row.original_payment_method, row.original_payment_provider)
+            : (row.payment_method ? formatPaymentMethod(row.payment_method, row.original_payment_provider || '') : ''),
+        originalPaidAmount: Number(row.original_paid_amount || row.original_total_amount || 0),
+        originalGrossAmount: Number(row.original_gross_amount || row.original_total_amount || 0),
+        originalRefundedAmount: Number(row.original_refunded_amount || 0),
+        remainingRefundableAmount: Math.max(Number(row.original_paid_amount || row.original_total_amount || 0) - Number(row.original_refunded_amount || 0), 0),
+        currency: row.original_currency || 'SGD',
+        paymentDate: row.original_payment_date || null,
+        paymentTransactionReference: row.original_provider_transaction_id || row.original_provider_capture_id || row.original_provider_payment_id || row.original_provider_session_id || '',
         status: row.status,
         merchantDecision: row.merchant_decision,
         adminDecision: row.admin_decision,
@@ -184,6 +268,12 @@ function mapRow(row = {}) {
         adminNote: row.admin_note,
         refundAmount: Number(row.refund_amount || 0),
         approvedRefundAmount: Number(row.approved_refund_amount || 0),
+        paymentTransactionId: row.payment_transaction_id ? Number(row.payment_transaction_id) : null,
+        reviewedBy: row.reviewed_by ? Number(row.reviewed_by) : null,
+        reviewedAt: row.reviewed_at,
+        providerRefundId: row.provider_refund_id || '',
+        refundedAt: row.refunded_at,
+        failureReason: row.failure_reason || '',
         lateFeeAmount: Number(row.late_fee_amount || 0),
         isLateCancellation: Boolean(row.is_late_cancellation),
         customerTermsAccepted: Boolean(row.customer_terms_accepted),
@@ -214,10 +304,23 @@ function selectSql(whereClause = '') {
             support_requests.*,
             customers.name AS customer_name,
             customers.email AS customer_email,
-            COALESCE(merchants.name, merchant_salons.salon_name) AS merchant_name
+            COALESCE(merchants.name, merchant_salons.salon_name) AS merchant_name,
+            payment_txn.total_amount AS original_total_amount,
+            payment_txn.gross_amount AS original_gross_amount,
+            payment_txn.paid_amount AS original_paid_amount,
+            payment_txn.refunded_amount AS original_refunded_amount,
+            payment_txn.currency AS original_currency,
+            payment_txn.payment_method AS original_payment_method,
+            payment_txn.payment_provider AS original_payment_provider,
+            payment_txn.provider_payment_id AS original_provider_payment_id,
+            payment_txn.provider_session_id AS original_provider_session_id,
+            payment_txn.provider_capture_id AS original_provider_capture_id,
+            payment_txn.provider_transaction_id AS original_provider_transaction_id,
+            payment_txn.payment_date AS original_payment_date
         FROM support_requests
         INNER JOIN users AS customers ON customers.user_id = support_requests.customer_user_id
         LEFT JOIN users AS merchants ON merchants.user_id = support_requests.merchant_user_id
+        LEFT JOIN transactions AS payment_txn ON payment_txn.transaction_id = support_requests.payment_transaction_id
         LEFT JOIN (
             SELECT merchant_id, MIN(salon_name) AS salon_name
             FROM salons
@@ -226,8 +329,8 @@ function selectSql(whereClause = '') {
         ${whereClause}
         ORDER BY
             CASE
-                WHEN support_requests.status IN ('pending_admin_review', 'pending_merchant_review') THEN 0
-                WHEN support_requests.status IN ('merchant_approved', 'merchant_declined') THEN 1
+                WHEN support_requests.status = 'pending_merchant_review' THEN 0
+                WHEN support_requests.status IN ('approved', 'refund_processing', 'refund_failed') THEN 1
                 ELSE 2
             END,
             support_requests.created_at DESC,
@@ -251,19 +354,22 @@ function create(data, callback) {
                     target_type,
                     target_id,
                     receipt_id,
+                    target_label,
+                    payment_method,
                     status,
                     reason,
                     customer_note,
                     requested_change,
                     refund_amount,
                     approved_refund_amount,
+                    payment_transaction_id,
                     late_fee_amount,
                     is_late_cancellation,
                     customer_terms_accepted,
                     customer_terms_version,
                     delivery_status
                 )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
@@ -273,12 +379,15 @@ function create(data, callback) {
             data.targetType,
             String(data.targetId),
             data.receiptId || null,
-            data.status || 'pending_admin_review',
+            data.targetLabel || null,
+            data.paymentMethod || null,
+            data.status || 'pending_merchant_review',
             data.reason || null,
             data.customerNote || null,
             data.requestedChange || null,
             Number(data.refundAmount || 0),
             Number(data.approvedRefundAmount || 0),
+            data.paymentTransactionId || null,
             Number(data.lateFeeAmount || 0),
             data.isLateCancellation ? 1 : 0,
             data.customerTermsAccepted ? 1 : 0,
@@ -322,7 +431,7 @@ function getForMerchant(merchantUserId, callback) {
         db.query(
             selectSql(`WHERE support_requests.merchant_user_id = ?
                 AND support_requests.request_type IN ('order_refund', 'booking_refund')
-                AND support_requests.status IN ('pending_merchant_review', 'merchant_approved', 'merchant_declined', 'resolved_approved', 'resolved_rejected')`),
+                AND support_requests.status IN ('pending_merchant_review', 'approved', 'refund_processing', 'refunded', 'rejected', 'refund_failed', 'cancelled')`),
             [merchantUserId],
             (error, rows = []) => {
                 if (error) {
@@ -388,7 +497,7 @@ function hasActiveRequest(customerUserId, targetType, targetId, requestTypes, ca
             customerUserId,
             targetType,
             String(targetId),
-            ...RESOLVED_STATUSES
+            ...ACTIVE_STATUSES
         ];
         let typeClause = '';
 
@@ -403,7 +512,7 @@ function hasActiveRequest(customerUserId, targetType, targetId, requestTypes, ca
             WHERE customer_user_id = ?
                 AND target_type = ?
                 AND target_id = ?
-                AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')})
+                AND status IN (${ACTIVE_STATUSES.map(() => '?').join(', ')})
                 ${typeClause}
             LIMIT 1
         `;
@@ -419,6 +528,44 @@ function hasActiveRequest(customerUserId, targetType, targetId, requestTypes, ca
     });
 }
 
+function getMerchantRefundStats(merchantUserId, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                SUM(CASE WHEN status = 'pending_merchant_review' THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_count,
+                SUM(CASE WHEN status = 'refund_processing' THEN 1 ELSE 0 END) AS processing_count,
+                SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END) AS refunded_count,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
+                SUM(CASE WHEN status = 'refund_failed' THEN 1 ELSE 0 END) AS failed_count
+            FROM support_requests
+            WHERE merchant_user_id = ?
+                AND request_type IN ('order_refund', 'booking_refund')
+        `;
+
+        db.query(sql, [merchantUserId], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, {
+                pendingCount: Number(rows[0]?.pending_count || 0),
+                approvedCount: Number(rows[0]?.approved_count || 0),
+                processingCount: Number(rows[0]?.processing_count || 0),
+                refundedCount: Number(rows[0]?.refunded_count || 0),
+                rejectedCount: Number(rows[0]?.rejected_count || 0),
+                failedCount: Number(rows[0]?.failed_count || 0)
+            });
+        });
+    });
+}
+
 function countOpenByCustomer(customerUserId, callback) {
     ensureSchema((schemaError) => {
         if (schemaError) {
@@ -430,10 +577,10 @@ function countOpenByCustomer(customerUserId, callback) {
             SELECT COUNT(*) AS open_count
             FROM support_requests
             WHERE customer_user_id = ?
-                AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')})
+                AND status IN (${ACTIVE_STATUSES.map(() => '?').join(', ')})
         `;
 
-        db.query(sql, [customerUserId, ...RESOLVED_STATUSES], (error, rows = []) => {
+        db.query(sql, [customerUserId, ...ACTIVE_STATUSES], (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;
@@ -454,13 +601,14 @@ function getSummary(callback) {
         const sql = `
             SELECT
                 COUNT(*) AS total_count,
-                SUM(CASE WHEN status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS open_count,
-                SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS pending_refund_count,
-                COALESCE(SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')}) THEN refund_amount ELSE 0 END), 0) AS pending_refund_amount
+                SUM(CASE WHEN status IN (${ACTIVE_STATUSES.map(() => '?').join(', ')}) THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status = 'pending_merchant_review' THEN 1 ELSE 0 END) AS pending_refund_count,
+                COALESCE(SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status IN (${ACTIVE_STATUSES.map(() => '?').join(', ')}) THEN refund_amount ELSE 0 END), 0) AS pending_refund_amount,
+                SUM(CASE WHEN request_type IN ('order_refund', 'booking_refund') AND status = 'refund_failed' THEN 1 ELSE 0 END) AS failed_refund_count
             FROM support_requests
         `;
 
-        db.query(sql, [...RESOLVED_STATUSES, ...RESOLVED_STATUSES, ...RESOLVED_STATUSES], (error, rows = []) => {
+        db.query(sql, [...ACTIVE_STATUSES, ...ACTIVE_STATUSES], (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;
@@ -470,7 +618,8 @@ function getSummary(callback) {
                 totalCount: Number(rows[0]?.total_count || 0),
                 openCount: Number(rows[0]?.open_count || 0),
                 pendingRefundCount: Number(rows[0]?.pending_refund_count || 0),
-                pendingRefundAmount: Number(rows[0]?.pending_refund_amount || 0)
+                pendingRefundAmount: Number(rows[0]?.pending_refund_amount || 0),
+                failedRefundCount: Number(rows[0]?.failed_refund_count || 0)
             });
         });
     });
@@ -499,56 +648,117 @@ function adminSendToMerchant(requestId, adminUserId, note, callback) {
     });
 }
 
-function merchantRespond(requestId, merchantUserId, decision, note, callback) {
+function merchantReject(requestId, merchantUserId, rejectionReason, merchantNotes, callback) {
     ensureSchema((schemaError) => {
         if (schemaError) {
             callback(schemaError);
             return;
         }
 
-        const merchantDecision = decision === 'approved' ? 'approved' : 'declined';
-        const status = merchantDecision === 'approved' ? 'merchant_approved' : 'merchant_declined';
-
         const sql = `
             UPDATE support_requests
             SET
-                merchant_decision = ?,
+                merchant_decision = 'rejected',
                 merchant_note = ?,
-                status = ?,
+                admin_decision = 'not_required',
+                admin_note = NULL,
+                status = 'rejected',
+                reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP,
+                resolved_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
             WHERE request_id = ?
                 AND merchant_user_id = ?
                 AND status = 'pending_merchant_review'
         `;
 
-        db.query(sql, [merchantDecision, note || null, status, requestId, merchantUserId], callback);
+        const note = merchantNotes
+            ? `${rejectionReason}\n\nInternal notes: ${merchantNotes}`
+            : rejectionReason;
+
+        db.query(sql, [note || null, merchantUserId, requestId, merchantUserId], callback);
     });
 }
 
-function adminResolve(requestId, adminUserId, decision, note, callback) {
+function markMerchantApproved(requestId, merchantUserId, merchantNotes, callback) {
     ensureSchema((schemaError) => {
         if (schemaError) {
             callback(schemaError);
             return;
         }
 
-        const adminDecision = decision === 'approved' ? 'approved' : 'rejected';
-        const status = adminDecision === 'approved' ? 'resolved_approved' : 'resolved_rejected';
+        const sql = `
+            UPDATE support_requests
+            SET
+                merchant_decision = 'approved',
+                merchant_note = ?,
+                admin_decision = 'not_required',
+                status = 'refund_processing',
+                reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE request_id = ?
+                AND merchant_user_id = ?
+                AND status = 'pending_merchant_review'
+        `;
+
+        db.query(sql, [merchantNotes || null, merchantUserId, requestId, merchantUserId], callback);
+    });
+}
+
+function markRefundSucceeded(requestId, merchantUserId, result, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const status = result?.manualRequired ? 'refund_processing' : 'refunded';
+        const sql = `
+            UPDATE support_requests
+            SET
+                status = ?,
+                provider_refund_id = ?,
+                approved_refund_amount = ?,
+                refunded_at = CASE WHEN ? = 'refunded' THEN CURRENT_TIMESTAMP ELSE refunded_at END,
+                resolved_at = CASE WHEN ? = 'refunded' THEN CURRENT_TIMESTAMP ELSE resolved_at END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE request_id = ?
+                AND merchant_user_id = ?
+                AND status = 'refund_processing'
+        `;
+
+        db.query(sql, [
+            status,
+            result?.providerRefundId || null,
+            Number(result?.amount || 0),
+            status,
+            status,
+            requestId,
+            merchantUserId
+        ], callback);
+    });
+}
+
+function markRefundFailed(requestId, merchantUserId, failureReason, callback) {
+    ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
 
         const sql = `
             UPDATE support_requests
             SET
-                admin_user_id = ?,
-                admin_decision = ?,
-                admin_note = ?,
-                status = ?,
-                resolved_at = CURRENT_TIMESTAMP,
+                status = 'refund_failed',
+                failure_reason = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE request_id = ?
-                AND status NOT IN (${RESOLVED_STATUSES.map(() => '?').join(', ')})
+                AND merchant_user_id = ?
+                AND status = 'refund_processing'
         `;
 
-        db.query(sql, [adminUserId, adminDecision, note || null, status, requestId, ...RESOLVED_STATUSES], callback);
+        db.query(sql, [failureReason || null, requestId, merchantUserId], callback);
     });
 }
 
@@ -625,8 +835,6 @@ function getMessagesForRequests(requestIds, callback) {
 }
 
 module.exports = {
-    adminResolve,
-    adminSendToMerchant,
     countOpenByCustomer,
     create,
     createMessage,
@@ -634,8 +842,12 @@ module.exports = {
     getForAdmin,
     getForCustomer,
     getForMerchant,
+    getMerchantRefundStats,
     getMessagesForRequests,
     getSummary,
     hasActiveRequest,
-    merchantRespond
+    markMerchantApproved,
+    markRefundFailed,
+    markRefundSucceeded,
+    merchantReject
 };

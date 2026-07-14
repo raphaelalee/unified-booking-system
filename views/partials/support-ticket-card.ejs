@@ -4,12 +4,16 @@
             <span class="support-ticket-id">Ticket #<%= request.id %></span>
             <h3><%= requestLabel(request.requestType) %></h3>
             <p><%= request.targetType === 'order' ? 'Order' : 'Booking' %> reference <strong><%= request.receiptId || request.targetId %></strong></p>
+            <% if (role !== 'customer') { %>
+                <p>Customer <strong><%= request.customerName || 'Customer' %></strong></p>
+            <% } %>
         </div>
         <span class="support-status-pill"><%= supportStatusLabel(request.status) %></span>
     </div>
 
     <div class="support-ticket-meta">
         <p><span>Last updated</span><strong><%= formatDateTime(request.updatedAt || request.createdAt) %></strong></p>
+        <p><span>Submitted</span><strong><%= formatDateTime(request.createdAt) %></strong></p>
         <p><span>Priority</span><strong><%= priorityLabel(request) %></strong></p>
         <p><span>Response time</span><strong><%= responseTimeLabel(request) %></strong></p>
     </div>
@@ -18,12 +22,31 @@
         <div class="support-ticket-summary">
             <% if (request.reason) { %><p><strong>Reason:</strong> <%= request.reason %></p><% } %>
             <% if (request.customerNote) { %><p><strong>Details:</strong> <%= request.customerNote %></p><% } %>
+            <% if (request.targetLabel) { %><p><strong><%= request.targetType === 'order' ? 'Product details' : 'Service details' %>:</strong> <%= request.targetLabel %></p><% } %>
+            <% if (request.paymentMethodLabel || request.paymentMethod) { %><p><strong>Payment method:</strong> <%= request.paymentMethodLabel || request.paymentMethod %></p><% } %>
+            <% if (request.paymentProvider) { %><p><strong>Payment provider:</strong> <%= request.paymentProvider %></p><% } %>
+            <% if (request.paymentTransactionReference) { %><p><strong>Payment reference:</strong> <%= request.paymentTransactionReference %></p><% } %>
+            <% if (request.paymentDate) { %><p><strong>Payment date:</strong> <%= formatDateTime(request.paymentDate) %></p><% } %>
             <% if (request.refundAmount > 0) { %>
+                <p><strong>Original amount paid:</strong> $<%= Number(request.originalPaidAmount || request.refundAmount || 0).toFixed(2) %></p>
                 <p><strong>Requested refund:</strong> $<%= Number(request.refundAmount || 0).toFixed(2) %></p>
+                <% if (Number(request.approvedRefundAmount || 0) > 0) { %>
+                    <p><strong>Approved refund:</strong> $<%= Number(request.approvedRefundAmount || 0).toFixed(2) %></p>
+                <% } %>
+                <p><strong>Successfully refunded:</strong> $<%= Number(request.originalRefundedAmount || 0).toFixed(2) %></p>
+                <p><strong>Remaining refundable:</strong> $<%= Number(request.remainingRefundableAmount || 0).toFixed(2) %></p>
                 <% if (request.lateFeeAmount > 0) { %>
                     <p><strong>Late fee:</strong> $<%= Number(request.lateFeeAmount || 0).toFixed(2) %></p>
                 <% } %>
-                <p><strong>Refund after policy checks:</strong> $<%= Math.max(0, Number(request.refundAmount || 0) - Number(request.lateFeeAmount || 0)).toFixed(2) %></p>
+                <% if (request.providerRefundId) { %><p><strong>Provider refund reference:</strong> <%= request.providerRefundId %></p><% } %>
+                <% if (request.refundedAt) { %><p><strong>Refund completed:</strong> <%= formatDateTime(request.refundedAt) %></p><% } %>
+                <% if (request.reviewedAt) { %><p><strong>Merchant reviewed:</strong> <%= formatDateTime(request.reviewedAt) %></p><% } %>
+                <% if (request.status === 'refund_failed') { %>
+                    <p><strong>Refund failure:</strong> Your refund could not be completed. The merchant has been notified and may retry the refund.</p>
+                <% } %>
+                <% if (request.status === 'rejected' && request.merchantNote) { %>
+                    <p><strong>Rejection reason:</strong> <%= request.merchantNote %></p>
+                <% } %>
             <% } %>
         </div>
     <% } %>
@@ -81,11 +104,15 @@
         <div class="support-action-box">
             <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                <label for="merchant-note-<%= request.id %>">Merchant note</label>
-                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="3" minlength="8" required placeholder="Add a short explanation for the customer and Vaniday admin."></textarea>
+                <label for="merchant-note-<%= request.id %>">Approval note</label>
+                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="2" placeholder="Optional customer-facing approval note."></textarea>
+                <label for="merchant-rejection-<%= request.id %>">Rejection reason</label>
+                <textarea id="merchant-rejection-<%= request.id %>" name="rejectionReason" rows="2" placeholder="Required only when rejecting. This is shown to the customer."></textarea>
+                <label for="merchant-internal-<%= request.id %>">Internal notes</label>
+                <textarea id="merchant-internal-<%= request.id %>" name="internalNotes" rows="2" placeholder="Optional private note for merchant/admin audit."></textarea>
                 <div class="inline-actions">
                     <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
-                    <button class="button secondary danger-button" type="submit" name="decision" value="declined">Decline</button>
+                    <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
                 </div>
             </form>
         </div>
@@ -93,25 +120,7 @@
 
     <% if (role === 'admin' && !isClosed(request)) { %>
         <div class="support-action-box admin-support-actions">
-            <% if (request.status === 'pending_admin_review' && request.merchantUserId) { %>
-                <form action="/help-center/requests/<%= request.id %>/send-to-merchant" method="POST">
-                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                    <label for="admin-send-note-<%= request.id %>">Message for merchant</label>
-                    <textarea id="admin-send-note-<%= request.id %>" name="adminNote" rows="2" placeholder="Ask the merchant to approve or decline this request."></textarea>
-                    <button class="button secondary" type="submit">Request merchant approval</button>
-                </form>
-            <% } %>
-            <form action="/help-center/requests/<%= request.id %>/admin-resolution" method="POST">
-                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                <label for="admin-final-note-<%= request.id %>">Final admin note</label>
-                <textarea id="admin-final-note-<%= request.id %>" name="adminNote" rows="2" minlength="8" required placeholder="Explain the final decision."></textarea>
-                <div class="inline-actions">
-                    <% if (request.merchantDecision === 'approved') { %>
-                        <button class="button primary" type="submit" name="decision" value="approved">Issue refund</button>
-                    <% } %>
-                    <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
-                </div>
-            </form>
+            <p class="muted">Admin monitoring only. The linked merchant owns the approval decision and refund processing for this request.</p>
         </div>
     <% } %>
 </article>

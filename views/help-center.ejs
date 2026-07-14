@@ -1,7 +1,7 @@
 <%- include('partials/header', { title, useBootstrap: true }) %>
 
 <%
-    const finalStatuses = ['resolved_approved', 'resolved_rejected', 'cancelled', 'closed'];
+    const finalStatuses = ['refunded', 'rejected', 'cancelled', 'closed'];
     const visibleRequests = Array.isArray(requests) ? requests : [];
     const safeBookings = Array.isArray(bookings) ? bookings : [];
     const safeOrders = Array.isArray(orders) ? orders : [];
@@ -17,12 +17,12 @@
     const requestLabel = (type) => requestLabels[type] || String(type || 'Support request').replace(/_/g, ' ');
     const statusClass = (status) => `status-${String(status || 'pending').replace(/_/g, '-')}`;
     const supportStatusLabel = (status) => ({
-        pending_admin_review: 'Under Review',
         pending_merchant_review: 'Waiting for Merchant',
-        merchant_approved: 'Under Review',
-        merchant_declined: 'Under Review',
-        resolved_approved: 'Resolved',
-        resolved_rejected: 'Resolved',
+        approved: 'Approved',
+        refund_processing: 'Refund Processing',
+        refunded: 'Refunded',
+        rejected: 'Rejected',
+        refund_failed: 'Refund Failed',
         cancelled: 'Closed',
         closed: 'Closed'
     }[status] || 'Open');
@@ -36,10 +36,11 @@
     const canCancelOrder = (order) => !['shipped', 'delivered', 'cancelled'].includes(order.deliveryStatus);
     const buildTimeline = (request) => {
         const timeline = [{ label: 'Submitted', time: formatDateTime(request.createdAt) }];
-        if (request.merchantNote || request.merchantDecision !== 'pending') timeline.push({ label: 'Merchant replied', time: formatDateTime(request.updatedAt) });
-        if (request.adminNote || request.adminDecision !== 'pending') timeline.push({ label: 'Admin replied', time: formatDateTime(request.updatedAt) });
-        if (request.refundAmount > 0 && request.status === 'resolved_approved') timeline.push({ label: 'Refund processed', time: formatDateTime(request.resolvedAt || request.updatedAt) });
-        if (isClosed(request)) timeline.push({ label: 'Issue resolved', time: formatDateTime(request.resolvedAt || request.updatedAt) });
+        if (request.reviewedAt || request.merchantDecision !== 'pending') timeline.push({ label: 'Merchant decision', time: formatDateTime(request.reviewedAt || request.updatedAt) });
+        if (request.status === 'refund_processing') timeline.push({ label: 'Refund processing', time: formatDateTime(request.updatedAt) });
+        if (request.status === 'refund_failed') timeline.push({ label: 'Refund failed', time: formatDateTime(request.updatedAt) });
+        if (request.status === 'refunded') timeline.push({ label: 'Refund completed', time: formatDateTime(request.refundedAt || request.resolvedAt || request.updatedAt) });
+        if (isClosed(request)) timeline.push({ label: 'Request closed', time: formatDateTime(request.resolvedAt || request.updatedAt) });
         return timeline;
     };
     const helpCategories = [
@@ -51,7 +52,7 @@
         { icon: 'G', title: 'Promotions & Rewards', description: 'Check voucher, cashback, VaniGlints, and reward eligibility.', href: '#faq', keywords: 'promotions rewards voucher cashback glints loyalty' }
     ];
     const faqs = [
-        { question: 'When am I eligible for a refund?', answer: 'Refund requests are accepted only for paid bookings or paid product orders. Orders must not already be shipped or refunded. Vaniday admin reviews the case first, then requests merchant approval before any refund is processed. Late booking cancellations may include a fee.', keywords: 'refund policy eligible late cancellation' },
+        { question: 'When am I eligible for a refund?', answer: 'Refund requests are accepted only for paid bookings or paid product orders. Orders must not already be shipped, delivered, cancelled, or refunded. The request is sent directly to the merchant linked to the booking or order for review. Late booking cancellations may include a fee.', keywords: 'refund policy eligible late cancellation' },
         { question: 'How do I reschedule a booking?', answer: 'Go to Profile > Bookings and use Reschedule on the booking card. Help Center is only for unresolved refund, payment, technical, or merchant issues.', keywords: 'booking policy reschedule profile bookings merchant' },
         { question: 'My payment failed but I was charged. What should I do?', answer: 'Check your receipt and bank status first. If the charge remains after a short delay, create a Payment Issues ticket with a screenshot.', keywords: 'payment troubleshooting failed charged bank' },
         { question: 'Why are my rewards or vouchers missing?', answer: 'Rewards are linked to paid receipts and eligible campaigns. Some vouchers exclude cancelled, refunded, or already discounted purchases.', keywords: 'loyalty rewards voucher glints cashback' },
@@ -76,13 +77,13 @@
             </div>
         <% } else if (role === 'merchant') { %>
             <div class="support-smart-row role-desk-actions">
-                <span>Only admin-forwarded refund requests appear here.</span>
+                <span>New refund requests from your customers appear here directly.</span>
                 <a href="#support-tickets">Review merchant queue</a>
             </div>
         <% } else { %>
             <div class="support-smart-row role-desk-actions">
-                <span>Admin reviews first, merchant approval second, final refund last.</span>
-                <a href="#support-tickets">Review refund queue</a>
+                <span>Monitor merchant decisions, processing, failures, and escalations.</span>
+                <a href="#support-tickets">Monitor refund queue</a>
             </div>
         <% } %>
     </div>
@@ -140,7 +141,7 @@
                     <ul class="giftcard-terms">
                         <li>Only paid bookings and paid orders may be reviewed for refund.</li>
                         <li>Product orders that are already shipped, delivered, cancelled, or previously refunded are not eligible through this flow.</li>
-                        <li>Vaniday admin reviews the request first, then asks the merchant to approve or decline before a refund is issued.</li>
+                        <li>The request is sent directly to the merchant linked to the booking or order for approval or rejection.</li>
                         <li>Booking cancellations made within 24 hours may include a late-cancellation fee deducted from the approved refund.</li>
                         <li>Submitting false information or duplicate claims may cause the request to be rejected.</li>
                     </ul>
@@ -206,10 +207,10 @@
                         </label>
                         <label class="merchant-toggle-row">
                             <input type="checkbox" name="acceptRefundTerms" required>
-                            <span><strong>I accept the refund terms</strong><small>I confirm the information is accurate and understand the merchant must approve before Vaniday can process a refund.</small></span>
+                            <span><strong>I accept the refund terms</strong><small>I confirm the information is accurate and understand the merchant must approve before a refund can be processed.</small></span>
                         </label>
                         <p class="support-form-note" data-support-create-feedback>For rescheduling, use Profile > Bookings instead.</p>
-                        <button class="button primary full" type="submit">Create Ticket</button>
+                        <button class="button primary full" type="submit">Submit Refund Request</button>
                     </form>
                 </section>
             <% } else if (role === 'merchant') { %>
@@ -221,23 +222,23 @@
                         </div>
                     </div>
                     <div class="support-role-steps">
-                        <article><span>1</span><strong>Review</strong><p>Read only the refund requests Vaniday admin has already sent to your business.</p></article>
-                        <article><span>2</span><strong>Decide</strong><p>Approve or decline with a clear merchant note based on the service or order record.</p></article>
-                        <article><span>3</span><strong>Hand back</strong><p>Vaniday admin makes the final customer-facing decision and processes money movement.</p></article>
+                        <article><span>1</span><strong>Review</strong><p>Read refund requests linked to your own bookings, services, products, or orders.</p></article>
+                        <article><span>2</span><strong>Decide</strong><p>Approve or reject with a clear customer-facing reason when needed.</p></article>
+                        <article><span>3</span><strong>Process</strong><p>Approved refunds are processed against the original payment where automatic refunds are available.</p></article>
                     </div>
                 </section>
             <% } else { %>
                 <section class="support-section role-desk-summary">
                     <div class="support-section-heading">
                         <div>
-                            <p class="eyebrow">Admin workflow</p>
-                            <h2>Refund control path</h2>
+                            <p class="eyebrow">Admin oversight</p>
+                            <h2>Refund monitoring</h2>
                         </div>
                     </div>
                     <div class="support-role-steps">
-                        <article><span>1</span><strong>Validate</strong><p>Check payment status, shipping state, duplicate claims, and refund policy terms.</p></article>
-                        <article><span>2</span><strong>Ask merchant</strong><p>Forward only eligible requests to the correct merchant for approval or decline.</p></article>
-                        <article><span>3</span><strong>Resolve</strong><p>Issue or reject the final refund after merchant response and record the reason.</p></article>
+                        <article><span>1</span><strong>Monitor</strong><p>View all refund requests and merchant decisions across the platform.</p></article>
+                        <article><span>2</span><strong>Investigate</strong><p>Track failed refunds, disputes, and unusual decision patterns.</p></article>
+                        <article><span>3</span><strong>Audit</strong><p>Use ticket history and notes for oversight without owning standard approval.</p></article>
                     </div>
                 </section>
             <% } %>
@@ -250,8 +251,8 @@
                             <%= role === 'customer'
                                 ? 'Unresolved and escalated issues'
                                 : role === 'merchant'
-                                    ? 'Refund requests awaiting merchant review'
-                                    : 'Customer refund submissions' %>
+                                    ? 'Refund requests for your business'
+                                    : 'Platform refund monitoring' %>
                         </h2>
                     </div>
                     <span><%= visibleRequests.length %> ticket<%= visibleRequests.length === 1 ? '' : 's' %></span>
@@ -265,9 +266,9 @@
                             <p class="muted">Most issues can be solved with FAQs or booking self-service. If something remains unresolved, create a ticket.</p>
                             <a class="button secondary" href="#faq">Browse Help Articles</a>
                         <% } else if (role === 'merchant') { %>
-                            <p class="muted">No refund requests have been sent to this merchant yet.</p>
+                            <p class="muted">No refund requests are assigned to this merchant yet.</p>
                         <% } else { %>
-                            <p class="muted">No customer refund submissions are waiting for admin review.</p>
+                            <p class="muted">No refund requests are available for monitoring.</p>
                         <% } %>
                     </div>
                 <% } else { %>

@@ -352,9 +352,7 @@ app.post('/notifications/clear-read', requireLogin, notificationController.clear
 app.get('/help-center', requireLogin, helpCenterController.showHelpCenter);
 app.post('/help-center/requests', requireCustomer, handleSupportScreenshotUpload, helpCenterController.createRequest);
 app.post('/help-center/requests/:requestId/replies', requireLogin, handleSupportScreenshotUpload, helpCenterController.replyToRequest);
-app.post('/help-center/requests/:requestId/send-to-merchant', requireRole('admin'), helpCenterController.adminSendToMerchant);
 app.post('/help-center/requests/:requestId/merchant-response', requireRole('merchant'), helpCenterController.merchantRespond);
-app.post('/help-center/requests/:requestId/admin-resolution', requireRole('admin'), helpCenterController.adminResolve);
 app.post('/help-center/orders/:transactionId/delivery-status', requireRole('merchant', 'admin'), helpCenterController.updateOrderDeliveryStatus);
 app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
@@ -591,7 +589,7 @@ app.get('/terms', allowGuestOrCustomer, (req, res) => {
         sections: [
             { title: 'Bookings', copy: 'Customers are responsible for selecting accurate service, date, and contact details. Merchants may review, confirm, reschedule, or cancel bookings according to their availability policies.' },
             { title: 'Accounts', copy: 'Keep your login details private and update your profile information when it changes. Vaniday may protect accounts from suspicious or abusive activity.' },
-            { title: 'Rewards and Payments', copy: 'Promotions, points, cashback, vouchers, and refunds are subject to eligibility checks and merchant or admin review where applicable.' }
+            { title: 'Rewards and Payments', copy: 'Promotions, points, cashback, vouchers, and refunds are subject to eligibility checks and merchant review where applicable.' }
         ]
     });
 });

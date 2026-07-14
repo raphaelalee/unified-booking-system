@@ -36,6 +36,7 @@
                         <th>Amount</th>
                         <th>Payment Method</th>
                         <th>Status</th>
+                        <th>Refund</th>
                         <th>Date</th>
                         <th>Action</th>
                     </tr>
@@ -97,12 +98,23 @@
                                     <%= entry.itemNames %>
                                 <% } %>
                             </td>
-                            <td>$<%= Number(entry.totalAmount || 0).toFixed(2) %></td>
-                            <td><%= entry.paymentMethod %></td>
                             <td>
-                                <div><%= entry.paymentStatus %></div>
+                                <div>$<%= Number(entry.totalAmount || 0).toFixed(2) %></div>
+                                <% if (Number(entry.refundedAmount || 0) > 0) { %>
+                                    <div class="muted">Net: $<%= Number(entry.remainingPaidAmount || 0).toFixed(2) %></div>
+                                <% } %>
+                            </td>
+                            <td><%= entry.paymentMethodLabel || entry.paymentMethod %></td>
+                            <td>
+                                <div><%= entry.paymentStatusLabel || entry.paymentStatus %></div>
                                 <% if (entry.type === 'product' && entry.deliveryStatus) { %>
                                     <div class="muted">Fulfilment: <%= entry.deliveryStatus %></div>
+                                <% } %>
+                            </td>
+                            <td>
+                                <div><%= entry.refundStatusLabel || entry.refundStatus || 'None' %></div>
+                                <% if (Number(entry.refundedAmount || 0) > 0) { %>
+                                    <div class="muted">Refunded: $<%= Number(entry.refundedAmount || 0).toFixed(2) %></div>
                                 <% } %>
                             </td>
                             <td><%= entry.createdAtLabel %></td>
