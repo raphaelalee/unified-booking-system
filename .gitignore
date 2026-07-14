@@ -11,3 +11,7 @@ package-lock.json
 package.json
 server.err.log
 server.out.log
+
+
+.wwebjs_auth/
+.wwebjs_cache/
