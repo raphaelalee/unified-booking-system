@@ -455,7 +455,7 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     provider_charge_id,
                     provider_metadata_json
                 )
-                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
