@@ -93,6 +93,23 @@ function setProfileSuccess(req, message) {
 }
 
 function parseProductHistoryItems(value) {
+    try {
+        const parsed = JSON.parse(value || '[]');
+
+        if (Array.isArray(parsed)) {
+            return parsed.map((item) => ({
+                productId: Number(item.productId || item.serviceId || 0),
+                serviceId: Number(item.serviceId || item.productId || 0),
+                name: item.name || 'Product',
+                quantity: Number(item.quantity || 1),
+                merchantId: Number(item.merchantId || 0),
+                imageUrl: item.imageUrl || ''
+            }));
+        }
+    } catch (error) {
+        // Fall back to the legacy delimited payload while older in-memory rows still exist.
+    }
+
     return String(value || '')
         .split('||')
         .map((chunk) => chunk.trim())
@@ -104,9 +121,29 @@ function parseProductHistoryItems(value) {
                 serviceId: Number(productId || 0),
                 name: name || 'Product',
                 quantity: Number(quantity || 1),
-                merchantId: Number(merchantId || 0)
+                merchantId: Number(merchantId || 0),
+                imageUrl: ''
             };
         });
+}
+
+async function getProductImageMap(productIds = []) {
+    const normalizedIds = Array.from(new Set(productIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)));
+
+    if (!normalizedIds.length) {
+        return {};
+    }
+
+    const placeholders = normalizedIds.map(() => '?').join(', ');
+    const rows = await queryRows(
+        `SELECT product_id, image_url FROM products WHERE product_id IN (${placeholders})`,
+        normalizedIds
+    );
+
+    return rows.reduce((map, row) => {
+        map[Number(row.product_id)] = row.image_url || '';
+        return map;
+    }, {});
 }
 
 function normalizeFilter(filter) {
@@ -199,7 +236,16 @@ async function getProductHistory(userId) {
             transactions.transaction_id AS id,
             'product' AS type,
             GROUP_CONCAT(CONCAT(products.name, ' x', order_items.quantity) ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
-            GROUP_CONCAT(CONCAT(order_items.product_id, '::', products.name, '::', order_items.quantity, '::', COALESCE(products.salon_id, '')) ORDER BY order_items.order_item_id SEPARATOR '||') AS item_payload,
+            JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'productId', order_items.product_id,
+                    'serviceId', order_items.product_id,
+                    'name', products.name,
+                    'quantity', order_items.quantity,
+                    'merchantId', COALESCE(products.salon_id, 0),
+                    'imageUrl', COALESCE(products.image_url, '')
+                )
+            ) AS item_payload,
             transactions.total_amount,
             transactions.payment_method,
             transactions.payment_provider,
@@ -327,6 +373,9 @@ async function showHistory(req, res) {
             map[`${review.receiptId}:${review.productId}`] = review;
             return map;
         }, {});
+        const productImageMap = await getProductImageMap(
+            mergedProducts.flatMap((entry) => (Array.isArray(entry.items) ? entry.items : []).map((item) => Number(item.serviceId || item.productId || 0)))
+        );
         const enrichedProducts = mergedProducts.map((entry) => {
             const items = Array.isArray(entry.items) ? entry.items : [];
             const reviewable = isCompletedProductOrder(entry);
@@ -340,6 +389,7 @@ async function showHistory(req, res) {
                     return {
                         ...item,
                         productId,
+                        imageUrl: item.imageUrl || productImageMap[productId] || '',
                         review: productReviewMap[reviewKey] || null
                     };
                 })

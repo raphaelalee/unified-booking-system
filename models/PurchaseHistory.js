@@ -142,6 +142,73 @@ function formatItemNames(items = []) {
     }).filter(Boolean).join(', ');
 }
 
+function getProductImageLookup(productIds, callback) {
+    const normalizedIds = Array.from(new Set(
+        productIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0)
+    ));
+
+    if (!normalizedIds.length) {
+        callback(null, {});
+        return;
+    }
+
+    const placeholders = normalizedIds.map(() => '?').join(', ');
+    db.query(
+        `SELECT product_id, image_url FROM products WHERE product_id IN (${placeholders})`,
+        normalizedIds,
+        (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            const lookup = rows.reduce((map, row) => {
+                map[Number(row.product_id)] = row.image_url || '';
+                return map;
+            }, {});
+
+            callback(null, lookup);
+        }
+    );
+}
+
+function normalizeReceiptItems(receipt, callback) {
+    const items = Array.isArray(receipt?.items) ? receipt.items : [];
+
+    if (receipt?.type === 'booking' || !items.length) {
+        callback(null, items);
+        return;
+    }
+
+    const productIds = items
+        .map((item) => Number(item.productId || item.serviceId || 0))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+    getProductImageLookup(productIds, (lookupError, imageLookup) => {
+        if (lookupError) {
+            callback(lookupError);
+            return;
+        }
+
+        const normalizedItems = items.map((item) => {
+            const productId = Number(item.productId || item.serviceId || 0);
+            const safeProductId = Number.isInteger(productId) && productId > 0 ? productId : null;
+            const imageUrl = String(item.imageUrl || imageLookup[safeProductId] || '').trim();
+
+            return {
+                ...item,
+                productId: safeProductId,
+                serviceId: safeProductId,
+                imageUrl
+            };
+        });
+
+        callback(null, normalizedItems);
+    });
+}
+
 function save(receipt, callback) {
     ensureTable((tableError) => {
         if (tableError) {
@@ -149,79 +216,85 @@ function save(receipt, callback) {
             return;
         }
 
-        const items = Array.isArray(receipt.items) ? receipt.items : [];
-        const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
-        const paymentMethod = normalizePaymentMethod(receipt.paymentMethod || 'card');
-        const paymentProvider = normalizePaymentProvider(receipt.paymentProvider, paymentMethod);
-        const paidAmount = Number(receipt.paidAmount || receipt.totalAmount || 0);
-        const refundedAmount = Number(receipt.refundedAmount || 0);
-        const paymentBreakdown = receipt.paymentBreakdown?.length
-            ? receipt.paymentBreakdown
-            : formatPaymentBreakdown([], {
-                paymentMethod,
-                paymentProvider,
-                amount: paidAmount,
-                refundedAmount
-            });
-        const sql = `
-            INSERT INTO purchase_history
-                (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                item_names = VALUES(item_names),
-                items_json = VALUES(items_json),
-                total_amount = VALUES(total_amount),
-                payment_method = VALUES(payment_method),
-                payment_status = VALUES(payment_status),
-                payment_provider = VALUES(payment_provider),
-                payment_method_label = VALUES(payment_method_label),
-                payment_breakdown_json = VALUES(payment_breakdown_json),
-                payment_transaction_id = VALUES(payment_transaction_id),
-                provider_payment_reference = VALUES(provider_payment_reference),
-                refunded_amount = VALUES(refunded_amount),
-                remaining_paid_amount = VALUES(remaining_paid_amount),
-                fulfilment = VALUES(fulfilment),
-                pickup_merchant_id = VALUES(pickup_merchant_id),
-                pickup_merchant_name = VALUES(pickup_merchant_name),
-                pickup_status = VALUES(pickup_status),
-                pickup_at = VALUES(pickup_at),
-                original_amount = VALUES(original_amount),
-                cashback_used = VALUES(cashback_used),
-                points_redeemed = VALUES(points_redeemed),
-                points_discount = VALUES(points_discount),
-                item_subtotal = VALUES(item_subtotal),
-                shipping_fee = VALUES(shipping_fee)
-        `;
+        normalizeReceiptItems(receipt, (itemError, items) => {
+            if (itemError) {
+                callback(itemError);
+                return;
+            }
 
-        db.query(sql, [
-            String(receipt.id),
-            receipt.userId,
-            receipt.type === 'booking' ? 'booking' : 'product',
-            itemNames,
-            JSON.stringify(items),
-            Number(receipt.totalAmount || 0),
-            paymentMethod,
-            receipt.paymentStatus || 'paid',
-            receipt.paidAt ? new Date(receipt.paidAt) : new Date(),
-            receipt.fulfilment || null,
-            receipt.pickupMerchantId || null,
-            receipt.pickupMerchantName || null,
-            receipt.pickupStatus || (receipt.fulfilment === 'pickup' ? 'pending_pickup' : null),
-            receipt.pickupAt ? new Date(receipt.pickupAt) : null,
-            Number(receipt.originalAmount || receipt.totalAmount || 0),
-            Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0),
-            Number(receipt.pointsRedeemed || 0),
-            Number(receipt.pointsDiscount || 0),
-            Number(receipt.itemSubtotal || 0),
-            Number(receipt.shippingFee || 0),
-            paymentProvider,
-            receipt.paymentMethodLabel || formatPaymentMethod(paymentMethod, paymentProvider),
-            JSON.stringify(paymentBreakdown),
-            receipt.transactionId || null,
-            receipt.paymentTransactionReference || receipt.providerPaymentId || receipt.providerSessionId || '',
-            refundedAmount,
-            Math.max(paidAmount - refundedAmount, 0)
-        ], callback);
+            const itemNames = formatItemNames(items) || (receipt.type === 'booking' ? 'Service booking' : 'Product order');
+            const paymentMethod = normalizePaymentMethod(receipt.paymentMethod || 'card');
+            const paymentProvider = normalizePaymentProvider(receipt.paymentProvider, paymentMethod);
+            const paidAmount = Number(receipt.paidAmount || receipt.totalAmount || 0);
+            const refundedAmount = Number(receipt.refundedAmount || 0);
+            const paymentBreakdown = receipt.paymentBreakdown?.length
+                ? receipt.paymentBreakdown
+                : formatPaymentBreakdown([], {
+                    paymentMethod,
+                    paymentProvider,
+                    amount: paidAmount,
+                    refundedAmount
+                });
+            const sql = `
+                INSERT INTO purchase_history
+                    (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    item_names = VALUES(item_names),
+                    items_json = VALUES(items_json),
+                    total_amount = VALUES(total_amount),
+                    payment_method = VALUES(payment_method),
+                    payment_status = VALUES(payment_status),
+                    payment_provider = VALUES(payment_provider),
+                    payment_method_label = VALUES(payment_method_label),
+                    payment_breakdown_json = VALUES(payment_breakdown_json),
+                    payment_transaction_id = VALUES(payment_transaction_id),
+                    provider_payment_reference = VALUES(provider_payment_reference),
+                    refunded_amount = VALUES(refunded_amount),
+                    remaining_paid_amount = VALUES(remaining_paid_amount),
+                    fulfilment = VALUES(fulfilment),
+                    pickup_merchant_id = VALUES(pickup_merchant_id),
+                    pickup_merchant_name = VALUES(pickup_merchant_name),
+                    pickup_status = VALUES(pickup_status),
+                    pickup_at = VALUES(pickup_at),
+                    original_amount = VALUES(original_amount),
+                    cashback_used = VALUES(cashback_used),
+                    points_redeemed = VALUES(points_redeemed),
+                    points_discount = VALUES(points_discount),
+                    item_subtotal = VALUES(item_subtotal),
+                    shipping_fee = VALUES(shipping_fee)
+            `;
+
+            db.query(sql, [
+                String(receipt.id),
+                receipt.userId,
+                receipt.type === 'booking' ? 'booking' : 'product',
+                itemNames,
+                JSON.stringify(items),
+                Number(receipt.totalAmount || 0),
+                paymentMethod,
+                receipt.paymentStatus || 'paid',
+                receipt.paidAt ? new Date(receipt.paidAt) : new Date(),
+                receipt.fulfilment || null,
+                receipt.pickupMerchantId || null,
+                receipt.pickupMerchantName || null,
+                receipt.pickupStatus || (receipt.fulfilment === 'pickup' ? 'pending_pickup' : null),
+                receipt.pickupAt ? new Date(receipt.pickupAt) : null,
+                Number(receipt.originalAmount || receipt.totalAmount || 0),
+                Number(receipt.cashbackRedeemed || receipt.cashbackUsed || 0),
+                Number(receipt.pointsRedeemed || 0),
+                Number(receipt.pointsDiscount || 0),
+                Number(receipt.itemSubtotal || 0),
+                Number(receipt.shippingFee || 0),
+                paymentProvider,
+                receipt.paymentMethodLabel || formatPaymentMethod(paymentMethod, paymentProvider),
+                JSON.stringify(paymentBreakdown),
+                receipt.transactionId || null,
+                receipt.paymentTransactionReference || receipt.providerPaymentId || receipt.providerSessionId || '',
+                refundedAmount,
+                Math.max(paidAmount - refundedAmount, 0)
+            ], callback);
+        });
     });
 }
 
