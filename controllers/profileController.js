@@ -81,7 +81,7 @@ function isCompletedProductOrder(entry = {}) {
     const deliveryStatus = String(entry.deliveryStatus || '').toLowerCase();
     const pickupStatus = String(entry.pickupStatus || '').toLowerCase();
 
-    return deliveryStatus === 'delivered' || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
+    return ['delivered', 'completed'].includes(deliveryStatus) || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
 }
 
 function setProfileError(req, message) {
@@ -208,6 +208,7 @@ async function getProductHistory(userId) {
             transactions.refunded_amount,
             transactions.payment_status,
             transactions.delivery_status,
+            transactions.fulfilment_type,
             transactions.pickup_status,
             transactions.created_at
         FROM transactions
@@ -224,6 +225,7 @@ async function getProductHistory(userId) {
             transactions.refunded_amount,
             transactions.payment_status,
             transactions.delivery_status,
+            transactions.fulfilment_type,
             transactions.pickup_status,
             transactions.created_at
         ORDER BY transactions.created_at DESC, transactions.transaction_id DESC
@@ -239,6 +241,7 @@ async function getProductHistory(userId) {
         items: parseProductHistoryItems(row.item_payload),
         totalAmount: Number(row.total_amount || 0),
         ...buildPaymentHistoryFields(row),
+        fulfilmentType: row.fulfilment_type || 'pickup',
         deliveryStatus: row.delivery_status || 'processing',
         pickupStatus: row.pickup_status || '',
         createdAt: row.created_at,

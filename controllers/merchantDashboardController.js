@@ -713,12 +713,34 @@ function normalizeMerchantBookingStatus(value) {
 
 function normalizeOrderDeliveryStatus(value) {
     const status = String(value || '').trim().toLowerCase();
-    const allowed = new Set(['processing', 'packed', 'shipped', 'delivered', 'cancelled']);
+    const allowed = new Set([
+        'processing',
+        'packed',
+        'ready_for_pickup',
+        'delivered_to_pickup_location',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'cancelled'
+    ]);
     return allowed.has(status) ? status : '';
 }
 
 function getDeliveryStatusLabel(value) {
-    return String(value || 'processing').replace(/_/g, ' ');
+    const normalized = String(value || 'processing').trim().toLowerCase();
+    const labels = {
+        processing: 'Processing',
+        packed: 'Packed',
+        ready_for_pickup: 'Ready for Pickup',
+        delivered_to_pickup_location: 'Delivered to Pickup Location',
+        shipped: 'Shipped',
+        out_for_delivery: 'Out for Delivery',
+        delivered: 'Delivered',
+        completed: 'Completed',
+        picked_up: 'Picked Up',
+        cancelled: 'Cancelled'
+    };
+    return labels[normalized] || normalized.replace(/_/g, ' ');
 }
 
 function buildMerchantReports(merchant, bookings = [], hadError = false) {
@@ -1573,7 +1595,7 @@ function updateOrderStatus(req, res) {
             }
 
             if (!result?.affectedRows) {
-                req.session.merchantError = 'Order status could not be updated for your merchant account.';
+                req.session.merchantError = 'Order status could not be updated. Pickup might already be verified or the selected status is not valid for this fulfilment type.';
                 return res.redirect('/merchant/orders');
             }
 

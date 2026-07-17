@@ -7,6 +7,10 @@
 </section>
 
 <section class="section compact">
+    <%
+        const formatStatusLabel = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+        const formatFulfilmentLabel = (value) => String(value || '').toLowerCase() === 'delivery' ? 'Delivery' : 'Pickup';
+    %>
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
@@ -108,7 +112,10 @@
                             <td>
                                 <div><%= entry.paymentStatusLabel || entry.paymentStatus %></div>
                                 <% if (entry.type === 'product' && entry.deliveryStatus) { %>
-                                    <div class="muted">Fulfilment: <%= entry.deliveryStatus %></div>
+                                    <div class="muted">
+                                        <%= formatFulfilmentLabel(entry.fulfilmentType || entry.fulfilment) %>:
+                                        <%= formatStatusLabel((String(entry.fulfilmentType || entry.fulfilment).toLowerCase() === 'pickup' && entry.pickupStatus) ? entry.pickupStatus : entry.deliveryStatus) %>
+                                    </div>
                                 <% } %>
                             </td>
                             <td>

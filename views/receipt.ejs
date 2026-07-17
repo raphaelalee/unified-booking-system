@@ -221,10 +221,19 @@
 
         <aside class="receipt-qr-panel">
             <p class="eyebrow"><%= qrLabel %></p>
-            <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
-            <p class="muted"><%= qrDescription %></p>
-            <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
-            <% if (showQrDebug) { %>
+            <% if (qrCodeDataUrl) { %>
+                <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
+                <p class="muted"><%= qrDescription %></p>
+                <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
+            <% } else { %>
+                <p class="muted"><%= qrDescription %></p>
+                <% if (isProductPickup) { %>
+                    <p class="muted">Your merchant will update the order to Ready for Pickup before verification is allowed.</p>
+                <% } else { %>
+                    <p class="muted">This is a delivery order. Pickup QR verification is not used.</p>
+                <% } %>
+            <% } %>
+            <% if (showQrDebug && qrCodeDataUrl) { %>
                 <div class="qr-debug-panel">
                     <p class="eyebrow">QR Debug</p>
                     <p class="muted"><strong>System:</strong> <%= qrSystem %></p>

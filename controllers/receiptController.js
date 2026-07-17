@@ -68,8 +68,12 @@ function getPickupStatusLabel(value) {
         pending_pickup: 'Pending Pickup',
         processing: 'Pending Pickup',
         packed: 'Pending Pickup',
-        ready: 'Pending Pickup',
+        ready: 'Ready for Pickup',
+        ready_for_pickup: 'Ready for Pickup',
+        delivered_to_pickup_location: 'Delivered to Pickup Location',
+        not_applicable: 'Not Applicable',
         picked_up: 'Picked Up',
+        completed: 'Picked Up',
         delivered: 'Picked Up',
         cancelled: 'Cancelled'
     };
@@ -78,7 +82,41 @@ function getPickupStatusLabel(value) {
 }
 
 function isCollectedStatus(value) {
-    return ['picked_up', 'collected', 'delivered'].includes(String(value || '').trim().toLowerCase());
+    return ['picked_up', 'collected', 'delivered', 'completed'].includes(String(value || '').trim().toLowerCase());
+}
+
+function isPickupReadyForCustomer(order) {
+    const pickupStatus = String(order?.pickupStatus || '').trim().toLowerCase();
+    const deliveryStatus = String(order?.deliveryStatus || '').trim().toLowerCase();
+
+    return pickupStatus === 'ready_for_pickup'
+        || pickupStatus === 'delivered_to_pickup_location'
+        || deliveryStatus === 'ready_for_pickup'
+        || deliveryStatus === 'delivered_to_pickup_location';
+}
+
+function getPickupVerificationBlockReason(order, currentUserId) {
+    if (!order) {
+        return 'This pickup order could not be found.';
+    }
+
+    if (String(order.fulfilmentType || 'pickup').toLowerCase() !== 'pickup') {
+        return 'Pickup verification is not available for delivery orders.';
+    }
+
+    if (String(order.paymentStatus || '').toLowerCase() !== 'paid') {
+        return 'This order is not paid, so pickup cannot be confirmed.';
+    }
+
+    if (Number(order.pickupQrUsed || 0) === 1 || order.pickupVerifiedAt || isCollectedStatus(order.pickupStatus)) {
+        return 'This pickup has already been verified.';
+    }
+
+    if (!isPickupReadyForCustomer(order)) {
+        return 'Your order has not arrived at the pickup location yet.';
+    }
+
+    return '';
 }
 
 function getFulfilmentLabel(value) {
@@ -256,13 +294,14 @@ function getPickupMerchantName(receipt) {
 
 function getReceiptMode(receipt) {
     const isBooking = isBookingReceipt(receipt);
-    const isProductPickup = !isBooking && (String(receipt.fulfilment || 'pickup').toLowerCase() === 'pickup');
+    const fulfilment = String(receipt.fulfilment || receipt.fulfilmentType || 'pickup').toLowerCase();
+    const isProductPickup = !isBooking && fulfilment === 'pickup';
 
     return {
         receiptType: isBooking ? 'booking' : 'product',
         isBooking,
         isProductPickup,
-        fulfilmentLabel: isBooking ? '' : getFulfilmentLabel(receipt.fulfilment || 'pickup'),
+        fulfilmentLabel: isBooking ? '' : getFulfilmentLabel(fulfilment),
         pickupMerchantName: isBooking ? '' : getPickupMerchantName(receipt),
         pickupStatusLabel: isBooking ? '' : getPickupStatusLabel(receipt.pickupStatus || receipt.deliveryStatus)
     };
@@ -366,10 +405,15 @@ function mapOrderReceipt(order) {
         providerRefundId: order.providerRefundId || '',
         transactionId: order.id,
         deliveryStatus: order.deliveryStatus,
+        fulfilmentType: order.fulfilmentType || 'pickup',
         merchantUserIds: order.merchantUserIds || [],
-        fulfilment: 'pickup',
+        fulfilment: order.fulfilmentType || 'pickup',
         pickupMerchantName: order.merchantName || 'Vaniday merchant',
-        pickupStatus: getPickupStatusLabel(order.pickupStatus || order.deliveryStatus),
+        pickupStatus: order.pickupStatus || '',
+        pickupReadyAt: order.pickupReadyAt || null,
+        pickupVerifiedAt: order.pickupVerifiedAt || null,
+        pickupVerifiedBy: order.pickupVerifiedBy || null,
+        pickupQrUsed: Number(order.pickupQrUsed || 0) === 1,
         pickupAt: order.collectedAt || null,
         paidAt: order.createdAt || new Date().toISOString()
     };
@@ -694,15 +738,24 @@ async function buildReceiptViewModel(req, id) {
             campaignCashbackEarned: campaignCashback.earned,
             campaignCashbackReversed: campaignCashback.reversed
         };
-    const token = receiptMode.isBooking ? signBookingCheckInToken(receipt.id) : signCheckinToken(receipt);
+    const shouldGenerateQr = receiptMode.isBooking || receiptMode.isProductPickup;
+    const token = receiptMode.isBooking
+        ? signBookingCheckInToken(receipt.id)
+        : receiptMode.isProductPickup
+            ? signCheckinToken(receipt)
+            : '';
     const verificationUrl = receiptMode.isBooking
         ? getBookingCheckInUrl(req, receipt.id)
-        : `${getPublicBaseUrl(req)}/pickup-verify/order/${encodeURIComponent(getOrderId(receipt))}?token=${encodeURIComponent(token)}`;
-    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
-        errorCorrectionLevel: 'M',
-        margin: 2,
-        width: 260
-    });
+        : receiptMode.isProductPickup
+            ? `${getPublicBaseUrl(req)}/pickup-verify/order/${encodeURIComponent(getOrderId(receipt))}?token=${encodeURIComponent(token)}`
+            : '';
+    const qrCodeDataUrl = shouldGenerateQr
+        ? await QRCode.toDataURL(verificationUrl, {
+            errorCorrectionLevel: 'M',
+            margin: 2,
+            width: 260
+        })
+        : '';
 
     return {
         title: `Receipt ${receipt.id}`,
@@ -714,14 +767,22 @@ async function buildReceiptViewModel(req, id) {
         checkinUrl: verificationUrl,
         verificationUrl,
         checkinToken: token,
-        qrLabel: receiptMode.isBooking ? 'Appointment Check-In QR' : 'Pickup Verification QR',
+        qrLabel: receiptMode.isBooking
+            ? 'Appointment Check-In QR'
+            : receiptMode.isProductPickup
+                ? 'Pickup Verification QR'
+                : 'Delivery Fulfilment',
         qrDescription: receiptMode.isBooking
             ? 'Scan this QR code at the merchant counter to check in for your appointment.'
-            : 'Show this QR code to the merchant when collecting your item.',
-        qrSystem: receiptMode.isBooking ? 'booking-check-in' : 'pickup-verification',
+            : receiptMode.isProductPickup
+                ? 'Show this QR code to the merchant when collecting your item.'
+                : 'Delivery orders are confirmed through the delivery fulfilment process.',
+        qrSystem: receiptMode.isBooking ? 'booking-check-in' : (receiptMode.isProductPickup ? 'pickup-verification' : 'delivery-fulfilment'),
         qrRouteTarget: receiptMode.isBooking
             ? `/checking/${token}`
-            : `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`,
+            : receiptMode.isProductPickup
+                ? `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`
+                : '',
         qrCodeDataUrl,
         showQrDebug: process.env.NODE_ENV === 'development',
         appointmentLabel,
@@ -1105,9 +1166,9 @@ function verifyPickup(req, res) {
         }
 
         const currentUser = req.session.user || null;
-        const alreadyCollected = isCollectedStatus(order.pickupStatus);
-        const canConfirm = !alreadyCollected
-            && String(order.paymentStatus || '').toLowerCase() === 'paid';
+        const blockReason = getPickupVerificationBlockReason(order, currentUser?.id);
+        const alreadyCollected = blockReason === 'This pickup has already been verified.';
+        const canConfirm = !blockReason;
         const message = req.session.pickupVerificationMessage || '';
         req.session.pickupVerificationMessage = null;
 
@@ -1118,16 +1179,19 @@ function verifyPickup(req, res) {
             order: {
                 ...order,
                 receiptId,
+                fulfilmentType: order.fulfilmentType || 'pickup',
                 pickupStatusLabel: getPickupStatusLabel(order.pickupStatus),
                 paymentStatusLabel: formatStatusLabel(order.paymentStatus || 'paid'),
                 createdAtLabel: formatDateTime(order.createdAt),
                 collectedAtLabel: formatDateTime(order.collectedAt),
+                pickupReadyAtLabel: formatDateTime(order.pickupReadyAt),
+                pickupVerifiedAtLabel: formatDateTime(order.pickupVerifiedAt),
                 quantityTotal: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
             },
             token: req.query.token || '',
             canConfirm,
             alreadyCollected,
-            permissionMessage: !alreadyCollected && !canConfirm ? 'This order is not paid, so pickup cannot be confirmed.' : '',
+            permissionMessage: blockReason,
             currentUser,
             cartCount: res.locals.cartCount || 0
         });
@@ -1135,7 +1199,6 @@ function verifyPickup(req, res) {
 }
 
 function confirmPickup(req, res) {
-    const receiptId = `order-${req.params.id}`;
     const token = req.body.token || req.query.token || '';
     const payload = verifyPickupToken(req.params.id, token);
     const redirectPath = `/pickup-verify/order/${encodeURIComponent(req.params.id)}?token=${encodeURIComponent(token)}`;
@@ -1155,55 +1218,42 @@ function confirmPickup(req, res) {
         });
     }
 
-    return Transaction.getPickupVerificationById(req.params.id, (lookupError, order) => {
-        if (lookupError) {
-            console.error(lookupError);
+    return Transaction.verifyPickupByQr(req.params.id, req.session.user?.id, (verifyError, result = {}) => {
+        if (verifyError) {
+            console.error(verifyError);
             return res.status(500).render('error', {
-                title: 'Pickup Verification Error',
-                message: 'Pickup details could not be loaded.'
+                title: 'Pickup Confirmation Error',
+                message: 'Pickup could not be confirmed.'
             });
         }
 
-        if (!order) {
-            return res.status(404).render('error', {
-                title: 'Order Not Found',
-                message: 'This pickup order could not be found.'
-            });
+        if (result.ok) {
+            req.session.pickupVerificationMessage = 'Pickup verified successfully.';
+            return res.redirect(redirectPath);
         }
 
-        if (String(order.paymentStatus || '').toLowerCase() !== 'paid') {
+        if (result.code === 'not_pickup') {
+            req.session.pickupVerificationMessage = 'Pickup verification is not available for delivery orders.';
+            return res.redirect(redirectPath);
+        }
+
+        if (result.code === 'not_paid') {
             req.session.pickupVerificationMessage = 'This order is not paid, so pickup cannot be confirmed.';
             return res.redirect(redirectPath);
         }
 
-        if (isCollectedStatus(order.pickupStatus)) {
-            req.session.pickupVerificationMessage = 'This item has already been collected.';
+        if (result.code === 'not_ready') {
+            req.session.pickupVerificationMessage = 'Your order has not arrived at the pickup location yet.';
             return res.redirect(redirectPath);
         }
 
-        return Transaction.markPickupCollected(req.params.id, (updateError, result) => {
-            if (updateError) {
-                console.error(updateError);
-                return res.status(500).render('error', {
-                    title: 'Pickup Confirmation Error',
-                    message: 'Pickup could not be confirmed.'
-                });
-            }
+        if (result.code === 'already_verified') {
+            req.session.pickupVerificationMessage = 'This pickup has already been verified.';
+            return res.redirect(redirectPath);
+        }
 
-            if (!result?.affectedRows) {
-                req.session.pickupVerificationMessage = 'This item has already been collected.';
-                return res.redirect(redirectPath);
-            }
-
-            PurchaseHistory.markPickupCollected(receiptId, (historyError) => {
-                if (historyError) {
-                    console.error(historyError);
-                }
-
-                req.session.pickupVerificationMessage = 'Pickup confirmed successfully.';
-                return res.redirect(redirectPath);
-            });
-        });
+        req.session.pickupVerificationMessage = 'Pickup could not be confirmed for this order.';
+        return res.redirect(redirectPath);
     });
 }
 

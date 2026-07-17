@@ -6,7 +6,7 @@
     <% if (invalid) { %>
         <p>Invalid or expired pickup QR.</p>
     <% } else if (alreadyCollected) { %>
-        <p>This item has already been collected.</p>
+        <p>This pickup has already been verified.</p>
     <% } else { %>
         <p>Review the order details before confirming product collection.</p>
     <% } %>
@@ -28,8 +28,14 @@
                     <p><span>Payment Status</span><strong><%= order.paymentStatusLabel %></strong></p>
                     <p><span>Pickup Status</span><strong><%= order.pickupStatusLabel %></strong></p>
                     <p><span>Order Date/time</span><strong><%= order.createdAtLabel %></strong></p>
+                    <% if (order.pickupReadyAtLabel) { %>
+                        <p><span>Pickup Ready At</span><strong><%= order.pickupReadyAtLabel %></strong></p>
+                    <% } %>
                     <% if (alreadyCollected && order.collectedAtLabel) { %>
                         <p><span>Collected At</span><strong><%= order.collectedAtLabel %></strong></p>
+                    <% } %>
+                    <% if (order.pickupVerifiedAtLabel) { %>
+                        <p><span>Pickup Verified At</span><strong><%= order.pickupVerifiedAtLabel %></strong></p>
                     <% } %>
                 </div>
 
@@ -69,17 +75,19 @@
             <aside class="receipt-qr-panel">
                 <p class="eyebrow"><%= alreadyCollected ? 'Already collected' : 'Collection action' %></p>
                 <% if (alreadyCollected) { %>
-                    <p class="muted">This item has already been collected.</p>
+                    <p class="muted">This pickup has already been verified.</p>
                     <% if (order.collectedAtLabel) { %>
                         <p><strong>Collected At:</strong> <%= order.collectedAtLabel %></p>
                     <% } %>
                 <% } else if (canConfirm) { %>
                     <form action="/pickup-verify/order/<%= encodeURIComponent(order.id) %>/confirm?token=<%= encodeURIComponent(token) %>" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                         <input type="hidden" name="token" value="<%= token %>">
-                        <button class="button primary full" type="submit">Confirm Item Collected</button>
+                        <button class="button primary full" type="submit">Verify Pickup</button>
                     </form>
                 <% } else { %>
                     <p class="muted"><%= permissionMessage %></p>
+                    <button class="button secondary full" type="button" disabled>Verify Pickup</button>
                 <% } %>
             </aside>
         </div>

@@ -8,14 +8,22 @@
         totalCommissionDeducted: 0,
         totalNetPayout: 0
     };
-    const statusOptions = [
+    const deliveryStatusOptions = [
         { value: 'processing', label: 'Processing' },
         { value: 'packed', label: 'Packed' },
         { value: 'shipped', label: 'Shipped' },
+        { value: 'out_for_delivery', label: 'Out for Delivery' },
         { value: 'delivered', label: 'Delivered' },
         { value: 'cancelled', label: 'Cancelled' }
     ];
-    const statusLabels = statusOptions.reduce((labels, option) => {
+    const pickupStatusOptions = [
+        { value: 'processing', label: 'Processing' },
+        { value: 'packed', label: 'Packed' },
+        { value: 'ready_for_pickup', label: 'Ready for Pickup' },
+        { value: 'delivered_to_pickup_location', label: 'Delivered to Pickup Location' },
+        { value: 'cancelled', label: 'Cancelled' }
+    ];
+    const statusLabels = [...deliveryStatusOptions, ...pickupStatusOptions, { value: 'completed', label: 'Completed' }, { value: 'picked_up', label: 'Picked Up' }].reduce((labels, option) => {
         labels[option.value] = option.label;
         return labels;
     }, {});
@@ -85,19 +93,26 @@
             <% } else { %>
                 <div class="merchant-order-management-list">
                     <% orders.forEach((order) => {
+                        const isPickupOrder = String(order.fulfilmentType || 'pickup').toLowerCase() === 'pickup';
                         const currentStatus = String(order.deliveryStatus || 'processing');
+                        const statusOptions = isPickupOrder ? pickupStatusOptions : deliveryStatusOptions;
+                        const pickupVerified = Boolean(order.pickupVerifiedAt || order.pickupQrUsed || String(order.pickupStatus || '').toLowerCase() === 'picked_up');
                     %>
                         <article class="merchant-order-management-card">
                             <div class="merchant-order-management-main">
                                 <div>
                                     <span class="merchant-order-id">#<%= order.id %></span>
                                     <strong><%= order.customerName || 'Customer' %></strong>
-                                    <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %></small>
+                                    <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %> · <%= isPickupOrder ? 'Pickup' : 'Delivery' %></small>
                                 </div>
                                 <span class="merchant-status-badge status-<%= currentStatus.replace(/\s+/g, '_') %>">
                                     <%= statusLabels[currentStatus] || currentStatus %>
                                 </span>
                             </div>
+
+                            <% if (isPickupOrder && pickupVerified) { %>
+                                <p class="muted" style="margin: .5rem 0 0;">Pickup already verified by customer<%= order.pickupVerifiedAt ? ` on ${formatOrderDate(order.pickupVerifiedAt)}` : '' %>.</p>
+                            <% } %>
 
                             <div class="merchant-order-management-items">
                                 <% (order.items || []).forEach((item) => { %>
@@ -126,13 +141,13 @@
                                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                     <label>
                                         <span>Status</span>
-                                        <select name="deliveryStatus">
+                                        <select name="deliveryStatus" <%= pickupVerified ? 'disabled' : '' %>>
                                             <% statusOptions.forEach((option) => { %>
                                                 <option value="<%= option.value %>" <%= option.value === currentStatus ? 'selected' : '' %>><%= option.label %></option>
                                             <% }) %>
                                         </select>
                                     </label>
-                                    <button class="button primary" type="submit">Update</button>
+                                    <button class="button primary" type="submit" <%= pickupVerified ? 'disabled' : '' %>>Update</button>
                                 </form>
                             </div>
                         </article>

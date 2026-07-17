@@ -207,7 +207,7 @@ function isCompletedProductOrder(receipt = {}) {
     const deliveryStatus = String(receipt.deliveryStatus || '').toLowerCase();
     const pickupStatus = String(receipt.pickupStatus || '').toLowerCase();
 
-    return deliveryStatus === 'delivered' || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
+    return ['delivered', 'completed'].includes(deliveryStatus) || ['picked_up', 'collected', 'delivered'].includes(pickupStatus);
 }
 
 function sortReviewEntries(entries = []) {
@@ -247,8 +247,8 @@ function buildProductReviewEntries(receipts = [], reviews = []) {
                 merchant_name: item.merchantName || receipt.merchantName || 'Vaniday merchant',
                 booking_date: receipt.paidAt,
                 reviewDate: receipt.paidAt,
-                status: receipt.pickupStatus || receipt.deliveryStatus || receipt.paymentStatus || 'delivered',
-                fulfilment: receipt.fulfilment || '',
+                status: receipt.pickupStatus || receipt.deliveryStatus || receipt.paymentStatus || 'completed',
+                fulfilment: receipt.fulfilment || receipt.fulfilmentType || '',
                 quantity: Number(item.quantity || 1),
                 review
             };

@@ -366,7 +366,7 @@ function getSupportOrderForCustomer(userId, receiptId, callback) {
 }
 
 function updateDeliveryStatus(receiptId, status, callback) {
-    const value = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'].includes(status)
+    const value = ['processing', 'packed', 'ready_for_pickup', 'delivered_to_pickup_location', 'shipped', 'out_for_delivery', 'delivered', 'completed', 'cancelled'].includes(status)
         ? status
         : 'processing';
 

@@ -4649,6 +4649,11 @@ function persistPaidTransaction(payment, paymentMethod) {
             loyaltyPointsValue: Number(payment.pointsDiscount || 0),
             bookingId: payment.kind === 'booking' ? payment.bookingId || payment.receiptId : null,
             createOrder: payment.kind === 'order',
+            fulfilmentType: payment.kind === 'order' ? normalizeFulfilment(payment.fulfilment || 'pickup') : 'pickup',
+            deliveryStatus: payment.kind === 'order' ? 'processing' : null,
+            pickupStatus: payment.kind === 'order' && normalizeFulfilment(payment.fulfilment || 'pickup') === 'pickup'
+                ? 'pending_pickup'
+                : 'not_applicable',
             currency: payment.currency || 'SGD',
             paymentProvider: canonicalProvider,
             providerPaymentId: payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || null,

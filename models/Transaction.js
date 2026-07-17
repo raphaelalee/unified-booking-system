@@ -80,8 +80,28 @@ function ensureFulfilmentSchema(callback) {
             alters.push("ADD COLUMN pickup_status VARCHAR(40) NOT NULL DEFAULT 'pending_pickup'");
         }
 
+        if (!fields.has('fulfilment_type')) {
+            alters.push("ADD COLUMN fulfilment_type VARCHAR(20) NOT NULL DEFAULT 'pickup'");
+        }
+
         if (!fields.has('collected_at')) {
             alters.push('ADD COLUMN collected_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('pickup_ready_at')) {
+            alters.push('ADD COLUMN pickup_ready_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('pickup_verified_at')) {
+            alters.push('ADD COLUMN pickup_verified_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('pickup_verified_by')) {
+            alters.push('ADD COLUMN pickup_verified_by INT DEFAULT NULL');
+        }
+
+        if (!fields.has('pickup_qr_used')) {
+            alters.push('ADD COLUMN pickup_qr_used TINYINT(1) NOT NULL DEFAULT 0');
         }
 
         if (!fields.has('original_amount')) {
@@ -369,15 +389,51 @@ function ensureOrderRefundSchema(callback) {
 
 function normalizeDeliveryStatus(status) {
     const value = String(status || '').trim().toLowerCase();
-    const allowed = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
+    const allowed = [
+        'processing',
+        'packed',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'ready_for_pickup',
+        'delivered_to_pickup_location',
+        'completed',
+        'cancelled'
+    ];
     return allowed.includes(value) ? value : 'processing';
 }
 
-function normalizePickupStatus(status, deliveryStatus) {
+function normalizeFulfilmentType(value) {
+    return String(value || '').trim().toLowerCase() === 'delivery' ? 'delivery' : 'pickup';
+}
+
+function isPickupReadyStatus(status) {
+    const value = String(status || '').trim().toLowerCase();
+    return value === 'ready_for_pickup' || value === 'delivered_to_pickup_location';
+}
+
+function isPickupCollectedStatus(status) {
+    const value = String(status || '').trim().toLowerCase();
+    return ['picked_up', 'collected'].includes(value);
+}
+
+function normalizePickupStatus(status, deliveryStatus, fulfilmentType = 'pickup') {
+    if (normalizeFulfilmentType(fulfilmentType) === 'delivery') {
+        return 'not_applicable';
+    }
+
     const value = String(status || '').trim().toLowerCase();
 
-    if (['picked_up', 'collected'].includes(value) || String(deliveryStatus || '').toLowerCase() === 'delivered') {
+    if (isPickupCollectedStatus(value) || String(deliveryStatus || '').toLowerCase() === 'completed') {
         return 'picked_up';
+    }
+
+    if (isPickupReadyStatus(value)) {
+        return value;
+    }
+
+    if (isPickupReadyStatus(deliveryStatus)) {
+        return String(deliveryStatus || '').trim().toLowerCase();
     }
 
     if (value === 'cancelled') {
@@ -400,6 +456,10 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
     const voucherDiscountAmount = Number(transactionOptions.voucherDiscountAmount || transactionOptions.voucherDiscount || 0);
     const loyaltyPointsUsed = Number(transactionOptions.loyaltyPointsUsed || transactionOptions.pointsRedeemed || 0);
     const loyaltyPointsValue = Number(transactionOptions.loyaltyPointsValue || transactionOptions.pointsDiscount || 0);
+    const hasProductItems = (items || []).some((item) => String(item.type || '').trim().toLowerCase() === 'product');
+    const fulfilmentType = normalizeFulfilmentType(transactionOptions.fulfilmentType || transactionOptions.fulfilment || (hasProductItems ? 'pickup' : 'pickup'));
+    const initialDeliveryStatus = normalizeDeliveryStatus(transactionOptions.deliveryStatus || 'processing');
+    const initialPickupStatus = normalizePickupStatus(transactionOptions.pickupStatus, initialDeliveryStatus, fulfilmentType);
 
     ensureFulfilmentSchema((schemaError) => {
         if (schemaError) {
@@ -433,6 +493,9 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     payment_status,
                     payment_method,
                     booking_id,
+                    delivery_status,
+                    pickup_status,
+                    fulfilment_type,
                     original_amount,
                     cashback_used,
                     currency,
@@ -455,7 +518,7 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     provider_charge_id,
                     provider_metadata_json
                 )
-                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
@@ -463,6 +526,9 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                 amount,
                 normalizedMethod,
                 transactionOptions.bookingId || null,
+                initialDeliveryStatus,
+                initialPickupStatus,
+                fulfilmentType,
                 originalAmount,
                 cashbackUsed,
                 transactionOptions.currency || 'SGD',
@@ -928,6 +994,12 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 transactions.refunded_amount,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
+                transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.shipped_at,
                 transactions.delivered_at,
                 transactions.created_at,
@@ -970,6 +1042,12 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 refundedAmount: Number(first.refunded_amount || 0),
                 providerRefundId: first.provider_refund_id || '',
                 deliveryStatus: first.delivery_status || 'processing',
+                fulfilmentType: normalizeFulfilmentType(first.fulfilment_type),
+                pickupStatus: normalizePickupStatus(first.pickup_status, first.delivery_status, first.fulfilment_type),
+                pickupReadyAt: first.pickup_ready_at,
+                pickupVerifiedAt: first.pickup_verified_at,
+                pickupVerifiedBy: first.pickup_verified_by || null,
+                pickupQrUsed: Number(first.pickup_qr_used || 0) === 1,
                 shippedAt: first.shipped_at,
                 deliveredAt: first.delivered_at,
                 createdAt: first.created_at,
@@ -1006,7 +1084,12 @@ function getPickupVerificationById(transactionId, callback) {
                 transactions.refunded_amount,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
                 transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.collected_at,
                 transactions.created_at,
                 users.name AS customer_name,
@@ -1054,7 +1137,12 @@ function getPickupVerificationById(transactionId, callback) {
                 refundedAmount: Number(first.refunded_amount || 0),
                 providerRefundId: first.provider_refund_id || '',
                 deliveryStatus: first.delivery_status || 'processing',
-                pickupStatus: normalizePickupStatus(first.pickup_status, first.delivery_status),
+                fulfilmentType: normalizeFulfilmentType(first.fulfilment_type),
+                pickupStatus: normalizePickupStatus(first.pickup_status, first.delivery_status, first.fulfilment_type),
+                pickupReadyAt: first.pickup_ready_at,
+                pickupVerifiedAt: first.pickup_verified_at,
+                pickupVerifiedBy: first.pickup_verified_by || null,
+                pickupQrUsed: Number(first.pickup_qr_used || 0) === 1,
                 collectedAt: first.collected_at,
                 createdAt: first.created_at,
                 items: rows.map((row) => ({
@@ -1092,6 +1180,12 @@ function getMerchantOrderReport(merchantUserId, callback) {
                     transactions.payment_method,
                     transactions.payment_status,
                     transactions.delivery_status,
+                    transactions.fulfilment_type,
+                    transactions.pickup_status,
+                    transactions.pickup_ready_at,
+                    transactions.pickup_verified_at,
+                    transactions.pickup_verified_by,
+                    transactions.pickup_qr_used,
                     transactions.created_at,
                     users.name AS customer_name,
                     COUNT(order_items.order_item_id) AS item_count,
@@ -1124,6 +1218,12 @@ function getMerchantOrderReport(merchantUserId, callback) {
                     transactions.payment_method,
                     transactions.payment_status,
                     transactions.delivery_status,
+                    transactions.fulfilment_type,
+                    transactions.pickup_status,
+                    transactions.pickup_ready_at,
+                    transactions.pickup_verified_at,
+                    transactions.pickup_verified_by,
+                    transactions.pickup_qr_used,
                     transactions.created_at,
                     users.name,
                     salons.commission_rate
@@ -1168,6 +1268,12 @@ function getMerchantOrderReport(merchantUserId, callback) {
                         paymentMethod: row.payment_method || 'card',
                         paymentStatus: row.payment_status || 'paid',
                         deliveryStatus: row.delivery_status || 'processing',
+                        fulfilmentType: normalizeFulfilmentType(row.fulfilment_type),
+                        pickupStatus: normalizePickupStatus(row.pickup_status, row.delivery_status, row.fulfilment_type),
+                        pickupReadyAt: row.pickup_ready_at,
+                        pickupVerifiedAt: row.pickup_verified_at,
+                        pickupVerifiedBy: row.pickup_verified_by || null,
+                        pickupQrUsed: Number(row.pickup_qr_used || 0) === 1,
                         itemCount: Number(row.item_count || 0),
                         createdAt: row.created_at
                     };
@@ -1277,6 +1383,12 @@ function getCustomerOrders(userId, callback) {
                 transactions.provider_capture_id,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
+                transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.refund_status,
                 transactions.refunded_amount,
                 transactions.refund_reason,
@@ -1305,6 +1417,12 @@ function getCustomerOrders(userId, callback) {
                 transactions.provider_capture_id,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
+                transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.refund_status,
                 transactions.refunded_amount,
                 transactions.refund_reason,
@@ -1340,6 +1458,12 @@ function getCustomerOrders(userId, callback) {
                 providerCaptureId: row.provider_capture_id || '',
                 providerRefundId: row.provider_refund_id || '',
                 deliveryStatus: row.delivery_status || 'processing',
+                fulfilmentType: normalizeFulfilmentType(row.fulfilment_type),
+                pickupStatus: normalizePickupStatus(row.pickup_status, row.delivery_status, row.fulfilment_type),
+                pickupReadyAt: row.pickup_ready_at,
+                pickupVerifiedAt: row.pickup_verified_at,
+                pickupVerifiedBy: row.pickup_verified_by || null,
+                pickupQrUsed: Number(row.pickup_qr_used || 0) === 1,
                 refundStatus: row.refund_status || 'none',
                 refundedAmount: Number(row.refunded_amount || 0),
                 refundReason: row.refund_reason || '',
@@ -1371,6 +1495,12 @@ function getOrderById(transactionId, callback) {
                 transactions.provider_capture_id,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
+                transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.refund_status,
                 transactions.refunded_amount,
                 transactions.refund_reason,
@@ -1401,6 +1531,12 @@ function getOrderById(transactionId, callback) {
                 transactions.provider_capture_id,
                 transactions.provider_refund_id,
                 transactions.delivery_status,
+                transactions.fulfilment_type,
+                transactions.pickup_status,
+                transactions.pickup_ready_at,
+                transactions.pickup_verified_at,
+                transactions.pickup_verified_by,
+                transactions.pickup_qr_used,
                 transactions.refund_status,
                 transactions.refunded_amount,
                 transactions.refund_reason,
@@ -1447,6 +1583,12 @@ function getOrderById(transactionId, callback) {
                 providerCaptureId: row.provider_capture_id || '',
                 providerRefundId: row.provider_refund_id || '',
                 deliveryStatus: row.delivery_status || 'processing',
+                fulfilmentType: normalizeFulfilmentType(row.fulfilment_type),
+                pickupStatus: normalizePickupStatus(row.pickup_status, row.delivery_status, row.fulfilment_type),
+                pickupReadyAt: row.pickup_ready_at,
+                pickupVerifiedAt: row.pickup_verified_at,
+                pickupVerifiedBy: row.pickup_verified_by || null,
+                pickupQrUsed: Number(row.pickup_qr_used || 0) === 1,
                 refundStatus: row.refund_status || 'none',
                 refundedAmount: Number(row.refunded_amount || 0),
                 refundReason: row.refund_reason || '',
@@ -1475,13 +1617,8 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
             return;
         }
 
-        const deliveryStatus = normalizeDeliveryStatus(status);
-        const timestampColumn = deliveryStatus === 'shipped'
-            ? ', shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)'
-            : deliveryStatus === 'delivered'
-                ? ', delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)'
-                : '';
-        const params = [deliveryStatus, transactionId];
+        const requestedStatus = normalizeDeliveryStatus(status);
+        const params = [transactionId];
         let ownershipClause = '';
 
         if (options.merchantUserId) {
@@ -1498,14 +1635,285 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
             params.push(options.merchantUserId);
         }
 
-        const sql = `
-            UPDATE transactions
-            SET delivery_status = ?${timestampColumn}
+        const lookupSql = `
+            SELECT
+                transaction_id,
+                fulfilment_type,
+                delivery_status,
+                pickup_status,
+                pickup_verified_at,
+                pickup_qr_used
+            FROM transactions
             WHERE transaction_id = ?
             ${ownershipClause}
+            LIMIT 1
         `;
 
-        db.query(sql, params, callback);
+        db.query(lookupSql, params, (lookupError, rows = []) => {
+            if (lookupError) {
+                callback(lookupError);
+                return;
+            }
+
+            const row = rows[0];
+
+            if (!row) {
+                callback(null, { affectedRows: 0, changedRows: 0 });
+                return;
+            }
+
+            const fulfilmentType = normalizeFulfilmentType(row.fulfilment_type);
+            const isPickup = fulfilmentType === 'pickup';
+
+            if (isPickup && (Number(row.pickup_qr_used || 0) === 1 || row.pickup_verified_at || isPickupCollectedStatus(row.pickup_status))) {
+                callback(null, { affectedRows: 0, changedRows: 0 });
+                return;
+            }
+
+            const allowedForPickup = new Set(['processing', 'packed', 'ready_for_pickup', 'delivered_to_pickup_location', 'cancelled']);
+            const allowedForDelivery = new Set(['processing', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled']);
+
+            if ((isPickup && !allowedForPickup.has(requestedStatus)) || (!isPickup && !allowedForDelivery.has(requestedStatus))) {
+                callback(null, { affectedRows: 0, changedRows: 0 });
+                return;
+            }
+
+            const updateFields = [];
+            const updateValues = [];
+
+            updateFields.push('delivery_status = ?');
+            updateValues.push(requestedStatus);
+
+            if (requestedStatus === 'shipped' || requestedStatus === 'out_for_delivery') {
+                updateFields.push('shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)');
+            }
+
+            if (requestedStatus === 'delivered') {
+                updateFields.push('delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+            }
+
+            if (isPickup) {
+                const pickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
+                    ? requestedStatus
+                    : requestedStatus === 'cancelled'
+                        ? 'cancelled'
+                        : 'pending_pickup';
+
+                updateFields.push('pickup_status = ?');
+                updateValues.push(pickupStatus);
+
+                if (isPickupReadyStatus(pickupStatus)) {
+                    updateFields.push('pickup_ready_at = COALESCE(pickup_ready_at, CURRENT_TIMESTAMP)');
+                }
+            }
+
+            const updateSql = `
+                UPDATE transactions
+                SET ${updateFields.join(', ')}
+                WHERE transaction_id = ?
+            `;
+
+            db.query(updateSql, [...updateValues, transactionId], (updateError, updateResult) => {
+                if (updateError || !updateResult?.affectedRows) {
+                    callback(updateError, updateResult);
+                    return;
+                }
+
+                const receiptId = `order-${transactionId}`;
+                const historyFields = ['delivery_status = ?'];
+                const historyValues = [requestedStatus];
+
+                if (isPickup) {
+                    const historyPickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
+                        ? requestedStatus
+                        : requestedStatus === 'cancelled'
+                            ? 'cancelled'
+                            : 'pending_pickup';
+
+                    historyFields.push('pickup_status = ?');
+                    historyValues.push(historyPickupStatus);
+                }
+
+                const historySql = `
+                    UPDATE purchase_history
+                    SET ${historyFields.join(', ')}
+                    WHERE receipt_id = ?
+                        AND purchase_type = 'product'
+                `;
+
+                db.query(historySql, [...historyValues, receiptId], (historyError) => {
+                    callback(historyError, updateResult);
+                });
+            });
+        });
+    });
+}
+
+function verifyPickupByQr(transactionId, customerUserId, callback) {
+    ensureFulfilmentSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const lockSql = `
+                    SELECT
+                        transaction_id,
+                        user_id,
+                        payment_status,
+                        delivery_status,
+                        pickup_status,
+                        fulfilment_type,
+                        pickup_ready_at,
+                        pickup_verified_at,
+                        pickup_verified_by,
+                        pickup_qr_used,
+                        collected_at
+                    FROM transactions
+                    WHERE transaction_id = ?
+                    FOR UPDATE
+                `;
+
+                connection.query(lockSql, [transactionId], (lookupError, rows = []) => {
+                    if (lookupError) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(lookupError);
+                        });
+                    }
+
+                    const order = rows[0];
+
+                    if (!order) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, { ok: false, code: 'not_found' });
+                        });
+                    }
+
+                    if (normalizeFulfilmentType(order.fulfilment_type) !== 'pickup') {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, { ok: false, code: 'not_pickup' });
+                        });
+                    }
+
+                    if (String(order.payment_status || '').toLowerCase() !== 'paid') {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, { ok: false, code: 'not_paid' });
+                        });
+                    }
+
+                    const alreadyVerified = Number(order.pickup_qr_used || 0) === 1
+                        || Boolean(order.pickup_verified_at)
+                        || isPickupCollectedStatus(order.pickup_status);
+
+                    if (alreadyVerified) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, {
+                                ok: false,
+                                code: 'already_verified',
+                                pickupVerifiedAt: order.pickup_verified_at || order.collected_at || null,
+                                pickupVerifiedBy: order.pickup_verified_by || null
+                            });
+                        });
+                    }
+
+                    const readyByPickupStatus = isPickupReadyStatus(order.pickup_status);
+                    const readyByDeliveryStatus = isPickupReadyStatus(order.delivery_status);
+
+                    if (!readyByPickupStatus && !readyByDeliveryStatus) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            callback(null, { ok: false, code: 'not_ready' });
+                        });
+                    }
+
+                    const updateTransactionSql = `
+                        UPDATE transactions
+                        SET
+                            pickup_status = 'picked_up',
+                            delivery_status = 'completed',
+                            pickup_qr_used = 1,
+                            pickup_verified_at = COALESCE(pickup_verified_at, CURRENT_TIMESTAMP),
+                            pickup_verified_by = COALESCE(pickup_verified_by, ?),
+                            collected_at = COALESCE(collected_at, CURRENT_TIMESTAMP),
+                            delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+                        WHERE transaction_id = ?
+                            AND COALESCE(pickup_qr_used, 0) = 0
+                            AND COALESCE(pickup_status, 'pending_pickup') NOT IN ('picked_up', 'collected')
+                    `;
+
+                    connection.query(updateTransactionSql, [customerUserId, transactionId], (updateError, updateResult) => {
+                        if (updateError) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(updateError);
+                            });
+                        }
+
+                        if (!updateResult?.affectedRows) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                callback(null, { ok: false, code: 'already_verified' });
+                            });
+                        }
+
+                        const receiptId = `order-${transactionId}`;
+                        const updateHistorySql = `
+                            UPDATE purchase_history
+                            SET
+                                pickup_status = 'picked_up',
+                                pickup_at = COALESCE(pickup_at, CURRENT_TIMESTAMP),
+                                delivery_status = 'completed'
+                            WHERE receipt_id = ?
+                                AND purchase_type = 'product'
+                        `;
+
+                        connection.query(updateHistorySql, [receiptId], (historyError) => {
+                            if (historyError) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(historyError);
+                                });
+                            }
+
+                            connection.commit((commitError) => {
+                                if (commitError) {
+                                    return connection.rollback(() => {
+                                        connection.release();
+                                        callback(commitError);
+                                    });
+                                }
+
+                                connection.release();
+                                callback(null, {
+                                    ok: true,
+                                    code: 'verified',
+                                    receiptId,
+                                    transactionId
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
     });
 }
 
@@ -1803,5 +2211,6 @@ module.exports = {
     getPaidSpendByUserId,
     markPickupCollected,
     recordRefund,
-    updateDeliveryStatus
+    updateDeliveryStatus,
+    verifyPickupByQr
 };
