@@ -6,12 +6,13 @@
     const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
     const paymentLabel = receipt.paymentMethodLabel || receipt.paymentMethod || 'Payment';
     const paymentBreakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
+    const receiptDisplayReference = receipt.order_number || receipt.orderNumber || ('#' + (receipt.displayId || receipt.id));
     const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 %>
 
 <section class="page-title receipt-title">
     <p class="eyebrow"><%= isBooking ? 'Booking receipt' : 'Product receipt' %></p>
-    <h1>Receipt #<%= receipt.displayId || receipt.id %></h1>
+    <h1>Receipt <%= receiptDisplayReference %></h1>
     <% if (isBooking) { %>
         <p><strong><%= receipt.userName %></strong> booked <strong><%= receipt.items[0]?.name || 'a service' %></strong></p>
         <p>Status: <strong><%= receipt.statusLabel || receipt.status %></strong></p>
@@ -78,7 +79,7 @@
                     <p><span>User</span><strong><%= receipt.userName %></strong></p>
                     <p><span>Status</span><strong><%= receipt.statusLabel || receipt.status %></strong></p>
                     <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
-                    <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
+                    <p><span>Receipt ID</span><strong><%= receiptDisplayReference %></strong></p>
                     <p><span>Payment method</span><strong><%= paymentLabel %></strong></p>
                     <p><span>Payment status</span><strong><%= formatStatus(receipt.paymentStatus) %></strong></p>
                     <p><span>Refund status</span><strong><%= formatStatus(receipt.refundStatus) %></strong></p>
@@ -89,7 +90,7 @@
                     <% } %>
                 <% } else { %>
                     <p><span>User</span><strong><%= receipt.userName %></strong></p>
-                    <p><span>Receipt ID</span><strong>#<%= receipt.displayId || receipt.id %></strong></p>
+                    <p><span>Receipt ID</span><strong><%= receiptDisplayReference %></strong></p>
                     <p><span>Payment method</span><strong><%= paymentLabel %></strong></p>
                     <p><span>Payment provider</span><strong><%= receipt.paymentProvider || '-' %></strong></p>
                     <p><span>Payment status</span><strong><%= formatStatus(receipt.paymentStatus) %></strong></p>

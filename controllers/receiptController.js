@@ -391,6 +391,9 @@ function mapOrderReceipt(order) {
     return {
         id: `order-${order.id}`,
         displayId: order.id,
+        orderId: order.orderId || null,
+        order_number: order.order_number || order.orderNumber || '',
+        orderNumber: order.orderNumber || order.order_number || '',
         type: 'order',
         userId: order.userId,
         userName: order.userName || order.customerName || 'Customer',
@@ -950,6 +953,7 @@ function buildFallbackPdf(data) {
                 width: 220
             });
             const receipt = data.receipt;
+            const receiptDisplayReference = receipt.order_number || receipt.orderNumber || `#${receipt.displayId || receipt.id}`;
             const pageWidth = doc.page.width;
             const left = doc.page.margins.left;
             const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;
@@ -960,7 +964,7 @@ function buildFallbackPdf(data) {
             doc.fillColor(brandGreen).font('Times-Bold').fontSize(26).text('Vaniday', left + 48, 26);
             doc.fillColor(muted).font('Helvetica').fontSize(9).text('Beauty and wellness booking system', left + 50, 56);
             doc.fillColor(ink).font('Times-Bold').fontSize(34).text('Receipt', left, 82);
-            doc.fillColor(muted).font('Helvetica').fontSize(11).text(`#${receipt.displayId || receipt.id}`, left + 360, 92, {
+            doc.fillColor(muted).font('Helvetica').fontSize(11).text(receiptDisplayReference, left + 360, 92, {
                 width: contentWidth - 360,
                 align: 'right'
             });

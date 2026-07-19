@@ -36,7 +36,7 @@
                     <div class="history-card-top">
                         <div class="history-card-title-group">
                             <span class="sync-pill"><%= entry.type %></span>
-                            <strong class="history-card-id">Order #<%= entry.id %></strong>
+                            <strong class="history-card-id">Order <%= entry.order_number || entry.orderNumber || ('#' + entry.id) %></strong>
                         </div>
                         <a class="button secondary" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">Receipt</a>
                     </div>

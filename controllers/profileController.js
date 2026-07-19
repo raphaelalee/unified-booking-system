@@ -234,6 +234,8 @@ async function getProductHistory(userId) {
     const sql = `
         SELECT
             transactions.transaction_id AS id,
+            (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+            (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
             'product' AS type,
             GROUP_CONCAT(CONCAT(products.name, ' x', order_items.quantity) ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
             JSON_ARRAYAGG(
@@ -282,6 +284,9 @@ async function getProductHistory(userId) {
     return rows.map((row) => ({
         id: row.id,
         receiptId: `order-${row.id}`,
+        orderId: row.order_id || null,
+        order_number: row.order_number || '',
+        orderNumber: row.order_number || '',
         type: 'product',
         itemNames: row.item_names || 'Product order',
         items: parseProductHistoryItems(row.item_payload),
@@ -306,6 +311,9 @@ function getPersistentHistory(userId) {
             resolve((rows || []).map((row) => ({
                 id: row.receipt_id.replace(/^order-/, ''),
                 receiptId: row.receipt_id,
+                orderId: row.order_id || null,
+                order_number: row.order_number || '',
+                orderNumber: row.order_number || '',
                 type: row.purchase_type === 'booking' ? 'booking' : 'product',
                 itemNames: row.item_names,
                 items: PurchaseHistory.mapReceipt(row)?.items || [],

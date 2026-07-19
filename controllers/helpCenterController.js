@@ -103,6 +103,19 @@ function parseOrderTransactionId(value) {
     return match ? Number(match[1]) : null;
 }
 
+function formatOrderDisplayReference(source = {}) {
+    const directReference = source.order_number || source.orderNumber;
+
+    if (directReference) {
+        return directReference;
+    }
+
+    const rawReference = source.receiptId || source.targetId || source.id || source;
+    const transactionId = parseOrderTransactionId(rawReference);
+
+    return transactionId ? `#${transactionId}` : String(rawReference || '');
+}
+
 function mergeCustomerOrders(transactionOrders = [], historyOrders = []) {
     const seenReceipts = new Set();
     const normalizedTransactionOrders = transactionOrders.map((order) => ({
@@ -973,11 +986,15 @@ async function merchantRespond(req, res) {
         }
         processingStarted = true;
 
+        const requestTargetReference = request.requestType === 'order_refund'
+            ? formatOrderDisplayReference(request)
+            : (request.receiptId || request.targetId);
+
         notifyCustomer(request.customerUserId, {
             actorUserId: req.session.user.id,
             type: 'support_request',
             title: 'Merchant approved your refund request',
-            message: `${requestLabels[request.requestType]} #${request.id} for ${request.receiptId || request.targetId} was approved for $${getApprovedRefundAmount(request).toFixed(2)}. The refund is now processing.`,
+            message: `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} was approved for $${getApprovedRefundAmount(request).toFixed(2)}. The refund is now processing.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-merchant-${request.id}-approved`
         });
@@ -995,7 +1012,7 @@ async function merchantRespond(req, res) {
             type: 'support_request',
             title: completed ? 'Refund completed' : 'Refund requires manual processing',
             message: completed
-                ? `${requestLabels[request.requestType]} #${request.id} for ${request.receiptId || request.targetId} has been refunded for $${refundOutcome.amount.toFixed(2)}.`
+                ? `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} has been refunded for $${refundOutcome.amount.toFixed(2)}.`
                 : `${requestLabels[request.requestType]} #${request.id} was approved, but this payment method needs manual merchant processing.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-refund-${request.id}-${completed ? 'refunded' : 'manual'}`
@@ -1287,19 +1304,20 @@ async function updateOrderDeliveryStatus(req, res) {
         }
 
         const order = await getOrderById(req.params.transactionId);
+        const orderDisplayReference = order?.order_number || order?.orderNumber || `#${req.params.transactionId}`;
 
         if (order) {
             notifyCustomer(order.userId, {
                 actorUserId: req.session.user.id,
                 type: 'order_update',
                 title: 'Order delivery updated',
-                message: `Order ${order.receiptId} is now ${status}.`,
+                message: `Order ${orderDisplayReference} is now ${status}.`,
                 linkUrl: '/help-center',
                 dedupeKey: `order-delivery-${order.id}-${status}-${Date.now()}`
             });
         }
 
-        setFlash(req, 'success', `Order #${req.params.transactionId} was updated to ${status}.`);
+        setFlash(req, 'success', `Order ${orderDisplayReference} was updated to ${status}.`);
     } catch (error) {
         setFlash(req, 'error', error.message || 'The order delivery status could not be updated.');
     }

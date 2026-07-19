@@ -194,6 +194,9 @@ function mapWalletHistoryRow(row) {
     return {
         id: row.receipt_id.replace(/^order-/, ''),
         receiptId: row.receipt_id,
+        orderId: row.order_id || null,
+        order_number: row.order_number || '',
+        orderNumber: row.order_number || '',
         type: row.purchase_type === 'booking' ? 'Booking' : 'Order',
         itemNames: row.item_names,
         totalAmount: Number(row.total_amount || 0),
@@ -286,6 +289,12 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let eWalletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] };
 
     function finishWithWallet(walletError, loyalty = null) {
+        const displayedLoyalty = loyalty
+            ? {
+                ...loyalty,
+                transactions: Loyalty.applyTransactionDisplayDetails(loyalty.transactions || [], walletHistory)
+            }
+            : loyalty;
         const wallet = loyalty?.wallet || {};
         const rewardPoints = walletError
             ? 0
@@ -311,7 +320,7 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
                         ? '0.00'
                         : Number(wallet.cashbackBalance || 0).toFixed(2),
                     member,
-                    loyalty,
+                    loyalty: displayedLoyalty,
                     walletHistory,
                     eWallet: eWalletSummary.wallet || { balance: 0, currency: 'SGD' },
                     eWalletTransactions: eWalletSummary.recentTransactions || eWalletSummary.transactions || [],

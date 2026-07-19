@@ -101,7 +101,7 @@
                         <article class="merchant-order-management-card">
                             <div class="merchant-order-management-main">
                                 <div>
-                                    <span class="merchant-order-id">#<%= order.id %></span>
+                                    <span class="merchant-order-id">Order <%= order.order_number || order.orderNumber || ('#' + order.id) %></span>
                                     <strong><%= order.customerName || 'Customer' %></strong>
                                     <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %> · <%= isPickupOrder ? 'Pickup' : 'Delivery' %></small>
                                 </div>

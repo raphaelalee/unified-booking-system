@@ -12,6 +12,61 @@ const DEFAULT_COMMISSION_RATE = 15;
 let merchantCommissionSchemaReady = false;
 let orderRefundSchemaReady = false;
 let paymentAllocationSchemaReady = false;
+let orderNumberSchemaReady = false;
+
+function formatOrderNumberDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}${month}${day}`;
+}
+
+function buildOrderNumber(orderId, date = new Date()) {
+    return `ORD-${formatOrderNumberDate(date)}-${String(orderId).padStart(6, '0')}`;
+}
+
+function mapOrderRow(row = {}) {
+    if (!row || !row.order_id) {
+        return null;
+    }
+
+    return {
+        orderId: Number(row.order_id),
+        order_number: row.order_number || '',
+        orderNumber: row.order_number || ''
+    };
+}
+
+function ensureOrderNumberSchema(callback) {
+    if (orderNumberSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    db.query('SHOW COLUMNS FROM orders', (columnError, columns = []) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        const fields = new Set(columns.map((column) => column.Field));
+
+        if (fields.has('order_number')) {
+            orderNumberSchemaReady = true;
+            callback(null);
+            return;
+        }
+
+        db.query('ALTER TABLE orders ADD COLUMN order_number VARCHAR(32) DEFAULT NULL', (alterError) => {
+            if (!alterError) {
+                orderNumberSchemaReady = true;
+            }
+
+            callback(alterError);
+        });
+    });
+}
 
 function normalizeCommissionRate(value) {
     const numeric = Number(value);
@@ -473,6 +528,16 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                 return;
             }
 
+        const ensureOrderNumber = transactionOptions.createOrder === true
+            ? ensureOrderNumberSchema
+            : (next) => next(null);
+
+        ensureOrderNumber((orderNumberSchemaError) => {
+            if (orderNumberSchemaError) {
+                done(orderNumberSchemaError);
+                return;
+            }
+
         db.getConnection((connectionError, connection) => {
         if (connectionError) {
             done(connectionError);
@@ -562,8 +627,8 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                         && Number.isInteger(Number(item.serviceId))
                         && Number(item.serviceId) > 0);
 
-                const transactionId = transactionResult.insertId;
-                const allocations = buildPaymentAllocations(transactionId, normalizedMethod, normalizedProvider, paidAmount, {
+                const paymentTransactionId = transactionResult.insertId;
+                const allocations = buildPaymentAllocations(paymentTransactionId, normalizedMethod, normalizedProvider, paidAmount, {
                     ...transactionOptions,
                     providerPaymentId: transactionOptions.providerPaymentId,
                     providerCaptureId: transactionOptions.providerCaptureId,
@@ -651,7 +716,7 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     }
 
                     const orderItems = productItems.map((item) => [
-                        transactionResult.insertId,
+                        paymentTransactionId,
                         Number(item.serviceId),
                         Math.max(1, Number(item.quantity || 1)),
                         Number(item.price || 0),
@@ -672,7 +737,7 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
 
                         connection.query(
                             'UPDATE transactions SET order_item_id = ? WHERE transaction_id = ?',
-                            [itemResult.insertId, transactionResult.insertId],
+                            [itemResult.insertId, paymentTransactionId],
                             (linkError) => {
                                 if (linkError) {
                                     return connection.rollback(() => {
@@ -703,32 +768,66 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
 
                 connection.query(
                     'INSERT INTO orders (user_id, transaction_id, total_amount) VALUES (?, ?, ?)',
-                    [userId, transactionResult.insertId, amount],
-                    (orderError, orderResult) => {
-                        if (orderError) {
+                    [userId, paymentTransactionId, amount],
+                    (orderInsertError) => {
+                        if (orderInsertError) {
                             return connection.rollback(() => {
                                 connection.release();
-                                done(orderError);
+                                done(orderInsertError);
                             });
                         }
 
                         connection.query(
-                            'UPDATE transactions SET order_id = ? WHERE transaction_id = ?',
-                            [orderResult.insertId, transactionResult.insertId],
-                            (linkError) => {
-                                if (linkError) {
+                            'SELECT order_id, order_number FROM orders WHERE transaction_id = ? LIMIT 1',
+                            [paymentTransactionId],
+                            (createdOrderLookupError, createdOrderRows = []) => {
+                                if (createdOrderLookupError || !createdOrderRows[0]) {
                                     return connection.rollback(() => {
                                         connection.release();
-                                        done(linkError);
+                                        done(createdOrderLookupError || new Error('Created order could not be loaded.'));
                                     });
                                 }
 
-                                insertOrderItems(orderResult.insertId);
+                                const createdOrderRow = createdOrderRows[0];
+                                const createdOrderId = Number(createdOrderRow.order_id);
+                                const createdOrderNumber = createdOrderRow.order_number || buildOrderNumber(createdOrderId);
+                                transactionResult.orderId = createdOrderId;
+                                transactionResult.order_number = createdOrderNumber;
+                                transactionResult.orderNumber = createdOrderNumber;
+
+                                connection.query(
+                                    'UPDATE orders SET order_number = ? WHERE order_id = ?',
+                                    [createdOrderNumber, createdOrderId],
+                                    (orderNumberError) => {
+                                        if (orderNumberError) {
+                                            return connection.rollback(() => {
+                                                connection.release();
+                                                done(orderNumberError);
+                                            });
+                                        }
+
+                                        connection.query(
+                                            'UPDATE transactions SET order_id = ? WHERE transaction_id = ?',
+                                            [createdOrderId, paymentTransactionId],
+                                            (linkError) => {
+                                                if (linkError) {
+                                                    return connection.rollback(() => {
+                                                        connection.release();
+                                                        done(linkError);
+                                                    });
+                                                }
+
+                                                insertOrderItems(createdOrderId);
+                                            }
+                                        );
+                                    }
+                                );
                             }
                         );
                     }
                 );
             });
+        });
         });
         });
     });
@@ -982,9 +1081,17 @@ function getOrderReceiptById(transactionId, userId, callback) {
             return;
         }
 
+        ensureOrderNumberSchema((orderNumberSchemaError) => {
+            if (orderNumberSchemaError) {
+                callback(orderNumberSchemaError);
+                return;
+            }
+
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
+                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1032,6 +1139,9 @@ function getOrderReceiptById(transactionId, userId, callback) {
             const first = rows[0];
             callback(null, {
                 id: first.id,
+                orderId: first.order_id || null,
+                order_number: first.order_number || '',
+                orderNumber: first.order_number || '',
                 userId: first.user_id,
                 userName: first.customer_name,
                 totalAmount: Number(first.total_amount || 0),
@@ -1062,6 +1172,7 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 }))
             });
         });
+        });
     });
 }
 
@@ -1072,9 +1183,17 @@ function getPickupVerificationById(transactionId, callback) {
             return;
         }
 
+        ensureOrderNumberSchema((orderNumberSchemaError) => {
+            if (orderNumberSchemaError) {
+                callback(orderNumberSchemaError);
+                return;
+            }
+
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
+                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1125,6 +1244,9 @@ function getPickupVerificationById(transactionId, callback) {
             callback(null, {
                 id: first.id,
                 receiptId: `order-${first.id}`,
+                orderId: first.order_id || null,
+                order_number: first.order_number || '',
+                orderNumber: first.order_number || '',
                 userId: first.user_id,
                 customerName: first.customer_name || 'Customer',
                 merchantName: merchantNames.join(', ') || 'Vaniday merchant',
@@ -1156,6 +1278,7 @@ function getPickupVerificationById(transactionId, callback) {
                 }))
             });
         });
+        });
     });
 }
 
@@ -1172,9 +1295,17 @@ function getMerchantOrderReport(merchantUserId, callback) {
                 return;
             }
 
+            ensureOrderNumberSchema((orderNumberSchemaError) => {
+                if (orderNumberSchemaError) {
+                    callback(orderNumberSchemaError);
+                    return;
+                }
+
             const sql = `
                 SELECT
                     transactions.transaction_id,
+                    (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+                    (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
                     transactions.user_id,
                     transactions.total_amount,
                     transactions.payment_method,
@@ -1257,6 +1388,9 @@ function getMerchantOrderReport(merchantUserId, callback) {
 
                     return {
                         id: row.transaction_id,
+                        orderId: row.order_id || null,
+                        order_number: row.order_number || '',
+                        orderNumber: row.order_number || '',
                         userId: row.user_id,
                         customerName: row.customer_name || 'Customer',
                         items,
@@ -1278,6 +1412,7 @@ function getMerchantOrderReport(merchantUserId, callback) {
                         createdAt: row.created_at
                     };
                 }));
+            });
             });
         });
     });
@@ -1369,9 +1504,17 @@ function getCustomerOrders(userId, callback) {
             return;
         }
 
+        ensureOrderNumberSchema((orderNumberSchemaError) => {
+            if (orderNumberSchemaError) {
+                callback(orderNumberSchemaError);
+                return;
+            }
+
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
+                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1440,6 +1583,9 @@ function getCustomerOrders(userId, callback) {
             callback(null, rows.map((row) => ({
                 id: row.id,
                 receiptId: `order-${row.id}`,
+                orderId: row.order_id || null,
+                order_number: row.order_number || '',
+                orderNumber: row.order_number || '',
                 userId: row.user_id,
                 itemNames: row.item_names || 'Product order',
                 merchantName: row.merchant_names || 'Vaniday merchant',
@@ -1471,6 +1617,7 @@ function getCustomerOrders(userId, callback) {
                 createdAt: row.created_at
             })));
         });
+        });
     });
 }
 
@@ -1481,9 +1628,17 @@ function getOrderById(transactionId, callback) {
             return;
         }
 
+        ensureOrderNumberSchema((orderNumberSchemaError) => {
+            if (orderNumberSchemaError) {
+                callback(orderNumberSchemaError);
+                return;
+            }
+
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
+                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
+                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1563,6 +1718,9 @@ function getOrderById(transactionId, callback) {
             callback(null, {
                 id: row.id,
                 receiptId: `order-${row.id}`,
+                orderId: row.order_id || null,
+                order_number: row.order_number || '',
+                orderNumber: row.order_number || '',
                 userId: row.user_id,
                 customerName: row.customer_name || 'Customer',
                 customerEmail: row.customer_email || '',
@@ -1595,6 +1753,7 @@ function getOrderById(transactionId, callback) {
                 refundedBy: row.refunded_by || null,
                 createdAt: row.created_at
             });
+        });
         });
     });
 }
@@ -2197,9 +2356,37 @@ function getById(transactionId, callback) {
     });
 }
 
+function getOrderRowByTransactionId(paymentTransactionId, callback) {
+    if (!paymentTransactionId) {
+        callback(null, null);
+        return;
+    }
+
+    ensureOrderNumberSchema((orderNumberSchemaError) => {
+        if (orderNumberSchemaError) {
+            callback(orderNumberSchemaError);
+            return;
+        }
+
+        db.query(
+            'SELECT order_id, order_number FROM orders WHERE transaction_id = ? LIMIT 1',
+            [paymentTransactionId],
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, mapOrderRow(rows[0]));
+            }
+        );
+    });
+}
+
 module.exports = {
     createPaidTransaction,
     getById,
+    getOrderRowByTransactionId,
     getOrderById,
     getMerchantOrderReport,
     getMerchantOrderRecipients,

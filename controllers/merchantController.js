@@ -4674,20 +4674,26 @@ function persistPaidTransaction(payment, paymentMethod) {
                 return;
             }
 
-            const transactionId = result?.insertId || null;
+            const paymentTransactionId = result?.insertId || null;
+            const transactionResult = {
+                transactionId: paymentTransactionId,
+                orderId: result?.orderId || null,
+                order_number: result?.order_number || result?.orderNumber || '',
+                orderNumber: result?.orderNumber || result?.order_number || ''
+            };
 
-            if (payment.kind !== 'booking' || !transactionId) {
-                resolve(transactionId);
+            if (payment.kind !== 'booking' || !paymentTransactionId) {
+                resolve(transactionResult);
                 return;
             }
 
-            Booking.attachTransaction(payment.receiptId, transactionId, (bookingError) => {
+            Booking.attachTransaction(payment.receiptId, paymentTransactionId, (bookingError) => {
                 if (bookingError) {
                     reject(bookingError);
                     return;
                 }
 
-                resolve(transactionId);
+                resolve(transactionResult);
             });
         });
     });
@@ -4733,6 +4739,28 @@ function getOrderRecipients(transactionId) {
             }
 
             resolve(recipients || []);
+        });
+    });
+}
+
+function getExistingOrderDetails(transactionId) {
+    return new Promise((resolve) => {
+        if (!transactionId) {
+            resolve({ orderId: null, orderNumber: '' });
+            return;
+        }
+
+        Transaction.getOrderRowByTransactionId(transactionId, (error, order) => {
+            if (error) {
+                logNotificationError(error);
+                resolve({ orderId: null, orderNumber: '' });
+                return;
+            }
+
+            resolve({
+                orderId: order?.orderId || null,
+                orderNumber: order?.order_number || order?.orderNumber || ''
+            });
         });
     });
 }
@@ -4816,6 +4844,9 @@ function savePaidReceipt(req, payment, paymentMethod) {
     const receipt = {
         id: receiptId,
         displayId: payment.displayId,
+        orderId: payment.orderId || null,
+        order_number: payment.order_number || payment.orderNumber || '',
+        orderNumber: payment.orderNumber || payment.order_number || '',
         type: payment.kind === 'booking' ? 'booking' : 'order',
         userId: payment.userId,
         userName: payment.userName || req.session.user?.name || 'Customer',
@@ -4955,17 +4986,35 @@ function getCampaignCashbackEstimate(payment) {
 
 async function completeTrustedPaymentWork(req, payment, paymentMethod) {
     const pendingPaymentId = payment.receiptId;
-    const transactionId = payment.existingTransactionId || await persistPaidTransaction(payment, paymentMethod);
+    const transactionResult = payment.existingTransactionId
+        ? { transactionId: payment.existingTransactionId }
+        : await persistPaidTransaction(payment, paymentMethod);
+    const paymentTransactionId = transactionResult?.transactionId || transactionResult;
+    const existingOrderDetails = transactionResult?.orderId
+        ? { orderId: transactionResult.orderId, orderNumber: transactionResult.order_number || transactionResult.orderNumber || '' }
+        : (payment.kind === 'order' ? await getExistingOrderDetails(paymentTransactionId) : { orderId: null, orderNumber: '' });
+    const createdOrderId = transactionResult?.orderId || existingOrderDetails.orderId || null;
+    const createdOrderNumber = transactionResult?.order_number
+        || transactionResult?.orderNumber
+        || existingOrderDetails.orderNumber
+        || '';
 
     if (payment.paymentAttemptId && !payment.existingTransactionId) {
-        await updatePaymentAttempt('markTransaction', payment.paymentAttemptId, transactionId);
+        await updatePaymentAttempt('markTransaction', payment.paymentAttemptId, paymentTransactionId);
     }
 
-    const paidPayment = { ...payment, pendingPaymentId, transactionId };
+    const paidPayment = {
+        ...payment,
+        pendingPaymentId,
+        transactionId: paymentTransactionId,
+        orderId: createdOrderId,
+        order_number: createdOrderNumber,
+        orderNumber: createdOrderNumber
+    };
 
-    if (payment.kind === 'order' && transactionId) {
-        paidPayment.receiptId = `order-${transactionId}`;
-        paidPayment.displayId = transactionId;
+    if (payment.kind === 'order' && paymentTransactionId) {
+        paidPayment.receiptId = `order-${paymentTransactionId}`;
+        paidPayment.displayId = paymentTransactionId;
     }
 
     if (Number(paidPayment.pointsRedeemed || 0) > 0) {
@@ -5020,6 +5069,11 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
                 paidPayment.userId,
                 paidPayment.cashbackRedeemed,
                 `cashback-${paidPayment.receiptId}`,
+                {
+                    orderId: paidPayment.orderId,
+                    orderNumber: paidPayment.order_number || paidPayment.orderNumber || '',
+                    receiptType: paidPayment.kind
+                },
                 (error) => error ? reject(error) : resolve()
             );
         });
@@ -5059,7 +5113,7 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
         }
     }));
 
-    await notifyPaymentCompleted(req, paidPayment, transactionId);
+    await notifyPaymentCompleted(req, paidPayment, paymentTransactionId);
 
     return paidPayment.receiptId;
 }

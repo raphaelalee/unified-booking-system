@@ -181,7 +181,7 @@
                                 <% }) %>
                                 <% safeOrders.forEach((order) => { %>
                                     <option value="<%= order.targetId || order.id %>" data-target-type="order" <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
-                                        <%= order.receiptId %> - <%= order.itemNames %>
+                                        Order <%= order.order_number || order.orderNumber || ('#' + (order.id || String(order.receiptId || '').replace(/^order-/, ''))) %> - <%= order.itemNames %>
                                     </option>
                                 <% }) %>
                             </select>

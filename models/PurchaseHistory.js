@@ -125,6 +125,10 @@ function ensureTable(callback) {
                 alters.push('ADD COLUMN remaining_paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
             }
 
+            if (!fields.has('order_number')) {
+                alters.push('ADD COLUMN order_number VARCHAR(32) DEFAULT NULL');
+            }
+
             if (!alters.length) {
                 callback(null);
                 return;
@@ -237,8 +241,8 @@ function save(receipt, callback) {
                 });
             const sql = `
                 INSERT INTO purchase_history
-                    (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount, order_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     item_names = VALUES(item_names),
                     items_json = VALUES(items_json),
@@ -262,7 +266,8 @@ function save(receipt, callback) {
                     points_redeemed = VALUES(points_redeemed),
                     points_discount = VALUES(points_discount),
                     item_subtotal = VALUES(item_subtotal),
-                    shipping_fee = VALUES(shipping_fee)
+                    shipping_fee = VALUES(shipping_fee),
+                    order_number = VALUES(order_number)
             `;
 
             db.query(sql, [
@@ -292,7 +297,8 @@ function save(receipt, callback) {
                 receipt.transactionId || null,
                 receipt.paymentTransactionReference || receipt.providerPaymentId || receipt.providerSessionId || '',
                 refundedAmount,
-                Math.max(paidAmount - refundedAmount, 0)
+                Math.max(paidAmount - refundedAmount, 0),
+                receipt.order_number || receipt.orderNumber || null
             ], callback);
         });
     });
@@ -306,10 +312,12 @@ function getByUserId(userId, callback) {
         }
 
         const sql = `
-            SELECT *
-            FROM purchase_history
-            WHERE user_id = ?
-            ORDER BY created_at DESC, history_id DESC
+            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            FROM purchase_history ph
+            LEFT JOIN orders o
+                ON ph.payment_transaction_id = o.transaction_id
+            WHERE ph.user_id = ?
+            ORDER BY ph.created_at DESC, ph.history_id DESC
         `;
 
         db.query(sql, [userId], callback);
@@ -324,10 +332,12 @@ function getByReceiptId(receiptId, userId, callback) {
         }
 
         const sql = `
-            SELECT *
-            FROM purchase_history
-            WHERE receipt_id = ?
-                AND user_id = ?
+            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            FROM purchase_history ph
+            LEFT JOIN orders o
+                ON ph.payment_transaction_id = o.transaction_id
+            WHERE ph.receipt_id = ?
+                AND ph.user_id = ?
             LIMIT 1
         `;
 
@@ -350,9 +360,11 @@ function getByReceiptIdAny(receiptId, callback) {
         }
 
         const sql = `
-            SELECT *
-            FROM purchase_history
-            WHERE receipt_id = ?
+            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            FROM purchase_history ph
+            LEFT JOIN orders o
+                ON ph.payment_transaction_id = o.transaction_id
+            WHERE ph.receipt_id = ?
             LIMIT 1
         `;
 
@@ -376,24 +388,28 @@ function getSupportOrdersByUserId(userId, callback) {
 
         const sql = `
             SELECT
-                receipt_id,
-                user_id,
-                item_names,
-                total_amount,
-                payment_method,
-                payment_provider,
-                payment_status,
-                delivery_status,
-                refund_status,
-                refunded_amount,
-                remaining_paid_amount,
-                refunded_at,
-                created_at
-            FROM purchase_history
-            WHERE user_id = ?
-                AND purchase_type = 'product'
-                AND payment_status IN ('paid', 'partially_refunded', 'refunded')
-            ORDER BY created_at DESC, history_id DESC
+                ph.receipt_id,
+                o.order_id,
+                COALESCE(ph.order_number, o.order_number) AS order_number,
+                ph.user_id,
+                ph.item_names,
+                ph.total_amount,
+                ph.payment_method,
+                ph.payment_provider,
+                ph.payment_status,
+                ph.delivery_status,
+                ph.refund_status,
+                ph.refunded_amount,
+                ph.remaining_paid_amount,
+                ph.refunded_at,
+                ph.created_at
+            FROM purchase_history ph
+            LEFT JOIN orders o
+                ON ph.payment_transaction_id = o.transaction_id
+            WHERE ph.user_id = ?
+                AND ph.purchase_type = 'product'
+                AND ph.payment_status IN ('paid', 'partially_refunded', 'refunded')
+            ORDER BY ph.created_at DESC, ph.history_id DESC
         `;
 
         db.query(sql, [userId], (error, rows = []) => {
@@ -405,6 +421,9 @@ function getSupportOrdersByUserId(userId, callback) {
             callback(null, rows.map((row) => ({
                 id: row.receipt_id,
                 receiptId: row.receipt_id,
+                orderId: row.order_id || null,
+                order_number: row.order_number || '',
+                orderNumber: row.order_number || '',
                 targetId: row.receipt_id,
                 source: 'purchase_history',
                 userId: row.user_id,
@@ -511,6 +530,9 @@ function mapReceipt(row) {
     return {
         id: row.receipt_id,
         displayId: row.receipt_id.replace(/^order-/, ''),
+        orderId: row.order_id || null,
+        order_number: row.order_number || '',
+        orderNumber: row.order_number || '',
         type: row.purchase_type === 'booking' ? 'booking' : 'order',
         userId: row.user_id,
         userName: '',

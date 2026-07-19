@@ -140,11 +140,13 @@ function renderWallet(req, res, viewName, title) {
                     req.session.loyaltySuccess = null;
                     req.session.loyaltyError = null;
 
+                    const transactions = Loyalty.applyTransactionDisplayDetails(viewModel.transactions, receipts);
+
                     return res.render(viewName, {
                         title,
                         wallet: viewModel.wallet,
                         rules: viewModel.rules,
-                        transactions: viewModel.transactions,
+                        transactions,
                         receipts,
                         birthdayPromotion: buildBirthdayPromotion(accountUser, vouchers),
                         success,

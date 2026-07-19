@@ -22,10 +22,8 @@
     const isProductReviewEntry = (entry) => String(entry.reviewItemType || '') === 'product';
     const profileReviewRewardMax = 70;
     const profileReviewPotential = profileReviewableBookings.length * profileReviewRewardMax;
-    const profileReviewEarnedPoints = loyalty && Array.isArray(loyalty.transactions)
-        ? loyalty.transactions
-            .filter((entry) => String(entry.type || '').toLowerCase() === 'review_bonus')
-            .reduce((sum, entry) => sum + Number(entry.pointsDelta || 0), 0)
+    const profileReviewEarnedPoints = loyalty && loyalty.displaySummary
+        ? Number(loyalty.displaySummary.reviewBonusPointsTotal || 0)
         : 0;
     const formatBookingStatus = (value) => String(value || 'pending').replace(/_/g, ' ');
     const formatBookingDate = (value) => {
@@ -1179,27 +1177,14 @@
                         const walletReceipts = typeof walletHistory !== 'undefined' && Array.isArray(walletHistory)
                             ? walletHistory
                             : [];
-                        const walletReceiptMap = walletReceipts.reduce((map, receipt) => {
-                            map[String(receipt.receiptId)] = receipt;
-                            return map;
-                        }, {});
                         const walletTransactions = loyalty && Array.isArray(loyalty.transactions)
                             ? loyalty.transactions
                             : [];
-                        const cashbackTransactions = walletTransactions.filter((entry) => {
-                            const type = String(entry.type || '').toUpperCase();
-                            return Number(entry.cashbackDelta || 0) !== 0
-                                || ['CASHBACK_USED', 'CASHBACK_EARNED', 'CASHBACK_REVERSED', 'REDEEMED'].includes(type);
-                        });
-                        const cashbackEarnedTotal = cashbackTransactions
-                            .filter((entry) => Number(entry.cashbackDelta || 0) > 0)
-                            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0);
-                        const cashbackUsedTotal = Math.abs(cashbackTransactions
-                            .filter((entry) => Number(entry.cashbackDelta || 0) < 0)
-                            .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
+                        const loyaltyDisplaySummary = loyalty && loyalty.displaySummary
+                            ? loyalty.displaySummary
+                            : { displayCashbackSummary: '$0.00 earned - $0.00 used or reversed' };
                         const recentWalletTransactions = walletTransactions.slice(0, 6);
                         const recentWalletReceipts = walletReceipts.slice(0, 4);
-                        const walletTypeLabel = (value) => String(value || '').replace(/_/g, ' ').toLowerCase();
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -1282,7 +1267,7 @@
                                 <section class="profile-wallet-cashback">
                                     <p class="eyebrow">Cashback</p>
                                     <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
-                                    <span>$<%= cashbackEarnedTotal.toFixed(2) %> earned · $<%= cashbackUsedTotal.toFixed(2) %> used or reversed</span>
+                                    <span><%= loyaltyDisplaySummary.displayCashbackSummary %></span>
                                     <form action="/customer/checkout/apply-cashback" method="POST">
                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                         <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use in cart</button>
@@ -1330,34 +1315,31 @@
                                     <% } else { %>
                                         <div class="profile-wallet-list">
                                             <% recentWalletTransactions.forEach((entry) => { %>
-                                                <% const linkedReceipt = entry.sourceReceiptId ? walletReceiptMap[String(entry.sourceReceiptId)] : null; %>
-                                                <% const activitySearch = [
-                                                    entry.description,
-                                                    linkedReceipt ? linkedReceipt.itemNames : '',
-                                                    linkedReceipt ? linkedReceipt.merchantName : '',
-                                                    walletTypeLabel(entry.type),
-                                                    new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }),
-                                                    `${entry.pointsDelta || 0} points`,
-                                                    `${Number(entry.cashbackDelta || 0).toFixed(2)} cashback`
-                                                ].filter(Boolean).join(' ').toLowerCase(); %>
-                                                <% const activityKinds = [
-                                                    Number(entry.pointsDelta || 0) !== 0 ? 'points' : '',
-                                                    Number(entry.cashbackDelta || 0) !== 0 ? 'cashback' : ''
-                                                ].filter(Boolean).join(' '); %>
                                                 <article class="profile-wallet-row"
                                                     data-wallet-transaction-row
-                                                    data-wallet-kinds="<%= activityKinds || 'activity' %>"
-                                                    data-wallet-search="<%= activitySearch %>">
+                                                    data-wallet-kinds="<%= entry.displayKindsText || 'activity' %>"
+                                                    data-wallet-search="<%= entry.displaySearchText || '' %>">
                                                     <div>
-                                                        <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
-                                                        <strong><%= entry.description %></strong>
-                                                        <% if (linkedReceipt) { %>
-                                                            <small><%= linkedReceipt.itemNames %></small>
+                                                        <span><%= entry.displayDate || '' %></span>
+                                                        <strong><%= entry.displayTitle %></strong>
+                                                        <% if (entry.displayLines && entry.displayLines.length) { %>
+                                                            <% entry.displayLines.forEach((line) => { %>
+                                                                <small><%= line %></small>
+                                                            <% }) %>
                                                         <% } %>
                                                     </div>
                                                     <div>
-                                                        <strong class="<%= entry.pointsDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.pointsDelta > 0 ? '+' : '' %><%= entry.pointsDelta %> pts</strong>
-                                                        <small class="<%= entry.cashbackDelta >= 0 ? 'positive' : 'negative' %>"><%= entry.cashbackDelta >= 0 ? '+' : '-' %>$<%= Math.abs(Number(entry.cashbackDelta || 0)).toFixed(2) %></small>
+                                                        <% if (entry.displayValueLines && entry.displayValueLines.length) { %>
+                                                            <% entry.displayValueLines.forEach((line, index) => { %>
+                                                                <% if (index === 0) { %>
+                                                                    <strong class="<%= line.tone %>"><%= line.text %></strong>
+                                                                <% } else { %>
+                                                                    <small class="<%= line.tone %>"><%= line.text %></small>
+                                                                <% } %>
+                                                            <% }) %>
+                                                        <% } else { %>
+                                                            <small><%= entry.displayStatus || 'Recorded' %></small>
+                                                        <% } %>
                                                     </div>
                                                 </article>
                                             <% }) %>
@@ -1394,7 +1376,7 @@
                                                     data-wallet-search="<%= receiptSearch %>">
                                                     <div>
                                                         <span><%= receipt.type %></span>
-                                                        <strong>Receipt <%= receipt.id %></strong>
+                                                        <strong>Receipt <%= receipt.order_number || receipt.orderNumber || ('#' + receipt.id) %></strong>
                                                         <small><%= receipt.itemNames %></small>
                                                     </div>
                                                     <div>

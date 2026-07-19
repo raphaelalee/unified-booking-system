@@ -21,8 +21,8 @@
         <div class="receipt-layout">
             <article class="receipt-card">
                 <div class="receipt-meta-grid">
-                    <p><span>Receipt ID</span><strong><%= order.receiptId %></strong></p>
-                    <p><span>Order ID</span><strong><%= order.id %></strong></p>
+                    <p><span>Receipt ID</span><strong><%= order.order_number || order.orderNumber || ('#' + (order.id || String(order.receiptId || '').replace(/^order-/, ''))) %></strong></p>
+                    <p><span>Order</span><strong><%= order.order_number || order.orderNumber || ('#' + order.id) %></strong></p>
                     <p><span>Customer</span><strong><%= order.customerName %></strong></p>
                     <p><span>Merchant</span><strong><%= order.merchantName %></strong></p>
                     <p><span>Payment Status</span><strong><%= order.paymentStatusLabel %></strong></p>

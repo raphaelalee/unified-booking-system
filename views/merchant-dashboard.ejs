@@ -248,7 +248,7 @@
                             <article class="merchant-product-order-card">
                                 <div class="merchant-product-order-main">
                                     <div>
-                                        <span class="merchant-order-id">#<%= order.id %></span>
+                                        <span class="merchant-order-id">Order <%= order.order_number || order.orderNumber || ('#' + order.id) %></span>
                                         <strong><%= order.customerName || 'Customer' %></strong>
                                         <small><%= formatOrderDate(order.createdAt) %> · <%= order.paymentMethod || 'Payment' %></small>
                                     </div>

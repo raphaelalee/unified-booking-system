@@ -1600,6 +1600,7 @@ function updateOrderStatus(req, res) {
             }
 
             const statusLabel = getDeliveryStatusLabel(status);
+            const orderDisplayReference = order.order_number || order.orderNumber || `#${transactionId}`;
             notifyCustomer(order.userId, {
                 actorUserId: req.session.user.id,
                 type: 'order_update',
@@ -1610,7 +1611,7 @@ function updateOrderStatus(req, res) {
                 metadata: { transactionId, status }
             });
 
-            req.session.merchantSuccess = `Order #${transactionId} updated to ${statusLabel}.`;
+            req.session.merchantSuccess = `Order ${orderDisplayReference} updated to ${statusLabel}.`;
             return res.redirect('/merchant/orders');
         });
     });
