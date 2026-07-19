@@ -32,7 +32,7 @@
     <div class="receipt-layout">
         <article class="receipt-card">
             <div class="receipt-meta-grid">
-                <p><span>Booking ID</span><strong>#<%= booking.id %></strong></p>
+                <p><span>Booking ID</span><strong><%= booking.displayReference || ('#' + booking.id) %></strong></p>
                 <p><span>Service</span><strong><%= booking.serviceName %></strong></p>
                 <% if (booking.purchaseType === 'package') { %>
                     <p><span>Package price</span><strong>$<%= Number(booking.servicePrice || 0).toFixed(2) %></strong></p>

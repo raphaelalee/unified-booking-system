@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
+const { buildBookingReference } = require('./bookingReference');
 
 function getEmailConfig() {
     const host = process.env.SMTP_HOST;
@@ -38,6 +39,7 @@ function buildBookingEmailText(booking) {
         '',
         'Your Vaniday booking request has been received.',
         '',
+        booking.displayReference ? `Booking ID: ${booking.displayReference}` : '',
         `Merchant: ${booking.merchantName}`,
         `Service: ${booking.serviceName}`,
         `Date: ${booking.bookingDate}`,
@@ -78,6 +80,14 @@ function buildBookingEmailHtml(booking, qrCid = '') {
                                     </div>`
         : '';
 
+    const bookingReferenceRow = booking.displayReference
+        ? `
+                                        <tr>
+                                            <td style="padding:18px 20px;border-bottom:1px solid #e5d8c8;font-size:13px;text-transform:uppercase;font-weight:700;color:#7b6a56;">Booking ID</td>
+                                            <td style="padding:18px 20px;border-bottom:1px solid #e5d8c8;font-size:15px;font-weight:700;color:#241f1a;">${escapeHtml(booking.displayReference)}</td>
+                                        </tr>`
+        : '';
+
     return `
         <div style="margin:0;padding:0;background:#f5efe5;font-family:Arial,Helvetica,sans-serif;color:#241f1a;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f5efe5;padding:24px 0;">
@@ -101,6 +111,7 @@ function buildBookingEmailHtml(booking, qrCid = '') {
                                     <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#5f5448;">Hi ${escapeHtml(booking.customerName)}, we have recorded your Vaniday booking request. Here are the details.</p>
 
                                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f8f1e8;border:1px solid #e5d8c8;border-radius:10px;">
+                                        ${bookingReferenceRow}
                                         <tr>
                                             <td style="padding:18px 20px;border-bottom:1px solid #e5d8c8;font-size:13px;text-transform:uppercase;font-weight:700;color:#7b6a56;">Merchant</td>
                                             <td style="padding:18px 20px;border-bottom:1px solid #e5d8c8;font-size:15px;font-weight:700;color:#241f1a;">${escapeHtml(booking.merchantName)}</td>
@@ -146,6 +157,7 @@ function buildBookingEmailHtml(booking, qrCid = '') {
 function normalizeBookingEmail(booking) {
     return {
         ...booking,
+        displayReference: booking.displayReference || buildBookingReference(booking.bookingId || booking.id, booking.bookingDate),
         checkinUrl: booking.checkinUrl || booking.checkInUrl || ''
     };
 }
@@ -191,10 +203,14 @@ async function sendBookingConfirmationEmail(booking) {
     });
 
     try {
+        const subjectReference = normalizedBooking.displayReference
+            ? ` ${normalizedBooking.displayReference}`
+            : '';
+
         return await transporter.sendMail({
             from: config.from,
             to: normalizedBooking.email,
-            subject: `Vaniday booking request: ${normalizedBooking.serviceName}`,
+            subject: `Vaniday booking${subjectReference}: ${normalizedBooking.serviceName}`,
             text: buildBookingEmailText(normalizedBooking),
             html: buildBookingEmailHtml(normalizedBooking, qrCid),
             attachments

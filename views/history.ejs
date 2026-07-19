@@ -11,6 +11,10 @@
         const formatStatusLabel = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
         const formatFulfilmentLabel = (value) => String(value || '').toLowerCase() === 'delivery' ? 'Delivery' : 'Pickup';
         const formatBookingReference = (entry) => {
+            if (entry.displayReference) {
+                return entry.displayReference;
+            }
+
             const bookingId = String(entry.id || entry.receiptId || '').replace(/\D/g, '');
             const bookingDate = new Date(entry.createdAt || 0);
             const datePart = Number.isNaN(bookingDate.getTime())

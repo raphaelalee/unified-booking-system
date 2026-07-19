@@ -7,6 +7,7 @@ const {
     normalizePaymentMethod,
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
+const { buildBookingReference } = require('../utils/bookingReference');
 
 function queryRows(sql, values = []) {
     return new Promise((resolve, reject) => {
@@ -41,20 +42,6 @@ function formatHistoryDate(value) {
         dateStyle: 'medium',
         timeStyle: 'short'
     });
-}
-
-function buildBookingReference(bookingId, dateValue) {
-    const id = Number(bookingId || 0);
-    const date = new Date(dateValue || 0);
-    const datePart = Number.isNaN(date.getTime())
-        ? '00000000'
-        : [
-            date.getFullYear(),
-            String(date.getMonth() + 1).padStart(2, '0'),
-            String(date.getDate()).padStart(2, '0')
-        ].join('');
-
-    return `BKG-${datePart}-${String(id).padStart(6, '0')}`;
 }
 
 function normalizeProductImageUrl(value) {

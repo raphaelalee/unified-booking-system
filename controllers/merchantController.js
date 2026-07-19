@@ -31,6 +31,7 @@ const {
     normalizePaymentMethod,
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
+const { buildBookingReference } = require('../utils/bookingReference');
 const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
 const nets = require('../services/nets');
@@ -995,6 +996,7 @@ async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validat
 
     return {
         id: bookingId,
+        displayReference: buildBookingReference(bookingId, bookingDate),
         customerName: validation.customerName || req.session.user?.name || 'Guest',
         email: validation.email || req.session.user?.email || '',
         merchantName: merchant.name,
@@ -2743,6 +2745,7 @@ function saveQrBooking(req, res) {
             }
 
                 const bookingId = getInsertedBookingId(confirmation.result);
+                const bookingReference = buildBookingReference(bookingId, req.body.bookingDate);
                 const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
                 const finishSuccess = async () => {
                     const bookingReceipt = await buildBookingReceiptForSuccess(req, {
@@ -2766,6 +2769,7 @@ function saveQrBooking(req, res) {
                     bookingDate: req.body.bookingDate,
                     bookingTime: validation.bookingTime,
                     bookingId,
+                    bookingReference,
                     bookingStatus: confirmation.status,
                     bookingReceipt,
                     whatsappConfirmationUrl: getWhatsAppUrl(buildWhatsAppBookingMessage({
@@ -2782,6 +2786,8 @@ function saveQrBooking(req, res) {
 
                 notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
                 notifyBooking({
+                    bookingId,
+                    displayReference: bookingReference,
                     customerName: validation.customerName,
                     email: validation.email,
                     phone: validation.phone,
@@ -2917,6 +2923,7 @@ function saveSecureScanBooking(req, res) {
                 }
 
                     const bookingId = getInsertedBookingId(confirmation.result);
+                    const bookingReference = buildBookingReference(bookingId, req.body.bookingDate);
                     const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
                     const finishSuccess = async () => {
                         const bookingReceipt = await buildBookingReceiptForSuccess(req, {
@@ -2940,6 +2947,7 @@ function saveSecureScanBooking(req, res) {
                         bookingDate: req.body.bookingDate,
                         bookingTime: validation.bookingTime,
                         bookingId,
+                        bookingReference,
                         bookingStatus: confirmation.status,
                         bookingReceipt,
                         anotherBookingPath: getSecureBookingPath(merchant),
@@ -2957,6 +2965,8 @@ function saveSecureScanBooking(req, res) {
 
                     notifyBookingCreated(req, merchant, validation, bookingId, confirmation.status);
                     notifyBooking({
+                        bookingId,
+                        displayReference: bookingReference,
                         customerName: validation.customerName,
                         email: validation.email,
                         phone: validation.phone,

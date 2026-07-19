@@ -18,7 +18,7 @@
     <div class="receipt-layout">
         <article class="receipt-card">
             <div class="receipt-meta-grid">
-                <p><span>Booking ID</span><strong>#<%= booking.id %></strong></p>
+                <p><span>Booking ID</span><strong><%= booking.displayReference || ('#' + booking.id) %></strong></p>
                 <p><span>Status</span><strong><%= String(booking.status || 'completed').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) %></strong></p>
                 <p><span>Service</span><strong><%= booking.service_name %></strong></p>
                 <p><span>Merchant</span><strong><%= booking.merchant_name %></strong></p>

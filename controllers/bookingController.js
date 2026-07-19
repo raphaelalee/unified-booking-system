@@ -28,6 +28,7 @@ const {
 const {
     formatAppointmentDateTime
 } = require('../utils/dateTimeFormat');
+const { buildBookingReference } = require('../utils/bookingReference');
 
 function isValidBookingDate(value) {
     const state = Booking.getBookingDateState(value);
@@ -451,6 +452,7 @@ function createBooking(req, res) {
 
             try {
                 const bookingId = confirmation.result.insertId;
+                const bookingReference = buildBookingReference(bookingId, bookingDate);
                 notifyBookingCreated(bookingId);
 
                 if (!confirmation.confirmed) {
@@ -461,6 +463,7 @@ function createBooking(req, res) {
                             message: 'Booking submitted and waiting for merchant approval.',
                             booking: {
                                 id: bookingId,
+                                displayReference: bookingReference,
                                 merchantName: service.salonName || 'Vaniday merchant',
                                 serviceName: bookedServiceName,
                                 servicePrice: bookedServicePrice,
@@ -483,6 +486,7 @@ function createBooking(req, res) {
                         bookingDate,
                         bookingTime,
                         bookingId,
+                        bookingReference,
                         bookingStatus: 'pending',
                         anotherBookingPath: '/services'
                     });
@@ -500,6 +504,7 @@ function createBooking(req, res) {
                 try {
                     const emailResult = await sendBookingConfirmationEmail({
                         bookingId,
+                        displayReference: bookingReference,
                         customerName: customerName || 'Customer',
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
@@ -559,6 +564,7 @@ function createBooking(req, res) {
                             : 'Booking confirmed. Receipt, QR, and notifications have been sent.',
                         booking: {
                             id: bookingId,
+                            displayReference: bookingReference,
                             customerName: customerName || 'Customer',
                             email,
                             merchantName: service.salonName || 'Vaniday merchant',
@@ -582,6 +588,7 @@ function createBooking(req, res) {
                     title: 'Booking Confirmed',
                     booking: {
                         id: bookingId,
+                        displayReference: bookingReference,
                         customerName: customerName || 'Customer',
                         email,
                         merchantName: service.salonName || 'Vaniday merchant',
@@ -665,6 +672,7 @@ function confirmBooking(req, res) {
                 title: 'Booking Confirmed',
                 booking: {
                     ...booking,
+                    displayReference: buildBookingReference(booking.id, booking.paid_at || booking.booking_date),
                     status: 'completed'
                 }
             });

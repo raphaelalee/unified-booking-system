@@ -4,6 +4,9 @@
     const safeBookingStatus = String(typeof bookingStatus !== 'undefined' ? bookingStatus : 'confirmed').toLowerCase();
     const isPendingBooking = safeBookingStatus === 'pending';
     const statusLabel = isPendingBooking ? 'Pending approval' : 'Confirmed';
+    const displayBookingReference = typeof bookingReference !== 'undefined'
+        ? bookingReference
+        : (typeof bookingReceipt !== 'undefined' && bookingReceipt && bookingReceipt.displayReference ? bookingReceipt.displayReference : '');
 %>
 
 <section class="page-title receipt-title">
@@ -37,7 +40,7 @@
         <div class="receipt-layout">
             <article class="receipt-card">
                 <div class="receipt-meta-grid">
-                    <p><span>Booking ID</span><strong>#<%= bookingReceipt.id %></strong></p>
+                    <p><span>Booking ID</span><strong><%= displayBookingReference || ('#' + bookingReceipt.id) %></strong></p>
                     <p><span>Status</span><strong><%= statusLabel %></strong></p>
                     <p><span>Service</span><strong><%= bookingReceipt.serviceName %></strong></p>
                     <p><span>Merchant</span><strong><%= bookingReceipt.merchantName %></strong></p>

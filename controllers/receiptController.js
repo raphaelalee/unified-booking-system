@@ -23,6 +23,7 @@ const {
     normalizePaymentMethod,
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
+const { buildBookingReference } = require('../utils/bookingReference');
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
@@ -221,7 +222,7 @@ function buildBookingCalendarIcs(receipt) {
     const startValue = formatIcsLocalDateTime(dateKey, bookingTime);
     const endValue = endParts ? formatIcsLocalDateTime(endParts.dateKey, endParts.time) : '';
     const description = [
-        `Booking ID: ${receipt.id}`,
+        `Booking ID: ${receipt.displayReference || receipt.id}`,
         `Service: ${serviceName}`,
         `Merchant: ${receipt.merchantName || 'Vaniday merchant'}`,
         receipt.merchantAddress ? `Address: ${receipt.merchantAddress}` : '',
@@ -257,7 +258,7 @@ function buildGoogleCalendarUrl(receipt) {
     const startValue = formatIcsLocalDateTime(dateKey, bookingTime);
     const endValue = endParts ? formatIcsLocalDateTime(endParts.dateKey, endParts.time) : startValue;
     const description = [
-        `Booking ID: ${receipt.id}`,
+        `Booking ID: ${receipt.displayReference || receipt.id}`,
         `Service: ${serviceName}`,
         `Merchant: ${receipt.merchantName || 'Vaniday merchant'}`,
         receipt.merchantAddress ? `Address: ${receipt.merchantAddress}` : '',
@@ -346,6 +347,7 @@ function mapBookingReceipt(row, req) {
 
     return {
         id: row.id,
+        displayReference: buildBookingReference(row.id, row.paid_at || row.booking_date),
         type: 'booking',
         userId: row.user_id,
         userName: row.customer_name,
@@ -953,7 +955,7 @@ function buildFallbackPdf(data) {
                 width: 220
             });
             const receipt = data.receipt;
-            const receiptDisplayReference = receipt.order_number || receipt.orderNumber || `#${receipt.displayId || receipt.id}`;
+            const receiptDisplayReference = receipt.displayReference || receipt.order_number || receipt.orderNumber || `#${receipt.displayId || receipt.id}`;
             const pageWidth = doc.page.width;
             const left = doc.page.margins.left;
             const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;

@@ -6,7 +6,7 @@
     const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
     const paymentLabel = receipt.paymentMethodLabel || receipt.paymentMethod || 'Payment';
     const paymentBreakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
-    const receiptDisplayReference = receipt.order_number || receipt.orderNumber || ('#' + (receipt.displayId || receipt.id));
+    const receiptDisplayReference = receipt.displayReference || receipt.order_number || receipt.orderNumber || ('#' + (receipt.displayId || receipt.id));
     const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 %>
 
