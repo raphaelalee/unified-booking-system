@@ -96,20 +96,13 @@ function buildCancellationMessage(booking) {
     ].filter(Boolean).join('\n');
 }
 
-async function sendWhatsAppText(phone, message) {
-    const provider = getProvider();
-    const body = String(message || '').trim();
-
-    if (provider === 'whatsapp_web' || provider === 'whatsapp-web' || provider === 'web') {
-        return sendWhatsAppWebText(phone, body);
-    }
-
+async function sendWhatsAppViaTwilio(phone, body) {
     const config = getConfig();
     const to = formatWhatsAppAddress(phone);
     const from = formatWhatsAppAddress(config.from);
 
     if (!isWhatsAppEnabled() || !config.accountSid || !config.authToken || !from || !to || !body) {
-        return { skipped: true };
+        return { skipped: true, reason: 'twilio_not_configured' };
     }
 
     const params = new URLSearchParams({
@@ -134,10 +127,45 @@ async function sendWhatsAppText(phone, message) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(data.message || `Twilio WhatsApp failed with status ${response.status}`);
+        return {
+            skipped: true,
+            reason: 'twilio_send_failed',
+            errorMessage: data.message || `Twilio WhatsApp failed with status ${response.status}`
+        };
     }
 
     return data;
+}
+
+async function sendWhatsAppText(phone, message) {
+    const provider = getProvider();
+    const body = String(message || '').trim();
+
+    if (provider === 'whatsapp_web' || provider === 'whatsapp-web' || provider === 'web') {
+        const webResult = await sendWhatsAppWebText(phone, body);
+
+        if (!webResult?.skipped) {
+            return webResult;
+        }
+
+        if (['whatsapp_send_no_lid', 'whatsapp_number_not_found'].includes(String(webResult.reason || ''))) {
+            const twilioResult = await sendWhatsAppViaTwilio(phone, body);
+            if (!twilioResult?.skipped) {
+                return twilioResult;
+            }
+
+            return {
+                skipped: true,
+                reason: webResult.reason,
+                fallbackReason: twilioResult.reason || null,
+                errorMessage: twilioResult.errorMessage || null
+            };
+        }
+
+        return webResult;
+    }
+
+    return sendWhatsAppViaTwilio(phone, body);
 }
 
 function sendBookingNotification(booking) {

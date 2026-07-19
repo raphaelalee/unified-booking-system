@@ -4,6 +4,9 @@ const paypal = require('../services/paypal');
 const hitpay = require('../services/hitpay');
 const nets = require('../services/nets');
 const PaymentAttempt = require('../models/PaymentAttempt');
+const User = require('../models/User');
+const { sendWalletTopupOtpEmail } = require('../utils/emailNotifications');
+const { sendWhatsAppText } = require('../utils/whatsappNotifications');
 const crypto = require('crypto');
 
 const TOPUP_2FA_TTL_MS = 5 * 60 * 1000;
@@ -67,6 +70,135 @@ function hashTopupCode(code) {
     return crypto.createHash('sha256').update(String(code || '')).digest('hex');
 }
 
+function maskEmail(email) {
+    const [name, domain] = String(email || '').split('@');
+
+    if (!name || !domain) {
+        return 'your email';
+    }
+
+    const visibleName = name.length <= 2
+        ? `${name[0] || '*'}*`
+        : `${name.slice(0, 2)}${'*'.repeat(Math.min(name.length - 2, 4))}`;
+
+    return `${visibleName}@${domain}`;
+}
+
+function maskPhone(phone) {
+    const digits = String(phone || '').replace(/[^\d]/g, '');
+
+    if (digits.length < 4) {
+        return 'your WhatsApp number';
+    }
+
+    return `${'*'.repeat(Math.max(digits.length - 4, 0))}${digits.slice(-4)}`;
+}
+
+function normalizeContactMethod(method) {
+    const normalized = String(method || '').trim().toLowerCase();
+
+    if (normalized === 'whatsapp') return 'whatsapp';
+    if (normalized === 'email') return 'email';
+    return 'email';
+}
+
+function getTopupOtpDeliveryError(method, reason = '') {
+    if (method === 'whatsapp') {
+        if (reason === 'missing_phone') {
+            return 'Your profile has no phone number. Add a phone number first, or change preferred contact to email.';
+        }
+
+        if (reason === 'invalid_phone') {
+            return 'Your profile phone number format is invalid for WhatsApp. Update your phone number and try again.';
+        }
+
+        if (reason === 'whatsapp_web_client_not_ready') {
+            return 'WhatsApp Web is not ready yet. Scan the WhatsApp QR code in the server terminal, then try again.';
+        }
+
+        if (reason === 'whatsapp_number_not_found' || reason === 'whatsapp_send_no_lid') {
+            return 'WhatsApp OTP could not be sent because this phone number is not reachable on WhatsApp.';
+        }
+
+        if (reason === 'whatsapp_web_provider_disabled' || reason === 'whatsapp_disabled') {
+            return 'WhatsApp OTP is disabled in configuration. Enable WhatsApp Web notifications and try again.';
+        }
+
+        if (reason === 'twilio_send_failed' || reason === 'twilio_not_configured') {
+            return 'WhatsApp OTP could not be delivered through Twilio fallback. Check Twilio WhatsApp setup and try again.';
+        }
+
+        return 'WhatsApp OTP could not be sent. Please check your profile phone number or WhatsApp setup, or change preferred contact to email.';
+    }
+
+    return 'Email OTP could not be sent. Please check your profile email or SMTP configuration.';
+}
+
+function getTopupOtpSuccessMessage(method, destination) {
+    if (method === 'whatsapp') {
+        return `A 6-digit verification code was sent via WhatsApp to ${destination}.`;
+    }
+
+    return `A 6-digit verification code was sent via email to ${destination}.`;
+}
+
+async function getTopup2faUser(req) {
+    const userId = req.session.user?.id;
+
+    if (!userId) {
+        return null;
+    }
+
+    const user = await new Promise((resolve, reject) => {
+        User.findById(userId, (error, result) => error ? reject(error) : resolve(result));
+    });
+
+    return user || null;
+}
+
+async function sendTopup2faCode(user, method, code) {
+    if (method === 'whatsapp') {
+        const phone = String(user?.phone || '').trim();
+        if (!phone) {
+            return { sent: false, reason: 'missing_phone' };
+        }
+
+        const message = `Your Vaniday wallet top-up code is ${code}. It expires in 5 minutes.`;
+        const result = await sendWhatsAppText(phone, message);
+
+        if (result?.skipped) {
+            return { sent: false, reason: result.reason || 'not_configured' };
+        }
+
+        return {
+            sent: true,
+            method: 'whatsapp',
+            destination: maskPhone(phone)
+        };
+    }
+
+    const email = String(user?.email || '').trim();
+    if (!email) {
+        return { sent: false, reason: 'missing_email' };
+    }
+
+    const result = await sendWalletTopupOtpEmail({
+        email,
+        name: user?.name || 'there',
+        code
+    });
+
+    if (result?.skipped) {
+        return { sent: false, reason: result.reason || 'not_configured' };
+    }
+
+    return {
+        sent: true,
+        method: 'email',
+        destination: maskEmail(email)
+    };
+}
+
 function generateTopup2faCode() {
     return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -91,17 +223,16 @@ function getTopup2faChallenge(req) {
     return challenge;
 }
 
-function startTopup2fa(req, amount, paymentMethod) {
-    const code = generateTopup2faCode();
+function storeTopup2fa(req, amount, paymentMethod, code, delivery) {
     req.session.walletTopup2fa = {
         amount,
         paymentMethod,
         codeHash: hashTopupCode(code),
         createdAt: Date.now(),
-        attempts: 0
+        attempts: 0,
+        deliveryMethod: delivery?.method || 'email',
+        deliveryDestination: delivery?.destination || 'your contact channel'
     };
-
-    console.log(`[Wallet2FA] Top-up OTP for user ${req.session.user?.id}: ${code} (expires in 5 minutes)`);
 }
 
 async function startTopupPayment(req, res, amount, paymentMethod) {
@@ -328,9 +459,41 @@ async function topupWallet(req, res) {
         return res.redirect('/profile/wallet');
     }
 
-    startTopup2fa(req, amount, paymentMethod);
-    setWalletSuccess(req, 'A sample verification code was sent to the server terminal. Enter it to continue.');
-    return res.redirect('/profile/wallet/topup/verify');
+    try {
+        const user = await getTopup2faUser(req);
+        if (!user) {
+            setWalletError(req, 'Please log in to add funds to your wallet.');
+            return res.redirect('/login');
+        }
+
+        const preferredContactMethod = normalizeContactMethod(
+            user.preferred_contact_method || user.preferredContactMethod || req.session.user?.preferredContactMethod
+        );
+        const code = generateTopup2faCode();
+        const delivery = await sendTopup2faCode(user, preferredContactMethod, code);
+
+        if (!delivery.sent) {
+            console.warn('Wallet top-up OTP delivery failed', {
+                userId: user.user_id,
+                method: preferredContactMethod,
+                reason: delivery.reason || 'unknown'
+            });
+            setWalletError(req, getTopupOtpDeliveryError(preferredContactMethod, delivery.reason));
+            return res.redirect('/profile/wallet');
+        }
+
+        req.session.user.preferredContactMethod = preferredContactMethod;
+        req.session.user.email = user.email || req.session.user.email;
+        req.session.user.phone = user.phone || req.session.user.phone;
+
+        storeTopup2fa(req, amount, paymentMethod, code, delivery);
+        setWalletSuccess(req, getTopupOtpSuccessMessage(delivery.method, delivery.destination));
+        return res.redirect('/profile/wallet/topup/verify');
+    } catch (error) {
+        console.error(error);
+        setWalletError(req, 'Top-up verification code could not be sent. Please try again.');
+        return res.redirect('/profile/wallet');
+    }
 }
 
 function showTopup2faVerify(req, res) {
@@ -354,6 +517,8 @@ function showTopup2faVerify(req, res) {
         title: 'Verify Wallet Top-Up',
         amount: Number(challenge.amount || 0),
         paymentMethodLabel: getProviderLabel(challenge.paymentMethod),
+        deliveryMethodLabel: String(challenge.deliveryMethod || 'email').toLowerCase() === 'whatsapp' ? 'WhatsApp' : 'Email',
+        deliveryDestination: challenge.deliveryDestination || 'your contact channel',
         expiresInSeconds: Math.ceil(remainingMs / 1000),
         success,
         error
@@ -373,7 +538,7 @@ async function verifyTopup2fa(req, res) {
 
     const code = String(req.body.topup2faCode || '').trim();
     if (!/^\d{6}$/.test(code)) {
-        setWalletError(req, 'Please enter the 6-digit verification code from the terminal.');
+        setWalletError(req, 'Please enter the 6-digit verification code sent to you.');
         return res.redirect('/profile/wallet/topup/verify');
     }
 

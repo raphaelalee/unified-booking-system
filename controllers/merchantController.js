@@ -345,19 +345,85 @@ function normalizeFulfilment(value) {
     return String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup';
 }
 
-function buildPickupMerchantOptions(cart = []) {
+function normalizeAddressText(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function getApprovedSalons() {
+    return new Promise((resolve, reject) => {
+        MerchantService.getSalons((error, rows = []) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(rows);
+        });
+    });
+}
+
+function buildPickupMerchantOptions(cart = [], salonRows = []) {
     const optionMap = new Map();
+    const salonMap = new Map((salonRows || []).map((row) => [
+        String(row.salon_id),
+        {
+            address: normalizeAddressText(row.address),
+            pickupInstructions: normalizeAddressText(row.description)
+        }
+    ]));
 
     (cart || []).forEach((item) => {
-        if (item.merchantId && item.merchantName) {
-            optionMap.set(String(item.merchantId), {
-                id: String(item.merchantId),
-                name: item.merchantName
-            });
+        const merchantId = String(item.merchantId || '').trim();
+        const merchantName = String(item.merchantName || '').trim();
+
+        if (!merchantId || !merchantName) {
+            return;
         }
+
+        const existing = optionMap.get(merchantId) || {
+            id: merchantId,
+            name: merchantName,
+            address: salonMap.get(merchantId)?.address || '',
+            pickupInstructions: salonMap.get(merchantId)?.pickupInstructions || '',
+            items: []
+        };
+        const quantity = Math.max(1, Number(item.quantity || 1));
+        const lineTotal = Number(item.lineTotal || (Number(item.price || 0) * quantity));
+
+        existing.items.push({
+            id: String(item.id || ''),
+            name: item.serviceName || item.name || 'Cart item',
+            type: item.type || 'Service',
+            quantity,
+            lineTotal
+        });
+
+        optionMap.set(merchantId, existing);
     });
 
-    return Array.from(optionMap.values()).sort((left, right) => left.name.localeCompare(right.name));
+    return Array.from(optionMap.values())
+        .map((merchant) => ({
+            ...merchant,
+            itemCount: merchant.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+            totalAmount: Math.round(merchant.items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0) * 100) / 100
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function resolvePickupMerchantOptions(cart = []) {
+    const baseOptions = buildPickupMerchantOptions(cart, []);
+
+    if (!baseOptions.length) {
+        return [];
+    }
+
+    try {
+        const salonRows = await getApprovedSalons();
+        return buildPickupMerchantOptions(cart, salonRows);
+    } catch (error) {
+        console.error('Pickup merchant details could not be enriched:', error);
+        return baseOptions;
+    }
 }
 
 function getSelectedCartIds(body = {}) {
@@ -374,25 +440,25 @@ function getSelectedCartIds(body = {}) {
 
 function validateDeliveryDetails(body = {}) {
     const deliveryAddress = String(body.deliveryAddress || '').trim().replace(/\s+/g, ' ');
-    const deliveryUnit = String(body.deliveryUnit || '').trim().replace(/\s+/g, ' ');
+    const deliveryUnit = String(body.deliveryUnit || '').trim();
     const deliveryPostal = String(body.deliveryPostal || '').trim();
-    const normalizedPhone = String(body.deliveryPhone || '').replace(/[\s-]/g, '').replace(/^\+65/, '');
+    const deliveryPhone = String(body.deliveryPhone || '').trim();
     const errors = [];
 
-    if (deliveryAddress.length < 8) {
-        errors.push('Enter a complete delivery address.');
+    if (!deliveryAddress) {
+        errors.push('Enter a delivery address.');
     }
 
-    if (!deliveryUnit || !/^[A-Za-z0-9#\-/\s]+$/.test(deliveryUnit)) {
-        errors.push('Enter a valid unit number.');
+    if (!/^#\d{1,3}-\d{1,3}$/.test(deliveryUnit)) {
+        errors.push('Use unit format #12-34.');
     }
 
     if (!/^\d{6}$/.test(deliveryPostal)) {
         errors.push('Enter a valid 6-digit postal code.');
     }
 
-    if (!/^[689]\d{7}$/.test(normalizedPhone)) {
-        errors.push('Enter a valid Singapore contact number.');
+    if (!/^\d{8}$/.test(deliveryPhone)) {
+        errors.push('Enter an 8-digit contact number.');
     }
 
     return {
@@ -400,7 +466,7 @@ function validateDeliveryDetails(body = {}) {
             deliveryAddress,
             deliveryUnit,
             deliveryPostal,
-            deliveryPhone: normalizedPhone
+            deliveryPhone
         },
         errors
     };
@@ -3335,7 +3401,7 @@ function showCart(req, res) {
     });
 }
 
-function checkout(req, res) {
+async function checkout(req, res) {
     const selectedIds = getSelectedCartIds(req.body);
 
     const cart = (req.session.cart || []).map((item) => {
@@ -3359,13 +3425,16 @@ function checkout(req, res) {
     const pickupMerchantId = hasProductItems ? 'any' : '';
     const shippingFee = 0;
     const amount = Math.round(itemSubtotal * 100) / 100;
+    const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
+    const pickupMerchants = await resolvePickupMerchantOptions(selectedItems);
+    const isMultiMerchantPickup = pickupMerchants.length > 1;
+    const defaultPickupMerchantId = pickupMerchants.length === 1 ? String(pickupMerchants[0].id) : 'grouped';
+    const defaultPickupMerchantAddress = pickupMerchants.length === 1 ? String(pickupMerchants[0].address || '') : '';
+    const fulfilmentMerchantName = hasProductItems ? 'Any merchant' : 'Cart checkout';
     const selectedVoucherId = String(req.body.selectedVoucherId || 'none').trim();
     const hasSelectedVoucher = Boolean(selectedVoucherId && selectedVoucherId !== 'none');
     const useCashback = !hasSelectedVoucher && (req.body.redeemCashback === 'on' || req.session.applyCashback === true);
-    const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
-    const pickupMerchants = buildPickupMerchantOptions(selectedItems);
-    const fulfilmentMerchantName = hasProductItems ? 'Any merchant' : 'Cart checkout';
     const deliveryDetails = {
         deliveryAddress: '',
         deliveryUnit: '',
@@ -3404,11 +3473,28 @@ function checkout(req, res) {
         selectedVoucherId,
         useCashback,
         fulfilment,
-        pickupMerchantId,
+        pickupMerchantId: isMultiMerchantPickup ? 'grouped' : pickupMerchantId,
+        pickupMerchantAddress: defaultPickupMerchantAddress,
+        pickupMode: isMultiMerchantPickup ? 'grouped' : 'single',
         pickupMerchantName: '',
         pickupMerchantOptions: pickupMerchants,
         ...deliveryDetails
     };
+
+    if (req.session.pendingPayments[checkoutId].selectedVoucherId && req.session.pendingPayments[checkoutId].selectedVoucherId !== 'none') {
+        try {
+            const eligibleVouchers = await getEligibleProductVouchers(req.session.user.id, req.session.pendingPayments[checkoutId]);
+            const eligibleVoucherIds = new Set(eligibleVouchers.map((voucher) => String(voucher.id)));
+
+            if (!eligibleVoucherIds.has(String(req.session.pendingPayments[checkoutId].selectedVoucherId))) {
+                req.session.pendingPayments[checkoutId].selectedVoucherId = 'none';
+                req.session.pendingPayments[checkoutId].useCashback = Boolean(req.session.applyCashback === true);
+            }
+        } catch (error) {
+            console.error('Cart reward selection could not be verified:', error);
+        }
+    }
+
     savePaymentAttempt('checkout', checkoutId, req.session.pendingPayments[checkoutId]).catch((error) => {
         console.error('Pending checkout could not be persisted:', error);
     });
@@ -3425,12 +3511,30 @@ function checkout(req, res) {
             ? await getEligibleProductVouchers(req.session.user.id, req.session.pendingPayments[checkoutId])
             : [];
         const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, req.session.pendingPayments[checkoutId]);
-
-        const campaignCashback = await getCampaignCashbackEstimate(req.session.pendingPayments[checkoutId]);
+        const trustedCheckoutPayment = await prepareTrustedPayment(req, req.session.pendingPayments[checkoutId]).catch((error) => {
+            console.error('Cart checkout reward summary could not be verified:', error);
+            return null;
+        });
+        const campaignCashback = trustedCheckoutPayment?.campaignCashback || await getCampaignCashbackEstimate(req.session.pendingPayments[checkoutId]);
+        const paymentSummary = trustedCheckoutPayment ? {
+            originalAmount: Number(trustedCheckoutPayment.originalAmount || amount),
+            voucherDiscount: Number(trustedCheckoutPayment.voucherDiscount || 0),
+            pointsDiscount: Number(trustedCheckoutPayment.pointsDiscount || 0),
+            cashbackDiscount: Number(trustedCheckoutPayment.cashbackRedeemed || 0),
+            finalAmount: Number(trustedCheckoutPayment.amount || amount),
+            campaignCashback: Number(trustedCheckoutPayment.campaignCashback?.total || 0)
+        } : {
+            originalAmount: Number(amount),
+            voucherDiscount: 0,
+            pointsDiscount: 0,
+            cashbackDiscount: 0,
+            finalAmount: Number(amount),
+            campaignCashback: 0
+        };
 
         return res.render('payment', getPaymentViewModel({
             title: 'Payment',
-            amount,
+            amount: paymentSummary.finalAmount,
             itemSubtotal,
             shippingFee,
             merchantName: fulfilmentMerchantName,
@@ -3443,7 +3547,8 @@ function checkout(req, res) {
             items: req.session.pendingPayments[checkoutId].items,
             useCashback,
             fulfilment,
-            pickupMerchantId,
+            pickupMerchantId: hasProductItems ? defaultPickupMerchantId : pickupMerchantId,
+            pickupMerchantAddress: hasProductItems ? defaultPickupMerchantAddress : '',
             pickupMerchantOptions: pickupMerchants,
             deliveryFee: CART_DELIVERY_FEE,
             ...deliveryDetails,
@@ -3454,6 +3559,7 @@ function checkout(req, res) {
             birthdayPromotion: null,
             rewardRedemption: null,
             campaignCashback,
+            paymentSummary,
             redeemPointsRequested: 0,
             loyalty: walletError ? null : loyalty,
             eWallet,
@@ -3659,6 +3765,8 @@ async function showPayment(req, res) {
 }
 
 function getPaymentPayload(body = {}) {
+    const isCartCheckout = body.cartCheckout === 'true';
+
     return {
         amount: Number(body.amount || 0),
         itemSubtotal: Number(body.itemSubtotal || 0),
@@ -3666,19 +3774,20 @@ function getPaymentPayload(body = {}) {
         merchantName: body.merchantName || 'Vaniday',
         serviceName: body.serviceName || 'Booking',
         cartItemId: body.cartItemId || '',
-        cartCheckout: body.cartCheckout === 'true',
+        cartCheckout: isCartCheckout,
         checkoutId: body.checkoutId || '',
         bookingId: body.bookingId || '',
-        selectedVoucherId: body.selectedVoucherId || '',
+        selectedVoucherId: isCartCheckout ? '' : (body.selectedVoucherId || ''),
         selectedItemIds: String(body.selectedItemIds || ''),
         fulfilment: body.fulfilment || '',
         pickupMerchantId: body.pickupMerchantId || '',
+        pickupMerchantAddress: body.pickupMerchantAddress || '',
         deliveryAddress: body.deliveryAddress || '',
         deliveryUnit: body.deliveryUnit || '',
         deliveryPostal: body.deliveryPostal || '',
         deliveryPhone: body.deliveryPhone || '',
-        redeemPoints: Math.max(0, Math.floor(Number(body.redeemPoints || 0))),
-        useCashback: body.redeemCashback === 'on' || body.useCashback === 'true'
+        redeemPoints: isCartCheckout ? 0 : Math.max(0, Math.floor(Number(body.redeemPoints || 0))),
+        useCashback: isCartCheckout ? false : (body.redeemCashback === 'on' || body.useCashback === 'true')
     };
 }
 
@@ -4120,6 +4229,9 @@ function applyCheckoutFulfilment(pending, payment) {
             fulfilment: '',
             pickupMerchantId: '',
             pickupMerchantName: '',
+            pickupMerchantAddress: '',
+            pickupMode: '',
+            pickupGroups: [],
             deliveryAddress: '',
             deliveryUnit: '',
             deliveryPostal: '',
@@ -4128,14 +4240,43 @@ function applyCheckoutFulfilment(pending, payment) {
     }
 
     const fulfilment = normalizeFulfilment(payment.fulfilment || pending.fulfilment || 'pickup');
-    const pickupMerchantId = payment.pickupMerchantId || pending.pickupMerchantId || 'any';
+    const pickupMerchantId = String(payment.pickupMerchantId || pending.pickupMerchantId || 'any').trim();
+    const pickupMerchantAddress = normalizeAddressText(payment.pickupMerchantAddress || pending.pickupMerchantAddress || '');
     const pickupMerchants = Array.isArray(pending.pickupMerchantOptions) && pending.pickupMerchantOptions.length
         ? pending.pickupMerchantOptions
         : buildPickupMerchantOptions(items);
-    const pickupMerchantMap = new Map(pickupMerchants.map((merchant) => [String(merchant.id), merchant.name]));
+    const pickupMerchantMap = new Map(pickupMerchants.map((merchant) => [String(merchant.id), merchant]));
+    const hasMultiplePickupMerchants = pickupMerchants.length > 1;
+    const pickupGroups = pickupMerchants.map((merchant) => ({
+        merchantId: String(merchant.id || ''),
+        merchantName: merchant.name || '',
+        pickupAddress: normalizeAddressText(merchant.address || ''),
+        pickupInstructions: normalizeAddressText(merchant.pickupInstructions || ''),
+        items: Array.isArray(merchant.items) ? merchant.items : []
+    }));
 
-    if (fulfilment === 'pickup' && pickupMerchantId && pickupMerchantId !== 'any' && !pickupMerchantMap.has(String(pickupMerchantId))) {
-        throw new Error('Please select a valid pickup merchant.');
+    if (fulfilment === 'pickup') {
+        if (hasMultiplePickupMerchants) {
+            if (pickupMerchantId && pickupMerchantId !== 'grouped') {
+                throw new Error('This order includes multiple merchants. Pickup is grouped by merchant and cannot be reassigned to a single location.');
+            }
+        } else {
+            const expectedMerchant = pickupMerchants[0] || null;
+            const expectedMerchantId = expectedMerchant ? String(expectedMerchant.id || '') : '';
+
+            if (!expectedMerchantId) {
+                throw new Error('No valid pickup merchant is available for this cart.');
+            }
+
+            if (pickupMerchantId && pickupMerchantId !== expectedMerchantId && pickupMerchantId !== 'any') {
+                throw new Error('Please select a valid pickup merchant from your cart.');
+            }
+
+            const expectedAddress = normalizeAddressText(expectedMerchant.address || '');
+            if (pickupMerchantAddress && expectedAddress && pickupMerchantAddress !== expectedAddress) {
+                throw new Error('Selected pickup address does not match the selected merchant.');
+            }
+        }
     }
 
     const deliveryValidation = validateDeliveryDetails(payment);
@@ -4143,9 +4284,15 @@ function applyCheckoutFulfilment(pending, payment) {
         throw new Error(deliveryValidation.errors.join(' '));
     }
 
-    const selectedPickupName = fulfilment === 'pickup' && pickupMerchantId && pickupMerchantId !== 'any'
-        ? (pickupMerchantMap.get(String(pickupMerchantId)) || pickupMerchantId)
-        : '';
+    const resolvedSinglePickupMerchantId = !hasMultiplePickupMerchants && (pickupMerchantId === 'any' || !pickupMerchantId)
+        ? String(pickupMerchants[0]?.id || '')
+        : String(pickupMerchantId || '');
+    const selectedPickupMerchant = fulfilment === 'pickup' && !hasMultiplePickupMerchants
+        ? pickupMerchantMap.get(resolvedSinglePickupMerchantId)
+        : null;
+    const selectedPickupName = selectedPickupMerchant?.name || (hasMultiplePickupMerchants && fulfilment === 'pickup' ? 'Grouped by merchant' : '');
+    const selectedPickupAddress = selectedPickupMerchant?.address || '';
+    const selectedPickupInstructions = selectedPickupMerchant?.pickupInstructions || '';
     const shippingFee = fulfilment === 'delivery' ? CART_DELIVERY_FEE : 0;
     const amount = Math.round((itemSubtotal + shippingFee) * 100) / 100;
     const deliveryDetails = fulfilment === 'delivery'
@@ -4165,14 +4312,29 @@ function applyCheckoutFulfilment(pending, payment) {
         originalAmount: amount,
         merchantName: fulfilment === 'delivery' ? 'Delivery' : (selectedPickupName || 'Any merchant'),
         fulfilment,
-        pickupMerchantId: fulfilment === 'pickup' ? pickupMerchantId : '',
+        pickupMerchantId: fulfilment === 'pickup'
+            ? (hasMultiplePickupMerchants ? 'grouped' : String(selectedPickupMerchant?.id || pickupMerchants[0]?.id || ''))
+            : '',
         pickupMerchantName: selectedPickupName,
+        pickupMerchantAddress: fulfilment === 'pickup' ? normalizeAddressText(selectedPickupAddress) : '',
+        pickupInstructions: fulfilment === 'pickup' ? normalizeAddressText(selectedPickupInstructions) : '',
+        pickupMode: fulfilment === 'pickup' ? (hasMultiplePickupMerchants ? 'grouped' : 'single') : '',
+        pickupGroups: fulfilment === 'pickup' ? pickupGroups : [],
         pickupMerchantOptions: pickupMerchants,
         ...deliveryDetails
     };
 }
 
 function renderPaymentForm(res, payment, error = null) {
+    const paymentSummary = payment.paymentSummary || {
+        originalAmount: Number(payment.originalAmount || payment.itemSubtotal || payment.amount || 0),
+        voucherDiscount: Number(payment.voucherDiscount || 0),
+        pointsDiscount: Number(payment.pointsDiscount || 0),
+        cashbackDiscount: Number(payment.cashbackRedeemed || 0),
+        finalAmount: Number(payment.amount || 0),
+        campaignCashback: Number(payment.campaignCashback?.total || payment.campaignCashback || 0)
+    };
+
     return res.status(error ? 400 : 200).render('payment', getPaymentViewModel({
         title: 'Payment',
         amount: Number(payment.amount || 0),
@@ -4189,6 +4351,7 @@ function renderPaymentForm(res, payment, error = null) {
         items: payment.items || [],
         fulfilment: payment.fulfilment || '',
         pickupMerchantId: payment.pickupMerchantId || '',
+        pickupMerchantAddress: payment.pickupMerchantAddress || '',
         pickupMerchantOptions: payment.pickupMerchantOptions || [],
         deliveryAddress: payment.deliveryAddress || '',
         deliveryUnit: payment.deliveryUnit || '',
@@ -4199,6 +4362,7 @@ function renderPaymentForm(res, payment, error = null) {
         availableVouchers: payment.availableVouchers || [],
         voucherRecommendation: payment.voucherRecommendation || null,
         birthdayPromotion: payment.birthdayPromotion || null,
+        paymentSummary,
         loyalty: null,
         eWallet: payment.eWallet || null,
         ...payment,
@@ -4458,11 +4622,14 @@ async function getSmartVoucherRecommendationDetails(userId, payment) {
 }
 
 async function applyVoucherRedemption(req, payment) {
-    const submittedVoucherValue = Object.prototype.hasOwnProperty.call(req.body || {}, 'selectedVoucherId')
-        ? req.body.selectedVoucherId
-        : payment.selectedVoucherId;
+    const isCartCheckout = payment.kind === 'order' && payment.cartCheckout === true;
+    const submittedVoucherValue = isCartCheckout
+        ? payment.selectedVoucherId
+        : (Object.prototype.hasOwnProperty.call(req.body || {}, 'selectedVoucherId')
+            ? req.body.selectedVoucherId
+            : payment.selectedVoucherId);
     const rawSelectedVoucherId = String(submittedVoucherValue || '').trim();
-    const fallbackVoucherId = Number(payment.voucherRecommendation?.voucher?.id || 0);
+    const fallbackVoucherId = isCartCheckout ? 0 : Number(payment.voucherRecommendation?.voucher?.id || 0);
     const selectedVoucherIds = rawSelectedVoucherId === 'none' ? [] : rawSelectedVoucherId
         .split(',')
         .map((value) => Number(value.trim()))
@@ -4525,7 +4692,10 @@ async function applyVoucherRedemption(req, payment) {
 }
 
 async function applyPointRedemption(req, payment) {
-    const requestedPoints = Math.max(0, Math.floor(Number(req.body.redeemPoints || payment.redeemPointsRequested || 0)));
+    const isCartCheckout = payment.kind === 'order' && payment.cartCheckout === true;
+    const requestedPoints = isCartCheckout
+        ? Math.max(0, Math.floor(Number(payment.redeemPointsRequested || 0)))
+        : Math.max(0, Math.floor(Number(req.body.redeemPoints || payment.redeemPointsRequested || 0)));
 
     if (payment.kind !== 'booking' || requestedPoints <= 0) {
         return payment;
@@ -4572,7 +4742,12 @@ async function applyCashbackRedemption(req, payment) {
         };
     }
 
-    if (req.body.redeemCashback !== 'on' && payment.useCashback !== true) {
+    const isCartCheckout = payment.kind === 'order' && payment.cartCheckout === true;
+    const shouldUseCashback = isCartCheckout
+        ? payment.useCashback === true
+        : (req.body.redeemCashback === 'on' || payment.useCashback === true);
+
+    if (!shouldUseCashback) {
         return payment;
     }
 
@@ -4615,7 +4790,9 @@ async function prepareTrustedPayment(req, payment) {
         trustedPayment.voucherMode = 'booking';
     } else if (trustedPayment.kind === 'order') {
         trustedPayment.availableVouchers = await getEligibleProductVouchers(req.session.user.id, trustedPayment);
-        trustedPayment.selectedVoucherId = payment.selectedVoucherId || trustedPayment.selectedVoucherId || '';
+        trustedPayment.selectedVoucherId = trustedPayment.selectedVoucherId || '';
+        trustedPayment.useCashback = trustedPayment.useCashback === true;
+        trustedPayment.redeemPointsRequested = Math.max(0, Math.floor(Number(trustedPayment.redeemPointsRequested || 0)));
         {
             const smartVoucher = await getSmartVoucherRecommendationDetails(req.session.user.id, trustedPayment);
             trustedPayment.voucherRecommendation = smartVoucher.recommendation;
@@ -4666,7 +4843,22 @@ function persistPaidTransaction(payment, paymentMethod) {
                 provider: canonicalProvider,
                 hitpayStatus: payment.hitpayStatus || null,
                 paypalPayerEmail: payment.paypalPayerEmail || null,
-                netsRetrievalRef: payment.txnRetrievalRef || null
+                netsRetrievalRef: payment.txnRetrievalRef || null,
+                fulfilment: payment.kind === 'order'
+                    ? {
+                        type: normalizeFulfilment(payment.fulfilment || 'pickup'),
+                        pickupMode: payment.pickupMode || '',
+                        pickupMerchantId: payment.pickupMerchantId || '',
+                        pickupMerchantName: payment.pickupMerchantName || '',
+                        pickupMerchantAddress: payment.pickupMerchantAddress || '',
+                        pickupInstructions: payment.pickupInstructions || '',
+                        pickupGroups: Array.isArray(payment.pickupGroups) ? payment.pickupGroups : [],
+                        deliveryAddress: payment.deliveryAddress || '',
+                        deliveryUnit: payment.deliveryUnit || '',
+                        deliveryPostal: payment.deliveryPostal || '',
+                        deliveryPhone: payment.deliveryPhone || ''
+                    }
+                    : null
             }
         }, (error, result) => {
             if (error) {

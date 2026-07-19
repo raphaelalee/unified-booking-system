@@ -6,7 +6,11 @@
     <p>Confirm your order and complete payment in under a minute.</p>
 </section>
 
-<section class="section compact payment-page">
+<%
+    const isCartPayment = typeof cartCheckout !== 'undefined' && cartCheckout;
+%>
+
+<section class="section compact payment-page <%= isCartPayment ? 'cart-checkout-payment' : '' %>">
     <div class="payment-layout">
         <%
             const paymentVoucherList = typeof availableVouchers !== 'undefined' && Array.isArray(availableVouchers) ? availableVouchers : [];
@@ -19,11 +23,12 @@
             const smartVoucherMessageView = typeof smartVoucherMessage !== 'undefined' ? String(smartVoucherMessage || '').trim() : '';
             const paymentBirthdayPromotion = typeof birthdayPromotion !== 'undefined' ? birthdayPromotion : null;
             const paymentSelectedVouchers = paymentVoucherList.filter((voucher) => paymentSelectedVoucherIds.includes(String(voucher.id)));
-            const isCartPayment = typeof cartCheckout !== 'undefined' && cartCheckout;
             const paymentItems = typeof items !== 'undefined' && Array.isArray(items) ? items : [];
             const paymentPickupOptions = typeof pickupMerchantOptions !== 'undefined' && Array.isArray(pickupMerchantOptions) ? pickupMerchantOptions : [];
             const checkoutHasProductItems = isCartPayment && paymentItems.some((item) => item.type === 'Product');
+            const pickupRequiresGroupedFlow = checkoutHasProductItems && paymentPickupOptions.length > 1;
             const paymentDeliveryFee = Number(typeof deliveryFee !== 'undefined' ? deliveryFee || 0 : shippingFee || 0);
+            const paymentSummaryView = typeof paymentSummary !== 'undefined' && paymentSummary ? paymentSummary : null;
             const merchantVoucherView = voucherRecommendationView?.voucher || null;
             const calculateViewDiscount = (voucher, base) => voucher
                 ? Math.min(voucher.discountType === 'percentage'
@@ -38,26 +43,26 @@
                 voucherRunningTotal -= discount;
                 return total + discount;
             }, 0);
-            const paymentVoucherEstimate = merchantVoucherEstimate + platformVoucherEstimate;
+            const paymentVoucherEstimate = paymentSummaryView ? Number(paymentSummaryView.voucherDiscount || 0) : (merchantVoucherEstimate + platformVoucherEstimate);
             const paymentCashbackBlockedByVoucher = paymentVoucherEstimate > 0;
             const rewardRedemptionView = typeof rewardRedemption !== 'undefined' && rewardRedemption ? rewardRedemption : null;
             const rewardRules = rewardRedemptionView && rewardRedemptionView.rules ? rewardRedemptionView.rules : null;
             const rewardWallet = rewardRedemptionView && rewardRedemptionView.wallet ? rewardRedemptionView.wallet : null;
             const requestedRewardPoints = Number(redeemPointsRequested || 0);
             const rewardBaseAmount = Math.max(Number(amount || 0) - paymentVoucherEstimate, 0);
-            const paymentPointEstimate = rewardRedemptionView && rewardRedemptionView.enabled && requestedRewardPoints > 0
+            const paymentPointEstimate = paymentSummaryView ? Number(paymentSummaryView.pointsDiscount || 0) : (rewardRedemptionView && rewardRedemptionView.enabled && requestedRewardPoints > 0
                 ? Math.min(
                     requestedRewardPoints * Number(rewardRules.pointsToCashRate || 0),
                     rewardBaseAmount * (Number(rewardRules.maxDiscountPercent || 0) / 100),
                     rewardBaseAmount
                 )
-                : 0;
-            const paymentCashbackEstimate = typeof useCashback !== 'undefined' && useCashback && loyalty && !paymentCashbackBlockedByVoucher
+                : 0);
+            const paymentCashbackEstimate = paymentSummaryView ? Number(paymentSummaryView.cashbackDiscount || 0) : (typeof useCashback !== 'undefined' && useCashback && loyalty && !paymentCashbackBlockedByVoucher
                 ? Math.min(Number(loyalty.wallet.cashbackBalance || 0), Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate, 0))
-                : 0;
+                : 0);
             const campaignCashbackView = typeof campaignCashback !== 'undefined' && campaignCashback ? campaignCashback : { total: 0, breakdown: [] };
-            const campaignCashbackTotal = Number(campaignCashbackView.total || 0);
-            const paymentAmountDue = Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate - paymentCashbackEstimate, 0);
+            const campaignCashbackTotal = paymentSummaryView ? Number(paymentSummaryView.campaignCashback || 0) : Number(campaignCashbackView.total || 0);
+            const paymentAmountDue = paymentSummaryView ? Number(paymentSummaryView.finalAmount || amount || 0) : Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate - paymentCashbackEstimate, 0);
             const eWalletView = typeof eWallet !== 'undefined' && eWallet ? eWallet : null;
             const eWalletBalance = Number(eWalletView && eWalletView.balance || 0);
             const walletCanPay = eWalletBalance >= paymentAmountDue;
@@ -79,7 +84,7 @@
                 || campaignCashbackTotal > 0
             );
         %>
-        <form class="login-form payment-form" action="/payment" method="POST" data-base-amount="<%= Number(amount || 0).toFixed(2) %>" data-item-subtotal="<%= Number(itemSubtotal || amount || 0).toFixed(2) %>" data-delivery-fee="<%= paymentDeliveryFee.toFixed(2) %>" data-merchant-voucher-estimate="<%= merchantVoucherEstimate.toFixed(2) %>" data-voucher-estimate="<%= paymentVoucherEstimate.toFixed(2) %>" data-cashback-balance="<%= typeof loyalty !== 'undefined' && loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>" data-ewallet-balance="<%= eWalletBalance.toFixed(2) %>">
+        <form class="login-form payment-form <%= isCartPayment ? 'cart-checkout-form' : '' %>" action="/payment" method="POST" data-base-amount="<%= Number(amount || 0).toFixed(2) %>" data-item-subtotal="<%= Number(itemSubtotal || amount || 0).toFixed(2) %>" data-delivery-fee="<%= paymentDeliveryFee.toFixed(2) %>" data-merchant-voucher-estimate="<%= merchantVoucherEstimate.toFixed(2) %>" data-platform-voucher-estimate="<%= platformVoucherEstimate.toFixed(2) %>" data-points-estimate="<%= paymentPointEstimate.toFixed(2) %>" data-cashback-estimate="<%= paymentCashbackEstimate.toFixed(2) %>" data-voucher-estimate="<%= paymentVoucherEstimate.toFixed(2) %>" data-cashback-balance="<%= typeof loyalty !== 'undefined' && loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>" data-ewallet-balance="<%= eWalletBalance.toFixed(2) %>">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <input id="payment-amount-input" type="hidden" name="amount" value="<%= amount %>">
             <input type="hidden" name="itemSubtotal" value="<%= Number(itemSubtotal || amount || 0).toFixed(2) %>">
@@ -91,13 +96,10 @@
             <input type="hidden" name="checkoutId" value="<%= typeof checkoutId !== 'undefined' ? checkoutId : '' %>">
             <input type="hidden" name="bookingId" value="<%= typeof bookingId !== 'undefined' ? bookingId : '' %>">
             <input type="hidden" name="selectedItemIds" value="<%= Array.isArray(selectedItemIds) ? selectedItemIds.join(',') : (selectedItemIds || '') %>">
-            <input type="hidden" name="useCashback" value="<%= typeof useCashback !== 'undefined' && useCashback ? 'true' : 'false' %>">
-            <% if (typeof useCashback !== 'undefined' && useCashback) { %>
-                <input type="hidden" name="redeemCashback" value="on">
-            <% } %>
             <% if (!checkoutHasProductItems) { %>
                 <input type="hidden" name="fulfilment" value="<%= fulfilment || '' %>">
                 <input type="hidden" name="pickupMerchantId" value="<%= pickupMerchantId || '' %>">
+                <input type="hidden" name="pickupMerchantAddress" value="<%= pickupMerchantAddress || '' %>">
                 <input type="hidden" name="deliveryAddress" value="<%= deliveryAddress || '' %>">
                 <input type="hidden" name="deliveryUnit" value="<%= deliveryUnit || '' %>">
                 <input type="hidden" name="deliveryPostal" value="<%= deliveryPostal || '' %>">
@@ -109,8 +111,12 @@
 
             <div class="checkout-progress" aria-label="Checkout progress">
                 <div class="checkout-progress-pill active">1. Details</div>
-                <div class="checkout-progress-pill active">2. Rewards</div>
-                <div class="checkout-progress-pill active">3. Payment</div>
+                <% if (isCartPayment) { %>
+                    <div class="checkout-progress-pill active">2. Payment</div>
+                <% } else { %>
+                    <div class="checkout-progress-pill active">2. Discounts</div>
+                    <div class="checkout-progress-pill active">3. Payment</div>
+                <% } %>
             </div>
 
             <div class="payment-form-header">
@@ -148,34 +154,55 @@
 
                         <div class="payment-fulfilment-details">
                             <div id="payment-pickup-options" class="fulfilment-panel payment-pickup-panel">
-                                <label class="pickup-field">
-                                    Pickup merchant
-                                    <select id="payment-pickup-merchant-select" name="pickupMerchantId">
-                                        <option value="any" <%= !pickupMerchantId || pickupMerchantId === 'any' ? 'selected' : '' %>>Any merchant</option>
-                                        <% paymentPickupOptions.forEach((merchant) => { %>
-                                            <option value="<%= merchant.id %>" <%= String(pickupMerchantId || '') === String(merchant.id) ? 'selected' : '' %>><%= merchant.name %></option>
-                                        <% }) %>
-                                    </select>
-                                </label>
-                                <p class="muted">Choose where you want to collect your items.</p>
+                                <% if (pickupRequiresGroupedFlow) { %>
+                                    <input type="hidden" name="pickupMerchantId" value="grouped">
+                                    <input type="hidden" name="pickupMerchantAddress" value="">
+                                    <p class="muted payment-pickup-grouped-note">This order contains items from multiple merchants. Pickup is grouped by merchant and each merchant keeps its own pickup location.</p>
+                                <% } else { %>
+                                    <label class="pickup-field">
+                                        Pickup merchant
+                                        <select id="payment-pickup-merchant-select" name="pickupMerchantId">
+                                            <% paymentPickupOptions.forEach((merchant) => { %>
+                                                <option value="<%= merchant.id %>" data-pickup-address="<%= merchant.address || '' %>" <%= String(pickupMerchantId || '') === String(merchant.id) ? 'selected' : '' %>><%= merchant.name %></option>
+                                            <% }) %>
+                                        </select>
+                                    </label>
+                                    <input id="payment-pickup-address-input" type="hidden" name="pickupMerchantAddress" value="<%= pickupMerchantAddress || (paymentPickupOptions[0] ? paymentPickupOptions[0].address || '' : '') %>">
+                                <% } %>
+
+                                <div class="payment-pickup-merchant-list" aria-label="Pickup merchant details">
+                                    <% paymentPickupOptions.forEach((merchant) => { %>
+                                        <article class="payment-pickup-merchant-card">
+                                            <h4><%= merchant.name %></h4>
+                                            <p><strong>Pickup address:</strong> <%= merchant.address || 'Address not available' %></p>
+                                            <% if (merchant.pickupInstructions) { %>
+                                                <p><strong>Pickup instructions:</strong> <%= merchant.pickupInstructions %></p>
+                                            <% } %>
+                                        </article>
+                                    <% }) %>
+                                </div>
                             </div>
 
                             <div id="payment-delivery-options" class="fulfilment-panel payment-delivery-panel" style="display:none;">
                                 <label class="delivery-field">
                                     Street address
-                                    <input type="text" name="deliveryAddress" value="<%= deliveryAddress || '' %>" placeholder="123 Orchard Road" minlength="8" autocomplete="street-address" data-payment-delivery-required>
+                                    <input type="text" name="deliveryAddress" value="<%= deliveryAddress || '' %>" placeholder="123 Orchard Road" autocomplete="street-address" data-payment-delivery-required data-delivery-validate="address">
+                                    <small class="payment-field-error" data-delivery-error-for="deliveryAddress" hidden></small>
                                 </label>
                                 <label class="delivery-field">
                                     Unit number
-                                    <input type="text" name="deliveryUnit" value="<%= deliveryUnit || '' %>" placeholder="#12-34" pattern="[A-Za-z0-9#\-/\s]+" autocomplete="address-line2" data-payment-delivery-required>
+                                    <input type="text" name="deliveryUnit" value="<%= deliveryUnit || '' %>" placeholder="#12-34" pattern="#\d{1,3}-\d{1,3}" autocomplete="address-line2" data-payment-delivery-required data-delivery-validate="unit">
+                                    <small class="payment-field-error" data-delivery-error-for="deliveryUnit" hidden></small>
                                 </label>
                                 <label class="delivery-field">
                                     Postal code
-                                    <input type="text" name="deliveryPostal" value="<%= deliveryPostal || '' %>" placeholder="123456" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="postal-code" data-payment-delivery-required>
+                                    <input type="text" name="deliveryPostal" value="<%= deliveryPostal || '' %>" placeholder="123456" inputmode="numeric" maxlength="6" pattern="\d{6}" autocomplete="postal-code" data-payment-delivery-required data-delivery-validate="postal">
+                                    <small class="payment-field-error" data-delivery-error-for="deliveryPostal" hidden></small>
                                 </label>
                                 <label class="delivery-field">
                                     Contact phone
-                                    <input type="tel" name="deliveryPhone" value="<%= deliveryPhone || '' %>" placeholder="91234567" inputmode="tel" pattern="(\+65\s*)?[689][0-9]{7}" autocomplete="tel" data-payment-delivery-required>
+                                    <input type="tel" name="deliveryPhone" value="<%= deliveryPhone || '' %>" placeholder="91234567" inputmode="numeric" maxlength="8" pattern="\d{8}" autocomplete="tel" data-payment-delivery-required data-delivery-validate="phone">
+                                    <small class="payment-field-error" data-delivery-error-for="deliveryPhone" hidden></small>
                                 </label>
                                 <p class="muted">Delivery fee: $<%= paymentDeliveryFee.toFixed(2) %>. All fields are required.</p>
                             </div>
@@ -184,158 +211,37 @@
                 </section>
             <% } %>
 
-            <% if (hasSavingsSection) { %>
+            <% if (isCartPayment) { %>
                 <section class="checkout-card payment-rewards-card">
                     <div class="checkout-card-header payment-section-heading">
-                        <h3>Rewards</h3>
-                        <p>Quickly review cashback, vouchers, and points.</p>
+                        <h3>Discount summary</h3>
+                        <p>Discounts from your cart are locked in and verified on the server.</p>
                     </div>
-                    <div class="payment-rewards-compact">
-                        <% if (paymentBirthdayPromotion && paymentBirthdayPromotion.isBirthdayMonth) { %>
-                            <div class="notice success payment-reward-item">
-                                <p>
-                                    Birthday perks are active for <strong><%= paymentBirthdayPromotion.monthName %></strong>.
-                                    This payment can earn bonus points.
-                                </p>
-                            </div>
-                        <% } %>
-
-                        <% if (paymentVoucherList.length > 0 || (voucherRecommendationView && voucherRecommendationView.voucher) || smartVoucherMessageView) { %>
-                            <div class="loyalty-redemption-card payment-cashback-card payment-reward-item">
-                    <% if (paymentVoucherList.length > 0) { %>
-                        <div class="cart-voucher-picker">
-                            <span>
-                                    <strong>Available vouchers</strong>
-                                    <small>
-                                    Choose an eligible voucher for this checkout.
-                                </small>
-                            </span>
-                            <div
-                                class="cart-voucher-panel"
-                                id="payment-voucher-panel">
-                                <div class="cart-voucher-options">
-                                    <input type="hidden" name="selectedVoucherId" value="<%= paymentSelectedVoucherIds.join(',') %>" data-selected-platform-vouchers>
-                                    <% paymentVoucherList.forEach((voucher) => { %>
-                                        <label class="cart-voucher-option">
-                                            <input
-                                                type="checkbox"
-                                                value="<%= voucher.id %>"
-                                                data-platform-voucher
-                                                data-discount-type="<%= voucher.discountType || 'fixed' %>"
-                                                data-discount-percent="<%= Number(voucher.discountPercent || 0) %>"
-                                                data-discount-value="<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>"
-                                                <%= paymentSelectedVoucherIds.includes(String(voucher.id)) ? 'checked' : '' %>>
-                                            <span class="cart-voucher-option-copy">
-                                                <strong><%= voucher.title %></strong>
-                                                <small class="payment-voucher-meta">
-                                                    Voucher ID: <%= voucher.id %> &middot; Code: <%= voucher.code %>
-                                                </small>
-                                                <small class="payment-voucher-value">
-                                                    <%= voucher.discountType === 'percentage'
-                                                        ? `${Number(voucher.discountPercent || 0)}% OFF`
-                                                        : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %>
-                                                </small>
-                                                <small class="payment-voucher-meta">
-                                                    <%= voucher.expiresAt
-                                                        ? `Expires ${new Date(voucher.expiresAt).toLocaleDateString('en-SG', { dateStyle: 'medium' })}`
-                                                        : voucher.minimumSpend
-                                                            ? `Minimum spend $${Number(voucher.minimumSpend || 0).toFixed(2)}`
-                                                            : 'Eligible items only' %>
-                                                </small>
-                                            </span>
-                                        </label>
-                                    <% }) %>
-                                </div>
-                            </div>
-                        </div>
-                    <% } %>
-                            </div>
-                        <% } %>
-
-                        <% if (!(typeof cartCheckout !== 'undefined' && cartCheckout) && rewardRedemptionView) { %>
-                            <div class="loyalty-redemption-card payment-cashback-card payment-reward-item">
-                    <% if (rewardRedemptionView.enabled) { %>
-                        <label>
-                            <span>
-                                <strong>Redeem points</strong>
-                                <small>
-                                    Available <%= Number(rewardWallet.pointsBalance || 0) %> points.
-                                    Redeemable amount $<%= Number(rewardRedemptionView.maxDiscountAmount || 0).toFixed(2) %>.
-                                    Max usable <%= Number(rewardRedemptionView.maxPoints || 0) %> points.
-                                    Minimum <%= rewardRules.minPointsToRedeem %>.
-                                    Max reward discount <%= Number(rewardRules.maxDiscountPercent || 0) %>%.
-                                    Final value is confirmed at payment capture.
-                                </small>
-                            </span>
-                            <input
-                                id="payment-redeem-points"
-                                type="number"
-                                name="redeemPoints"
-                                min="0"
-                                step="1"
-                                max="<%= Number(rewardRedemptionView.maxPoints || rewardWallet.pointsBalance || 0) %>"
-                                value="<%= requestedRewardPoints || 0 %>"
-                                data-point-rate="<%= Number(rewardRules.pointsToCashRate || 0) %>"
-                                data-max-discount="<%= Number(rewardRedemptionView.maxDiscountAmount || 0) %>"
-                                data-base-amount="<%= rewardBaseAmount.toFixed(2) %>"
-                                data-cashback-estimate="<%= paymentCashbackEstimate.toFixed(2) %>">
-                        </label>
-                    <% } else { %>
-                        <span>
-                            <strong>Points redemption unavailable</strong>
-                            <small><%= rewardRedemptionView.reason || 'This merchant or service does not allow points redemption.' %></small>
-                        </span>
-                    <% } %>
-                            </div>
-                        <% } %>
-
-                        <% if (typeof cartCheckout !== 'undefined' && cartCheckout && typeof useCashback !== 'undefined' && useCashback) { %>
-                            <div class="loyalty-redemption-card payment-cashback-card payment-reward-item">
-                    <span>
-                        <strong><%= paymentCashbackBlockedByVoucher ? 'Cashback paused for this voucher' : 'Cashback selected from cart' %></strong>
-                        <small>
-                            Available $<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %>.
-                            <%= paymentCashbackBlockedByVoucher
-                                ? 'Wallet cashback cannot be combined with a voucher in the same checkout.'
-                                : `Estimated cashback applied: $${paymentCashbackEstimate.toFixed(2)}.` %>
-                            Final value is confirmed at payment capture.
-                        </small>
-                    </span>
-                            </div>
-                        <% } else if (!(typeof cartCheckout !== 'undefined' && cartCheckout)) { %>
-                            <div class="loyalty-redemption-card payment-cashback-card payment-reward-item">
-                    <% if (typeof loyalty !== 'undefined' && loyalty && Number(loyalty.wallet.cashbackBalance || 0) > 0) { %>
-                    <label>
-                        <input type="checkbox" name="redeemCashback" value="on" <%= paymentCashbackBlockedByVoucher ? 'disabled' : '' %>>
-                        <span>
-                            <strong>Use cashback rewards</strong>
-                            <small>
-                                Available $<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %>.
-                                <%= paymentCashbackBlockedByVoucher
-                                    ? 'Wallet cashback cannot be combined with the selected voucher.'
-                                    : `Up to $${Math.min(Number(loyalty.wallet.cashbackBalance || 0), Number(amount || 0)).toFixed(2)} will be applied to this payment.` %>
-                            </small>
-                        </span>
-                    </label>
-                    <% } else { %>
-                    <span>
-                        <strong>No cashback available yet</strong>
-                        <small>Complete this payment to earn rewards for your next checkout.</small>
-                    </span>
-                    <% } %>
-                            </div>
-                        <% } %>
-
-                        <% if (campaignCashbackTotal > 0) { %>
-                            <div class="notice success payment-reward-item">
-                                <p>
-                                    Estimated campaign cashback:
-                                    <strong>$<%= campaignCashbackTotal.toFixed(2) %></strong>.
-                                    Added to your wallet after successful payment.
-                                </p>
-                            </div>
-                        <% } %>
+                    <div class="cart-totals">
+                        <p><span>Voucher discount</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
+                        <p><span>Points discount</span><strong>-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
+                        <p><span>Cashback discount</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
+                        <p class="cart-total-line"><span>Final payable amount</span><strong id="payment-summary-final-payable">$<%= paymentAmountDue.toFixed(2) %></strong></p>
                     </div>
+                    <% if (campaignCashbackTotal > 0) { %>
+                        <p class="muted">Estimated campaign cashback after payment: +$<%= campaignCashbackTotal.toFixed(2) %></p>
+                    <% } %>
+                </section>
+            <% } else { %>
+                <section class="checkout-card payment-rewards-card">
+                    <div class="checkout-card-header payment-section-heading">
+                        <h3>Applied discounts</h3>
+                        <p>Rewards from cart are locked for this checkout and validated again on the server.</p>
+                    </div>
+                    <div class="cart-totals">
+                        <p><span>Voucher discount</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
+                        <p><span>Points discount</span><strong>-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
+                        <p><span>Cashback discount</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
+                        <p class="cart-total-line"><span>Final payable amount</span><strong id="payment-summary-final-payable">$<%= paymentAmountDue.toFixed(2) %></strong></p>
+                    </div>
+                    <% if (campaignCashbackTotal > 0) { %>
+                        <p class="muted">Estimated campaign cashback after payment: +$<%= campaignCashbackTotal.toFixed(2) %></p>
+                    <% } %>
                 </section>
             <% } %>
 
@@ -453,7 +359,7 @@
                 <% } %>
                 <p class="cart-total-line"><span>Total due</span><strong id="payment-summary-total">$<%= paymentAmountDue.toFixed(2) %></strong></p>
             </div>
-            <p class="muted">Your final total updates automatically when options change.</p>
+            <p class="muted"><%= isCartPayment ? 'Your final total is locked in from your cart and verified on the server.' : 'Your final total updates automatically when options change.' %></p>
         </aside>
     </div>
 </section>
@@ -474,29 +380,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const submitButton = document.getElementById('payment-submit-button');
     const paypalButtonContainer = document.getElementById('paypal-button-container');
     const paypalMessage = document.getElementById('paypal-message');
-    const redeemPointsInput = document.getElementById('payment-redeem-points');
-    const pointsRow = document.getElementById('payment-points-row');
-    const pointsValue = document.getElementById('payment-points-value');
-    const voucherRow = document.getElementById('payment-voucher-row');
-    const voucherValue = document.getElementById('payment-voucher-value');
-    const voucherLabel = document.getElementById('payment-voucher-label');
     const shippingRow = document.getElementById('payment-shipping-row');
     const shippingValue = document.getElementById('payment-shipping-value');
-    const cashbackRow = document.getElementById('payment-cashback-row');
-    const cashbackValue = document.getElementById('payment-cashback-value');
     const summaryTotal = document.getElementById('payment-summary-total');
+    const summaryFinalPayable = document.getElementById('payment-summary-final-payable');
     const liveTotal = document.getElementById('payment-live-total');
     const amountInput = document.getElementById('payment-amount-input');
     const shippingInput = document.getElementById('payment-shipping-input');
-    const voucherToggle = document.getElementById('payment-voucher-toggle');
-    const voucherPanel = document.getElementById('payment-voucher-panel');
-    const voucherInputs = Array.from(document.querySelectorAll('input[type="checkbox"][data-platform-voucher]'));
-    const selectedPlatformVoucherField = document.querySelector('[data-selected-platform-vouchers]');
     const fulfilmentChoices = Array.from(document.querySelectorAll('.payment-fulfilment-options .fulfilment-choice'));
     const fulfilmentRadios = Array.from(document.querySelectorAll('.payment-fulfilment-options input[name="fulfilment"]'));
     const pickupPanel = document.getElementById('payment-pickup-options');
     const deliveryPanel = document.getElementById('payment-delivery-options');
     const pickupSelect = document.getElementById('payment-pickup-merchant-select');
+    const pickupAddressInput = document.getElementById('payment-pickup-address-input');
+    const hasGroupedPickupFlow = Boolean(form?.querySelector('input[name="pickupMerchantId"][value="grouped"]'));
     const deliveryFields = Array.from(document.querySelectorAll('[data-payment-delivery-required]'));
     const fulfilmentPill = document.querySelector('.payment-fulfilment-pill');
     const summaryFulfilment = document.getElementById('payment-summary-fulfilment');
@@ -504,12 +401,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const summaryPickup = document.getElementById('payment-summary-pickup');
     const summaryDeliveryRow = document.getElementById('payment-summary-delivery-row');
     const summaryDelivery = document.getElementById('payment-summary-delivery');
+    const deliveryErrors = new Map(Array.from(document.querySelectorAll('[data-delivery-error-for]')).map((node) => [node.dataset.deliveryErrorFor, node]));
     const ewalletBalanceCopy = document.getElementById('payment-ewallet-balance');
     const ewalletStatusCopy = document.getElementById('payment-ewallet-status');
     const ewalletShortfallCopy = document.getElementById('payment-ewallet-shortfall');
     const walletMethodInput = document.querySelector('input[name="paymentMethod"][value="wallet"]');
     const walletMethodCard = walletMethodInput ? walletMethodInput.closest('.payment-method-card') : null;
     const paypalEnabled = <%= paypalEnabled ? 'true' : 'false' %>;
+    const fixedVoucherDiscount = Number(form?.dataset.voucherEstimate || 0);
+    const fixedPointsDiscount = Number(form?.dataset.pointsEstimate || 0);
+    const fixedCashbackDiscount = Number(form?.dataset.cashbackEstimate || 0);
+    const fixedDiscountTotal = Math.max(fixedVoucherDiscount + fixedPointsDiscount + fixedCashbackDiscount, 0);
 
     function setPayPalMessage(message) {
         if (!paypalMessage) return;
@@ -526,8 +428,91 @@ document.addEventListener('DOMContentLoaded', function () {
             payload[key] = value;
         });
 
-        payload.redeemCashback = formData.get('redeemCashback') ? 'on' : '';
         return payload;
+    }
+
+    function getDeliveryFieldError(field) {
+        if (!field) {
+            return '';
+        }
+
+        const fieldType = field.dataset.deliveryValidate;
+        const trimmed = String(field.value || '').trim();
+
+        if (fieldType === 'address') {
+            return trimmed ? '' : 'Delivery address is required.';
+        }
+
+        if (fieldType === 'unit') {
+            return /^#\d{1,3}-\d{1,3}$/.test(trimmed) ? '' : 'Use unit format #12-34.';
+        }
+
+        if (fieldType === 'postal') {
+            return /^\d{6}$/.test(trimmed) ? '' : 'Enter a valid 6-digit postal code.';
+        }
+
+        if (fieldType === 'phone') {
+            return /^\d{8}$/.test(trimmed) ? '' : 'Enter an 8-digit contact number.';
+        }
+
+        return '';
+    }
+
+    function setDeliveryFieldError(field, message) {
+        if (!field) {
+            return;
+        }
+
+        const errorNode = deliveryErrors.get(field.name);
+        field.classList.toggle('is-invalid', Boolean(message));
+        field.setAttribute('aria-invalid', message ? 'true' : 'false');
+        field.setCustomValidity(message || '');
+
+        if (errorNode) {
+            errorNode.hidden = !message;
+            errorNode.textContent = message || '';
+        }
+    }
+
+    function validateDeliveryField(field) {
+        if (!field) {
+            return true;
+        }
+
+        if (field.disabled) {
+            setDeliveryFieldError(field, '');
+            return true;
+        }
+
+        if (field.dataset.deliveryValidate) {
+            field.value = String(field.value || '').trim();
+        }
+
+        const error = getDeliveryFieldError(field);
+        setDeliveryFieldError(field, error);
+        return !error;
+    }
+
+    function validateDeliveryFieldsForCurrentFulfilment() {
+        if (getFulfilmentValue() !== 'delivery') {
+            deliveryFields.forEach((field) => setDeliveryFieldError(field, ''));
+            return true;
+        }
+
+        let firstInvalid = null;
+        const isValid = deliveryFields.every((field) => {
+            const valid = validateDeliveryField(field);
+            if (!valid && !firstInvalid) {
+                firstInvalid = field;
+            }
+            return valid;
+        });
+
+        if (!isValid && firstInvalid) {
+            firstInvalid.focus();
+        }
+
+        return isValid;
     }
 
     async function postJson(url, payload) {
@@ -593,60 +578,16 @@ document.addEventListener('DOMContentLoaded', function () {
         syncPaymentMethod();
     }
 
-    function getVoucherDiscount(baseAmount) {
-        let remaining = baseAmount;
-        const merchantDiscount = Math.min(Number(form?.dataset.merchantVoucherEstimate || 0), remaining);
-        remaining -= merchantDiscount;
-        let platformDiscount = 0;
-
-        voucherInputs.filter((input) => input.checked).forEach((input) => {
-            const discountType = input.dataset.discountType || 'fixed';
-            const discountPercent = Number(input.dataset.discountPercent || 0);
-            const discountValue = Number(input.dataset.discountValue || 0);
-            const discount = discountType === 'percentage'
-                ? Math.min(remaining * (discountPercent / 100), remaining)
-                : Math.min(discountValue, remaining);
-            platformDiscount += discount;
-            remaining -= discount;
-        });
-
-        return { merchantDiscount, platformDiscount, total: merchantDiscount + platformDiscount };
-    }
-
-    function syncVoucherRedemption() {
+    function syncTotalsForFulfilment() {
         if (!form || !summaryTotal || !liveTotal) return;
 
         const baseAmount = Number(form.dataset.baseAmount || 0);
-        const voucherBreakdown = getVoucherDiscount(baseAmount);
-        const voucherDiscount = voucherBreakdown.total;
-        const voucherApplied = voucherDiscount > 0;
-        const cashbackBalance = Number(form.dataset.cashbackBalance || 0);
-        const cashbackCheckbox = form.querySelector('input[type="checkbox"][name="redeemCashback"]');
-        const cashbackHidden = form.querySelector('input[type="hidden"][name="useCashback"][value="true"]');
-        const cashbackRequestFields = Array.from(form.querySelectorAll('input[type="hidden"][name="redeemCashback"], input[type="hidden"][name="useCashback"]'));
-        const useCashback = !voucherApplied && Boolean((cashbackCheckbox && cashbackCheckbox.checked) || cashbackHidden);
-        const cashbackApplied = useCashback ? Math.min(cashbackBalance, Math.max(baseAmount - voucherDiscount, 0)) : 0;
+        const totalDue = Math.max(baseAmount - fixedDiscountTotal, 0);
 
-        if (cashbackCheckbox) cashbackCheckbox.disabled = voucherApplied;
-        cashbackRequestFields.forEach((field) => {
-            field.disabled = voucherApplied;
-        });
-        if (voucherRow) voucherRow.style.display = voucherBreakdown.platformDiscount > 0 ? '' : 'none';
-        if (voucherValue) voucherValue.textContent = '-' + formatMoney(voucherBreakdown.platformDiscount);
-        if (voucherLabel) voucherLabel.textContent = voucherInputs.filter((input) => input.checked).length > 1 ? 'Platform vouchers' : 'Platform voucher';
-        if (selectedPlatformVoucherField) selectedPlatformVoucherField.value = voucherInputs.filter((input) => input.checked).map((input) => input.value).join(',');
-        if (cashbackRow) cashbackRow.style.display = cashbackApplied > 0 ? '' : 'none';
-        if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
-
-        if (redeemPointsInput) {
-            redeemPointsInput.dataset.baseAmount = Math.max(baseAmount - voucherDiscount, 0).toFixed(2);
-            redeemPointsInput.dataset.cashbackEstimate = cashbackApplied.toFixed(2);
-            syncPointRedemption();
-            return;
-        }
-
-        const totalDue = Math.max(baseAmount - voucherDiscount - cashbackApplied, 0);
         summaryTotal.textContent = formatMoney(totalDue);
+        if (summaryFinalPayable) {
+            summaryFinalPayable.textContent = formatMoney(totalDue);
+        }
         liveTotal.textContent = formatMoney(totalDue);
         syncWalletAvailability(totalDue);
     }
@@ -682,11 +623,17 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (pickupPanel) pickupPanel.style.display = selected === 'pickup' ? '' : 'none';
         if (deliveryPanel) deliveryPanel.style.display = selected === 'delivery' ? '' : 'none';
-        if (pickupSelect) pickupSelect.disabled = selected !== 'pickup';
+        if (pickupSelect) {
+            pickupSelect.disabled = selected !== 'pickup' || hasGroupedPickupFlow;
+            pickupSelect.required = selected === 'pickup' && !hasGroupedPickupFlow;
+        }
         deliveryFields.forEach((field) => {
             const isDelivery = selected === 'delivery';
             field.required = isDelivery;
             field.disabled = !isDelivery;
+            if (!isDelivery) {
+                setDeliveryFieldError(field, '');
+            }
         });
         form.dataset.baseAmount = baseAmount.toFixed(2);
         if (amountInput) amountInput.value = baseAmount.toFixed(2);
@@ -697,31 +644,19 @@ document.addEventListener('DOMContentLoaded', function () {
         if (summaryFulfilment) summaryFulfilment.textContent = selected === 'delivery' ? 'Delivery' : 'Pick up';
         if (summaryPickupRow) summaryPickupRow.style.display = selected === 'pickup' ? '' : 'none';
         if (summaryDeliveryRow) summaryDeliveryRow.style.display = selected === 'delivery' ? '' : 'none';
-        if (summaryPickup && pickupSelect) {
-            summaryPickup.textContent = pickupSelect.options[pickupSelect.selectedIndex]?.text || 'Any merchant';
+        if (summaryPickup) {
+            if (selected === 'pickup' && hasGroupedPickupFlow) {
+                summaryPickup.textContent = 'Grouped by merchant';
+            } else if (pickupSelect) {
+                const selectedOption = pickupSelect.options[pickupSelect.selectedIndex];
+                summaryPickup.textContent = selectedOption?.text || 'Pickup merchant';
+                if (pickupAddressInput) {
+                    pickupAddressInput.value = selectedOption?.dataset.pickupAddress || '';
+                }
+            }
         }
         if (summaryDelivery) summaryDelivery.textContent = getDeliverySummary();
-        syncVoucherRedemption();
-    }
-
-    function syncPointRedemption() {
-        if (!redeemPointsInput || !summaryTotal || !liveTotal) return;
-
-        const maxPoints = Number(redeemPointsInput.max || 0);
-        const points = Math.max(0, Math.min(Math.floor(Number(redeemPointsInput.value || 0)), maxPoints));
-        const rate = Number(redeemPointsInput.dataset.pointRate || 0);
-        const maxDiscount = Number(redeemPointsInput.dataset.maxDiscount || 0);
-        const baseAmount = Number(redeemPointsInput.dataset.baseAmount || 0);
-        const cashbackEstimate = Number(redeemPointsInput.dataset.cashbackEstimate || 0);
-        const pointsDiscount = Math.min(points * rate, maxDiscount, baseAmount);
-        const totalDue = Math.max(baseAmount - pointsDiscount - cashbackEstimate, 0);
-
-        redeemPointsInput.value = String(points);
-        if (pointsRow) pointsRow.style.display = pointsDiscount > 0 ? '' : 'none';
-        if (pointsValue) pointsValue.textContent = '-' + formatMoney(pointsDiscount);
-        summaryTotal.textContent = formatMoney(totalDue);
-        liveTotal.textContent = formatMoney(totalDue);
-        syncWalletAvailability(totalDue);
+        syncTotalsForFulfilment();
     }
 
     function syncPaymentMethod() {
@@ -774,6 +709,9 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             createOrder: async function () {
                 setPayPalMessage('');
+                if (form && !validateDeliveryFieldsForCurrentFulfilment()) {
+                    throw new Error('Please complete valid delivery details before continuing.');
+                }
                 if (form && !form.reportValidity()) {
                     throw new Error('Please complete the required checkout details.');
                 }
@@ -803,32 +741,18 @@ document.addEventListener('DOMContentLoaded', function () {
     fulfilmentRadios.forEach((input) => input.addEventListener('change', syncCheckoutFulfilment));
     if (pickupSelect) pickupSelect.addEventListener('change', syncCheckoutFulfilment);
     deliveryFields.forEach((field) => {
+        field.addEventListener('blur', () => {
+            validateDeliveryField(field);
+            syncCheckoutFulfilment();
+        });
         field.addEventListener('input', syncCheckoutFulfilment);
         field.addEventListener('change', syncCheckoutFulfilment);
     });
-    if (voucherToggle && voucherPanel) {
-        const selectedVoucherInput = voucherPanel.querySelector('input[name="selectedVoucherId"]:checked');
-        if (selectedVoucherInput && selectedVoucherInput.value && selectedVoucherInput.value !== 'none') {
-            voucherToggle.setAttribute('aria-expanded', 'true');
-            voucherPanel.hidden = false;
+    form?.addEventListener('submit', (event) => {
+        if (!validateDeliveryFieldsForCurrentFulfilment()) {
+            event.preventDefault();
         }
-
-        voucherToggle.addEventListener('click', function () {
-            const isOpen = voucherToggle.getAttribute('aria-expanded') === 'true';
-            voucherToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-            voucherPanel.hidden = isOpen;
-        });
-    }
-    voucherInputs.forEach((input) => {
-        input.addEventListener('change', syncVoucherRedemption);
     });
-    if (redeemPointsInput) {
-        redeemPointsInput.addEventListener('input', syncPointRedemption);
-        redeemPointsInput.addEventListener('change', syncPointRedemption);
-    }
-    if (voucherInputs.some((input) => input.checked) || Number(form?.dataset.voucherEstimate || 0) > 0) {
-        syncVoucherRedemption();
-    }
     syncCheckoutFulfilment();
     syncPaymentMethod();
 });

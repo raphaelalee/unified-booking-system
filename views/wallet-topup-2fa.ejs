@@ -3,7 +3,7 @@
 <section class="page-title">
     <p class="eyebrow">E-wallet security</p>
     <h1>Verify your top-up</h1>
-    <p>Enter the 6-digit sample code shown in your server terminal.</p>
+    <p>Enter the 6-digit code sent to your preferred contact method.</p>
 </section>
 
 <section class="section compact wallet-page">
@@ -20,10 +20,13 @@
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
                 <div>
-                    <p class="eyebrow">Sample 2FA</p>
+                    <% const resolvedDeliveryMethodLabel = typeof deliveryMethodLabel !== 'undefined' ? deliveryMethodLabel : 'Email'; %>
+                    <% const resolvedDeliveryDestination = typeof deliveryDestination !== 'undefined' ? deliveryDestination : 'your contact channel'; %>
+                    <p class="eyebrow">2FA verification</p>
                     <h2>Security check</h2>
                     <p class="muted">Top-up amount: <strong>$<%= Number(amount || 0).toFixed(2) %></strong></p>
                     <p class="muted">Payment method: <strong><%= paymentMethodLabel %></strong></p>
+                    <p class="muted">Code sent via: <strong><%= resolvedDeliveryMethodLabel %></strong> (<%= resolvedDeliveryDestination %>)</p>
                     <p class="muted">Code expires in about <strong><%= Number(expiresInSeconds || 0) %>s</strong>.</p>
                 </div>
 

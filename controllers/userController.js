@@ -47,12 +47,27 @@ function logNotificationError(error) {
     }
 }
 
+function normalizePhoneForProfileInput(value) {
+    const raw = String(value || '').trim();
+    const digits = raw.replace(/\D/g, '');
+
+    if (/^65[689]\d{7}$/.test(digits)) {
+        return digits.slice(2);
+    }
+
+    if (/^[689]\d{7}$/.test(digits)) {
+        return digits;
+    }
+
+    return raw;
+}
+
 function buildSessionUser(user) {
     return {
         id: user.user_id,
         name: user.name,
         email: user.email,
-        phone: user.phone || '',
+        phone: normalizePhoneForProfileInput(user.phone),
         age: user.age || '',
         birthday: formatDateInputValue(user.birthday),
         gender: user.gender || '',
@@ -206,6 +221,16 @@ function mapWalletHistoryRow(row) {
     };
 }
 
+function getWalletPaginationOptions(query = {}) {
+    const requestedPage = Number(query.walletPage || 1);
+    const requestedPageSize = Number(query.walletPageSize || 10);
+
+    return {
+        page: Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1,
+        pageSize: requestedPageSize === 20 ? 20 : 10
+    };
+}
+
 function isCompletedProductOrder(receipt = {}) {
     const deliveryStatus = String(receipt.deliveryStatus || '').toLowerCase();
     const pickupStatus = String(receipt.pickupStatus || '').toLowerCase();
@@ -271,7 +296,11 @@ function buildProductReviewEntries(receipts = [], reviews = []) {
     };
 }
 
-function buildCustomerProfileExtras(req, accountUser, callback) {
+function buildCustomerProfileExtras(req, accountUser, options = {}, callback) {
+    const walletPaginationOptions = {
+        page: Number(options.walletPagination?.page || 1),
+        pageSize: Number(options.walletPagination?.pageSize || 10) === 20 ? 20 : 10
+    };
     const favouriteIds = req.session.favouriteMerchantIds || [];
     let favourites = [];
     const cart = req.session.cart || [];
@@ -287,70 +316,102 @@ function buildCustomerProfileExtras(req, accountUser, callback) {
     let userVouchers = [];
     let birthdayPromotion = buildBirthdayPromotion(accountUser, []);
     let eWalletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] };
+    let walletTransactionPagination = {
+        page: walletPaginationOptions.page,
+        pageSize: walletPaginationOptions.pageSize,
+        totalCount: 0,
+        totalPages: 1,
+        hasPrevious: false,
+        hasNext: false
+    };
 
     function finishWithWallet(walletError, loyalty = null) {
-        const displayedLoyalty = loyalty
-            ? {
-                ...loyalty,
-                transactions: Loyalty.applyTransactionDisplayDetails(loyalty.transactions || [], walletHistory)
-            }
-            : loyalty;
         const wallet = loyalty?.wallet || {};
         const rewardPoints = walletError
             ? 0
             : Number(wallet.pointsBalance || 0);
         const member = buildMember(rewardPoints);
-        EWallet.getWalletSummary(accountUser.user_id, (eWalletError, walletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] }) => {
-            if (eWalletError) {
-                console.error(eWalletError);
-            } else {
-                eWalletSummary = walletSummary;
-            }
 
-            User.getReferralStats(referralCode, (statsError, referralStats = {}) => {
-                if (statsError) {
-                    console.error(statsError);
+        const completeWithWalletTransactions = (walletTransactions = loyalty?.transactions || []) => {
+            const displayedLoyalty = loyalty
+                ? {
+                    ...loyalty,
+                    transactions: Loyalty.applyTransactionDisplayDetails(walletTransactions, walletHistory)
+                }
+                : loyalty;
+
+            EWallet.getWalletSummary(accountUser.user_id, (eWalletError, walletSummary = { wallet: { balance: 0, currency: 'SGD' }, transactions: [], recentTransactions: [] }) => {
+                if (eWalletError) {
+                    console.error(eWalletError);
+                } else {
+                    eWalletSummary = walletSummary;
                 }
 
-                const customerExtras = {
-                    favourites,
-                    cartItemCount,
-                    rewardPoints,
-                    cashbackBalance: walletError
-                        ? '0.00'
-                        : Number(wallet.cashbackBalance || 0).toFixed(2),
-                    member,
-                    loyalty: displayedLoyalty,
-                    walletHistory,
-                    eWallet: eWalletSummary.wallet || { balance: 0, currency: 'SGD' },
-                    eWalletTransactions: eWalletSummary.recentTransactions || eWalletSummary.transactions || [],
-                    userVouchers,
-                    referral: buildCustomerReferral(member, referralCode, referralStats),
-                    referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
-                    birthdayPromotion,
-                    upcomingBookings,
-                    pastBookings,
-                    cancelledBookings,
-                    bookingAvailability,
-                    reviewableBookings,
-                    reviewedBookings
-                };
+                User.getReferralStats(referralCode, (statsError, referralStats = {}) => {
+                    if (statsError) {
+                        console.error(statsError);
+                    }
 
-                if (accountUser.referral_code) {
-                    callback(walletError, customerExtras);
-                    return;
-                }
+                    const customerExtras = {
+                        favourites,
+                        cartItemCount,
+                        rewardPoints,
+                        cashbackBalance: walletError
+                            ? '0.00'
+                            : Number(wallet.cashbackBalance || 0).toFixed(2),
+                        member,
+                        loyalty: displayedLoyalty,
+                        walletHistory,
+                        walletTransactionPagination,
+                        eWallet: eWalletSummary.wallet || { balance: 0, currency: 'SGD' },
+                        eWalletTransactions: eWalletSummary.recentTransactions || eWalletSummary.transactions || [],
+                        userVouchers,
+                        referral: buildCustomerReferral(member, referralCode, referralStats),
+                        referralVoucherStatus: buildReferralVoucherStatus(accountUser, userVouchers),
+                        birthdayPromotion,
+                        upcomingBookings,
+                        pastBookings,
+                        cancelledBookings,
+                        bookingAvailability,
+                        reviewableBookings,
+                        reviewedBookings
+                    };
 
-                User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
-                    if (error) {
-                        callback(error, customerExtras);
+                    if (accountUser.referral_code) {
+                        callback(walletError, customerExtras);
                         return;
                     }
 
-                    req.session.user.referralCode = referralCode;
-                    callback(walletError, customerExtras);
+                    User.updateReferralCode(accountUser.user_id, referralCode, (error) => {
+                        if (error) {
+                            callback(error, customerExtras);
+                            return;
+                        }
+
+                        req.session.user.referralCode = referralCode;
+                        callback(walletError, customerExtras);
+                    });
                 });
             });
+        };
+
+        if (walletError || !loyalty) {
+            completeWithWalletTransactions([]);
+            return;
+        }
+
+        Loyalty.getTransactionsPage(accountUser.user_id, walletPaginationOptions, (transactionError, result = {}) => {
+            if (transactionError) {
+                console.error(transactionError);
+                completeWithWalletTransactions(loyalty.transactions || []);
+                return;
+            }
+
+            walletTransactionPagination = {
+                ...walletTransactionPagination,
+                ...(result.pagination || {})
+            };
+            completeWithWalletTransactions(result.transactions || []);
         });
     }
 
@@ -573,6 +634,14 @@ function getEmptyCustomerExtras() {
         member: buildMember(0),
         loyalty: null,
         walletHistory: [],
+        walletTransactionPagination: {
+            page: 1,
+            pageSize: 10,
+            totalCount: 0,
+            totalPages: 1,
+            hasPrevious: false,
+            hasNext: false
+        },
         userVouchers: [],
         referral: null,
         referralVoucherStatus: null,
@@ -701,7 +770,7 @@ function setAuthenticatedSession(req, user, message, callback) {
         req.session.profile = {
             name: user.name,
             email: user.email,
-            phone: user.phone || '',
+            phone: normalizePhoneForProfileInput(user.phone),
             age: user.age || '',
             birthday: formatDateInputValue(user.birthday),
             gender: user.gender || '',
@@ -1567,7 +1636,7 @@ function showProfile(req, res) {
         const profile = {
             name: accountUser?.name || sessionProfile.name || req.session.user.name,
             email: accountUser?.email || sessionProfile.email || req.session.user.email,
-            phone: accountUser?.phone || sessionProfile.phone || '',
+            phone: normalizePhoneForProfileInput(accountUser?.phone || sessionProfile.phone || req.session.user.phone || ''),
             age: accountUser?.age ?? sessionProfile.age ?? req.session.user.age ?? '',
             birthday: formatDateInputValue(accountUser?.birthday ?? sessionProfile.birthday ?? req.session.user.birthday),
             gender: accountUser?.gender || sessionProfile.gender || req.session.user.gender || '',
@@ -1583,6 +1652,7 @@ function showProfile(req, res) {
         }
 
         const isCustomer = req.session.user.role === 'customer';
+        const walletPagination = getWalletPaginationOptions(req.query || {});
         const renderProfile = (customerExtras, customerExtraError = null) => {
             const success = req.session.profileSuccess;
             const error = req.session.profileError || req.session.loyaltyError
@@ -1604,6 +1674,7 @@ function showProfile(req, res) {
                 member: customerExtras.member,
                 loyalty: customerExtras.loyalty,
                 walletHistory: customerExtras.walletHistory,
+                walletTransactionPagination: customerExtras.walletTransactionPagination,
                 eWallet: customerExtras.eWallet,
                 eWalletTransactions: customerExtras.eWalletTransactions,
                 userVouchers: customerExtras.userVouchers,
@@ -1629,7 +1700,7 @@ function showProfile(req, res) {
             return renderProfile(getEmptyCustomerExtras());
         }
 
-        return buildCustomerProfileExtras(req, accountUser, (customerExtraError, customerExtras) => {
+        return buildCustomerProfileExtras(req, accountUser, { walletPagination }, (customerExtraError, customerExtras) => {
             if (customerExtraError) {
                 console.error(customerExtraError);
             }

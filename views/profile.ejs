@@ -1174,17 +1174,22 @@
 
                 <section id="wallet" class="account-panel loyalty-profile-panel profile-tab-panel" data-profile-panel="wallet">
                     <%
-                        const walletReceipts = typeof walletHistory !== 'undefined' && Array.isArray(walletHistory)
-                            ? walletHistory
-                            : [];
                         const walletTransactions = loyalty && Array.isArray(loyalty.transactions)
                             ? loyalty.transactions
                             : [];
+                        const walletPagination = typeof walletTransactionPagination !== 'undefined' && walletTransactionPagination
+                            ? walletTransactionPagination
+                            : { page: 1, pageSize: 10, totalCount: walletTransactions.length, totalPages: 1, hasPrevious: false, hasNext: false };
                         const loyaltyDisplaySummary = loyalty && loyalty.displaySummary
                             ? loyalty.displaySummary
                             : { displayCashbackSummary: '$0.00 earned - $0.00 used or reversed' };
-                        const recentWalletTransactions = walletTransactions.slice(0, 6);
-                        const recentWalletReceipts = walletReceipts.slice(0, 4);
+                        const walletStartIndex = walletPagination.totalCount > 0
+                            ? ((walletPagination.page - 1) * walletPagination.pageSize) + 1
+                            : 0;
+                        const walletEndIndex = walletPagination.totalCount > 0
+                            ? Math.min(walletPagination.totalCount, walletStartIndex + walletTransactions.length - 1)
+                            : 0;
+                        const walletPageHref = (page, size) => `/profile?walletPage=${page}&walletPageSize=${size}#wallet`;
                     %>
                     <div class="account-panel-header">
                         <div>
@@ -1282,115 +1287,67 @@
                                 <span><strong><%= loyalty.wallet.lifetimePoints %></strong> lifetime points</span>
                             </div>
 
-                            <div class="profile-wallet-toolbar" data-wallet-toolbar>
-                                <label class="profile-wallet-search" for="wallet-search-input">
-                                    <span>Search wallet history</span>
-                                    <input id="wallet-search-input" type="search" placeholder="Try receipt, merchant, points, cashback, or date" data-wallet-search>
-                                </label>
-                                <label class="profile-wallet-scope" for="wallet-scope-select">
-                                    <span>Show</span>
-                                    <select id="wallet-scope-select" data-wallet-scope>
-                                        <option value="all">Everything</option>
-                                        <option value="activity">Wallet activity</option>
-                                        <option value="points">Points changes</option>
-                                        <option value="cashback">Cashback changes</option>
-                                        <option value="receipts">Paid receipts</option>
-                                    </select>
-                                </label>
-                                <button class="button secondary compact" type="button" data-wallet-clear>Reset</button>
+                            <div class="profile-wallet-history-controls">
+                                <p class="muted">Showing <%= walletStartIndex %>-<%= walletEndIndex %> of <%= walletPagination.totalCount %> transactions</p>
+                                <div class="profile-wallet-page-size" role="group" aria-label="Wallet transaction page size">
+                                    <a class="button secondary compact <%= walletPagination.pageSize === 10 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 10) %>">10 per page</a>
+                                    <a class="button secondary compact <%= walletPagination.pageSize === 20 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 20) %>">20 per page</a>
+                                </div>
                             </div>
 
-                            <div class="profile-wallet-grid">
-                                <section class="profile-wallet-block">
-                                    <div class="wallet-section-heading">
-                                        <div>
-                                            <p class="eyebrow">Activity</p>
-                                            <h3>Recent wallet activity</h3>
-                                        </div>
-                                        <span><span data-wallet-activity-count><%= recentWalletTransactions.length %></span> of <%= walletTransactions.length %> total</span>
+                            <section class="profile-wallet-block profile-wallet-history-block">
+                                <div class="wallet-section-heading">
+                                    <div>
+                                        <p class="eyebrow">Activity</p>
+                                        <h3>Wallet transaction history</h3>
+                                    </div>
+                                    <span>Page <%= walletPagination.page %> of <%= walletPagination.totalPages %></span>
+                                </div>
+
+                                <% if (!walletTransactions.length) { %>
+                                    <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
+                                <% } else { %>
+                                    <div class="profile-wallet-list">
+                                        <% walletTransactions.forEach((entry) => { %>
+                                            <article class="profile-wallet-row">
+                                                <div>
+                                                    <span><%= entry.displayDate || '' %></span>
+                                                    <strong><%= entry.displayTitle %></strong>
+                                                    <% if (entry.displaySubtitle) { %>
+                                                        <small>Item: <%= entry.displaySubtitle %></small>
+                                                    <% } %>
+                                                    <% if (entry.displayMerchantName) { %>
+                                                        <small>Merchant: <%= entry.displayMerchantName %></small>
+                                                    <% } %>
+                                                    <% if (entry.displayOrderReference) { %>
+                                                        <small>Reference: <%= entry.displayOrderReference %></small>
+                                                    <% } %>
+                                                </div>
+                                                <div>
+                                                    <strong class="<%= entry.displayPointsTone || 'neutral' %>">Points: <%= entry.displayPointsDelta || '0 pts' %></strong>
+                                                    <small class="<%= entry.displayCashbackTone || 'neutral' %>">Cashback: <%= entry.displayCashbackDelta || '$0.00' %></small>
+                                                </div>
+                                            </article>
+                                        <% }) %>
                                     </div>
 
-                                    <% if (!recentWalletTransactions.length) { %>
-                                        <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
-                                    <% } else { %>
-                                        <div class="profile-wallet-list">
-                                            <% recentWalletTransactions.forEach((entry) => { %>
-                                                <article class="profile-wallet-row"
-                                                    data-wallet-transaction-row
-                                                    data-wallet-kinds="<%= entry.displayKindsText || 'activity' %>"
-                                                    data-wallet-search="<%= entry.displaySearchText || '' %>">
-                                                    <div>
-                                                        <span><%= entry.displayDate || '' %></span>
-                                                        <strong><%= entry.displayTitle %></strong>
-                                                        <% if (entry.displayLines && entry.displayLines.length) { %>
-                                                            <% entry.displayLines.forEach((line) => { %>
-                                                                <small><%= line %></small>
-                                                            <% }) %>
-                                                        <% } %>
-                                                    </div>
-                                                    <div>
-                                                        <% if (entry.displayValueLines && entry.displayValueLines.length) { %>
-                                                            <% entry.displayValueLines.forEach((line, index) => { %>
-                                                                <% if (index === 0) { %>
-                                                                    <strong class="<%= line.tone %>"><%= line.text %></strong>
-                                                                <% } else { %>
-                                                                    <small class="<%= line.tone %>"><%= line.text %></small>
-                                                                <% } %>
-                                                            <% }) %>
-                                                        <% } else { %>
-                                                            <small><%= entry.displayStatus || 'Recorded' %></small>
-                                                        <% } %>
-                                                    </div>
-                                                </article>
-                                            <% }) %>
-                                        </div>
-                                        <p class="muted" data-wallet-empty="activity" hidden>No activity matches your current search.</p>
-                                    <% } %>
-                                </section>
+                                    <nav class="profile-wallet-pagination" aria-label="Wallet history pagination">
+                                        <% if (walletPagination.hasPrevious) { %>
+                                            <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page - 1, walletPagination.pageSize) %>">Previous</a>
+                                        <% } else { %>
+                                            <span class="button secondary compact is-disabled" aria-disabled="true">Previous</span>
+                                        <% } %>
 
-                                <section class="profile-wallet-block">
-                                    <div class="wallet-section-heading">
-                                        <div>
-                                            <p class="eyebrow">Receipts</p>
-                                            <h3>Recent paid receipts</h3>
-                                        </div>
-                                        <span><span data-wallet-receipt-count><%= recentWalletReceipts.length %></span> shown</span>
-                                    </div>
+                                        <% if (walletPagination.hasNext) { %>
+                                            <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page + 1, walletPagination.pageSize) %>">Next</a>
+                                        <% } else { %>
+                                            <span class="button secondary compact is-disabled" aria-disabled="true">Next</span>
+                                        <% } %>
+                                    </nav>
+                                <% } %>
 
-                                    <% if (!recentWalletReceipts.length) { %>
-                                        <p class="muted">No paid receipts linked to this wallet yet.</p>
-                                    <% } else { %>
-                                        <div class="profile-wallet-list">
-                                            <% recentWalletReceipts.forEach((receipt) => { %>
-                                                <% const receiptSearch = [
-                                                    receipt.type,
-                                                    `receipt ${receipt.id}`,
-                                                    receipt.itemNames,
-                                                    receipt.merchantName,
-                                                    Number(receipt.totalAmount || 0).toFixed(2),
-                                                    new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' })
-                                                ].filter(Boolean).join(' ').toLowerCase(); %>
-                                                <a class="profile-wallet-row"
-                                                    href="/receipt/<%= receipt.receiptId %>"
-                                                    data-wallet-receipt-row
-                                                    data-wallet-search="<%= receiptSearch %>">
-                                                    <div>
-                                                        <span><%= receipt.type %></span>
-                                                        <strong>Receipt <%= receipt.order_number || receipt.orderNumber || ('#' + receipt.id) %></strong>
-                                                        <small><%= receipt.itemNames %></small>
-                                                    </div>
-                                                    <div>
-                                                        <strong>$<%= receipt.totalAmount.toFixed(2) %></strong>
-                                                        <small><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></small>
-                                                    </div>
-                                                </a>
-                                            <% }) %>
-                                        </div>
-                                        <p class="muted" data-wallet-empty="receipts" hidden>No receipts match your current search.</p>
-                                        <a class="text-button profile-wallet-history-link" href="#history" data-profile-tab-link="history">Open full purchase history</a>
-                                    <% } %>
-                                </section>
-                            </div>
+                                <a class="text-button profile-wallet-history-link" href="#history" data-profile-tab-link="history">View purchase history</a>
+                            </section>
                         </div>
                     <% } else { %>
                         <p class="muted">Wallet details could not be loaded right now.</p>
@@ -1587,96 +1544,6 @@
 
         showPanel(hash === 'to-rate' ? 'history' : (hash || defaultPanel));
         showReviewPanel(hash === 'to-rate' ? 'to-rate' : defaultReviewPanel);
-    })();
-
-    (() => {
-        const walletPanel = document.querySelector('#wallet[data-profile-panel="wallet"]');
-        if (!walletPanel) {
-            return;
-        }
-
-        const searchInput = walletPanel.querySelector('[data-wallet-search]');
-        const scopeSelect = walletPanel.querySelector('[data-wallet-scope]');
-        const clearButton = walletPanel.querySelector('[data-wallet-clear]');
-        const transactionRows = Array.from(walletPanel.querySelectorAll('[data-wallet-transaction-row]'));
-        const receiptRows = Array.from(walletPanel.querySelectorAll('[data-wallet-receipt-row]'));
-        const activityCount = walletPanel.querySelector('[data-wallet-activity-count]');
-        const receiptCount = walletPanel.querySelector('[data-wallet-receipt-count]');
-        const activityEmpty = walletPanel.querySelector('[data-wallet-empty="activity"]');
-        const receiptsEmpty = walletPanel.querySelector('[data-wallet-empty="receipts"]');
-
-        if (!searchInput || !scopeSelect || (!transactionRows.length && !receiptRows.length)) {
-            return;
-        }
-
-        const rowMatchesSearch = (row, query) => {
-            if (!query) {
-                return true;
-            }
-
-            return String(row.dataset.walletSearch || '').includes(query);
-        };
-
-        const rowMatchesScope = (row, scope) => {
-            if (scope === 'all' || scope === 'activity') {
-                return true;
-            }
-
-            const kinds = ` ${String(row.dataset.walletKinds || '')} `;
-            return kinds.includes(` ${scope} `);
-        };
-
-        const applyWalletFilters = () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const scope = scopeSelect.value;
-            const showTransactions = scope !== 'receipts';
-            const showReceipts = scope === 'all' || scope === 'receipts';
-            let shownTransactions = 0;
-            let shownReceipts = 0;
-
-            transactionRows.forEach((row) => {
-                const visible = showTransactions && rowMatchesSearch(row, query) && rowMatchesScope(row, scope);
-                row.hidden = !visible;
-                if (visible) {
-                    shownTransactions += 1;
-                }
-            });
-
-            receiptRows.forEach((row) => {
-                const visible = showReceipts && rowMatchesSearch(row, query);
-                row.hidden = !visible;
-                if (visible) {
-                    shownReceipts += 1;
-                }
-            });
-
-            if (activityCount) {
-                activityCount.textContent = String(shownTransactions);
-            }
-
-            if (receiptCount) {
-                receiptCount.textContent = String(shownReceipts);
-            }
-
-            if (activityEmpty) {
-                activityEmpty.hidden = !(showTransactions && transactionRows.length && shownTransactions === 0);
-            }
-
-            if (receiptsEmpty) {
-                receiptsEmpty.hidden = !(showReceipts && receiptRows.length && shownReceipts === 0);
-            }
-        };
-
-        searchInput.addEventListener('input', applyWalletFilters);
-        scopeSelect.addEventListener('change', applyWalletFilters);
-        clearButton?.addEventListener('click', () => {
-            searchInput.value = '';
-            scopeSelect.value = 'all';
-            applyWalletFilters();
-            searchInput.focus();
-        });
-
-        applyWalletFilters();
     })();
 
     (() => {

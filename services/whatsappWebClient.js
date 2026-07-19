@@ -54,9 +54,115 @@ function normalizeRecipientPhone(phone) {
     return digits;
 }
 
+function getPhoneCandidates(phone) {
+    const rawDigits = normalizePhone(phone);
+    const normalized = normalizeRecipientPhone(phone);
+    const candidates = [];
+
+    [normalized, rawDigits].forEach((value) => {
+        const digits = String(value || '').trim();
+        if (!digits || candidates.includes(digits)) {
+            return;
+        }
+
+        candidates.push(digits);
+
+        // Support 00-prefixed international numbers.
+        if (digits.startsWith('00')) {
+            const withoutZeroZero = digits.slice(2);
+            if (withoutZeroZero && !candidates.includes(withoutZeroZero)) {
+                candidates.push(withoutZeroZero);
+            }
+        }
+
+        // For SG numbers entered with country code, also try local form.
+        if (digits.startsWith('65') && digits.length === 10) {
+            const local = digits.slice(2);
+            if (local && !candidates.includes(local)) {
+                candidates.push(local);
+            }
+        }
+
+        // For local 8-digit numbers, try with default country code.
+        if (/^\d{8}$/.test(digits)) {
+            const withCountry = `${getDefaultCountryCode()}${digits}`;
+            if (!candidates.includes(withCountry)) {
+                candidates.push(withCountry);
+            }
+        }
+    });
+
+    return candidates;
+}
+
 function toWhatsAppWebChatId(phone) {
     const digits = normalizeRecipientPhone(phone);
     return digits ? `${digits}@c.us` : '';
+}
+
+function getChatIdCandidates(phone) {
+    const ids = [];
+
+    getPhoneCandidates(phone).forEach((digits) => {
+        [`${digits}@c.us`, `${digits}@s.whatsapp.net`].forEach((id) => {
+            if (!ids.includes(id)) {
+                ids.push(id);
+            }
+        });
+    });
+
+    return ids;
+}
+
+function isMatchingIdentity(identity, phoneCandidates = []) {
+    const userPart = getIdentityUserPart(identity);
+    if (!userPart) {
+        return false;
+    }
+
+    return phoneCandidates.some((candidate) => {
+        const digits = String(candidate || '').trim();
+        if (!digits) {
+            return false;
+        }
+
+        if (userPart === digits) {
+            return true;
+        }
+
+        // Match local SG format (last 8 digits) against country-code identities.
+        if (digits.length >= 8 && userPart.endsWith(digits.slice(-8))) {
+            return true;
+        }
+
+        return false;
+    });
+}
+
+async function getKnownChatTargets(phoneCandidates = []) {
+    if (!webClient || !webClientReady) {
+        return [];
+    }
+
+    const targets = [];
+    const chats = await webClient.getChats().catch(() => []);
+
+    chats.forEach((chat) => {
+        const identity = String(chat?.id?._serialized || '');
+        if (!identity) {
+            return;
+        }
+
+        if (!isMatchingIdentity(identity, phoneCandidates)) {
+            return;
+        }
+
+        if (!targets.includes(identity)) {
+            targets.push(identity);
+        }
+    });
+
+    return targets;
 }
 
 function getIdentityUserPart(identity) {
@@ -188,16 +294,25 @@ async function startWhatsAppWebClient(options = {}) {
 }
 
 async function sendWhatsAppWebText(phone, message) {
-    if (!isWhatsAppWebProvider() || !isWhatsAppEnabled()) {
-        return { skipped: true };
+    if (!isWhatsAppWebProvider()) {
+        return { skipped: true, reason: 'whatsapp_web_provider_disabled' };
+    }
+
+    if (!isWhatsAppEnabled()) {
+        return { skipped: true, reason: 'whatsapp_disabled' };
     }
 
     const normalizedPhone = normalizeRecipientPhone(phone);
-    const chatId = toWhatsAppWebChatId(normalizedPhone);
+    const phoneCandidates = getPhoneCandidates(phone);
+    const chatIdCandidates = getChatIdCandidates(phone);
     const body = String(message || '').trim();
 
-    if (!normalizedPhone || !chatId || !body) {
-        return { skipped: true };
+    if (!normalizedPhone || !chatIdCandidates.length) {
+        return { skipped: true, reason: 'invalid_phone' };
+    }
+
+    if (!body) {
+        return { skipped: true, reason: 'empty_message' };
     }
 
     if (!webClient || !webClientReady) {
@@ -207,39 +322,69 @@ async function sendWhatsAppWebText(phone, message) {
         };
     }
 
-    const numberId = await webClient.getNumberId(normalizedPhone).catch((error) => {
-        const message = String(error?.message || '');
+    const resolvedIds = [];
 
-        if (/No LID/i.test(message)) {
-            return null;
+    for (const candidatePhone of phoneCandidates) {
+        const numberId = await webClient.getNumberId(candidatePhone).catch((error) => {
+            const message = String(error?.message || '');
+
+            if (/No LID/i.test(message)) {
+                return null;
+            }
+
+            throw error;
+        });
+
+        if (numberId?._serialized && !resolvedIds.includes(numberId._serialized)) {
+            resolvedIds.push(numberId._serialized);
+            rememberIdentityPhone(numberId._serialized, candidatePhone);
         }
-
-        throw error;
-    });
-
-    if (!numberId?._serialized) {
-        return {
-            skipped: true,
-            reason: 'whatsapp_number_not_found'
-        };
     }
 
-    rememberIdentityPhone(numberId._serialized, normalizedPhone);
+    const sendTargets = [];
 
-    const sent = await webClient.sendMessage(numberId._serialized, body.slice(0, 4000)).catch((error) => {
-        const message = String(error?.message || '');
-
-        if (/No LID/i.test(message)) {
-            return null;
+    const knownChatTargets = await getKnownChatTargets(phoneCandidates);
+    knownChatTargets.forEach((id) => {
+        if (!sendTargets.includes(id)) {
+            sendTargets.push(id);
         }
-
-        throw error;
     });
+
+    // First try direct number-based chat IDs so delivery targets the profile number directly.
+    chatIdCandidates.forEach((id) => {
+        if (!sendTargets.includes(id)) {
+            sendTargets.push(id);
+        }
+    });
+
+    // Then try provider-resolved identifiers.
+    resolvedIds.forEach((id) => {
+        if (!sendTargets.includes(id)) {
+            sendTargets.push(id);
+        }
+    });
+
+    let sent = null;
+    for (const target of sendTargets) {
+        sent = await webClient.sendMessage(target, body.slice(0, 4000)).catch((error) => {
+            const message = String(error?.message || '');
+
+            if (/No LID/i.test(message)) {
+                return null;
+            }
+
+            throw error;
+        });
+
+        if (sent) {
+            break;
+        }
+    }
 
     if (!sent) {
         return {
             skipped: true,
-            reason: 'whatsapp_send_no_lid'
+            reason: resolvedIds.length ? 'whatsapp_send_no_lid' : 'whatsapp_number_not_found'
         };
     }
 

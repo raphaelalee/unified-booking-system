@@ -727,6 +727,58 @@ function getTransactions(userId, limit, callback) {
     });
 }
 
+function getTransactionsPage(userId, options = {}, callback) {
+    const pageSize = Number(options.pageSize || 10) === 20 ? 20 : 10;
+    const currentPage = Math.max(1, Number(options.page || 1));
+    const offset = (currentPage - 1) * pageSize;
+
+    const countSql = `
+        SELECT COUNT(*) AS total_count
+        FROM loyalty_transactions lt
+        WHERE lt.user_id = ?
+    `;
+    const pageSql = `
+        SELECT lt.*, o.order_number
+        FROM loyalty_transactions lt
+        LEFT JOIN orders o
+            ON o.order_id = lt.order_id
+        WHERE lt.user_id = ?
+        ORDER BY lt.loyalty_transaction_id DESC
+        LIMIT ? OFFSET ?
+    `;
+
+    db.query(countSql, [userId], (countError, countRows = []) => {
+        if (countError) {
+            callback(countError);
+            return;
+        }
+
+        const totalCount = Number(countRows[0]?.total_count || 0);
+        const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+        const safePage = Math.min(currentPage, totalPages);
+        const safeOffset = (safePage - 1) * pageSize;
+
+        db.query(pageSql, [userId, pageSize, safeOffset], (pageError, rows = []) => {
+            if (pageError) {
+                callback(pageError);
+                return;
+            }
+
+            callback(null, {
+                transactions: rows.map(mapTransaction),
+                pagination: {
+                    page: safePage,
+                    pageSize,
+                    totalCount,
+                    totalPages,
+                    hasPrevious: safePage > 1,
+                    hasNext: safePage < totalPages
+                }
+            });
+        });
+    });
+}
+
 function getWalletView(userId, callback) {
     return ensureWallet(userId, (walletError, wallet) => {
         if (walletError) {
@@ -2233,6 +2285,7 @@ module.exports = {
     getMerchantRewardAnalytics,
     getPlatformSummary,
     getRules,
+    getTransactionsPage,
     getCampaignCashbackForReceipt,
     getWalletView,
     redeemCashback,
