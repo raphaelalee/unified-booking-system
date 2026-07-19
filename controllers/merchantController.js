@@ -6131,7 +6131,9 @@ async function streamNetsPaymentStatus(req, res) {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
-    let pendingPayment = req.session.pendingNetsPayment;
+    // NETS QR is shared by checkout and wallet top-ups. Both flows use this
+    // status stream, but keep their pending payment in separate session keys.
+    let pendingPayment = req.session.pendingNetsPayment || req.session.walletPendingNets;
 
     if (!pendingPayment) {
         const attempt = await findPaymentAttempt('nets', String(txn));

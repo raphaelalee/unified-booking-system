@@ -751,6 +751,8 @@ app.get('/profile/wallet/topup/verify', requireCustomer, walletController.showTo
 app.post('/profile/wallet/topup/verify', requireCustomer, walletController.verifyTopup2fa);
 app.get('/profile/wallet/success', requireCustomer, walletController.handleWalletSuccess);
 app.get('/profile/wallet/cancel', requireCustomer, walletController.handleWalletCancel);
+app.get('/profile/wallet/paypal/return', requireCustomer, walletController.handlePaypalReturn);
+app.get('/profile/wallet/paypal/cancel', requireCustomer, walletController.handlePaypalCancel);
 app.post('/profile/wallet/nets/complete', requireCustomer, walletController.completeNetsTopup);
 app.post('/profile/wallet/nets/fail', requireCustomer, walletController.failNetsTopup);
 app.get('/wallet', requireCustomer, loyaltyController.showWallet);

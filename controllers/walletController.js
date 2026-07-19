@@ -8,6 +8,7 @@ const User = require('../models/User');
 const { sendWalletTopupOtpEmail } = require('../utils/emailNotifications');
 const { sendWhatsAppText } = require('../utils/whatsappNotifications');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 
 const TOPUP_2FA_TTL_MS = 5 * 60 * 1000;
 
@@ -44,6 +45,49 @@ function getProviderLabel(method) {
         case 'stripe':
         default: return 'Stripe';
     }
+}
+
+function getNetsImageDataUrl(value) {
+    const compact = String(value || '').replace(/\s/g, '');
+    if (!compact || !/^[A-Za-z0-9+/=]+$/.test(compact)) {
+        return null;
+    }
+
+    const buffer = Buffer.from(compact, 'base64');
+    const signature = buffer.subarray(0, 8).toString('hex');
+
+    if (signature === '89504e470d0a1a0a') {
+        return `data:image/png;base64,${compact}`;
+    }
+
+    if (buffer.subarray(0, 3).toString('hex') === 'ffd8ff') {
+        return `data:image/jpeg;base64,${compact}`;
+    }
+
+    return null;
+}
+
+async function buildNetsQrCodeUrl(qrPayload) {
+    const payload = typeof qrPayload === 'string' ? qrPayload.trim() : '';
+
+    if (!payload) {
+        throw new Error('NETS did not return a QR payload.');
+    }
+
+    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(payload) || /^https:\/\//i.test(payload)) {
+        return payload;
+    }
+
+    const imageDataUrl = getNetsImageDataUrl(payload);
+    if (imageDataUrl) {
+        return imageDataUrl;
+    }
+
+    return QRCode.toDataURL(payload, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 280
+    });
 }
 
 function getStatusBadge(status) {
@@ -286,8 +330,16 @@ async function startTopupPayment(req, res, amount, paymentMethod) {
             amount,
             currencyCode: 'SGD',
             referenceId: `wallet-${topup.transactionId}`,
-            description: `Wallet top-up via PayPal (${formatAmount(amount)})`
+            description: `Wallet top-up via PayPal (${formatAmount(amount)})`,
+            returnUrl: `${baseUrl}/profile/wallet/paypal/return`,
+            cancelUrl: `${baseUrl}/profile/wallet/paypal/cancel`
         });
+        const approvalUrl = Array.isArray(order.links)
+            ? order.links.find((link) => link.rel === 'approve')?.href
+            : '';
+        if (!approvalUrl) {
+            throw new Error('PayPal did not return an approval link.');
+        }
         await new Promise((resolve, reject) => {
             PaymentAttempt.save({
                 attemptId: order.id,
@@ -300,7 +352,12 @@ async function startTopupPayment(req, res, amount, paymentMethod) {
         await new Promise((resolve, reject) => {
             EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', 'Wallet top-up via PayPal', order.id, (error) => error ? reject(error) : resolve());
         });
-        return res.redirect(`/api/paypal/checkout?orderId=${encodeURIComponent(order.id)}`);
+        req.session.walletPendingPaypal = {
+            orderId: order.id,
+            transactionId: topup.transactionId,
+            amount
+        };
+        return res.redirect(approvalUrl);
     }
 
     if (paymentMethod === 'hitpay') {
@@ -333,10 +390,21 @@ async function startTopupPayment(req, res, amount, paymentMethod) {
     }
 
     if (paymentMethod === 'nets') {
-        const txnId = nets.createSandboxTxnId();
-        const qrData = await nets.requestNetsQr(amount, txnId);
-        if (!nets.isQrSuccess(qrData)) {
-            throw new Error('NETS QR request was not accepted.');
+        let qrData;
+        let isPrototypeQr = false;
+        let netsErrorMessage = null;
+
+        try {
+            const txnId = nets.createSandboxTxnId();
+            qrData = await nets.requestNetsQr(amount, txnId);
+            if (!nets.isQrSuccess(qrData)) {
+                throw new Error('NETS QR request was not accepted.');
+            }
+        } catch (error) {
+            console.error('NETS wallet top-up QR request failed:', error.message);
+            qrData = nets.createPrototypeNetsQr(amount, `wallet-${topup.transactionId}-${Date.now()}`);
+            isPrototypeQr = true;
+            netsErrorMessage = error.message;
         }
         await new Promise((resolve, reject) => {
             EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', 'Wallet top-up via NETS QR', qrData.txn_retrieval_ref, (error) => error ? reject(error) : resolve());
@@ -345,24 +413,16 @@ async function startTopupPayment(req, res, amount, paymentMethod) {
             transactionId: topup.transactionId,
             txnRetrievalRef: qrData.txn_retrieval_ref,
             amount,
-            paymentMethod
+            paymentMethod,
+            isPrototypeQr
         };
         return res.render('netsQR', {
             title: 'NETS QR Wallet Top-Up',
             total: amount,
-            qrCodeUrl: await (async () => {
-                const payload = qrData.qr_code;
-                if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(String(payload))) {
-                    return payload;
-                }
-                if (/^https:\/\//i.test(String(payload))) {
-                    return payload;
-                }
-                return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(String(payload))}`;
-            })(),
+            qrCodeUrl: await buildNetsQrCodeUrl(qrData.qr_code),
             txnRetrievalRef: qrData.txn_retrieval_ref,
-            isPrototypeQr: false,
-            netsErrorMessage: null,
+            isPrototypeQr,
+            netsErrorMessage,
             completeUrl: '/profile/wallet/nets/complete',
             failCompleteUrl: '/profile/wallet/nets/fail',
             successRedirect: '/profile/wallet/success?transactionId=' + topup.transactionId,
@@ -569,152 +629,6 @@ async function verifyTopup2fa(req, res) {
         setWalletError(req, error.message || 'Wallet top-up could not be started.');
         return res.redirect('/profile/wallet');
     }
-
-    const topup = await new Promise((resolve, reject) => {
-        EWallet.createPendingTopup({
-            userId: req.session.user.id,
-            amount,
-            paymentMethod: paymentMethod.toUpperCase(),
-            description: `Wallet top-up via ${getProviderLabel(paymentMethod)}`
-        }, (error, result) => error ? reject(error) : resolve(result));
-    });
-
-    const attemptId = `wallet-${req.session.user.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const attemptPayload = {
-        userId: req.session.user.id,
-        amount,
-        paymentMethod,
-        transactionId: topup.transactionId,
-        walletTransactionId: topup.transactionId,
-        description: `Wallet top-up via ${getProviderLabel(paymentMethod)}`
-    };
-
-    await new Promise((resolve, reject) => {
-        PaymentAttempt.save({
-            attemptId,
-            userId: req.session.user.id,
-            provider: paymentMethod === 'hitpay' ? 'hitpay' : paymentMethod,
-            providerReference: null,
-            payment: attemptPayload
-        }, (error) => error ? reject(error) : resolve());
-    });
-
-    await new Promise((resolve, reject) => {
-        EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', `Wallet top-up via ${getProviderLabel(paymentMethod)}`, '', (error) => error ? reject(error) : resolve());
-    });
-
-    try {
-        if (paymentMethod === 'stripe') {
-            const baseUrl = getPublicBaseUrl(req);
-            const session = await stripe.createWalletTopupSession({
-                amount,
-                successUrl: `${baseUrl}/profile/wallet/success?transactionId=${topup.transactionId}`,
-                cancelUrl: `${baseUrl}/profile/wallet/cancel?transactionId=${topup.transactionId}`,
-                paymentMethodTypes: ['card']
-            });
-            return res.redirect(session.url);
-        }
-
-        if (paymentMethod === 'paypal') {
-            const baseUrl = getPublicBaseUrl(req);
-            const order = await paypal.createOrder({
-                amount,
-                currencyCode: 'SGD',
-                referenceId: `wallet-${topup.transactionId}`,
-                description: `Wallet top-up via PayPal (${formatAmount(amount)})`
-            });
-            await new Promise((resolve, reject) => {
-                PaymentAttempt.save({
-                    attemptId: order.id,
-                    userId: req.session.user.id,
-                    provider: 'paypal',
-                    providerReference: order.id,
-                    payment: { ...attemptPayload, providerReference: order.id }
-                }, (error) => error ? reject(error) : resolve());
-            });
-            await new Promise((resolve, reject) => {
-                EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', `Wallet top-up via PayPal`, order.id, (error) => error ? reject(error) : resolve());
-            });
-            return res.redirect(`/api/paypal/checkout?orderId=${encodeURIComponent(order.id)}`);
-        }
-
-        if (paymentMethod === 'hitpay') {
-            const baseUrl = getPublicBaseUrl(req);
-            const request = await hitpay.createPaymentRequest({
-                amount: amount.toFixed(2),
-                currency: 'SGD',
-                payment_methods: ['paynow_online'],
-                email: req.session.user?.email || '',
-                name: req.session.user?.name || 'Customer',
-                purpose: `Wallet top-up ${formatAmount(amount)}`,
-                reference_number: `wallet-${topup.transactionId}`,
-                redirect_url: `${baseUrl}/profile/wallet/success?transactionId=${topup.transactionId}`,
-                send_email: false,
-                send_sms: false
-            });
-            await new Promise((resolve, reject) => {
-                PaymentAttempt.save({
-                    attemptId: request.id,
-                    userId: req.session.user.id,
-                    provider: 'hitpay',
-                    providerReference: request.id,
-                    payment: { ...attemptPayload, providerReference: request.id }
-                }, (error) => error ? reject(error) : resolve());
-            });
-            await new Promise((resolve, reject) => {
-                EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', `Wallet top-up via PayNow/HitPay`, request.id, (error) => error ? reject(error) : resolve());
-            });
-            return res.redirect(request.url);
-        }
-
-        if (paymentMethod === 'nets') {
-            const txnId = nets.createSandboxTxnId();
-            const qrData = await nets.requestNetsQr(amount, txnId);
-            if (!nets.isQrSuccess(qrData)) {
-                throw new Error('NETS QR request was not accepted.');
-            }
-            await new Promise((resolve, reject) => {
-                EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', `Wallet top-up via NETS QR`, qrData.txn_retrieval_ref, (error) => error ? reject(error) : resolve());
-            });
-            req.session.walletPendingNets = {
-                transactionId: topup.transactionId,
-                txnRetrievalRef: qrData.txn_retrieval_ref,
-                amount,
-                paymentMethod
-            };
-            return res.render('netsQR', {
-                title: 'NETS QR Wallet Top-Up',
-                total: amount,
-                qrCodeUrl: await (async () => {
-                    const payload = qrData.qr_code;
-                    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(String(payload))) {
-                        return payload;
-                    }
-                    if (/^https:\/\//i.test(String(payload))) {
-                        return payload;
-                    }
-                    return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(String(payload))}`;
-                })(),
-                txnRetrievalRef: qrData.txn_retrieval_ref,
-                isPrototypeQr: false,
-                netsErrorMessage: null,
-                completeUrl: '/profile/wallet/nets/complete',
-                failCompleteUrl: '/profile/wallet/nets/fail',
-                successRedirect: '/profile/wallet/success?transactionId=' + topup.transactionId,
-                failRedirect: '/profile/wallet/cancel?transactionId=' + topup.transactionId,
-                backPrimaryUrl: '/profile/wallet',
-                backPrimaryLabel: 'Back to wallet',
-                backSecondaryUrl: '/profile',
-                backSecondaryLabel: 'Back to profile'
-            });
-        }
-
-        throw new Error('Unsupported payment method.');
-    } catch (error) {
-        console.error(error);
-        setWalletError(req, error.message || 'Wallet top-up could not be started.');
-        return res.redirect('/profile/wallet');
-    }
 }
 
 async function handleWalletSuccess(req, res) {
@@ -783,6 +697,67 @@ async function handleWalletCancel(req, res) {
     }
 }
 
+async function handlePaypalReturn(req, res) {
+    const pending = req.session.walletPendingPaypal;
+    const returnedOrderId = String(req.query.token || '').trim();
+
+    if (!pending || !returnedOrderId || returnedOrderId !== pending.orderId) {
+        setWalletError(req, 'Your PayPal top-up session is missing or expired.');
+        return res.redirect('/profile/wallet');
+    }
+
+    try {
+        const capturedOrder = await paypal.captureOrder(returnedOrderId);
+        const capture = paypal.extractCaptureDetails(capturedOrder);
+
+        if (capture.captureStatus !== 'COMPLETED'
+            || capture.currencyCode !== 'SGD'
+            || Math.abs(capture.value - Number(pending.amount)) > 0.001) {
+            throw new Error('PayPal did not confirm the expected top-up amount.');
+        }
+
+        await new Promise((resolve, reject) => {
+            EWallet.completePendingTransaction(pending.transactionId, req.session.user.id, {
+                description: 'Wallet top-up completed via PayPal',
+                providerReference: capture.captureId || returnedOrderId
+            }, (error, result) => error ? reject(error) : resolve(result));
+        });
+
+        req.session.walletPendingPaypal = null;
+        setWalletSuccess(req, 'Your wallet was topped up successfully.');
+        return res.redirect('/profile/wallet');
+    } catch (error) {
+        console.error('PayPal wallet top-up capture failed:', error.payload || error.message);
+        setWalletError(req, error.message || 'Your PayPal top-up could not be completed.');
+        return res.redirect('/profile/wallet');
+    }
+}
+
+async function handlePaypalCancel(req, res) {
+    const pending = req.session.walletPendingPaypal;
+    req.session.walletPendingPaypal = null;
+
+    if (pending?.transactionId) {
+        try {
+            await new Promise((resolve, reject) => {
+                EWallet.updateTransactionStatus(
+                    pending.transactionId,
+                    req.session.user.id,
+                    'CANCELLED',
+                    'Wallet top-up cancelled in PayPal.',
+                    pending.orderId || '',
+                    (error) => error ? reject(error) : resolve()
+                );
+            });
+        } catch (error) {
+            console.error('PayPal wallet top-up cancellation failed:', error.message);
+        }
+    }
+
+    setWalletError(req, 'Your PayPal top-up was cancelled.');
+    return res.redirect('/profile/wallet');
+}
+
 async function completeNetsTopup(req, res) {
     const pending = req.session.walletPendingNets;
     if (!pending) {
@@ -816,6 +791,8 @@ module.exports = {
     verifyTopup2fa,
     handleWalletSuccess,
     handleWalletCancel,
+    handlePaypalReturn,
+    handlePaypalCancel,
     completeNetsTopup,
     failNetsTopup,
     getStatusBadge,

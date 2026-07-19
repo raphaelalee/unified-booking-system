@@ -73,7 +73,7 @@ async function getAccessToken() {
     return data.access_token;
 }
 
-async function createOrder({ amount, currencyCode = 'SGD', referenceId, description }) {
+async function createOrder({ amount, currencyCode = 'SGD', referenceId, description, returnUrl, cancelUrl }) {
     const accessToken = await getAccessToken();
     const value = Number(amount || 0);
 
@@ -94,6 +94,14 @@ async function createOrder({ amount, currencyCode = 'SGD', referenceId, descript
             }
         ]
     };
+
+    if (returnUrl && cancelUrl) {
+        body.application_context = {
+            return_url: String(returnUrl),
+            cancel_url: String(cancelUrl),
+            user_action: 'PAY_NOW'
+        };
+    }
 
     return paypalRequest('/v2/checkout/orders', {
         method: 'POST',
