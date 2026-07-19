@@ -6,6 +6,8 @@ let webClientReady = false;
 let webClientStarting = false;
 let inboundMessageHandler = null;
 const identityPhoneMap = new Map();
+const processedInboundMessages = new Map();
+const INBOUND_DEDUPE_TTL_MS = 10 * 1000;
 
 function getProvider() {
     return String(process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
@@ -180,13 +182,66 @@ function rememberIdentityPhone(identity, phone) {
     identityPhoneMap.set(userPart, normalizedPhone);
 }
 
+function cleanupProcessedInboundMessages(now = Date.now()) {
+    processedInboundMessages.forEach((processedAt, key) => {
+        if (now - processedAt > INBOUND_DEDUPE_TTL_MS) {
+            processedInboundMessages.delete(key);
+        }
+    });
+}
+
+function claimInboundMessage(keys = []) {
+    const now = Date.now();
+    cleanupProcessedInboundMessages(now);
+    const normalizedKeys = keys.map((key) => String(key || '').trim()).filter(Boolean);
+
+    if (normalizedKeys.some((key) => processedInboundMessages.has(key))) {
+        return false;
+    }
+
+    normalizedKeys.forEach((key) => processedInboundMessages.set(key, now));
+    return true;
+}
+
 function extractPhoneFromContact(contact) {
     if (!contact) {
         return '';
     }
 
-    const candidate = normalizeRecipientPhone(contact.number || contact.id?.user || '');
-    return candidate;
+    // contact.id.user can be a privacy-preserving LID rather than a phone
+    // number. Prefer the dedicated number field and never accept an @lid ID
+    // as a customer telephone number.
+    const contactDomain = String(contact.id?._serialized || '').split('@')[1]?.toLowerCase();
+    const contactNumber = normalizeRecipientPhone(contact.number || '');
+    const lidNumber = normalizeRecipientPhone(contact.id?.user || '');
+    const candidate = (contactDomain === 'lid' && contactNumber === lidNumber ? '' : contactNumber)
+        || (contactDomain && contactDomain !== 'lid' ? contact.id?.user : '');
+    return normalizeRecipientPhone(candidate);
+}
+
+async function resolveLidPhone(identity) {
+    if (!webClient || !/@lid$/i.test(String(identity || ''))) {
+        return '';
+    }
+
+    try {
+        const mappings = await webClient.getContactLidAndPhone([String(identity)]);
+        const match = Array.isArray(mappings)
+            ? mappings.find((entry) => String(entry?.lid || '').toLowerCase() === String(identity).toLowerCase())
+                || mappings[0]
+            : null;
+        const phoneIdentity = String(match?.pn || '');
+        const phoneDomain = String(phoneIdentity.split('@')[1] || '').toLowerCase();
+
+        if (!phoneIdentity || phoneDomain === 'lid') {
+            return '';
+        }
+
+        return normalizeRecipientPhone(getIdentityUserPart(phoneIdentity));
+    } catch (error) {
+        console.warn(`WhatsApp LID could not be resolved to a phone number: ${identity}`, error.message);
+        return '';
+    }
 }
 
 async function startWhatsAppWebClient(options = {}) {
@@ -248,6 +303,7 @@ async function startWhatsAppWebClient(options = {}) {
             const fromUser = getIdentityUserPart(fromRaw);
             const fromDomain = String(fromRaw.split('@')[1] || '').toLowerCase();
             const text = message.body || '';
+            const messageId = String(message.id?._serialized || message.id?.id || '');
 
             if (!fromRaw || !text || message.fromMe) {
                 return;
@@ -263,9 +319,21 @@ async function startWhatsAppWebClient(options = {}) {
                 resolvedPhone = identityPhoneMap.get(fromUser);
             }
 
+            if (!resolvedPhone && fromDomain === 'lid') {
+                resolvedPhone = await resolveLidPhone(fromRaw);
+            }
+
             if (!resolvedPhone) {
                 const contact = await message.getContact().catch(() => null);
                 resolvedPhone = extractPhoneFromContact(contact);
+
+                if (!resolvedPhone && typeof contact?.getFormattedNumber === 'function') {
+                    const formattedNumber = await contact.getFormattedNumber().catch(() => '');
+                    const normalizedFormatted = normalizeRecipientPhone(formattedNumber);
+                    resolvedPhone = fromDomain === 'lid' && normalizedFormatted === normalizeRecipientPhone(fromUser)
+                        ? ''
+                        : normalizedFormatted;
+                }
             }
 
             if (!resolvedPhone) {
@@ -275,11 +343,22 @@ async function startWhatsAppWebClient(options = {}) {
 
             rememberIdentityPhone(fromRaw, resolvedPhone);
 
+            const normalizedText = String(text).trim().replace(/\s+/g, ' ').toLowerCase();
+            const fingerprint = `${resolvedPhone}:${normalizedText}`;
+            if (!claimInboundMessage([
+                messageId ? `id:${messageId}` : '',
+                `content:${fingerprint}`
+            ])) {
+                console.log(`Duplicate WhatsApp inbound message ignored: ${messageId || fingerprint}`);
+                return;
+            }
+
             if (typeof inboundMessageHandler === 'function') {
                 Promise.resolve(inboundMessageHandler({
                     from: resolvedPhone,
                     text,
-                    type: 'text'
+                    type: 'text',
+                    messageId
                 })).catch((error) => {
                     console.error('WhatsApp Web inbound handler failed:', error);
                 });
