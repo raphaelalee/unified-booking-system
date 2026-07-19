@@ -1,5 +1,6 @@
 const db = require('../db');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const Product = require('../models/Product');
 const Review = require('../models/Review');
 const {
     formatPaymentMethod,
@@ -40,6 +41,34 @@ function formatHistoryDate(value) {
         dateStyle: 'medium',
         timeStyle: 'short'
     });
+}
+
+function buildBookingReference(bookingId, dateValue) {
+    const id = Number(bookingId || 0);
+    const date = new Date(dateValue || 0);
+    const datePart = Number.isNaN(date.getTime())
+        ? '00000000'
+        : [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('');
+
+    return `BKG-${datePart}-${String(id).padStart(6, '0')}`;
+}
+
+function normalizeProductImageUrl(value) {
+    const imageUrl = String(value || '').trim().replace(/\\/g, '/');
+
+    if (!imageUrl || /^(?:https?:|data:)/i.test(imageUrl) || imageUrl.startsWith('/')) {
+        return imageUrl;
+    }
+
+    if (imageUrl.startsWith('public/')) {
+        return `/${imageUrl.slice('public/'.length)}`;
+    }
+
+    return `/${imageUrl}`;
 }
 
 function formatStatus(value) {
@@ -136,12 +165,25 @@ async function getProductImageMap(productIds = []) {
 
     const placeholders = normalizedIds.map(() => '?').join(', ');
     const rows = await queryRows(
-        `SELECT product_id, image_url FROM products WHERE product_id IN (${placeholders})`,
+        `
+            SELECT
+                products.product_id,
+                products.name,
+                products.description,
+                products.image_url,
+                categories.category_name AS category
+            FROM products
+            LEFT JOIN categories
+                ON categories.category_id = products.category_id
+            WHERE products.product_id IN (${placeholders})
+        `,
         normalizedIds
     );
 
     return rows.reduce((map, row) => {
-        map[Number(row.product_id)] = row.image_url || '';
+        map[Number(row.product_id)] = normalizeProductImageUrl(
+            row.image_url || Product.getFallbackImageUrl(row)
+        );
         return map;
     }, {});
 }
@@ -221,6 +263,7 @@ async function getBookingHistory(userId) {
     return rows.map((row) => ({
         id: row.id,
         receiptId: row.id,
+        displayReference: buildBookingReference(row.id, row.created_at),
         type: 'booking',
         itemNames: row.item_names,
         totalAmount: Number(row.total_amount || 0),
@@ -324,6 +367,9 @@ function getPersistentHistory(userId) {
                 pickupStatus: row.pickup_status || '',
                 createdAt: row.created_at,
                 createdAtLabel: formatHistoryDate(row.created_at),
+                displayReference: row.purchase_type === 'booking'
+                    ? buildBookingReference(row.receipt_id, row.created_at)
+                    : (row.order_number || ''),
                 source: 'persistent'
             })));
         });
@@ -397,7 +443,9 @@ async function showHistory(req, res) {
                     return {
                         ...item,
                         productId,
-                        imageUrl: item.imageUrl || productImageMap[productId] || '',
+                        // Use the current catalog image first so purchase history
+                        // always matches the image shown on the Products page.
+                        imageUrl: normalizeProductImageUrl(productImageMap[productId] || item.imageUrl || ''),
                         review: productReviewMap[reviewKey] || null
                     };
                 })

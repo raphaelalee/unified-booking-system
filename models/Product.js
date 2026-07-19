@@ -1055,6 +1055,7 @@ function removeProductFeatured(userId, productId, callback) {
 }
 
 module.exports = {
+    getFallbackImageUrl,
     getAll,
     getAllByCategory,
     getAllMerchantProducts,

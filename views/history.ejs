@@ -10,6 +10,19 @@
     <%
         const formatStatusLabel = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
         const formatFulfilmentLabel = (value) => String(value || '').toLowerCase() === 'delivery' ? 'Delivery' : 'Pickup';
+        const formatBookingReference = (entry) => {
+            const bookingId = String(entry.id || entry.receiptId || '').replace(/\D/g, '');
+            const bookingDate = new Date(entry.createdAt || 0);
+            const datePart = Number.isNaN(bookingDate.getTime())
+                ? '00000000'
+                : [
+                    bookingDate.getFullYear(),
+                    String(bookingDate.getMonth() + 1).padStart(2, '0'),
+                    String(bookingDate.getDate()).padStart(2, '0')
+                ].join('');
+
+            return `BKG-${datePart}-${bookingId.padStart(6, '0')}`;
+        };
     %>
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
@@ -36,7 +49,12 @@
                     <div class="history-card-top">
                         <div class="history-card-title-group">
                             <span class="sync-pill"><%= entry.type %></span>
-                            <strong class="history-card-id">Order <%= entry.order_number || entry.orderNumber || ('#' + entry.id) %></strong>
+                            <strong class="history-card-id">
+                                <%= entry.type === 'booking' ? 'Booking' : 'Order' %>
+                                <%= entry.type === 'booking'
+                                    ? formatBookingReference(entry)
+                                    : (entry.order_number || entry.orderNumber || ('#' + entry.id)) %>
+                            </strong>
                         </div>
                         <a class="button secondary" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">Receipt</a>
                     </div>
@@ -50,9 +68,9 @@
                                             <div class="history-item-row">
                                                 <img
                                                     class="history-item-image"
-                                                    src="<%= item.imageUrl || '/images/product-placeholder.png' %>"
+                                                    src="<%= item.imageUrl || '/images/product-room-mist.svg' %>"
                                                     alt="<%= item.name %>"
-                                                    onerror="this.onerror=null;this.src='/images/product-placeholder.png';"
+                                                    onerror="this.onerror=null;this.src='/images/product-room-mist.svg';"
                                                 >
                                                 <div class="history-item-content">
                                                     <div class="history-item-title">
