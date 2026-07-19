@@ -16,8 +16,9 @@
 
     <div class="wallet-shell">
         <div class="wallet-grid" style="grid-template-columns: minmax(280px, 520px); justify-content: center;">
-            <form class="account-panel wallet-topup-card" method="POST" action="/profile/wallet/topup/verify">
+            <form class="account-panel wallet-topup-card" method="POST" action="/profile/wallet/topup/verify" data-wallet-otp-form>
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <input type="hidden" name="topup2faCode" value="" data-wallet-otp-code>
 
                 <div>
                     <% const resolvedDeliveryMethodLabel = typeof deliveryMethodLabel !== 'undefined' ? deliveryMethodLabel : 'Email'; %>
@@ -30,20 +31,26 @@
                     <p class="muted">Code expires in about <strong><%= Number(expiresInSeconds || 0) %>s</strong>.</p>
                 </div>
 
-                <label>
-                    Verification code
-                    <input
-                        type="text"
-                        name="topup2faCode"
-                        inputmode="numeric"
-                        pattern="[0-9]{6}"
-                        minlength="6"
-                        maxlength="6"
-                        autocomplete="one-time-code"
-                        placeholder="123456"
-                        required
-                    >
-                </label>
+                <fieldset class="wallet-otp-fieldset">
+                    <legend>Verification code</legend>
+                    <div class="wallet-otp-inputs" aria-label="6-digit verification code">
+                        <% for (let index = 0; index < 6; index += 1) { %>
+                            <input
+                                class="wallet-otp-digit"
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="1"
+                                autocomplete="<%= index === 0 ? 'one-time-code' : 'off' %>"
+                                aria-label="Verification code digit <%= index + 1 %> of 6"
+                                data-wallet-otp-digit
+                                required
+                                <%= index === 0 ? 'autofocus' : '' %>
+                            >
+                        <% } %>
+                    </div>
+                    <p class="wallet-otp-hint">Enter the 6-digit code</p>
+                </fieldset>
 
                 <div class="hero-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;">
                     <button class="button primary" type="submit">Verify and continue</button>
@@ -53,5 +60,93 @@
         </div>
     </div>
 </section>
+
+<script>
+    (() => {
+        const form = document.querySelector('[data-wallet-otp-form]');
+        const digits = Array.from(document.querySelectorAll('[data-wallet-otp-digit]'));
+        const codeInput = document.querySelector('[data-wallet-otp-code]');
+
+        if (!form || !codeInput || digits.length !== 6) {
+            return;
+        }
+
+        const syncCode = () => {
+            codeInput.value = digits.map((input) => input.value).join('');
+        };
+
+        const fillDigits = (value, startIndex = 0) => {
+            const numbers = value.replace(/\D/g, '');
+
+            numbers.split('').forEach((number, offset) => {
+                if (digits[startIndex + offset]) {
+                    digits[startIndex + offset].value = number;
+                }
+            });
+
+            syncCode();
+            const focusIndex = Math.min(startIndex + numbers.length, digits.length - 1);
+            digits[focusIndex].focus();
+        };
+
+        digits.forEach((input, index) => {
+            input.addEventListener('focus', () => input.select());
+
+            input.addEventListener('input', () => {
+                const numbers = input.value.replace(/\D/g, '');
+
+                if (numbers.length > 1) {
+                    fillDigits(numbers, index);
+                    return;
+                }
+
+                input.value = numbers.slice(-1);
+                syncCode();
+
+                if (input.value && digits[index + 1]) {
+                    digits[index + 1].focus();
+                }
+            });
+
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Backspace' && !input.value && digits[index - 1]) {
+                    digits[index - 1].focus();
+                    digits[index - 1].value = '';
+                    syncCode();
+                }
+
+                if (event.key === 'ArrowLeft' && digits[index - 1]) {
+                    event.preventDefault();
+                    digits[index - 1].focus();
+                }
+
+                if (event.key === 'ArrowRight' && digits[index + 1]) {
+                    event.preventDefault();
+                    digits[index + 1].focus();
+                }
+            });
+
+            input.addEventListener('paste', (event) => {
+                const pastedCode = event.clipboardData.getData('text');
+
+                if (!/\d/.test(pastedCode)) {
+                    return;
+                }
+
+                event.preventDefault();
+                fillDigits(pastedCode, index);
+            });
+        });
+
+        form.addEventListener('submit', (event) => {
+            syncCode();
+
+            if (!/^\d{6}$/.test(codeInput.value)) {
+                event.preventDefault();
+                digits.find((input) => !input.value)?.focus();
+            }
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

@@ -176,6 +176,75 @@ body:not(.flappy-page) main {
     background: var(--paper);
 }
 
+.wallet-otp-fieldset {
+    min-width: 0;
+    padding: 0;
+    margin: 4px 0 0;
+    border: 0;
+}
+
+.wallet-otp-fieldset legend {
+    padding: 0;
+    margin-bottom: 10px;
+    color: var(--sage-ink);
+    font-weight: 700;
+}
+
+.wallet-otp-inputs {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(42px, 54px));
+    gap: 10px;
+}
+
+.wallet-topup-card .wallet-otp-digit {
+    width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    padding: 0;
+    border: 1.5px solid rgba(79, 104, 71, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 253, 247, 0.96);
+    color: var(--sage-ink);
+    font: 700 1.25rem/1 "Plus Jakarta Sans", sans-serif;
+    text-align: center;
+    caret-color: var(--sage-strong);
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.wallet-topup-card .wallet-otp-digit:hover {
+    border-color: rgba(79, 104, 71, 0.55);
+}
+
+.wallet-topup-card .wallet-otp-digit:focus {
+    outline: none;
+    border-color: var(--sage-strong);
+    box-shadow: 0 0 0 4px rgba(127, 150, 112, 0.18);
+    transform: translateY(-1px);
+}
+
+.wallet-topup-card .wallet-otp-digit:valid {
+    border-color: rgba(79, 104, 71, 0.65);
+}
+
+.wallet-otp-hint {
+    margin: 9px 0 0;
+    color: rgba(51, 66, 49, 0.68);
+    font-size: 0.82rem;
+}
+
+@media (max-width: 520px) {
+    .wallet-otp-inputs {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 7px;
+    }
+
+    .wallet-topup-card .wallet-otp-digit {
+        min-height: 50px;
+        border-radius: 10px;
+        font-size: 1.1rem;
+    }
+}
+
 .wallet-support-card ul {
     display: grid;
     gap: 10px;
