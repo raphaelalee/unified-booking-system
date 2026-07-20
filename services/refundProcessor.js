@@ -74,6 +74,8 @@ function mapLockedTransaction(row = {}, allocationRows = []) {
         userId: row.user_id,
         bookingId: row.booking_id,
         orderId: row.order_id,
+        orderNumber: row.order_number || '',
+        order_number: row.order_number || '',
         totalAmount: Number(row.total_amount || 0),
         originalAmount: Number(row.original_amount || row.gross_amount || row.total_amount || 0),
         grossAmount: Number(row.gross_amount || row.original_amount || row.total_amount || 0),
@@ -104,7 +106,13 @@ function mapLockedTransaction(row = {}, allocationRows = []) {
 }
 
 async function lockTransactionForRefund(connection, transactionId) {
-    const rows = await query(connection, 'SELECT * FROM transactions WHERE transaction_id = ? FOR UPDATE', [transactionId]);
+    const rows = await query(connection, `
+        SELECT transactions.*, orders.order_number
+        FROM transactions
+        LEFT JOIN orders ON orders.transaction_id = transactions.transaction_id
+        WHERE transactions.transaction_id = ?
+        FOR UPDATE
+    `, [transactionId]);
     if (!rows.length) return null;
 
     const allocations = await query(connection, `

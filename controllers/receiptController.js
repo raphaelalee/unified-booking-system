@@ -51,8 +51,7 @@ function signCheckinToken(receipt) {
 }
 
 function getOrderId(receipt) {
-    const match = String(receipt?.id || '').match(/^order-(\d+)$/);
-    return match ? match[1] : String(receipt?.displayId || receipt?.id || '').replace(/^order-/, '');
+    return String(receipt?.orderNumber || receipt?.order_number || receipt?.id || receipt?.displayId || '');
 }
 
 function isBookingReceipt(receipt) {
@@ -392,8 +391,8 @@ function mapOrderReceipt(order) {
     }
 
     return {
-        id: `order-${order.id}`,
-        displayId: order.id,
+        id: order.orderNumber || order.order_number || String(order.id),
+        displayId: order.orderNumber || order.order_number || String(order.id),
         orderId: order.orderId || null,
         order_number: order.order_number || order.orderNumber || '',
         orderNumber: order.orderNumber || order.order_number || '',
@@ -559,7 +558,7 @@ function canViewReceipt(req, receipt, merchant = null) {
 function verifyPickupToken(orderId, token) {
     try {
         const payload = jwt.verify(token, getTokenSecret());
-        const receiptId = `order-${orderId}`;
+        const receiptId = String(orderId);
 
         if (payload.purpose !== 'pickup') {
             return null;
@@ -693,17 +692,6 @@ async function loadReceipt(req, id) {
         return null;
     }
 
-    const orderMatch = String(id).match(/^order-(\d+)$/);
-
-    if (orderMatch) {
-        const orderReceipt = user.role === 'customer'
-            ? await getCustomerOrderReceipt(orderMatch[1], user.id)
-            : await getAnyOrderReceipt(orderMatch[1]);
-        if (orderReceipt) {
-            return canViewReceipt(req, orderReceipt, merchant) ? orderReceipt : null;
-        }
-    }
-
     const persistentReceipt = user.role === 'customer'
         ? await getCustomerPurchaseHistoryReceipt(id, user.id)
         : await getAnyPurchaseHistoryReceipt(id);
@@ -716,6 +704,13 @@ async function loadReceipt(req, id) {
         }
 
         return canViewReceipt(req, persistentReceipt, merchant) ? persistentReceipt : null;
+    }
+
+    const orderReceipt = user.role === 'customer'
+        ? await getCustomerOrderReceipt(id, user.id)
+        : await getAnyOrderReceipt(id);
+    if (orderReceipt) {
+        return canViewReceipt(req, orderReceipt, merchant) ? orderReceipt : null;
     }
 
     return null;
@@ -1157,7 +1152,7 @@ function checkIn(req, res) {
 }
 
 function verifyPickup(req, res) {
-    const receiptId = `order-${req.params.id}`;
+    const receiptId = String(req.params.id);
     const payload = verifyPickupToken(req.params.id, req.query.token);
 
     if (!payload) {

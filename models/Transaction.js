@@ -1338,8 +1338,8 @@ function getOrderReceiptById(transactionId, userId, callback) {
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
-                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1367,13 +1367,14 @@ function getOrderReceiptById(transactionId, userId, callback) {
             INNER JOIN users ON users.user_id = transactions.user_id
             INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
             INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
             LEFT JOIN salons ON salons.salon_id = products.salon_id
-            WHERE transactions.transaction_id = ?
+            WHERE (transactions.transaction_id = ? OR o.order_number = ?)
                 AND transactions.user_id = ?
             ORDER BY order_items.order_item_id ASC
         `;
 
-        db.query(sql, [transactionId, userId], (error, rows) => {
+        db.query(sql, [transactionId, transactionId, userId], (error, rows) => {
             if (error) {
                 callback(error);
                 return;
@@ -1440,8 +1441,8 @@ function getPickupVerificationById(transactionId, callback) {
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
-                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1469,12 +1470,13 @@ function getPickupVerificationById(transactionId, callback) {
             INNER JOIN users ON users.user_id = transactions.user_id
             INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
             INNER JOIN products ON products.product_id = order_items.product_id
+            LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
             LEFT JOIN salons ON salons.salon_id = products.salon_id
-            WHERE transactions.transaction_id = ?
+            WHERE transactions.transaction_id = ? OR o.order_number = ?
             ORDER BY order_items.order_item_id ASC
         `;
 
-        db.query(sql, [transactionId], (error, rows = []) => {
+        db.query(sql, [transactionId, transactionId], (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;
@@ -1491,7 +1493,7 @@ function getPickupVerificationById(transactionId, callback) {
 
             callback(null, {
                 id: first.id,
-                receiptId: `order-${first.id}`,
+                receiptId: first.order_number || String(first.id),
                 orderId: first.order_id || null,
                 order_number: first.order_number || '',
                 orderNumber: first.order_number || '',
@@ -1552,8 +1554,8 @@ function getMerchantOrderReport(merchantUserId, callback) {
             const sql = `
                 SELECT
                     transactions.transaction_id,
-                    (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-                    (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+                    o.order_id,
+                    o.order_number,
                     transactions.user_id,
                     transactions.total_amount,
                     transactions.payment_method,
@@ -1588,10 +1590,13 @@ function getMerchantOrderReport(merchantUserId, callback) {
                 INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
                 INNER JOIN products ON products.product_id = order_items.product_id
                 INNER JOIN salons ON salons.salon_id = products.salon_id
+                LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
                 WHERE salons.merchant_id = ?
                     AND transactions.payment_status = 'paid'
                 GROUP BY
                     transactions.transaction_id,
+                    o.order_id,
+                    o.order_number,
                     transactions.user_id,
                     transactions.total_amount,
                     transactions.payment_method,
@@ -1761,8 +1766,8 @@ function getCustomerOrders(userId, callback) {
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
-                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1790,6 +1795,7 @@ function getCustomerOrders(userId, callback) {
                 GROUP_CONCAT(DISTINCT salons.merchant_id ORDER BY salons.merchant_id SEPARATOR ',') AS merchant_user_ids,
                 GROUP_CONCAT(DISTINCT salons.salon_name ORDER BY salons.salon_name SEPARATOR ', ') AS merchant_names
             FROM transactions
+            LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
             INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
             INNER JOIN products ON products.product_id = order_items.product_id
             LEFT JOIN salons ON salons.salon_id = products.salon_id
@@ -1797,6 +1803,8 @@ function getCustomerOrders(userId, callback) {
                 AND transactions.payment_status IN ('paid', 'partially_refunded', 'refunded')
             GROUP BY
                 transactions.transaction_id,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1830,7 +1838,7 @@ function getCustomerOrders(userId, callback) {
 
             callback(null, rows.map((row) => ({
                 id: row.id,
-                receiptId: `order-${row.id}`,
+                receiptId: row.order_number || String(row.id),
                 orderId: row.order_id || null,
                 order_number: row.order_number || '',
                 orderNumber: row.order_number || '',
@@ -1885,8 +1893,8 @@ function getOrderById(transactionId, callback) {
         const sql = `
             SELECT
                 transactions.transaction_id AS id,
-                (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-                (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1917,12 +1925,15 @@ function getOrderById(transactionId, callback) {
                 GROUP_CONCAT(DISTINCT salons.salon_name ORDER BY salons.salon_name SEPARATOR ', ') AS merchant_names
             FROM transactions
             INNER JOIN users ON users.user_id = transactions.user_id
+            LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
             INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
             INNER JOIN products ON products.product_id = order_items.product_id
             LEFT JOIN salons ON salons.salon_id = products.salon_id
-            WHERE transactions.transaction_id = ?
+            WHERE transactions.transaction_id = ? OR o.order_number = ?
             GROUP BY
                 transactions.transaction_id,
+                o.order_id,
+                o.order_number,
                 transactions.user_id,
                 transactions.total_amount,
                 transactions.payment_status,
@@ -1950,7 +1961,7 @@ function getOrderById(transactionId, callback) {
             LIMIT 1
         `;
 
-        db.query(sql, [transactionId], (error, rows = []) => {
+        db.query(sql, [transactionId, transactionId], (error, rows = []) => {
             if (error) {
                 callback(error);
                 return;
@@ -1965,7 +1976,7 @@ function getOrderById(transactionId, callback) {
 
             callback(null, {
                 id: row.id,
-                receiptId: `order-${row.id}`,
+                receiptId: row.order_number || String(row.id),
                 orderId: row.order_id || null,
                 order_number: row.order_number || '',
                 orderNumber: row.order_number || '',
@@ -2013,7 +2024,11 @@ function getOrderForCustomer(userId, transactionId, callback) {
             return;
         }
 
-        callback(null, orders.find((order) => String(order.id) === String(transactionId)) || null);
+        callback(null, orders.find((order) => {
+            return String(order.id) === String(transactionId)
+                || String(order.orderNumber || order.order_number || '') === String(transactionId)
+                || String(order.receiptId || '') === String(transactionId);
+        }) || null);
     });
 }
 
@@ -2143,7 +2158,6 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
                             return;
                         }
 
-                        const receiptId = `order-${transactionId}`;
                         const historyFields = ['delivery_status = ?'];
                         const historyValues = [requestedStatus];
 
@@ -2159,13 +2173,15 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
                         }
 
                         const historySql = `
-                            UPDATE purchase_history
-                            SET ${historyFields.join(', ')}
-                            WHERE receipt_id = ?
-                                AND purchase_type = 'product'
+                            UPDATE purchase_history ph
+                            INNER JOIN orders o
+                                ON ph.receipt_id = o.order_number
+                            SET ${historyFields.map((field) => `ph.${field}`).join(', ')}
+                            WHERE o.transaction_id = ?
+                                AND ph.purchase_type = 'product'
                         `;
 
-                        connection.query(historySql, [...historyValues, receiptId], (historyError) => {
+                        connection.query(historySql, [...historyValues, transactionId], (historyError) => {
                             if (historyError) {
                                 rollback(historyError);
                                 return;
@@ -2210,23 +2226,25 @@ function verifyPickupByQr(transactionId, customerUserId, callback) {
 
                 const lockSql = `
                     SELECT
-                        transaction_id,
-                        user_id,
-                        payment_status,
-                        delivery_status,
-                        pickup_status,
-                        fulfilment_type,
-                        pickup_ready_at,
-                        pickup_verified_at,
-                        pickup_verified_by,
-                        pickup_qr_used,
-                        collected_at
+                        transactions.transaction_id,
+                        o.order_number,
+                        transactions.user_id,
+                        transactions.payment_status,
+                        transactions.delivery_status,
+                        transactions.pickup_status,
+                        transactions.fulfilment_type,
+                        transactions.pickup_ready_at,
+                        transactions.pickup_verified_at,
+                        transactions.pickup_verified_by,
+                        transactions.pickup_qr_used,
+                        transactions.collected_at
                     FROM transactions
-                    WHERE transaction_id = ?
+                    LEFT JOIN orders o ON o.transaction_id = transactions.transaction_id
+                    WHERE transactions.transaction_id = ? OR o.order_number = ?
                     FOR UPDATE
                 `;
 
-                connection.query(lockSql, [transactionId], (lookupError, rows = []) => {
+                connection.query(lockSql, [transactionId, transactionId], (lookupError, rows = []) => {
                     if (lookupError) {
                         return connection.rollback(() => {
                             connection.release();
@@ -2298,7 +2316,7 @@ function verifyPickupByQr(transactionId, customerUserId, callback) {
                             AND COALESCE(pickup_status, 'pending_pickup') NOT IN ('picked_up', 'collected')
                     `;
 
-                    connection.query(updateTransactionSql, [customerUserId, transactionId], (updateError, updateResult) => {
+                    connection.query(updateTransactionSql, [customerUserId, order.transaction_id], (updateError, updateResult) => {
                         if (updateError) {
                             return connection.rollback(() => {
                                 connection.release();
@@ -2313,18 +2331,20 @@ function verifyPickupByQr(transactionId, customerUserId, callback) {
                             });
                         }
 
-                        const receiptId = `order-${transactionId}`;
+                        const receiptId = order.order_number || String(order.transaction_id);
                         const updateHistorySql = `
-                            UPDATE purchase_history
+                            UPDATE purchase_history ph
+                            INNER JOIN orders o
+                                ON ph.receipt_id = o.order_number
                             SET
-                                pickup_status = 'picked_up',
-                                pickup_at = COALESCE(pickup_at, CURRENT_TIMESTAMP),
-                                delivery_status = 'completed'
-                            WHERE receipt_id = ?
-                                AND purchase_type = 'product'
+                                ph.pickup_status = 'picked_up',
+                                ph.pickup_at = COALESCE(ph.pickup_at, CURRENT_TIMESTAMP),
+                                ph.delivery_status = 'completed'
+                            WHERE o.transaction_id = ?
+                                AND ph.purchase_type = 'product'
                         `;
 
-                        connection.query(updateHistorySql, [receiptId], (historyError) => {
+                        connection.query(updateHistorySql, [order.transaction_id], (historyError) => {
                             if (historyError) {
                                 return connection.rollback(() => {
                                     connection.release();
@@ -2540,7 +2560,13 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                         return;
                     }
 
-                    Loyalty.reverseCampaignCashbackForReceipt(`order-${transactionId}`, (reverseError) => {
+                    getOrderRowByTransactionId(transactionId, (orderLookupError, orderRow) => {
+                        if (orderLookupError) {
+                            done(orderLookupError);
+                            return;
+                        }
+
+                        Loyalty.reverseCampaignCashbackForReceipt(orderRow?.orderNumber || orderRow?.order_number || String(transactionId), (reverseError) => {
                         if (reverseError) {
                             console.error('[refund:loyalty:reverse:error]', reverseError);
                             done(reverseError);
@@ -2548,6 +2574,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                         }
 
                         done(null, result);
+                        });
                     });
                 });
             });

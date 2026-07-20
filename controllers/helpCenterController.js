@@ -125,7 +125,7 @@ function sendSupportResponse(req, res, payload) {
 }
 
 function parseOrderTransactionId(value) {
-    const match = String(value || '').trim().match(/^(?:order-)?(\d+)$/i);
+    const match = String(value || '').trim().match(/^(\d+)$/);
     return match ? Number(match[1]) : null;
 }
 
@@ -527,7 +527,7 @@ async function processMerchantApprovedRefund(request, merchantUserId, merchantNo
         if (!order) {
             order = await getHistoryOrderForCustomer(
                 request.customerUserId,
-                request.receiptId || (transactionId ? `order-${transactionId}` : request.targetId)
+                request.receiptId || request.targetId
             );
         }
 
@@ -924,7 +924,7 @@ async function buildOrderRequest(req, requestType, targetId, body) {
     }
 
     if (!order) {
-        const receiptId = transactionId ? `order-${transactionId}` : targetId;
+        const receiptId = targetId;
         order = await getHistoryOrderForCustomer(req.session.user.id, receiptId);
     }
 
@@ -995,7 +995,7 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         returnRequired: eligibility.returnRequired || reasonValidation.reason.returnRequired,
         evidenceRequired: reasonValidation.reason.evidenceRequired,
         targetType: 'order',
-        targetId: String(transactionId || parseOrderTransactionId(order.receiptId) || order.targetId || order.id),
+        targetId: String(transactionId || order.transactionId || order.targetId || order.id),
         receiptId: order.receiptId,
         targetLabel: order.itemNames || 'Product order',
         paymentMethod: order.paymentMethod || order.paymentProvider || '',
@@ -1736,7 +1736,7 @@ async function adminResolve(req, res) {
             if (!order) {
                 order = await getHistoryOrderForCustomer(
                     request.customerUserId,
-                    request.receiptId || (transactionId ? `order-${transactionId}` : request.targetId)
+                    request.receiptId || request.targetId
                 );
             }
 

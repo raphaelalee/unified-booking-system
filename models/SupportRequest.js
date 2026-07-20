@@ -363,6 +363,8 @@ function mapRow(row = {}) {
         targetType: row.target_type,
         targetId: row.target_id,
         receiptId: row.receipt_id,
+        order_number: row.order_number || '',
+        orderNumber: row.order_number || '',
         targetLabel: row.target_label || '',
         paymentMethod: normalizePaymentMethod(row.original_payment_method || row.payment_method || ''),
         paymentProvider: normalizePaymentProvider(row.original_payment_provider || '', row.original_payment_method || row.payment_method || ''),
@@ -452,11 +454,13 @@ function selectSql(whereClause = '') {
             payment_txn.provider_session_id AS original_provider_session_id,
             payment_txn.provider_capture_id AS original_provider_capture_id,
             payment_txn.provider_transaction_id AS original_provider_transaction_id,
-            payment_txn.payment_date AS original_payment_date
+            payment_txn.payment_date AS original_payment_date,
+            order_refs.order_number AS order_number
         FROM support_requests
         INNER JOIN users AS customers ON customers.user_id = support_requests.customer_user_id
         LEFT JOIN users AS merchants ON merchants.user_id = support_requests.merchant_user_id
         LEFT JOIN transactions AS payment_txn ON payment_txn.transaction_id = support_requests.payment_transaction_id
+        LEFT JOIN orders AS order_refs ON order_refs.transaction_id = payment_txn.transaction_id
         LEFT JOIN (
             SELECT merchant_id, MIN(salon_name) AS salon_name
             FROM salons

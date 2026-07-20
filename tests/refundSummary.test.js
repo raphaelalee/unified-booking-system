@@ -58,7 +58,7 @@ test('refund summary provides historical fallbacks when references are missing',
     });
 
     assert.equal(summary.refundReference, 'RF-8');
-    assert.equal(summary.orderReference, 'order-91');
+    assert.equal(summary.orderReference, '#91');
     assert.equal(summary.cumulativeGrossRefunded, 10);
     assert.equal(summary.remainingRefundableAmount, 5);
 });

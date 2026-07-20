@@ -3,7 +3,7 @@
         <div>
             <span class="support-ticket-id">Ticket #<%= request.id %></span>
             <h3><%= requestLabel(request.requestType) %></h3>
-            <p><%= request.targetType === 'order' ? 'Order' : 'Booking' %> reference <strong><%= request.targetType === 'order' ? (request.order_number || request.orderNumber || ('#' + String(request.receiptId || request.targetId || '').replace(/^order-/, ''))) : (request.receiptId || request.targetId) %></strong></p>
+            <p><%= request.targetType === 'order' ? 'Order' : 'Booking' %> reference <strong><%= request.targetType === 'order' ? (request.order_number || request.orderNumber || request.receiptId || ('#' + request.targetId)) : (request.receiptId || request.targetId) %></strong></p>
             <% if (role !== 'customer') { %>
                 <p>Customer <strong><%= request.customerName || 'Customer' %></strong></p>
             <% } %>

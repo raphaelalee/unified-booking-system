@@ -80,10 +80,9 @@ async function ensureRewardAdjustmentSchema() {
 
 function getReceiptKeys(transaction = {}) {
     return [...new Set([
+        transaction.orderNumber || transaction.order_number || '',
         String(transaction.transactionId || ''),
-        `order-${transaction.transactionId || ''}`,
-        transaction.orderId ? String(transaction.orderId) : '',
-        transaction.orderId ? `order-${transaction.orderId}` : ''
+        transaction.orderId ? String(transaction.orderId) : ''
     ].filter(Boolean))];
 }
 
@@ -227,7 +226,7 @@ function buildRewardEffects(transaction, refund, original, previous) {
 
 async function insertLoyaltyAdjustment(connection, transaction, refund, original, adjustmentType, pointsDelta, cashbackDelta, description) {
     if (!pointsDelta && !cashbackDelta) return false;
-    const sourceReceiptId = `order-${transaction.transactionId}`;
+    const sourceReceiptId = transaction.orderNumber || transaction.order_number || String(transaction.transactionId);
     const idempotencyKey = `refund:${refund.refundReference}:${adjustmentType}`;
     const result = await query(connection, `
         INSERT IGNORE INTO loyalty_transactions

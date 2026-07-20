@@ -277,8 +277,7 @@ function cleanReference(value) {
 }
 
 function hasOrderReference(row = {}) {
-    return Boolean(cleanReference(row.order_number || row.orderNumber || row.order_id || row.orderId))
-        || /(?:^|-)order-\d+(?:-|$)/i.test(cleanReference(row.source_receipt_id || row.sourceReceiptId));
+    return Boolean(cleanReference(row.order_number || row.orderNumber || row.order_id || row.orderId));
 }
 
 function hasBookingReference(row = {}) {
@@ -525,7 +524,6 @@ function applyTransactionDisplayDetails(transactions = [], receipts = []) {
     const receiptMap = (receipts || []).reduce((map, receipt = {}) => {
         const keys = [
             receipt.receiptId,
-            receipt.id ? `order-${receipt.id}` : '',
             receipt.order_number,
             receipt.orderNumber
         ].filter(Boolean);
@@ -927,8 +925,7 @@ function isOrderReceipt(receipt = {}) {
 }
 
 function isOrderRelatedCashback(sourceReceiptId, options = {}) {
-    return String(options.receiptType || options.type || '').toLowerCase() === 'order'
-        || String(sourceReceiptId || '').startsWith('cashback-order-');
+    return String(options.receiptType || options.type || '').toLowerCase() === 'order';
 }
 
 function normalizePercent(value, fallback = 0) {

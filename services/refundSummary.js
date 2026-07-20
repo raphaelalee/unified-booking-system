@@ -22,8 +22,8 @@ function publicRefundReference(row = {}) {
 function publicOrderReference(row = {}) {
     return row.order_number
         || row.receipt_id
-        || (row.order_id ? `order-${row.order_id}` : '')
-        || (row.transaction_id ? `order-${row.transaction_id}` : 'Not available');
+        || (row.order_id ? `#${row.order_id}` : '')
+        || (row.transaction_id ? `#${row.transaction_id}` : 'Not available');
 }
 
 function refundDate(row = {}) {
@@ -96,7 +96,7 @@ function emptySummary(transactionId, base = {}) {
         refundStatus: base.refundStatus || 'none',
         returnStatus: base.returnStatus || '',
         providerRefundStatus: 'none',
-        orderReference: base.orderReference || base.orderNumber || base.receiptId || (transactionId ? `order-${transactionId}` : 'Not available'),
+        orderReference: base.orderReference || base.orderNumber || base.receiptId || (transactionId ? `#${transactionId}` : 'Not available'),
         refundReference: 'Not available',
         latestRefundDate: null,
         refunds: []

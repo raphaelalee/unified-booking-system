@@ -270,8 +270,12 @@ function save(receipt, callback) {
                     order_number = VALUES(order_number)
             `;
 
+            const receiptId = receipt.type === 'booking'
+                ? String(receipt.id)
+                : String(receipt.order_number || receipt.orderNumber || receipt.id);
+
             db.query(sql, [
-                String(receipt.id),
+                receiptId,
                 receipt.userId,
                 receipt.type === 'booking' ? 'booking' : 'product',
                 itemNames,
@@ -298,7 +302,7 @@ function save(receipt, callback) {
                 receipt.paymentTransactionReference || receipt.providerPaymentId || receipt.providerSessionId || '',
                 refundedAmount,
                 Math.max(paidAmount - refundedAmount, 0),
-                receipt.order_number || receipt.orderNumber || null
+                receipt.order_number || receipt.orderNumber || (receipt.type === 'booking' ? null : receiptId)
             ], callback);
         });
     });
@@ -315,7 +319,7 @@ function getByUserId(userId, callback) {
             SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
             FROM purchase_history ph
             LEFT JOIN orders o
-                ON ph.payment_transaction_id = o.transaction_id
+                ON ph.receipt_id = o.order_number
             WHERE ph.user_id = ?
             ORDER BY ph.created_at DESC, ph.history_id DESC
         `;
@@ -335,13 +339,19 @@ function getByReceiptId(receiptId, userId, callback) {
             SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
             FROM purchase_history ph
             LEFT JOIN orders o
-                ON ph.payment_transaction_id = o.transaction_id
-            WHERE ph.receipt_id = ?
+                ON ph.receipt_id = o.order_number
+            WHERE (
+                    ph.receipt_id = ?
+                    OR (
+                        ph.purchase_type = 'product'
+                        AND o.order_number = ?
+                    )
+                )
                 AND ph.user_id = ?
             LIMIT 1
         `;
 
-        db.query(sql, [String(receiptId), userId], (error, rows) => {
+        db.query(sql, [String(receiptId), String(receiptId), userId], (error, rows) => {
             if (error) {
                 callback(error);
                 return;
@@ -363,12 +373,16 @@ function getByReceiptIdAny(receiptId, callback) {
             SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
             FROM purchase_history ph
             LEFT JOIN orders o
-                ON ph.payment_transaction_id = o.transaction_id
+                ON ph.receipt_id = o.order_number
             WHERE ph.receipt_id = ?
+                OR (
+                    ph.purchase_type = 'product'
+                    AND o.order_number = ?
+                )
             LIMIT 1
         `;
 
-        db.query(sql, [String(receiptId)], (error, rows) => {
+        db.query(sql, [String(receiptId), String(receiptId)], (error, rows) => {
             if (error) {
                 callback(error);
                 return;
@@ -405,7 +419,7 @@ function getSupportOrdersByUserId(userId, callback) {
                 ph.created_at
             FROM purchase_history ph
             LEFT JOIN orders o
-                ON ph.payment_transaction_id = o.transaction_id
+                ON ph.receipt_id = o.order_number
             WHERE ph.user_id = ?
                 AND ph.purchase_type = 'product'
                 AND ph.payment_status IN ('paid', 'partially_refunded', 'refunded')
@@ -453,7 +467,10 @@ function getSupportOrderForCustomer(userId, receiptId, callback) {
             return;
         }
 
-        callback(null, orders.find((order) => String(order.receiptId) === String(receiptId)) || null);
+        callback(null, orders.find((order) => {
+            return String(order.receiptId) === String(receiptId)
+                || String(order.orderNumber || order.order_number || '') === String(receiptId);
+        }) || null);
     });
 }
 
@@ -469,7 +486,12 @@ function updateDeliveryStatus(receiptId, status, callback) {
         }
 
         db.query(
-            `UPDATE purchase_history SET delivery_status = ? WHERE receipt_id = ? AND purchase_type = 'product'`,
+            `UPDATE purchase_history ph
+             INNER JOIN orders o
+                ON ph.receipt_id = o.order_number
+             SET ph.delivery_status = ?
+             WHERE o.order_number = ?
+                AND ph.purchase_type = 'product'`,
             [value, receiptId],
             callback
         );
@@ -484,9 +506,15 @@ function recordRefund(receiptId, amount, callback) {
         }
 
         db.query(
-            `UPDATE purchase_history
-             SET refund_status = 'refunded', refunded_amount = ?, refunded_at = CURRENT_TIMESTAMP
-             WHERE receipt_id = ? AND purchase_type = 'product'`,
+            `UPDATE purchase_history ph
+             INNER JOIN orders o
+                ON ph.receipt_id = o.order_number
+             SET
+                ph.refund_status = 'refunded',
+                ph.refunded_amount = ?,
+                ph.refunded_at = CURRENT_TIMESTAMP
+             WHERE o.order_number = ?
+                AND ph.purchase_type = 'product'`,
             [Number(amount || 0), receiptId],
             (error, result) => {
                 if (error) {
@@ -529,7 +557,7 @@ function mapReceipt(row) {
 
     return {
         id: row.receipt_id,
-        displayId: row.receipt_id.replace(/^order-/, ''),
+        displayId: row.order_number || row.receipt_id,
         orderId: row.order_id || null,
         order_number: row.order_number || '',
         orderNumber: row.order_number || '',
@@ -573,9 +601,15 @@ function markPickupCollected(receiptId, callback) {
         }
 
         db.query(
-            `UPDATE purchase_history
-             SET pickup_status = 'picked_up', pickup_at = COALESCE(pickup_at, CURRENT_TIMESTAMP), delivery_status = 'delivered'
-             WHERE receipt_id = ? AND purchase_type = 'product'`,
+            `UPDATE purchase_history ph
+             INNER JOIN orders o
+                ON ph.receipt_id = o.order_number
+             SET
+                ph.pickup_status = 'picked_up',
+                ph.pickup_at = COALESCE(ph.pickup_at, CURRENT_TIMESTAMP),
+                ph.delivery_status = 'delivered'
+             WHERE o.order_number = ?
+                AND ph.purchase_type = 'product'`,
             [receiptId],
             callback
         );

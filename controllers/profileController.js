@@ -264,8 +264,8 @@ async function getProductHistory(userId) {
     const sql = `
         SELECT
             transactions.transaction_id AS id,
-            (SELECT orders.order_id FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_id,
-            (SELECT orders.order_number FROM orders WHERE orders.transaction_id = transactions.transaction_id LIMIT 1) AS order_number,
+            orders.order_id,
+            orders.order_number,
             'product' AS type,
             GROUP_CONCAT(CONCAT(products.name, ' x', order_items.quantity) ORDER BY order_items.order_item_id SEPARATOR ', ') AS item_names,
             JSON_ARRAYAGG(
@@ -290,11 +290,14 @@ async function getProductHistory(userId) {
             transactions.pickup_status,
             transactions.created_at
         FROM transactions
+        LEFT JOIN orders ON orders.transaction_id = transactions.transaction_id
         INNER JOIN order_items ON order_items.transaction_id = transactions.transaction_id
         INNER JOIN products ON products.product_id = order_items.product_id
         WHERE transactions.user_id = ?
         GROUP BY
             transactions.transaction_id,
+            orders.order_id,
+            orders.order_number,
             transactions.total_amount,
             transactions.payment_method,
             transactions.payment_provider,
@@ -313,7 +316,7 @@ async function getProductHistory(userId) {
 
     return rows.map((row) => ({
         id: row.id,
-        receiptId: `order-${row.id}`,
+        receiptId: row.order_number || String(row.id),
         orderId: row.order_id || null,
         order_number: row.order_number || '',
         orderNumber: row.order_number || '',
@@ -339,7 +342,7 @@ function getPersistentHistory(userId) {
             }
 
             resolve((rows || []).map((row) => ({
-                id: row.receipt_id.replace(/^order-/, ''),
+                id: row.receipt_id,
                 receiptId: row.receipt_id,
                 orderId: row.order_id || null,
                 order_number: row.order_number || '',

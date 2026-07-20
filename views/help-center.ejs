@@ -233,7 +233,7 @@
                                         data-payment-method="<%= order.paymentMethodLabel || order.paymentMethod || 'Original payment method' %>"
                                         <%= !eligibility.eligible ? 'disabled' : '' %>
                                         <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
-                                        Order <%= order.order_number || order.orderNumber || ('#' + (order.id || String(order.receiptId || '').replace(/^order-/, ''))) %> - <%= order.itemNames %>
+                                        Order <%= order.order_number || order.orderNumber || order.receiptId || ('#' + order.id) %> - <%= order.itemNames %>
                                         <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
                                     </option>
                                 <% }) %>

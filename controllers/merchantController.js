@@ -5253,8 +5253,8 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
     };
 
     if (payment.kind === 'order' && paymentTransactionId) {
-        paidPayment.receiptId = `order-${paymentTransactionId}`;
-        paidPayment.displayId = paymentTransactionId;
+        paidPayment.receiptId = createdOrderNumber || String(paymentTransactionId);
+        paidPayment.displayId = createdOrderNumber || String(paymentTransactionId);
     }
 
     if (Number(paidPayment.pointsRedeemed || 0) > 0) {

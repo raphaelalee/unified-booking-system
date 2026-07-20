@@ -49,7 +49,7 @@ function validateRules(rules) {
 
 function mapWalletReceipt(row) {
     return {
-        id: String(row.receipt_id || '').replace(/^order-/, ''),
+        id: String(row.receipt_id || ''),
         receiptId: row.receipt_id,
         itemNames: row.item_names || 'Paid receipt',
         totalAmount: Number(row.total_amount || 0),

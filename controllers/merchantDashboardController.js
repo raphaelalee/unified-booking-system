@@ -1641,7 +1641,7 @@ function updateOrderStatus(req, res) {
                 type: 'order_update',
                 title: 'Order status updated',
                 message: `Your ${order.itemNames || 'product order'} order is now ${statusLabel}.`,
-                linkUrl: `/receipt/order-${transactionId}`,
+                linkUrl: `/receipt/${encodeURIComponent(order.order_number || order.orderNumber || String(transactionId))}`,
                 dedupeKey: `merchant-order-status-${transactionId}-${status}-${Date.now()}`,
                 metadata: { transactionId, status }
             });

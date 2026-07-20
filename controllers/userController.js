@@ -208,8 +208,9 @@ function ensureReferralVoucherForExistingAccount(accountUser, vouchers = [], cal
 
 function mapWalletHistoryRow(row) {
     return {
-        id: row.receipt_id.replace(/^order-/, ''),
+        id: row.receipt_id,
         receiptId: row.receipt_id,
+        transactionId: row.payment_transaction_id || null,
         orderId: row.order_id || null,
         order_number: row.order_number || '',
         orderNumber: row.order_number || '',
@@ -227,7 +228,7 @@ function mapWalletHistoryRow(row) {
 
 function loadRefundSummariesForHistory(rows = [], callback) {
     const transactionIds = [...new Set(rows
-        .map((row) => Number(String(row.receipt_id || '').replace(/^order-/, '')) || Number(row.transaction_id || 0))
+        .map((row) => Number(row.payment_transaction_id || row.transaction_id || 0))
         .filter((id) => Number.isInteger(id) && id > 0))];
 
     if (!transactionIds.length) {
@@ -242,7 +243,7 @@ function loadRefundSummariesForHistory(rows = [], callback) {
 
 function attachRefundSummariesToHistory(rows = [], summaries = {}) {
     return rows.map((entry) => {
-        const transactionId = String(Number(String(entry.receiptId || '').replace(/^order-/, '')) || entry.transactionId || '');
+        const transactionId = String(Number(entry.transactionId || 0) || '');
         const refund = summaries[transactionId] || null;
         if (!refund) return entry;
         return {
@@ -268,7 +269,7 @@ function attachSupportRequestsToHistory(rows = [], supportRequests = []) {
     });
 
     return rows.map((entry) => {
-        const transactionId = String(Number(String(entry.receiptId || '').replace(/^order-/, '')) || entry.transactionId || '');
+        const transactionId = String(Number(entry.transactionId || 0) || '');
         const supportEscalation = byTransactionId[transactionId] || byReceiptId[String(entry.receiptId || '')] || null;
 
         return supportEscalation ? { ...entry, supportEscalation } : entry;
