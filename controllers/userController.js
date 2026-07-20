@@ -120,6 +120,11 @@ function generateReferralCode(userId) {
     return `VANI${String(userId).padStart(4, '0')}`;
 }
 
+function getReferralBaseUrl() {
+    const configuredUrl = process.env.APP_URL || process.env.PUBLIC_BASE_URL || process.env.BASE_URL;
+    return String(configuredUrl || `http://localhost:${process.env.PORT || 3000}`).trim().replace(/\/+$/, '');
+}
+
 function buildCustomerReferral(member, referralCode, stats = {}) {
     const reward = member.tier === 'Platinum' ? 135 : member.tier === 'Gold' ? 105 : member.tier === 'Silver' ? 80 : 60;
     const discount = member.tier === 'Platinum' ? 15 : 10;
@@ -129,7 +134,7 @@ function buildCustomerReferral(member, referralCode, stats = {}) {
 
     return {
         code: referralCode,
-        link: `https://www.vaniday.com/ref/${referralCode}`,
+        link: `${getReferralBaseUrl()}/ref/${encodeURIComponent(referralCode)}`,
         reward,
         discount,
         successfulReferrals,
