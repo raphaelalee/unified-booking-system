@@ -4783,6 +4783,233 @@ body:not(.flappy-page) .notification-count {
     text-transform: none;
 }
 
+.analytics-export-panel {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 10px;
+    min-width: min(460px, 100%);
+}
+
+.analytics-export-header,
+.analytics-export-actions,
+.analytics-export-dates {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.analytics-export-header {
+    justify-content: space-between;
+}
+
+.analytics-export-header > span,
+.analytics-export-header > strong {
+    font-size: 0.9rem;
+}
+
+.analytics-export-dates label {
+    flex: 1 1 150px;
+}
+
+.analytics-export-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.analytics-export-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.analytics-export-option.select-all {
+    width: fit-content;
+    min-width: 148px;
+}
+
+.analytics-export-option input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #4f6847;
+}
+
+.analytics-export-option span,
+.analytics-export-message {
+    font-size: 0.86rem;
+}
+
+.analytics-export-option span {
+    color: var(--sage-ink);
+    font-weight: 760;
+    text-transform: none;
+}
+
+.analytics-export-message {
+    min-height: 18px;
+    margin: 0;
+}
+
+.analytics-export-message[data-tone="success"] {
+    color: #3f6b3a;
+}
+
+.analytics-export-message[data-tone="error"] {
+    color: #a64032;
+}
+
+.analytics-export-message[data-tone="warning"],
+.analytics-export-message[data-tone="loading"] {
+    color: #8a5b12;
+}
+
+.support-refund-preview {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.48);
+}
+
+.support-refund-preview div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.support-refund-preview span {
+    color: var(--sage-readable);
+    font-weight: 750;
+}
+
+.support-refund-preview strong {
+    color: var(--sage-ink);
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.support-refund-preview .support-refund-net strong {
+    font-size: 1.35rem;
+}
+
+.support-refund-preview p {
+    margin: 4px 0 0;
+    color: var(--sage-readable);
+    font-size: 0.9rem;
+}
+
+.support-confirm-modal[hidden] {
+    display: none;
+}
+
+.support-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(20, 24, 20, 0.48);
+    overflow-y: auto;
+}
+
+.support-confirm-dialog {
+    width: min(560px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow: auto;
+    display: grid;
+    gap: 14px;
+    padding: 22px;
+    border-radius: 8px;
+    background: #fffdf7;
+    box-shadow: 0 20px 60px rgba(28, 34, 27, 0.24);
+}
+
+.support-confirm-dialog dl {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(160px, 1fr);
+    gap: 8px 16px;
+    margin: 0;
+}
+
+.support-confirm-dialog dt {
+    color: var(--sage-readable);
+    font-weight: 750;
+}
+
+.support-confirm-dialog dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+}
+
+.receipt-refund-breakdown {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(79, 104, 71, 0.14);
+}
+
+.receipt-refund-breakdown h2 {
+    margin: 0;
+    color: var(--sage-ink);
+    font-size: 1.05rem;
+}
+
+.receipt-refund-breakdown article {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.5);
+}
+
+.receipt-refund-breakdown article > div,
+.receipt-refund-breakdown dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.receipt-refund-breakdown strong,
+.receipt-refund-breakdown dd {
+    color: var(--sage-ink);
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+.receipt-refund-breakdown span,
+.receipt-refund-breakdown dt {
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.receipt-refund-breakdown dl {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+}
+
+.receipt-refund-breakdown dd {
+    margin: 0;
+    text-align: right;
+}
+
 .analytics-kpi-strip {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -8239,6 +8466,7 @@ form.is-submitting button[type="submit"] {
     padding: 16px;
     display: grid;
     gap: 14px;
+    min-width: 0;
     border: 1px solid rgba(79, 104, 71, 0.14);
     border-left: 5px solid var(--sage-strong);
     border-radius: 8px;
@@ -8273,15 +8501,19 @@ form.is-submitting button[type="submit"] {
     font-size: 0.76rem;
     font-weight: 900;
     text-transform: uppercase;
+    overflow-wrap: anywhere;
 }
 
 .support-status-pill {
+    max-width: 100%;
     padding: 7px 10px;
     border-radius: 999px;
     background: rgba(238, 244, 233, 0.82);
     color: var(--sage-ink);
     font-size: 0.78rem;
     font-weight: 900;
+    text-align: center;
+    white-space: normal;
 }
 
 .support-ticket-meta {
@@ -8291,6 +8523,7 @@ form.is-submitting button[type="submit"] {
 
 .support-ticket-meta p {
     margin: 0;
+    min-width: 0;
     padding: 10px;
     border-radius: 8px;
     background: rgba(238, 244, 233, 0.62);
@@ -8311,13 +8544,16 @@ form.is-submitting button[type="submit"] {
 
 .support-ticket-summary {
     display: grid;
-    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
 }
 
 .support-ticket-summary p,
 .support-conversation .muted {
     margin: 0;
     color: var(--sage-readable);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .support-ticket-details summary {
@@ -8339,6 +8575,7 @@ form.is-submitting button[type="submit"] {
     gap: 10px;
     align-items: center;
     color: var(--sage-readable);
+    min-width: 0;
 }
 
 .support-ticket-timeline p > span {
@@ -8356,6 +8593,7 @@ form.is-submitting button[type="submit"] {
 
 .support-message {
     max-width: 86%;
+    min-width: min(260px, 100%);
     padding: 12px;
     border-radius: 8px;
     background: rgba(238, 244, 233, 0.72);
@@ -8373,15 +8611,20 @@ form.is-submitting button[type="submit"] {
     color: var(--sage-readable);
     font-size: 0.78rem;
     font-weight: 900;
+    min-width: 0;
 }
 
 .support-message p {
     margin: 6px 0 0;
     color: var(--sage-ink);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .support-message img {
-    width: 160px;
+    width: min(220px, 100%);
+    max-height: 180px;
+    object-fit: cover;
     max-width: 100%;
     margin-top: 8px;
     border-radius: 8px;
@@ -8393,6 +8636,7 @@ form.is-submitting button[type="submit"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+    min-width: 0;
 }
 
 .support-contact-panel {
@@ -8834,6 +9078,212 @@ form.is-submitting button[type="submit"] {
 .inline-status-form select:focus {
     border-color: rgba(79, 104, 71, 0.52);
     outline: 3px solid rgba(127, 150, 112, 0.18);
+}
+
+.previous-refunds-card,
+.merchant-refund-panel {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.78);
+}
+
+.previous-refunds-card h4,
+.merchant-refund-panel h4 {
+    margin: 0;
+    color: var(--sage-strong);
+    font-size: 1rem;
+}
+
+.previous-refund-list {
+    display: grid;
+    gap: 8px;
+}
+
+.previous-refund-list p {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) repeat(4, minmax(72px, max-content));
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+    min-width: 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.72);
+    font-size: 0.86rem;
+}
+
+.previous-refund-list p > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.merchant-refund-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.refund-option-card,
+.refund-confirm-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.62);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.partial-refund-controls {
+    display: grid;
+    gap: 10px;
+}
+
+.refund-preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.refund-preset-row button {
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid rgba(79, 104, 71, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.9);
+    color: var(--sage-ink);
+    font-weight: 900;
+}
+
+.refund-preset-row button.is-active,
+.refund-preset-row button:hover {
+    background: var(--sage-strong);
+    color: var(--paper);
+}
+
+.percent-input-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.percent-input-wrap span {
+    font-weight: 900;
+}
+
+.merchant-refund-review input,
+.merchant-refund-review select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(79, 104, 71, 0.2);
+    border-radius: 8px;
+    padding: 0 10px;
+    background: rgba(255, 253, 247, 0.9);
+    color: var(--sage-ink);
+    font: inherit;
+}
+
+.merchant-refund-review input[type="radio"],
+.merchant-refund-review input[type="checkbox"] {
+    width: auto;
+    min-height: 0;
+}
+
+.merchant-refund-warning {
+    margin: 0.75rem 0;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid rgba(190, 125, 0, 0.28);
+    border-radius: 8px;
+    background: rgba(255, 247, 226, 0.9);
+    color: #6f4800;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.refund-calculation-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.refund-calculation-card dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(79, 104, 71, 0.12);
+    min-width: 0;
+}
+
+.refund-calculation-card dt {
+    color: rgba(51, 66, 49, 0.72);
+    font-weight: 700;
+    min-width: 0;
+}
+
+.refund-calculation-card dd {
+    margin: 0;
+    color: var(--sage-ink);
+    font-weight: 900;
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.refund-calculation-card .net-refund-row {
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(223, 232, 212, 0.66);
+}
+
+.refund-calculation-card .net-refund-row dd {
+    color: var(--sage-strong);
+    font-size: 1.35rem;
+}
+
+@media (max-width: 860px) {
+    .merchant-refund-grid,
+    .support-ticket-summary,
+    .previous-refund-list p {
+        grid-template-columns: 1fr;
+    }
+
+    .previous-refund-list p {
+        gap: 4px;
+    }
+
+    .refund-calculation-card dl div,
+    .support-refund-preview div,
+    .support-confirm-dialog dl {
+        grid-template-columns: 1fr;
+    }
+
+    .refund-calculation-card dl div,
+    .support-refund-preview div {
+        display: grid;
+    }
+
+    .refund-calculation-card dd,
+    .support-refund-preview strong,
+    .support-confirm-dialog dd,
+    .receipt-refund-breakdown dd {
+        text-align: left;
+    }
+
+    .receipt-refund-breakdown article > div,
+    .receipt-refund-breakdown dl div {
+        display: grid;
+    }
 }
 
 .admin-support-actions {
@@ -17400,5 +17850,315 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 
     .home-flash-arrow-right {
         right: -10px;
+    }
+}
+
+/* Spin & Discover wheel polish */
+.visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+.spin-wheel-wrap {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    box-sizing: border-box;
+}
+
+.spin-wheel-ring {
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 36% 28%, rgba(255, 255, 255, 0.78), transparent 30%),
+        linear-gradient(145deg, #f9f0dc, #c8a55a 48%, #fff7e7 52%, #7f915f);
+}
+
+.spin-wheel {
+    --wheel-label-radius: 31%;
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    box-sizing: border-box;
+    border: 14px solid #fbf2dc !important;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at center, transparent 0 22%, rgba(255, 248, 229, 0.3) 22.5% 25%, transparent 25.5%),
+        conic-gradient(var(--wheel-gradient)),
+        #d9b35f !important;
+    box-shadow:
+        0 32px 70px rgba(47, 74, 43, 0.24),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.92),
+        inset 0 0 0 18px rgba(255, 250, 240, 0.2),
+        inset 0 -18px 34px rgba(42, 54, 33, 0.16) !important;
+    transition: none !important;
+    transform: translateZ(0) rotate(0deg);
+    transform-origin: 50% 50%;
+    will-change: transform;
+}
+
+.spin-wheel::before {
+    inset: 19% !important;
+    border: 1px solid rgba(255, 255, 255, 0.72) !important;
+    background:
+        radial-gradient(circle, rgba(255, 253, 247, 0.16), transparent 58%),
+        repeating-conic-gradient(from -90deg, rgba(255, 255, 255, 0.52) 0 1deg, transparent 1deg calc(360deg / var(--segment-count, 4))) !important;
+    box-shadow:
+        0 0 0 1px rgba(54, 73, 43, 0.08),
+        inset 0 0 22px rgba(255, 255, 255, 0.22);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.spin-wheel::after {
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06) 36%, transparent 48%),
+        radial-gradient(circle at 50% 50%, transparent 0 74%, rgba(42, 54, 33, 0.16) 100%) !important;
+    z-index: 5;
+}
+
+.spin-wheel.has-winning-segment .spin-wheel-segment:not(.is-winning) {
+    opacity: 0.58;
+}
+
+.spin-wheel-segment {
+    position: absolute !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 100%;
+    transform: rotate(var(--segment-rotation)) !important;
+    transform-origin: 50% 50% !important;
+    z-index: 4 !important;
+    pointer-events: none;
+    transition: opacity 220ms ease, filter 220ms ease;
+}
+
+.spin-segment-content {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: grid;
+    grid-template-columns: minmax(22px, 30px) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.35rem;
+    width: clamp(104px, 30%, 156px);
+    max-width: 34%;
+    min-height: 42px;
+    padding: 0.34rem 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.46);
+    color: #21301c;
+    box-shadow: 0 8px 18px rgba(39, 50, 31, 0.1);
+    text-align: left;
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1));
+    transform-origin: 50% 50%;
+    backdrop-filter: blur(2px);
+}
+
+.spin-wheel .spin-segment-content,
+.spin-wheel .spin-segment-content span,
+.spin-wheel .spin-segment-content small {
+    position: static;
+    left: auto;
+    top: auto;
+    width: auto;
+    color: inherit;
+    text-align: left;
+    text-shadow: none;
+    transform: none;
+    transform-origin: initial;
+}
+
+.spin-wheel .spin-segment-content {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: clamp(104px, 30%, 156px);
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1));
+}
+
+.spin-wheel-segment.is-flipped .spin-segment-content {
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1)) rotate(180deg);
+}
+
+.spin-wheel-segment.is-winning .spin-segment-content {
+    border-color: rgba(255, 255, 255, 0.86);
+    background: rgba(255, 253, 247, 0.82);
+    box-shadow:
+        0 0 0 3px rgba(255, 250, 224, 0.44),
+        0 14px 26px rgba(47, 74, 43, 0.18);
+}
+
+.spin-wheel-segment b {
+    display: grid !important;
+    place-items: center;
+    width: 30px !important;
+    min-width: 30px;
+    aspect-ratio: 1;
+    border: 1px solid rgba(255, 255, 255, 0.64);
+    border-radius: 50%;
+    background: rgba(255, 250, 240, 0.92) !important;
+    color: #24351f !important;
+    font-size: 0.68rem !important;
+    font-style: normal;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 4px 11px rgba(47, 74, 43, 0.14);
+}
+
+.spin-wheel-segment em {
+    display: grid !important;
+    gap: 1px;
+    min-width: 0;
+    overflow: hidden;
+    color: #21301c !important;
+    font-style: normal;
+    line-height: 1.05 !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.48);
+    -webkit-line-clamp: initial !important;
+}
+
+.spin-wheel-segment em span,
+.spin-wheel-segment em small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spin-wheel-segment em span {
+    font-size: clamp(0.62rem, 1.05vw, 0.78rem);
+    font-weight: 900;
+}
+
+.spin-wheel-segment em small {
+    color: rgba(35, 50, 29, 0.86);
+    font-size: clamp(0.58rem, 0.95vw, 0.7rem);
+    font-weight: 800;
+}
+
+.spin-wheel-pointer {
+    left: 50%;
+    top: -6px !important;
+    border-top: 0 !important;
+    border-right-color: transparent !important;
+    border-bottom: 44px solid #2f4a2b !important;
+    border-left-color: transparent !important;
+    z-index: 8;
+    transform: translateX(-50%);
+    transform-origin: 50% 7px;
+}
+
+.spin-wheel-pointer::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 13px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f8e7b3;
+    box-shadow: inset 0 0 0 2px rgba(47, 74, 43, 0.12);
+    transform: translateX(-50%);
+}
+
+.spin-wheel-pointer.is-ticking {
+    animation: spinPointerTick 90ms ease-out;
+}
+
+.spin-wheel-center {
+    z-index: 9;
+    border: 7px solid rgba(255, 250, 240, 0.86);
+    background:
+        radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.34), transparent 28%),
+        linear-gradient(145deg, #294221, #78956f 62%, #d5b462) !important;
+}
+
+.spin-submit-button:focus-visible,
+.spin-modal-close:focus-visible,
+.spin-modal-actions .button:focus-visible {
+    outline: 3px solid rgba(74, 111, 67, 0.46);
+    outline-offset: 3px;
+}
+
+.spin-reveal-modal {
+    z-index: 3000;
+}
+
+@keyframes spinPointerTick {
+    50% {
+        transform: translateX(-50%) rotate(-7deg) scaleY(0.97);
+    }
+}
+
+@media (max-width: 860px) {
+    .spin-wheel {
+        --wheel-label-radius: 30%;
+    }
+
+    .spin-wheel .spin-segment-content,
+    .spin-segment-content {
+        width: clamp(86px, 29%, 122px);
+        max-width: 32%;
+        min-height: 36px;
+        padding: 0.25rem 0.32rem;
+        gap: 0.24rem;
+    }
+}
+
+@media (max-width: 560px) {
+    .spin-wheel {
+        --wheel-label-radius: 31%;
+    }
+
+    .spin-wheel .spin-segment-content,
+    .spin-segment-content {
+        grid-template-columns: 20px minmax(0, 1fr);
+        width: clamp(68px, 32%, 92px);
+        max-width: 35%;
+        min-height: 30px;
+        padding: 0.2rem 0.25rem;
+        border-radius: 6px;
+    }
+
+    .spin-wheel-segment b {
+        width: 20px !important;
+        min-width: 20px;
+        font-size: 0.5rem !important;
+    }
+
+    .spin-wheel-segment em span {
+        font-size: 0.52rem;
+    }
+
+    .spin-wheel-segment em small {
+        font-size: 0.48rem;
+    }
+
+    .spin-wheel-pointer {
+        border-left-width: 18px !important;
+        border-right-width: 18px !important;
+        border-bottom-width: 32px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spin-wheel-segment,
+    .spin-segment-content,
+    .spin-wheel-pointer {
+        transition: none !important;
+        animation: none !important;
     }
 }

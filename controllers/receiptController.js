@@ -24,6 +24,7 @@ const {
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
 const { buildBookingReference } = require('../utils/bookingReference');
+const { getRefundSummariesForTransactions } = require('../services/refundSummary');
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
@@ -600,6 +601,7 @@ async function enrichReceiptPayment(receipt) {
     const transactionId = receipt.transactionId
         || (receipt.type === 'order' ? getOrderId(receipt) : null);
     let summary = null;
+    let refundSummary = null;
 
     try {
         summary = await getPaymentSummary(transactionId);
@@ -607,10 +609,26 @@ async function enrichReceiptPayment(receipt) {
         console.error('Receipt payment summary failed:', error.message || error);
     }
 
+    try {
+        if (transactionId) {
+            const refundSummaries = await getRefundSummariesForTransactions([transactionId], {
+                [String(transactionId)]: {
+                    originalAmountPaid: Number(summary?.paidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0),
+                    orderReference: receipt.displayReference || receipt.order_number || receipt.orderNumber || receipt.id,
+                    refundStatus: summary?.refundStatus || receipt.refundStatus,
+                    fulfilmentStatus: receipt.deliveryStatus || receipt.status
+                }
+            });
+            refundSummary = refundSummaries[String(transactionId)] || null;
+        }
+    } catch (error) {
+        console.error('Receipt refund summary failed:', error.message || error);
+    }
+
     const paymentMethod = normalizePaymentMethod(summary?.paymentMethod || receipt.paymentMethod || 'card');
     const paymentProvider = normalizePaymentProvider(summary?.paymentProvider || receipt.paymentProvider, paymentMethod);
     const paidAmount = Number(summary?.paidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0);
-    const refundedAmount = Number(summary?.refundedAmount ?? receipt.refundedAmount ?? 0);
+    const refundedAmount = Number(refundSummary?.cumulativeGrossRefunded ?? summary?.refundedAmount ?? receipt.refundedAmount ?? 0);
     const remainingPaidAmount = Math.max(paidAmount - refundedAmount, 0);
     const paymentBreakdown = summary?.paymentBreakdown?.length
         ? summary.paymentBreakdown
@@ -640,16 +658,18 @@ async function enrichReceiptPayment(receipt) {
         externalPaymentAmount: Number(summary?.externalPaymentAmount ?? receipt.externalPaymentAmount ?? paidAmount),
         refundedAmount,
         remainingPaidAmount,
-        remainingRefundableAmount: Number(summary?.remainingRefundableAmount ?? remainingPaidAmount),
+        remainingRefundableAmount: Number(refundSummary?.remainingRefundableAmount ?? summary?.remainingRefundableAmount ?? remainingPaidAmount),
         paymentStatus: summary?.paymentStatus || receipt.paymentStatus || 'paid',
-        refundStatus: summary?.refundStatus || receipt.refundStatus || (refundedAmount > 0 ? 'partially_refunded' : 'none'),
+        refundStatus: refundSummary?.refundStatus || summary?.refundStatus || receipt.refundStatus || (refundedAmount > 0 ? 'partially_refunded' : 'none'),
+        refundSummary,
+        refundRows: refundSummary?.refunds || [],
         paymentTransactionReference: summary?.providerTransactionId || receipt.providerPaymentId || receipt.providerSessionId || '',
         providerPaymentId: summary?.providerPaymentId || receipt.providerPaymentId || '',
         providerSessionId: summary?.providerSessionId || receipt.providerSessionId || '',
         providerCaptureId: summary?.providerCaptureId || receipt.providerCaptureId || '',
-        providerRefundReference: summary?.providerRefundReference || receipt.providerRefundId || '',
+        providerRefundReference: refundSummary?.latestRefundReference || summary?.providerRefundReference || receipt.providerRefundId || '',
         paidAt: summary?.paymentDate || receipt.paidAt,
-        refundedAt: summary?.lastRefundedAt || receipt.refundedAt || null
+        refundedAt: refundSummary?.latestRefundDate || summary?.lastRefundedAt || receipt.refundedAt || null
     };
 }
 

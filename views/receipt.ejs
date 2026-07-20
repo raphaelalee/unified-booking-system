@@ -6,8 +6,10 @@
     const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
     const paymentLabel = receipt.paymentMethodLabel || receipt.paymentMethod || 'Payment';
     const paymentBreakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
+    const refundRows = Array.isArray(receipt.refundRows) ? receipt.refundRows : [];
     const receiptDisplayReference = receipt.displayReference || receipt.order_number || receipt.orderNumber || ('#' + (receipt.displayId || receipt.id));
     const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 %>
 
 <section class="page-title receipt-title">
@@ -180,6 +182,30 @@
                 <div class="receipt-total">
                     <span>Net amount retained</span>
                     <strong>$<%= Number(receipt.remainingPaidAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (refundRows.length > 0) { %>
+                <div class="receipt-refund-breakdown">
+                    <h2>Refund history</h2>
+                    <% refundRows.forEach((refund) => { %>
+                        <article>
+                            <div>
+                                <strong><%= refund.refundReference || 'Refund' %></strong>
+                                <span><%= formatStatus(refund.refundStatus) %><%= refund.providerRefundStatus ? ` / ${formatStatus(refund.providerRefundStatus)}` : '' %></span>
+                            </div>
+                            <dl>
+                                <div><dt>Requested</dt><dd><%= formatMoney(refund.customerRequestedAmount) %></dd></div>
+                                <div><dt>Approved</dt><dd><%= Number(refund.approvedPercentage || 0).toFixed(2) %>%</dd></div>
+                                <div><dt>Gross refund</dt><dd><%= formatMoney(refund.approvedGrossRefund) %></dd></div>
+                                <div><dt>Processing-fee deduction</dt><dd><%= formatMoney(refund.processingFeeDeduction) %></dd></div>
+                                <div><dt>External returned</dt><dd><%= formatMoney(refund.netExternalRefund) %></dd></div>
+                                <% if (Number(refund.walletRestored || 0) > 0) { %><div><dt>Wallet restored</dt><dd><%= formatMoney(refund.walletRestored) %></dd></div><% } %>
+                                <% if (Number(refund.pointsRestored || 0) > 0 || Number(refund.pointsReversed || 0) > 0) { %><div><dt>Points</dt><dd>+<%= Number(refund.pointsRestored || 0) %> / -<%= Number(refund.pointsReversed || 0) %></dd></div><% } %>
+                                <% if (Number(refund.cashbackRestored || 0) > 0 || Number(refund.cashbackReversed || 0) > 0) { %><div><dt>Cashback</dt><dd>+<%= formatMoney(refund.cashbackRestored) %> / -<%= formatMoney(refund.cashbackReversed) %></dd></div><% } %>
+                                <div><dt>Completed</dt><dd><%= refund.completedAt ? new Date(refund.completedAt).toLocaleString('en-SG') : 'Not completed' %></dd></div>
+                            </dl>
+                        </article>
+                    <% }) %>
                 </div>
             <% } %>
             <% if (receipt.paymentTransactionReference) { %>

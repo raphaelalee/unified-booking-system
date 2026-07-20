@@ -1,7 +1,7 @@
 <%- include('partials/header', { title, useBootstrap: true }) %>
 
 <%
-    const finalStatuses = ['refunded', 'rejected', 'cancelled', 'closed'];
+    const finalStatuses = ['partially_refunded', 'refunded', 'rejected', 'cancelled', 'closed'];
     const visibleRequests = Array.isArray(requests) ? requests : [];
     const safeBookings = Array.isArray(bookings) ? bookings : [];
     const safeOrders = Array.isArray(orders) ? orders : [];
@@ -18,27 +18,48 @@
     const statusClass = (status) => `status-${String(status || 'pending').replace(/_/g, '-')}`;
     const supportStatusLabel = (status) => ({
         pending_merchant_review: 'Waiting for Merchant',
+        under_review: 'Under Review',
+        more_information_required: 'More Information Required',
         approved: 'Approved',
         refund_processing: 'Refund Processing',
+        return_required: 'Return Required',
+        partially_refunded: 'Partially Refunded',
         refunded: 'Refunded',
         rejected: 'Rejected',
         refund_failed: 'Refund Failed',
+        refund_reconciliation_required: 'Manual Review Required',
         cancelled: 'Closed',
         closed: 'Closed'
     }[status] || 'Open');
     const isClosed = (request) => finalStatuses.includes(request.status);
     const priorityLabel = (request) => {
         if (request.requestType === 'booking_refund' || request.requestType === 'order_refund') return 'High';
-        if (request.status === 'pending_merchant_review') return 'Medium';
+        if (request.status === 'pending_merchant_review' || request.status === 'under_review') return 'Medium';
+        if (request.status === 'more_information_required') return 'Customer Action';
         return 'Normal';
     };
     const responseTimeLabel = (request) => priorityLabel(request) === 'High' ? 'Within 1 business day' : '1-2 business days';
-    const canCancelOrder = (order) => !['shipped', 'delivered', 'cancelled'].includes(order.deliveryStatus);
+    const actionLabel = (type) => ({
+        cancellation: 'Cancellation',
+        return_refund: 'Return and refund',
+        refund_only: 'Refund review'
+    }[type] || 'Refund review');
+    const optionReasonJson = (eligibility) => JSON.stringify((eligibility?.eligibleReasons || []).map((reason) => ({
+        code: reason.code,
+        label: reason.label,
+        responsibility: reason.responsibility,
+        evidenceRequired: Boolean(reason.evidenceRequired),
+        returnRequired: Boolean(reason.returnRequired)
+    }))).replace(/'/g, '&#39;');
     const buildTimeline = (request) => {
         const timeline = [{ label: 'Submitted', time: formatDateTime(request.createdAt) }];
         if (request.reviewedAt || request.merchantDecision !== 'pending') timeline.push({ label: 'Merchant decision', time: formatDateTime(request.reviewedAt || request.updatedAt) });
+        if (request.status === 'more_information_required') timeline.push({ label: 'More information requested', time: formatDateTime(request.reviewedAt || request.updatedAt) });
+        if (request.status === 'under_review') timeline.push({ label: 'Returned to review', time: formatDateTime(request.updatedAt) });
+        if (request.status === 'return_required') timeline.push({ label: 'Return required', time: formatDateTime(request.reviewedAt || request.updatedAt) });
         if (request.status === 'refund_processing') timeline.push({ label: 'Refund processing', time: formatDateTime(request.updatedAt) });
         if (request.status === 'refund_failed') timeline.push({ label: 'Refund failed', time: formatDateTime(request.updatedAt) });
+        if (request.status === 'refund_reconciliation_required') timeline.push({ label: 'Manual reconciliation required', time: formatDateTime(request.updatedAt) });
         if (request.status === 'refunded') timeline.push({ label: 'Refund completed', time: formatDateTime(request.refundedAt || request.resolvedAt || request.updatedAt) });
         if (isClosed(request)) timeline.push({ label: 'Request closed', time: formatDateTime(request.resolvedAt || request.updatedAt) });
         return timeline;
@@ -139,8 +160,8 @@
                         </div>
                     </div>
                     <ul class="giftcard-terms">
-                        <li>Only paid bookings and paid orders may be reviewed for refund.</li>
-                        <li>Product orders that are already shipped, delivered, cancelled, or previously refunded are not eligible through this flow.</li>
+                        <li>Only captured paid bookings and paid product orders may be reviewed for cancellation, return, or refund.</li>
+                        <li>Delivered or collected product issues may require a return step before any payment refund is approved.</li>
                         <li>The request is sent directly to the merchant linked to the booking or order for approval or rejection.</li>
                         <li>Booking cancellations made within 24 hours may include a late-cancellation fee deducted from the approved refund.</li>
                         <li>Submitting false information or duplicate claims may cause the request to be rejected.</li>
@@ -166,44 +187,93 @@
                         <label>
                             Issue
                             <select name="requestType" class="form-select" required>
-                                <option value="booking_refund">Refund dispute</option>
-                                <option value="order_refund">Payment or order refund</option>
+                                <option value="booking_refund">Booking cancellation or service refund</option>
+                                <option value="order_refund">Order cancellation, return or refund</option>
                             </select>
                         </label>
                         <label>
                             Reference
                             <select name="targetId" class="form-select" required>
                                 <option value="">Choose booking or order</option>
-                                <% safeBookings.forEach((booking) => { %>
-                                    <option value="<%= booking.id %>" data-target-type="booking" <%= String(selectedTarget.bookingId) === String(booking.id) ? 'selected' : '' %>>
+                                <% safeBookings.forEach((booking) => {
+                                    const eligibility = booking.refundEligibility || {};
+                                %>
+                                    <option value="<%= booking.id %>"
+                                        data-target-type="booking"
+                                        data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
+                                        data-action-type="<%= eligibility.actionType || '' %>"
+                                        data-action-label="<%= actionLabel(eligibility.actionType) %>"
+                                        data-status-code="<%= eligibility.statusCode || '' %>"
+                                        data-blocked-reason="<%= eligibility.blockedReason || '' %>"
+                                        data-deadline="<%= eligibility.deadlineLabel || '' %>"
+                                        data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
+                                        data-reasons='<%- optionReasonJson(eligibility) %>'
+                                        data-refund-amount="<%= Number(eligibility.refundableAmount || booking.service_price || booking.price || 0).toFixed(2) %>"
+                                        data-payment-method="<%= booking.paymentMethodLabel || booking.payment_method || 'Original payment method' %>"
+                                        <%= !eligibility.eligible ? 'disabled' : '' %>
+                                        <%= String(selectedTarget.bookingId) === String(booking.id) ? 'selected' : '' %>>
                                         Booking #<%= booking.id %> - <%= booking.service_name %>
+                                        <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
                                     </option>
                                 <% }) %>
-                                <% safeOrders.forEach((order) => { %>
-                                    <option value="<%= order.targetId || order.id %>" data-target-type="order" <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
+                                <% safeOrders.forEach((order) => {
+                                    const eligibility = order.refundEligibility || {};
+                                %>
+                                    <option value="<%= order.targetId || order.id %>"
+                                        data-target-type="order"
+                                        data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
+                                        data-action-type="<%= eligibility.actionType || '' %>"
+                                        data-action-label="<%= actionLabel(eligibility.actionType) %>"
+                                        data-status-code="<%= eligibility.statusCode || '' %>"
+                                        data-blocked-reason="<%= eligibility.blockedReason || '' %>"
+                                        data-deadline="<%= eligibility.deadlineLabel || '' %>"
+                                        data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
+                                        data-reasons='<%- optionReasonJson(eligibility) %>'
+                                        data-refund-amount="<%= Number(eligibility.refundableAmount || order.remainingRefundableAmount || order.totalAmount || 0).toFixed(2) %>"
+                                        data-payment-method="<%= order.paymentMethodLabel || order.paymentMethod || 'Original payment method' %>"
+                                        <%= !eligibility.eligible ? 'disabled' : '' %>
+                                        <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
                                         Order <%= order.order_number || order.orderNumber || ('#' + (order.id || String(order.receiptId || '').replace(/^order-/, ''))) %> - <%= order.itemNames %>
+                                        <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
                                     </option>
                                 <% }) %>
                             </select>
                         </label>
                         <input type="hidden" name="targetType" value="booking" data-support-target-type>
                         <label>
-                            Reason
-                            <select name="reason" class="form-select">
-                                <option value="Refund dispute">Refund dispute</option>
-                                <option value="Payment issue">Payment issue</option>
-                                <option value="Merchant rejection">Merchant rejection</option>
-                                <option value="Technical issue">Technical issue</option>
-                                <option value="Other">Other</option>
+                            Refund reason category
+                            <select name="reasonCategory" class="form-select" data-refund-reason-category required>
+                                <option value="">Choose a reference first</option>
                             </select>
+                        </label>
+                        <input type="hidden" name="reason" value="customer_cancellation" data-refund-reason-hidden>
+                        <label>
+                            Requested refund amount
+                            <input type="number" name="requestedRefundAmount" class="form-control" min="0.01" step="0.01" data-requested-refund-amount>
+                        </label>
+                        <section class="support-refund-preview" data-refund-preview>
+                            <div><span>Original payment method</span><strong data-preview-payment-method>Choose a reference</strong></div>
+                            <div><span>Gross refund amount</span><strong data-preview-gross>S$0.00</strong></div>
+                            <div><span>Payment-processing deduction</span><strong data-preview-fee>S$0.00</strong></div>
+                            <div class="support-refund-net"><span>Estimated net refund</span><strong data-preview-net>S$0.00</strong></div>
+                            <p data-preview-note>No processing-fee deduction is estimated in the browser. The server recalculates the final amount from the original transaction.</p>
+                        </section>
+                        <section class="support-refund-preview support-eligibility-preview" data-eligibility-preview>
+                            <div><span>Request type</span><strong data-eligibility-action>Choose a reference</strong></div>
+                            <div><span>Deadline</span><strong data-eligibility-deadline>-</strong></div>
+                            <p data-eligibility-message>Eligibility is checked again by the server before the request is stored.</p>
+                        </section>
+                        <label class="merchant-toggle-row" data-processing-fee-ack-row hidden>
+                            <input type="checkbox" name="processingFeeAcknowledged" data-processing-fee-ack>
+                            <span><strong>I understand the disclosed payment-processing deduction</strong><small data-processing-fee-ack-copy>The exact deduction is calculated again by the server before the request is stored.</small></span>
                         </label>
                         <label>
                             Details
                             <textarea name="customerNote" class="form-control" rows="3" maxlength="1200" placeholder="Briefly explain what happened and what help you need." required></textarea>
                         </label>
                         <label>
-                            Screenshot
-                            <input type="file" name="screenshot" class="form-control" accept="image/*">
+                            Evidence images
+                            <input type="file" name="screenshot" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
                         </label>
                         <label class="merchant-toggle-row">
                             <input type="checkbox" name="acceptRefundTerms" required>
@@ -212,6 +282,27 @@
                         <p class="support-form-note" data-support-create-feedback>For rescheduling, use Profile > Bookings instead.</p>
                         <button class="button primary full" type="submit">Submit Refund Request</button>
                     </form>
+                    <div class="support-confirm-modal" data-refund-confirm-modal hidden>
+                        <div class="support-confirm-dialog">
+                            <h3>Confirm Refund Request</h3>
+                            <p data-confirm-reference>Review the refund request before submitting.</p>
+                            <dl>
+                                <dt>Original payment method</dt><dd data-confirm-method></dd>
+                                <dt>Requested refund amount</dt><dd data-confirm-gross></dd>
+                                <dt>Processing-fee deduction</dt><dd data-confirm-fee></dd>
+                                <dt>Estimated net refund</dt><dd data-confirm-net></dd>
+                                <dt>Refund destination</dt><dd>Original payment method where supported</dd>
+                            </dl>
+                            <label class="merchant-toggle-row" data-confirm-ack-row hidden>
+                                <input type="checkbox" data-confirm-ack>
+                                <span><strong data-confirm-ack-copy>I understand the disclosed payment-processing deduction.</strong></span>
+                            </label>
+                            <div class="inline-actions">
+                                <button class="button secondary" type="button" data-confirm-back>Go Back</button>
+                                <button class="button primary" type="button" data-confirm-submit>Confirm Refund Request</button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             <% } else if (role === 'merchant') { %>
                 <section class="support-section role-desk-summary">
@@ -385,8 +476,95 @@
             const requestType = form.querySelector('[name="requestType"]');
             const targetSelect = form.querySelector('[name="targetId"]');
             const targetType = form.querySelector('[data-support-target-type]');
+            const reasonCategory = form.querySelector('[data-refund-reason-category]');
+            const reasonHidden = form.querySelector('[data-refund-reason-hidden]');
+            const requestedAmount = form.querySelector('[data-requested-refund-amount]');
+            const feeAckRow = form.querySelector('[data-processing-fee-ack-row]');
+            const feeAck = form.querySelector('[data-processing-fee-ack]');
+            const previewMethod = form.querySelector('[data-preview-payment-method]');
+            const previewGross = form.querySelector('[data-preview-gross]');
+            const previewFee = form.querySelector('[data-preview-fee]');
+            const previewNet = form.querySelector('[data-preview-net]');
+            const previewNote = form.querySelector('[data-preview-note]');
+            const eligibilityAction = form.querySelector('[data-eligibility-action]');
+            const eligibilityDeadline = form.querySelector('[data-eligibility-deadline]');
+            const eligibilityMessage = form.querySelector('[data-eligibility-message]');
+            const confirmModal = document.querySelector('[data-refund-confirm-modal]');
+            const confirmAckRow = confirmModal?.querySelector('[data-confirm-ack-row]');
+            const confirmAck = confirmModal?.querySelector('[data-confirm-ack]');
+            const confirmSubmit = confirmModal?.querySelector('[data-confirm-submit]');
             const feedback = form.querySelector('[data-support-create-feedback]');
             const submitButton = form.querySelector('button[type="submit"]');
+            let submitConfirmed = false;
+            const money = (value) => `S$${Number(value || 0).toFixed(2)}`;
+            const selectedRefundAmount = () => Number(requestedAmount?.value || targetSelect.selectedOptions[0]?.dataset.refundAmount || 0);
+            const selectedReasonOption = () => reasonCategory?.selectedOptions?.[0] || null;
+            const feeAcknowledgementLikelyRequired = () => selectedReasonOption()?.dataset.responsibility === 'customer';
+            const parseReasons = (selected) => {
+                try {
+                    return JSON.parse(selected?.dataset.reasons || '[]');
+                } catch (error) {
+                    return [];
+                }
+            };
+            const populateReasons = (selected) => {
+                if (!reasonCategory) return;
+                const previous = reasonCategory.value;
+                const reasons = parseReasons(selected);
+                reasonCategory.innerHTML = '';
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = reasons.length ? 'Choose reason' : 'No valid reasons available';
+                reasonCategory.appendChild(placeholder);
+                reasons.forEach((reason) => {
+                    const option = document.createElement('option');
+                    option.value = reason.code;
+                    option.textContent = reason.label;
+                    option.dataset.responsibility = reason.responsibility || '';
+                    option.dataset.evidenceRequired = reason.evidenceRequired ? '1' : '0';
+                    option.dataset.returnRequired = reason.returnRequired ? '1' : '0';
+                    reasonCategory.appendChild(option);
+                });
+                if (reasons.some((reason) => reason.code === previous)) {
+                    reasonCategory.value = previous;
+                } else if (reasons.length === 1) {
+                    reasonCategory.value = reasons[0].code;
+                }
+            };
+            const syncPreview = () => {
+                const selected = targetSelect.selectedOptions[0];
+                const gross = selectedRefundAmount();
+                const isEligible = selected?.dataset.eligible === '1';
+                const showAck = feeAcknowledgementLikelyRequired();
+                if (reasonHidden) reasonHidden.value = reasonCategory?.value || 'other';
+                if (requestedAmount && selected?.dataset.refundAmount && (!requestedAmount.value || Number(requestedAmount.value) <= 0)) {
+                    requestedAmount.value = Number(selected.dataset.refundAmount || 0).toFixed(2);
+                }
+                if (previewMethod) previewMethod.textContent = selected?.dataset.paymentMethod || 'Original payment method';
+                if (previewGross) previewGross.textContent = money(gross);
+                if (previewFee) previewFee.textContent = showAck ? 'Calculated by server' : 'S$0.00';
+                if (previewNet) previewNet.textContent = showAck ? 'Calculated by server' : money(gross);
+                if (previewNote) {
+                    previewNote.textContent = !isEligible
+                        ? (selected?.dataset.blockedReason || 'Choose an eligible booking or order.')
+                        : showAck
+                        ? 'If a verified original processing-fee deduction applies, the exact amount will be recalculated from the selected transaction on the server.'
+                        : 'Merchant/platform responsibility refunds do not pass payment-processing deductions to the customer.';
+                }
+                if (eligibilityAction) eligibilityAction.textContent = selected?.dataset.actionLabel || 'Choose a reference';
+                if (eligibilityDeadline) eligibilityDeadline.textContent = selected?.dataset.deadline || '-';
+                if (eligibilityMessage) {
+                    const returnCopy = selected?.dataset.returnRequired === '1'
+                        ? ' A product return step may be required before refund approval.'
+                        : '';
+                    eligibilityMessage.textContent = !isEligible
+                        ? (selected?.dataset.blockedReason || 'This reference cannot be submitted for refund review.')
+                        : `Eligible for ${selected?.dataset.actionLabel || 'refund review'}.${returnCopy}`;
+                }
+                if (feeAckRow) feeAckRow.hidden = !showAck;
+                if (feeAck && !showAck) feeAck.checked = false;
+                if (submitButton) submitButton.disabled = !isEligible || !reasonCategory?.value;
+            };
             const syncTarget = () => {
                 const selected = targetSelect.selectedOptions[0];
                 const inferredType = selected?.dataset.targetType || (requestType.value === 'order_refund' ? 'order' : 'booking');
@@ -396,16 +574,47 @@
                 } else {
                     Array.from(targetSelect.options).forEach((option) => option.hidden = option.dataset.targetType === 'order');
                 }
-                if (targetSelect.selectedOptions[0]?.hidden) {
-                    targetSelect.value = '';
+                if (targetSelect.selectedOptions[0]?.hidden || targetSelect.selectedOptions[0]?.disabled) {
+                    const nextOption = Array.from(targetSelect.options).find((option) => option.value && !option.hidden && !option.disabled);
+                    targetSelect.value = nextOption?.value || '';
                 }
+                if (requestedAmount) {
+                    requestedAmount.value = targetSelect.selectedOptions[0]?.dataset.refundAmount || '';
+                }
+                populateReasons(targetSelect.selectedOptions[0]);
+                syncPreview();
             };
             requestType.addEventListener('change', syncTarget);
             targetSelect.addEventListener('change', syncTarget);
+            reasonCategory?.addEventListener('change', syncPreview);
+            requestedAmount?.addEventListener('input', syncPreview);
             syncTarget();
 
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
+                if (submitButton?.disabled) {
+                    feedback.textContent = 'Choose an eligible booking or order and refund reason.';
+                    return;
+                }
+                if (!submitConfirmed && confirmModal) {
+                    const selected = targetSelect.selectedOptions[0];
+                    const showAck = feeAcknowledgementLikelyRequired();
+                    confirmModal.hidden = false;
+                    confirmModal.querySelector('[data-confirm-back]')?.focus();
+                    confirmModal.querySelector('[data-confirm-reference]').textContent = selected?.textContent?.trim() || 'Selected refund request';
+                    confirmModal.querySelector('[data-confirm-method]').textContent = selected?.dataset.paymentMethod || 'Original payment method';
+                    confirmModal.querySelector('[data-confirm-gross]').textContent = money(selectedRefundAmount());
+                    confirmModal.querySelector('[data-confirm-fee]').textContent = showAck ? 'Calculated by server' : 'S$0.00';
+                    confirmModal.querySelector('[data-confirm-net]').textContent = showAck ? 'Calculated by server' : money(selectedRefundAmount());
+                    if (confirmAckRow) confirmAckRow.hidden = !showAck;
+                    if (confirmAck) {
+                        confirmAck.checked = false;
+                        confirmAck.disabled = !showAck;
+                    }
+                    if (confirmSubmit) confirmSubmit.disabled = showAck;
+                    return;
+                }
+                submitConfirmed = false;
                 feedback.textContent = '';
                 submitButton.disabled = true;
                 submitButton.textContent = 'Creating...';
@@ -438,9 +647,228 @@
                     })
                     .finally(() => {
                         submitButton.disabled = false;
-                        submitButton.textContent = 'Create Ticket';
+                        submitButton.textContent = 'Submit Refund Request';
                     });
             });
+
+            confirmModal?.querySelector('[data-confirm-back]')?.addEventListener('click', () => {
+                confirmModal.hidden = true;
+            });
+            confirmModal?.addEventListener('click', (event) => {
+                if (event.target === confirmModal) {
+                    confirmModal.hidden = true;
+                }
+            });
+            confirmModal?.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    confirmModal.hidden = true;
+                }
+            });
+            confirmAck?.addEventListener('change', () => {
+                if (confirmSubmit) confirmSubmit.disabled = !confirmAck.checked;
+                if (feeAck) feeAck.checked = confirmAck.checked;
+            });
+            confirmSubmit?.addEventListener('click', () => {
+                confirmModal.hidden = true;
+                submitConfirmed = true;
+                form.requestSubmit();
+            });
+        });
+
+        document.querySelectorAll('[data-merchant-refund-review]').forEach((review) => {
+            const form = review.querySelector('form');
+            const tokenInput = form?.querySelector('input[name="_csrf"]');
+            const decisions = Array.from(review.querySelectorAll('[data-refund-decision]'));
+            const partialControls = review.querySelector('[data-partial-controls]');
+            const rejectControls = review.querySelector('[data-reject-controls]');
+            const moreInfoControls = review.querySelector('[data-more-info-controls]');
+            const percentageInput = review.querySelector('[data-refund-percentage]');
+            const presetButtons = Array.from(review.querySelectorAll('[data-refund-preset]'));
+            const partialReason = review.querySelector('[data-partial-reason]');
+            const partialReasonSelect = review.querySelector('[data-partial-reason-select]');
+            const rejectionReason = review.querySelector('textarea[name="rejectionReason"]');
+            const moreInfoMessage = review.querySelector('textarea[name="moreInfoMessage"]');
+            const confirmCheck = review.querySelector('[data-refund-confirm]');
+            const submitButton = review.querySelector('[data-refund-submit]');
+            const previewButton = review.querySelector('[data-refund-preview]');
+            const feedback = review.querySelector('[data-refund-feedback]');
+            const previewUrl = review.dataset.previewUrl;
+            let latestCalculation = null;
+            let submitting = false;
+            const moneyText = (value) => Number(value || 0).toFixed(2);
+            const selectedDecision = () => decisions.find((input) => input.checked)?.value || '';
+            const selectedPartialReason = () => {
+                const customReason = String(partialReason?.value || '').trim();
+                const presetReason = String(partialReasonSelect?.value || '').trim();
+                if (customReason) return customReason;
+                return presetReason && presetReason !== 'Other.' ? presetReason : '';
+            };
+            const syncPartialReason = () => {
+                const presetReason = String(partialReasonSelect?.value || '').trim();
+                if (partialReason && presetReason && presetReason !== 'Other.' && !String(partialReason.value || '').trim()) {
+                    partialReason.value = presetReason;
+                }
+            };
+            const setText = (selector, value) => {
+                const node = review.querySelector(selector);
+                if (node) node.textContent = value;
+            };
+            const syncVisibility = () => {
+                const decision = selectedDecision();
+                if (partialControls) partialControls.hidden = decision !== 'partial_refund';
+                if (rejectControls) rejectControls.hidden = decision !== 'rejected';
+                if (moreInfoControls) moreInfoControls.hidden = decision !== 'request_more_information';
+                if (submitButton) {
+                    submitButton.textContent = decision === 'rejected'
+                        ? 'Reject Refund Request'
+                        : decision === 'request_more_information'
+                            ? 'Request More Information'
+                        : decision === 'return_required'
+                            ? 'Require Product Return'
+                        : decision === 'partial_refund'
+                            ? 'Review Partial Refund'
+                            : 'Approve Full Refund';
+                }
+                if (confirmCheck) confirmCheck.checked = false;
+                latestCalculation = null;
+            };
+            const validateLocal = () => {
+                const decision = selectedDecision();
+                if (decision === 'partial_refund') {
+                    const raw = String(percentageInput?.value || '').trim();
+                    if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(raw)) return 'Enter a valid percentage with up to two decimal places.';
+                    const percentage = Number(raw);
+                    if (percentage <= 0 || percentage >= 100) return 'Partial refund percentage must be greater than 0 and less than 100.';
+                    if (String(partialReasonSelect?.value || '').trim() === 'Other.' && !String(partialReason?.value || '').trim()) {
+                        return 'Type the customer-facing reason for this partial refund.';
+                    }
+                    if (!selectedPartialReason()) return 'Add a reason for the partial refund.';
+                }
+                if (decision === 'rejected' && String(rejectionReason?.value || '').trim().length < 8) {
+                    return 'Add a rejection reason for the customer.';
+                }
+                if (decision === 'request_more_information' && String(moreInfoMessage?.value || '').trim().length < 12) {
+                    return 'Explain what evidence or information is missing for the customer.';
+                }
+                if (decision === 'return_required' && String(review.querySelector('textarea[name="merchantNote"]')?.value || '').trim().length < 8) {
+                    return 'Tell the customer what return action is required.';
+                }
+                return '';
+            };
+            const applyCalculation = (calculation, rewardEffects = {}) => {
+                latestCalculation = calculation;
+                setText('[data-preview-previous]', moneyText(calculation.previousGrossRefunds));
+                setText('[data-preview-remaining]', moneyText(calculation.remainingRefundableAmount));
+                setText('[data-preview-percentage]', moneyText(calculation.approvedRefundPercentage));
+                setText('[data-preview-gross]', moneyText(calculation.approvedGrossRefund));
+                setText('[data-preview-fee]', moneyText(calculation.processingFeeDeduction));
+                setText('[data-preview-other]', moneyText(calculation.otherDeductions));
+                setText('[data-preview-external]', moneyText(rewardEffects.externalRefundAmount));
+                setText('[data-preview-wallet]', moneyText(rewardEffects.walletRestoredAmount));
+                setText('[data-preview-points-restored]', Number(rewardEffects.pointsRestored || 0).toFixed(0));
+                setText('[data-preview-points-reversed]', Number(rewardEffects.pointsReversed || 0).toFixed(0));
+                setText('[data-preview-cashback-restored]', moneyText(rewardEffects.cashbackRestoredAmount));
+                setText('[data-preview-cashback-reversed]', moneyText(rewardEffects.cashbackReversedAmount));
+                setText('[data-preview-net]', moneyText(calculation.netCustomerRefund));
+                setText('[data-preview-after]', moneyText(calculation.remainingRefundableAfterRefund));
+            };
+            const requestPreview = async () => {
+                const localError = validateLocal();
+                if (localError) {
+                    if (feedback) feedback.textContent = localError;
+                    return null;
+                }
+                if (['rejected', 'return_required', 'request_more_information'].includes(selectedDecision())) return null;
+                syncPartialReason();
+                const body = new URLSearchParams(new FormData(form));
+                body.set('decision', selectedDecision());
+                body.set('approvedPercentage', selectedDecision() === 'full_refund' ? '100' : (percentageInput?.value || ''));
+                if (selectedDecision() === 'partial_refund') body.set('partialReason', selectedPartialReason());
+                if (feedback) feedback.textContent = 'Calculating...';
+                const response = await fetch(`${previewUrl}?_csrf=${encodeURIComponent(tokenInput?.value || '')}`, {
+                    method: 'POST',
+                    body,
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': tokenInput?.value || ''
+                    }
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Refund preview failed.');
+                applyCalculation(data.calculation || {}, data.rewardEffects || {});
+                if (feedback) feedback.textContent = data.message || 'Preview updated.';
+                return data.calculation;
+            };
+            decisions.forEach((input) => input.addEventListener('change', syncVisibility));
+            presetButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (percentageInput) percentageInput.value = button.dataset.refundPreset || '';
+                    presetButtons.forEach((preset) => preset.classList.toggle('is-active', preset === button));
+                    latestCalculation = null;
+                });
+            });
+            percentageInput?.addEventListener('input', () => {
+                presetButtons.forEach((preset) => preset.classList.toggle('is-active', preset.dataset.refundPreset === percentageInput.value));
+                latestCalculation = null;
+            });
+            partialReasonSelect?.addEventListener('change', () => {
+                syncPartialReason();
+                latestCalculation = null;
+            });
+            previewButton?.addEventListener('click', () => {
+                requestPreview().catch((error) => {
+                    if (feedback) feedback.textContent = error.message;
+                });
+            });
+            form?.addEventListener('submit', async (event) => {
+                if (submitting) {
+                    event.preventDefault();
+                    return;
+                }
+                const localError = validateLocal();
+                if (localError) {
+                    event.preventDefault();
+                    if (feedback) feedback.textContent = localError;
+                    return;
+                }
+                if (['rejected', 'return_required', 'request_more_information'].includes(selectedDecision())) {
+                    submitting = true;
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Saving...';
+                    }
+                    return;
+                }
+
+                if (!['rejected', 'return_required', 'request_more_information'].includes(selectedDecision())) {
+                    event.preventDefault();
+                    try {
+                        if (selectedDecision() === 'partial_refund') syncPartialReason();
+                        if (!latestCalculation) await requestPreview();
+                        if (!latestCalculation) {
+                            if (feedback) feedback.textContent = 'Refund preview could not be calculated. Recalculate and try again.';
+                            return;
+                        }
+                        if (!confirmCheck?.checked) {
+                            if (feedback) feedback.textContent = `Confirm that S$${moneyText(latestCalculation?.netCustomerRefund)} will be returned to the customer.`;
+                            return;
+                        }
+                        submitting = true;
+                        if (submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.textContent = 'Processing...';
+                        }
+                        form.submit();
+                    } catch (error) {
+                        if (feedback) feedback.textContent = error.message;
+                    } finally {
+                        if (!submitting && submitButton) submitButton.disabled = false;
+                    }
+                }
+            });
+            syncVisibility();
+            requestPreview().catch(() => {});
         });
 
         document.querySelectorAll('[data-support-reply-form]').forEach((form) => {
@@ -473,13 +901,31 @@
                         const reply = data.reply || {};
                         const node = document.createElement('div');
                         node.className = `support-message ${reply.senderRole === 'customer' ? 'from-customer' : 'from-support'}`;
-                        node.innerHTML = `
-                            <div><strong>${reply.senderName || 'You'}</strong><span>Just now</span></div>
-                            ${reply.messageBody ? `<p>${reply.messageBody.replace(/[<>&]/g, '')}</p>` : ''}
-                            ${reply.screenshotPath ? `<a href="${reply.screenshotPath}" target="_blank" rel="noopener"><img src="${reply.screenshotPath}" alt="Support screenshot"></a>` : ''}
-                        `;
-                        conversation.querySelector('.muted')?.remove();
-                        conversation.appendChild(node);
+                        const header = document.createElement('div');
+                        const sender = document.createElement('strong');
+                        const time = document.createElement('span');
+                        sender.textContent = reply.senderName || 'You';
+                        time.textContent = 'Just now';
+                        header.append(sender, time);
+                        node.appendChild(header);
+                        if (reply.messageBody) {
+                            const body = document.createElement('p');
+                            body.textContent = reply.messageBody;
+                            node.appendChild(body);
+                        }
+                        if (reply.screenshotPath && /^\/[A-Za-z0-9/_ .%#?=&-]+$/.test(reply.screenshotPath)) {
+                            const link = document.createElement('a');
+                            const image = document.createElement('img');
+                            link.href = reply.screenshotPath;
+                            link.target = '_blank';
+                            link.rel = 'noopener';
+                            image.src = reply.screenshotPath;
+                            image.alt = 'Support screenshot';
+                            link.appendChild(image);
+                            node.appendChild(link);
+                        }
+                        conversation?.querySelector('.muted')?.remove();
+                        conversation?.appendChild(node);
                         form.reset();
                         feedback.textContent = data.message || 'Reply sent.';
                     })

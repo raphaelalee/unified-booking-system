@@ -85,7 +85,28 @@ module.exports = {
     });
   },
 
-  refundPaymentIntent: async ({ paymentIntentId, amount }) => {
+  retrieveProcessingFeeSnapshot: async (paymentIntent) => {
+    const stripeClient = Stripe(process.env.STRIPE_SECRET_KEY);
+    const intent = typeof paymentIntent === 'string'
+      ? await stripeClient.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge.balance_transaction'] })
+      : paymentIntent;
+    const charge = typeof intent.latest_charge === 'string'
+      ? await stripeClient.charges.retrieve(intent.latest_charge, { expand: ['balance_transaction'] })
+      : intent.latest_charge;
+    const balanceTransaction = charge?.balance_transaction;
+
+    if (!balanceTransaction || typeof balanceTransaction === 'string') {
+      return { amount: 0, currency: 'SGD', source: 'unknown' };
+    }
+
+    return {
+      amount: Math.round(Number(balanceTransaction.fee || 0)) / 100,
+      currency: String(balanceTransaction.currency || 'sgd').toUpperCase(),
+      source: 'provider_reported'
+    };
+  },
+
+  refundPaymentIntent: async ({ paymentIntentId, amount, idempotencyKey }) => {
     // Initialize Stripe fresh on each call with current secret key
     const stripeClient = Stripe(process.env.STRIPE_SECRET_KEY);
     
@@ -97,6 +118,6 @@ module.exports = {
     return stripeClient.refunds.create({
       payment_intent: paymentIntentId,
       amount: cents
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
   }
 };

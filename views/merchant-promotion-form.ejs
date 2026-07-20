@@ -14,6 +14,7 @@
         </header>
 
     <form class="login-form service-admin-form" action="<%= promotion ? `/merchant/promotions/${promotion.id}` : '/merchant/promotions' %>" method="POST">
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <% if (errors.length > 0) { %>
             <div class="notice error">
                 <% errors.forEach((error) => { %>

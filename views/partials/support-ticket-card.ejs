@@ -22,17 +22,39 @@
         <div class="support-ticket-summary">
             <% if (request.reason) { %><p><strong>Reason:</strong> <%= request.reason %></p><% } %>
             <% if (request.customerNote) { %><p><strong>Details:</strong> <%= request.customerNote %></p><% } %>
+            <% if (request.status === 'more_information_required' && request.merchantNote) { %>
+                <p><strong>More information needed:</strong> <%= request.merchantNote %></p>
+            <% } %>
             <% if (request.targetLabel) { %><p><strong><%= request.targetType === 'order' ? 'Product details' : 'Service details' %>:</strong> <%= request.targetLabel %></p><% } %>
             <% if (request.paymentMethodLabel || request.paymentMethod) { %><p><strong>Payment method:</strong> <%= request.paymentMethodLabel || request.paymentMethod %></p><% } %>
             <% if (request.paymentProvider) { %><p><strong>Payment provider:</strong> <%= request.paymentProvider %></p><% } %>
             <% if (request.paymentTransactionReference) { %><p><strong>Payment reference:</strong> <%= request.paymentTransactionReference %></p><% } %>
             <% if (request.paymentDate) { %><p><strong>Payment date:</strong> <%= formatDateTime(request.paymentDate) %></p><% } %>
+            <% if (request.actionType || request.eligibilityStatusCode || request.returnRequired || request.evidenceRequired) { %>
+                <p><strong>Refund action:</strong> <%= request.actionType ? request.actionType.replace(/_/g, ' ') : 'merchant review' %></p>
+                <% if (request.eligibilityStatusCode) { %><p><strong>Eligibility status:</strong> <%= request.eligibilityStatusCode %></p><% } %>
+                <% if (request.eligibilityDeadline) { %><p><strong>Policy deadline:</strong> <%= formatDateTime(request.eligibilityDeadline) %></p><% } %>
+                <% if (request.returnRequired) { %><p><strong>Return required:</strong> Yes. Do not approve payment refund until the return step is handled.</p><% } %>
+                <% if (request.evidenceRequired) { %><p><strong>Evidence required:</strong> Yes</p><% } %>
+            <% } %>
             <% if (request.refundAmount > 0) { %>
                 <p><strong>Original amount paid:</strong> $<%= Number(request.originalPaidAmount || request.refundAmount || 0).toFixed(2) %></p>
-                <p><strong>Requested refund:</strong> $<%= Number(request.refundAmount || 0).toFixed(2) %></p>
-                <% if (Number(request.approvedRefundAmount || 0) > 0) { %>
-                    <p><strong>Approved refund:</strong> $<%= Number(request.approvedRefundAmount || 0).toFixed(2) %></p>
+                <p><strong>Original provider fee:</strong> $<%= Number(request.originalProcessingFeeAmount || 0).toFixed(2) %> (<%= request.processingFeeSource || 'unknown' %>)</p>
+                <p><strong>Gross requested refund:</strong> $<%= Number(request.grossRefundAmount || request.refundAmount || 0).toFixed(2) %></p>
+                <% if (Number(request.approvedRefundPercentage || 0) > 0 && !['pending_merchant_review', 'under_review', 'more_information_required'].includes(request.status)) { %>
+                    <p><strong>Approved percentage:</strong> <%= Number(request.approvedRefundPercentage || 100).toFixed(2) %>%</p>
+                    <p><strong>Refund base:</strong> $<%= Number(request.refundBaseAmount || request.grossRefundAmount || request.refundAmount || 0).toFixed(2) %></p>
+                    <% if (request.merchantDecisionReason) { %><p><strong>Merchant decision reason:</strong> <%= request.merchantDecisionReason %></p><% } %>
                 <% } %>
+                <p><strong>Payment-processing deduction:</strong> $<%= Number(request.processingFeeDeduction || 0).toFixed(2) %></p>
+                <% if (Number(request.otherDeductionAmount || 0) > 0) { %>
+                    <p><strong>Other deduction:</strong> $<%= Number(request.otherDeductionAmount || 0).toFixed(2) %></p>
+                <% } %>
+                <% if (Number(request.approvedRefundAmount || 0) > 0) { %>
+                    <p><strong>Net customer refund:</strong> $<%= Number(request.netRefundAmount || request.approvedRefundAmount || 0).toFixed(2) %></p>
+                <% } %>
+                <p><strong>Refund responsibility:</strong> <%= request.refundResponsibility || 'merchant' %></p>
+                <p><strong>Customer acknowledgement:</strong> <%= request.feeAcknowledgedAt ? formatDateTime(request.feeAcknowledgedAt) : 'Not required' %></p>
                 <p><strong>Successfully refunded:</strong> $<%= Number(request.originalRefundedAmount || 0).toFixed(2) %></p>
                 <p><strong>Remaining refundable:</strong> $<%= Number(request.remainingRefundableAmount || 0).toFixed(2) %></p>
                 <% if (request.lateFeeAmount > 0) { %>
@@ -44,9 +66,33 @@
                 <% if (request.status === 'refund_failed') { %>
                     <p><strong>Refund failure:</strong> Your refund could not be completed. The merchant has been notified and may retry the refund.</p>
                 <% } %>
+                <% if (request.status === 'refund_reconciliation_required') { %>
+                    <p><strong>Manual review required:</strong> The provider result is uncertain. Do not retry this refund until the provider record is reconciled.</p>
+                <% } %>
                 <% if (request.status === 'rejected' && request.merchantNote) { %>
                     <p><strong>Rejection reason:</strong> <%= request.merchantNote %></p>
                 <% } %>
+            <% } %>
+        </div>
+    <% } %>
+
+    <% if (role === 'merchant' && request.requestType && request.requestType.includes('refund')) { %>
+        <div class="previous-refunds-card">
+            <h4>Previous refunds</h4>
+            <% if (!request.previousRefunds || request.previousRefunds.length === 0) { %>
+                <p class="muted">No previous refunds for this transaction.</p>
+            <% } else { %>
+                <div class="previous-refund-list">
+                    <% request.previousRefunds.forEach((refund) => { %>
+                        <p>
+                            <strong><%= refund.refundReference || 'Refund' %></strong>
+                            <span><%= Number(refund.approvedRefundPercentage || 100).toFixed(2) %>%</span>
+                            <span>Gross $<%= Number(refund.grossRefundAmount || 0).toFixed(2) %></span>
+                            <span>Net $<%= Number(refund.netRefundAmount || 0).toFixed(2) %></span>
+                            <span><%= refund.refundStatus || 'pending' %></span>
+                        </p>
+                    <% }) %>
+                </div>
             <% } %>
         </div>
     <% } %>
@@ -88,31 +134,128 @@
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <input type="hidden" name="responseType" value="json">
             <label>
-                Reply to support
-                <textarea name="messageBody" rows="3" maxlength="1600" placeholder="Add context, updates, or questions for this ticket."></textarea>
+                <%= role === 'customer' && request.status === 'more_information_required' ? 'Add the requested information' : 'Reply to support' %>
+                <textarea name="messageBody" rows="3" maxlength="1600" placeholder="<%= role === 'customer' && request.status === 'more_information_required' ? 'Explain the additional evidence or details you are adding to this same refund request.' : 'Add context, updates, or questions for this ticket.' %>"></textarea>
             </label>
             <label>
-                Screenshot
-                <input type="file" name="screenshot" accept="image/*">
+                <%= role === 'customer' && request.status === 'more_information_required' ? 'Additional evidence' : 'Screenshot' %>
+                <input type="file" name="screenshot" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
             </label>
             <p class="support-reply-feedback" data-support-reply-feedback></p>
             <button class="button primary" type="submit">Send Reply</button>
         </form>
     </details>
 
-    <% if (role === 'merchant' && request.status === 'pending_merchant_review') { %>
-        <div class="support-action-box">
+    <% if (role === 'merchant' && ['pending_merchant_review', 'under_review'].includes(request.status)) { %>
+        <div class="support-action-box merchant-refund-review" data-merchant-refund-review data-preview-url="/help-center/requests/<%= request.id %>/merchant-refund-preview">
             <form action="/help-center/requests/<%= request.id %>/merchant-response" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                <label for="merchant-note-<%= request.id %>">Approval note</label>
-                <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="2" placeholder="Optional customer-facing approval note."></textarea>
-                <label for="merchant-rejection-<%= request.id %>">Rejection reason</label>
-                <textarea id="merchant-rejection-<%= request.id %>" name="rejectionReason" rows="2" placeholder="Required only when rejecting. This is shown to the customer."></textarea>
-                <label for="merchant-internal-<%= request.id %>">Internal notes</label>
-                <textarea id="merchant-internal-<%= request.id %>" name="internalNotes" rows="2" placeholder="Optional private note for merchant/admin audit."></textarea>
-                <div class="inline-actions">
-                    <button class="button primary" type="submit" name="decision" value="approved">Approve</button>
-                    <button class="button secondary danger-button" type="submit" name="decision" value="rejected">Reject</button>
+                <input type="hidden" name="requestStatus" value="<%= request.status %>">
+                <input type="hidden" name="requestUpdatedAt" value="<%= request.updatedAt ? new Date(request.updatedAt).toISOString() : '' %>">
+                <div class="merchant-refund-grid">
+                    <section class="merchant-refund-panel">
+                        <h4>Merchant decision</h4>
+                        <label class="refund-option-card">
+                            <input type="radio" name="decision" value="full_refund" data-refund-decision <%= request.returnRequired ? '' : 'checked' %>>
+                            <span>Approve Full Refund</span>
+                        </label>
+                        <label class="refund-option-card">
+                            <input type="radio" name="decision" value="partial_refund" data-refund-decision>
+                            <span>Approve Partial Refund</span>
+                        </label>
+                        <% if (request.returnRequired) { %>
+                            <label class="refund-option-card">
+                                <input type="radio" name="decision" value="return_required" data-refund-decision checked>
+                                <span>Require Product Return</span>
+                            </label>
+                        <% } %>
+                        <label class="refund-option-card">
+                            <input type="radio" name="decision" value="request_more_information" data-refund-decision>
+                            <span>Request More Information</span>
+                        </label>
+                        <label class="refund-option-card">
+                            <input type="radio" name="decision" value="rejected" data-refund-decision>
+                            <span>Reject Refund</span>
+                        </label>
+
+                        <% if (request.returnRequired) { %>
+                            <div class="merchant-refund-warning">
+                                Product return is required for this request. Use "Require Product Return" to notify the customer; normal refund approval is blocked until the return step is resolved.
+                            </div>
+                        <% } %>
+
+                        <div class="partial-refund-controls" data-partial-controls hidden>
+                            <p>The percentage is applied to the valid refund base, not the original order total.</p>
+                            <div class="refund-preset-row">
+                                <% [25, 50, 75, 100].forEach((percentage) => { %>
+                                    <button type="button" data-refund-preset="<%= percentage %>"><%= percentage %>%</button>
+                                <% }) %>
+                            </div>
+                            <label for="refund-percentage-<%= request.id %>">Custom percentage</label>
+                            <div class="percent-input-wrap">
+                                <input id="refund-percentage-<%= request.id %>" name="approvedPercentage" data-refund-percentage type="number" min="0.01" max="100" step="0.01" value="50">
+                                <span>%</span>
+                            </div>
+                            <label for="partial-reason-<%= request.id %>">Partial refund reason</label>
+                            <select id="partial-reason-<%= request.id %>" name="partialReasonPreset" data-partial-reason-select>
+                                <option value="">Select a reason</option>
+                                <option>Part of service completed.</option>
+                                <option>Some products delivered successfully.</option>
+                                <option>Customer used part of the booking.</option>
+                                <option>Cancellation-policy deduction.</option>
+                                <option>Item returned in incomplete condition.</option>
+                                <option>Other.</option>
+                            </select>
+                            <textarea name="partialReason" data-partial-reason rows="2" placeholder="Customer-facing reason for approving less than 100%."></textarea>
+                        </div>
+
+                        <div data-reject-controls hidden>
+                            <label for="merchant-rejection-<%= request.id %>">Rejection reason</label>
+                            <textarea id="merchant-rejection-<%= request.id %>" name="rejectionReason" rows="2" placeholder="Required when rejecting. This is shown to the customer."></textarea>
+                        </div>
+
+                        <div data-more-info-controls hidden>
+                            <label for="merchant-more-info-<%= request.id %>">Message to customer</label>
+                            <textarea id="merchant-more-info-<%= request.id %>" name="moreInfoMessage" rows="3" placeholder="Explain exactly what evidence or information is missing. This is shown to the customer."></textarea>
+                        </div>
+
+                        <label for="merchant-note-<%= request.id %>">Approval note</label>
+                        <textarea id="merchant-note-<%= request.id %>" name="merchantNote" rows="2" placeholder="Optional customer-facing approval note."></textarea>
+                        <label for="merchant-internal-<%= request.id %>">Internal notes</label>
+                        <textarea id="merchant-internal-<%= request.id %>" name="internalNotes" rows="2" placeholder="Optional private note for merchant/admin audit."></textarea>
+                    </section>
+
+                    <section class="merchant-refund-panel refund-calculation-card">
+                        <h4>Refund calculation</h4>
+                        <dl>
+                            <div><dt>Original amount paid</dt><dd>S$<%= Number(request.originalPaidAmount || 0).toFixed(2) %></dd></div>
+                            <div><dt>Customer requested</dt><dd>S$<%= Number(request.refundAmount || 0).toFixed(2) %></dd></div>
+                            <div><dt>Previous gross refunds</dt><dd>S$<span data-preview-previous><%= Number(request.originalRefundedAmount || 0).toFixed(2) %></span></dd></div>
+                            <div><dt>Remaining eligible</dt><dd>S$<span data-preview-remaining><%= Number(request.remainingRefundableAmount || 0).toFixed(2) %></span></dd></div>
+                            <div><dt>Selected percentage</dt><dd><span data-preview-percentage>100.00</span>%</dd></div>
+                            <div><dt>Approved gross refund</dt><dd>S$<span data-preview-gross><%= Number(request.refundAmount || 0).toFixed(2) %></span></dd></div>
+                            <div><dt>Processing-fee deduction</dt><dd>S$<span data-preview-fee>0.00</span></dd></div>
+                            <div><dt>Other deduction</dt><dd>S$<span data-preview-other>0.00</span></dd></div>
+                            <div><dt>External cash refund</dt><dd>S$<span data-preview-external>0.00</span></dd></div>
+                            <div><dt>Wallet restored</dt><dd>S$<span data-preview-wallet>0.00</span></dd></div>
+                            <div><dt>Points restored</dt><dd><span data-preview-points-restored>0</span> pts</dd></div>
+                            <div><dt>Points reversed</dt><dd><span data-preview-points-reversed>0</span> pts</dd></div>
+                            <div><dt>Cashback restored</dt><dd>S$<span data-preview-cashback-restored>0.00</span></dd></div>
+                            <div><dt>Cashback reversed</dt><dd>S$<span data-preview-cashback-reversed>0.00</span></dd></div>
+                            <div class="net-refund-row"><dt>Net refund to customer</dt><dd>S$<span data-preview-net><%= Number(request.refundAmount || 0).toFixed(2) %></span></dd></div>
+                            <div><dt>Remaining after refund</dt><dd>S$<span data-preview-after>0.00</span></dd></div>
+                        </dl>
+                        <p class="support-reply-feedback" data-refund-feedback></p>
+                        <label class="refund-confirm-check">
+                            <input type="checkbox" data-refund-confirm>
+                            <span>I confirm the displayed net refund will be returned to the customer.</span>
+                        </label>
+                        <div class="inline-actions">
+                            <button class="button primary" type="submit" data-refund-submit>Approve Full Refund</button>
+                            <button class="button secondary" type="button" data-refund-preview>Recalculate</button>
+                            <a class="button secondary" href="/help-center#support-tickets">Go Back</a>
+                        </div>
+                    </section>
                 </div>
             </form>
         </div>

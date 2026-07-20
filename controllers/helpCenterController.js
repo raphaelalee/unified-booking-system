@@ -2,6 +2,7 @@ const { promisify } = require('util');
 const Booking = require('../models/Booking');
 const Notification = require('../models/Notification');
 const PurchaseHistory = require('../models/PurchaseHistory');
+const PaymentRefund = require('../models/PaymentRefund');
 const SupportRequest = require('../models/SupportRequest');
 const Transaction = require('../models/Transaction');
 const Loyalty = require('../models/Loyalty');
@@ -9,18 +10,30 @@ const {
     sendCancellationForBooking,
     sendRescheduleForBooking
 } = require('../services/whatsappAutomation');
+const { sendSupportNotificationEmail } = require('../utils/emailNotifications');
+const { sendWhatsAppText } = require('../utils/whatsappNotifications');
 const {
     sendSmsCancellationForBooking,
     sendSmsRescheduleForBooking
 } = require('../services/smsAutomation');
 const { refundTransaction } = require('../services/refundProcessor');
+const {
+    REFUND_TERMS_VERSION,
+    calculateRefund,
+    normalizeReasonCategory
+} = require('../services/refundCalculation');
+const {
+    evaluateBooking,
+    evaluateOrder,
+    validateReason: validateEligibilityReason
+} = require('../services/refundEligibility');
+const { previewRefundRewardEffects } = require('../services/refundRewardAdjustments');
 
 const ACTIVE_REQUEST_LIMIT = 5;
-const SHIPPED_STATUSES = ['shipped', 'delivered'];
+const SHIPPED_STATUSES = ['shipped', 'out_for_delivery', 'in_delivery'];
 const ORDER_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
 const REFUND_REQUEST_TYPES = ['order_refund', 'booking_refund'];
-const REFUND_TERMS_VERSION = 'refund-policy-2026-05';
-const RESOLVED_REQUEST_STATUSES = ['refunded', 'rejected', 'cancelled', 'closed'];
+const RESOLVED_REQUEST_STATUSES = ['partially_refunded', 'refunded', 'rejected', 'cancelled', 'closed'];
 
 const requestLabels = {
     order_refund: 'Order refund',
@@ -29,11 +42,16 @@ const requestLabels = {
 
 const statusLabels = {
     pending_merchant_review: 'Pending merchant review',
+    under_review: 'Under review',
+    more_information_required: 'More information required',
     approved: 'Approved',
     refund_processing: 'Refund processing',
+    return_required: 'Return required',
+    partially_refunded: 'Partially refunded',
     refunded: 'Refunded',
     rejected: 'Rejected',
     refund_failed: 'Refund failed',
+    refund_reconciliation_required: 'Refund reconciliation required',
     cancelled: 'Cancelled',
     closed: 'Closed'
 };
@@ -51,6 +69,9 @@ const updateBookingSchedule = promisify(Booking.updateSchedule);
 const getCustomerOrders = promisify(Transaction.getCustomerOrders);
 const getOrderForCustomer = promisify(Transaction.getOrderForCustomer);
 const getOrderById = promisify(Transaction.getOrderById);
+const getTransactionById = promisify(Transaction.getById);
+const getCompletedRefundTotals = promisify(PaymentRefund.getCompletedTotalsForTransaction);
+const getRefundsForTransaction = promisify(PaymentRefund.getForTransaction);
 const getHistoryOrders = promisify(PurchaseHistory.getSupportOrdersByUserId);
 const getHistoryOrderForCustomer = promisify(PurchaseHistory.getSupportOrderForCustomer);
 const updateHistoryDeliveryStatus = promisify(PurchaseHistory.updateDeliveryStatus);
@@ -63,8 +84,13 @@ const findSupportRequest = promisify(SupportRequest.findById);
 const hasActiveRequest = promisify(SupportRequest.hasActiveRequest);
 const countOpenByCustomer = promisify(SupportRequest.countOpenByCustomer);
 const markMerchantApproved = promisify(SupportRequest.markMerchantApproved);
+const markMoreInformationRequired = promisify(SupportRequest.markMoreInformationRequired);
+const markMoreInformationSubmitted = promisify(SupportRequest.markMoreInformationSubmitted);
+const markReturnRequired = promisify(SupportRequest.markReturnRequired);
+const markReturnSubmitted = promisify(SupportRequest.markReturnSubmitted);
 const markRefundSucceeded = promisify(SupportRequest.markRefundSucceeded);
 const markRefundFailed = promisify(SupportRequest.markRefundFailed);
+const markRefundReconciliationRequired = promisify(SupportRequest.markRefundReconciliationRequired);
 const merchantRejectRequest = promisify(SupportRequest.merchantReject);
 const createSupportMessage = promisify(SupportRequest.createMessage);
 const getSupportMessagesForRequests = promisify(SupportRequest.getMessagesForRequests);
@@ -163,11 +189,123 @@ function calculateLateFee(amount) {
 }
 
 function getApprovedRefundAmount(request) {
-    return Math.max(0, Math.round((Number(request.refundAmount || 0) - Number(request.lateFeeAmount || 0)) * 100) / 100);
+    return Math.max(0, Math.round(Number(request.netRefundAmount || request.approvedRefundAmount || 0) * 100) / 100);
+}
+
+function parseRefundPercentage(value, { allowFull = true } = {}) {
+    const text = String(value == null || value === '' ? '100' : value).trim();
+    if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(text)) {
+        throw new Error('Refund percentage must be a number with up to two decimal places.');
+    }
+    const percentage = Number(text);
+    if (!Number.isFinite(percentage) || percentage <= 0) {
+        throw new Error('Refund percentage must be greater than 0.');
+    }
+    if (percentage > 100 || (!allowFull && percentage >= 100)) {
+        throw new Error(allowFull ? 'Refund percentage cannot exceed 100.' : 'Partial refund percentage must be less than 100.');
+    }
+    return Math.round(percentage * 100) / 100;
+}
+
+function normalizeMerchantRefundDecision(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['approved', 'full_refund', 'full'].includes(normalized)) return 'full_refund';
+    if (['partial_refund', 'partial'].includes(normalized)) return 'partial_refund';
+    if (['return_required', 'require_return', 'return'].includes(normalized)) return 'return_required';
+    if (['request_more_information', 'more_information_required', 'more_information', 'info_required'].includes(normalized)) return 'request_more_information';
+    if (['rejected', 'reject'].includes(normalized)) return 'rejected';
+    return '';
+}
+
+function mapEligibilityReasonToRefundCategory(reason = {}) {
+    if (reason.responsibility === 'customer') return 'customer_cancellation';
+    if (reason.responsibility === 'platform') return 'platform_error';
+    if (reason.responsibility === 'payment_error') return 'duplicate_charge';
+    if (['duplicate_charge', 'incorrect_charge', 'merchant_cancellation', 'platform_error'].includes(reason.code)) {
+        return reason.code;
+    }
+    return 'other';
+}
+
+function getSubmittedIssueCode(body = {}) {
+    return cleanText(body.issueType || body.reasonCategory || body.reason, 80) || 'other';
+}
+
+function getUploadedSupportEvidence(req) {
+    if (req.files && typeof req.files === 'object') {
+        return Object.values(req.files).flat().filter(Boolean);
+    }
+    return req.file ? [req.file] : [];
+}
+
+function formatRewardEffectSummary(outcome = {}) {
+    const parts = [];
+    if (Number(outcome.externalRefundAmount || outcome.amount || 0) > 0) {
+        parts.push(`S$${Number(outcome.externalRefundAmount || outcome.amount || 0).toFixed(2)} returned to the original payment method`);
+    }
+    if (Number(outcome.walletRestoredAmount || 0) > 0) {
+        parts.push(`S$${Number(outcome.walletRestoredAmount || 0).toFixed(2)} wallet balance restored`);
+    }
+    if (Number(outcome.pointsRestored || 0) > 0) {
+        parts.push(`${Number(outcome.pointsRestored || 0)} payment points restored`);
+    }
+    if (Number(outcome.pointsReversed || 0) > 0) {
+        parts.push(`${Number(outcome.pointsReversed || 0)} earned points reversed`);
+    }
+    if (Number(outcome.cashbackRestoredAmount || 0) > 0) {
+        parts.push(`S$${Number(outcome.cashbackRestoredAmount || 0).toFixed(2)} payment cashback restored`);
+    }
+    if (Number(outcome.cashbackReversedAmount || 0) > 0) {
+        parts.push(`S$${Number(outcome.cashbackReversedAmount || 0).toFixed(2)} earned cashback reversed`);
+    }
+    return parts.length ? parts.join(', ') : `S$${Number(outcome.amount || 0).toFixed(2)} returned to the customer`;
+}
+
+function mapRefundRows(rows = []) {
+    return rows.map((row) => ({
+        refundReference: row.refund_reference || (row.refund_id ? `RF-${row.refund_id}` : ''),
+        approvedRefundPercentage: Number(row.approved_refund_percentage || 100),
+        grossRefundAmount: Number(row.gross_refund_amount || row.refund_amount || 0),
+        netRefundAmount: Number(row.net_refund_amount || row.refund_amount || 0),
+        refundStatus: row.refund_status || '',
+        providerRefundId: row.provider_refund_id || '',
+        createdAt: row.created_at,
+        completedAt: row.completed_at || row.updated_at
+    }));
 }
 
 function isRefundRequest(requestType) {
     return REFUND_REQUEST_TYPES.includes(requestType);
+}
+
+async function calculateTransactionRefundPreview(transactionId, {
+    requestedGrossRefund,
+    approvedPercentage = 100,
+    reasonCategory,
+    acknowledgementAccepted,
+    lateFeeAmount = 0
+} = {}) {
+    const transaction = await getTransactionById(transactionId);
+
+    if (!transaction) {
+        throw new Error('The original payment transaction could not be found.');
+    }
+
+    if (!['paid', 'partially_refunded'].includes(String(transaction.paymentStatus || '').toLowerCase())) {
+        throw new Error('Only paid transactions can be refunded.');
+    }
+
+    const totals = await getCompletedRefundTotals(transaction.transactionId);
+    return calculateRefund({
+        transaction,
+        requestedGrossRefund,
+        previousGrossRefunds: totals.grossRefundedTotal || transaction.refundedAmount || 0,
+        previousFeeDeductions: totals.feeDeductionTotal || 0,
+        approvedPercentage,
+        reasonCategory,
+        acknowledgementAccepted,
+        lateFeeAmount
+    });
 }
 
 function normalizeRequestDate(value) {
@@ -311,6 +449,43 @@ function notifyAdmins(notification) {
     });
 }
 
+function absoluteHelpCenterUrl() {
+    return process.env.APP_BASE_URL
+        ? `${String(process.env.APP_BASE_URL).replace(/\/$/, '')}/help-center`
+        : '/help-center';
+}
+
+function notifyCustomerMoreInformationChannels(request, message) {
+    const title = `More information needed for refund request #${request.id}`;
+    const linkUrl = '/help-center';
+
+    notifyCustomer(request.customerUserId, {
+        type: 'support_request',
+        title,
+        message,
+        linkUrl,
+        dedupeKey: `refund:${request.id}:more-information-required:v1`
+    });
+
+    sendSupportNotificationEmail({
+        email: request.customerEmail,
+        customerName: request.customerName,
+        subject: title,
+        message,
+        linkUrl: absoluteHelpCenterUrl()
+    }).catch((error) => {
+        console.error('Support email notification failed:', error.message || error);
+    });
+
+    sendWhatsAppText(request.customerPhone, [
+        `Vaniday update: ${title}`,
+        message,
+        'Open Profile or Refund History, then reply on the same Help Center ticket. No new request is needed.'
+    ].join('\n')).catch((error) => {
+        console.error('Support WhatsApp notification failed:', error.message || error);
+    });
+}
+
 function getRoleCopy(role) {
     if (role === 'admin') {
         return {
@@ -335,10 +510,11 @@ function getRoleCopy(role) {
     };
 }
 
-async function processMerchantApprovedRefund(request, merchantUserId, merchantNote) {
-    const approvedRefundAmount = getApprovedRefundAmount(request);
+async function processMerchantApprovedRefund(request, merchantUserId, merchantNote, approval = {}) {
+    const requestedRefundAmount = Number(request.refundAmount || request.grossRefundAmount || getApprovedRefundAmount(request) || 0);
+    const approvedRefundAmount = Number(approval.grossRefundAmount || request.grossRefundAmount || request.refundAmount || getApprovedRefundAmount(request) || 0);
 
-    if (approvedRefundAmount <= 0) {
+    if (requestedRefundAmount <= 0 || approvedRefundAmount <= 0) {
         throw new Error('Approved refund amount must be greater than zero.');
     }
 
@@ -373,19 +549,30 @@ async function processMerchantApprovedRefund(request, merchantUserId, merchantNo
 
         if (transactionId) {
             refundOutcome = await refundTransaction(transactionId, {
-                amount: approvedRefundAmount,
+                amount: requestedRefundAmount,
                 reason: merchantNote || request.reason || request.customerNote || 'Merchant approved order refund',
+                reasonCategory: request.refundReasonCategory || request.reason,
+                approvedPercentage: approval.approvedRefundPercentage || request.approvedRefundPercentage || 100,
+                refundRequestId: request.id,
+                merchantDecision: approval.approvedRefundPercentage >= 100 ? 'full_refund' : 'partial_refund',
+                merchantDecisionReason: approval.customerFacingReason || merchantNote || '',
+                acknowledgementAccepted: Boolean(request.feeAcknowledgedAt || request.feeDeductionApplies),
+                feeAcknowledgedAt: request.feeAcknowledgedAt,
+                feeAcknowledgementVersion: request.feeAcknowledgementVersion,
+                lateFeeAmount: request.lateFeeAmount || 0,
                 refundedBy: merchantUserId,
                 merchantId: merchantUserId,
                 orderId: transactionId
             });
 
-            await updateDeliveryStatus(transactionId, 'cancelled', { merchantUserId });
+            if (refundOutcome.refundStatus === 'refunded') {
+                await updateDeliveryStatus(transactionId, 'cancelled', { merchantUserId });
+            }
 
             if (request.receiptId) {
                 await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
                 if (!refundOutcome.manualRequired) {
-                    await recordHistoryRefund(request.receiptId, approvedRefundAmount);
+                    await recordHistoryRefund(request.receiptId, refundOutcome.netRefundAmount || refundOutcome.amount);
                 }
                 await reverseCampaignCashback(request.receiptId);
             }
@@ -420,8 +607,17 @@ async function processMerchantApprovedRefund(request, merchantUserId, merchantNo
 
         if (booking.transaction_id) {
             refundOutcome = await refundTransaction(booking.transaction_id, {
-                amount: approvedRefundAmount,
+                amount: requestedRefundAmount,
                 reason: merchantNote || request.reason || request.customerNote || 'Merchant approved booking refund',
+                reasonCategory: request.refundReasonCategory || request.reason,
+                approvedPercentage: approval.approvedRefundPercentage || request.approvedRefundPercentage || 100,
+                refundRequestId: request.id,
+                merchantDecision: approval.approvedRefundPercentage >= 100 ? 'full_refund' : 'partial_refund',
+                merchantDecisionReason: approval.customerFacingReason || merchantNote || '',
+                acknowledgementAccepted: Boolean(request.feeAcknowledgedAt || request.feeDeductionApplies),
+                feeAcknowledgedAt: request.feeAcknowledgedAt,
+                feeAcknowledgementVersion: request.feeAcknowledgementVersion,
+                lateFeeAmount: request.lateFeeAmount || 0,
                 refundedBy: merchantUserId,
                 merchantId: merchantUserId,
                 bookingId: request.targetId
@@ -436,7 +632,9 @@ async function processMerchantApprovedRefund(request, merchantUserId, merchantNo
             };
         }
 
-        await markBookingCancelled(request.targetId);
+        if (refundOutcome.refundStatus === 'refunded') {
+            await markBookingCancelled(request.targetId);
+        }
         await markBookingRefundStatus(request.targetId, refundOutcome.refundStatus);
         await reverseCampaignCashback(String(request.targetId));
         await sendCancellationForBooking(request.targetId, request.reason || request.customerNote || '').catch((error) => {
@@ -459,6 +657,37 @@ async function attachMessages(requests = []) {
         ...request,
         messages: messageMap[String(request.id)] || []
     }));
+}
+
+async function attachRefundHistory(requests = []) {
+    const enriched = await Promise.all(requests.map(async (request) => {
+        if (!request.paymentTransactionId) {
+            return { ...request, previousRefunds: [] };
+        }
+
+        try {
+            const rows = await getRefundsForTransaction(request.paymentTransactionId);
+            return { ...request, previousRefunds: mapRefundRows(rows) };
+        } catch (error) {
+            console.error('Refund history load failed:', error.message);
+            return { ...request, previousRefunds: [] };
+        }
+    }));
+
+    return enriched;
+}
+
+function attachCustomerEligibility({ orders = [], bookings = [] } = {}) {
+    return {
+        orders: orders.map((order) => ({
+            ...order,
+            refundEligibility: evaluateOrder(order)
+        })),
+        bookings: bookings.map((booking) => ({
+            ...booking,
+            refundEligibility: evaluateBooking(booking)
+        }))
+    };
 }
 
 async function showHelpCenter(req, res) {
@@ -490,11 +719,14 @@ async function showHelpCenter(req, res) {
                 getHistoryOrders(req.session.user.id)
             ]);
 
+            const mergedOrders = mergeCustomerOrders(transactionOrders, historyOrders);
+            const eligibleContext = attachCustomerEligibility({ orders: mergedOrders, bookings });
+
             return res.render('help-center', {
                 ...viewModel,
-                requests: await attachMessages(requests),
-                bookings,
-                orders: mergeCustomerOrders(transactionOrders, historyOrders)
+                requests: await attachRefundHistory(await attachMessages(requests)),
+                bookings: eligibleContext.bookings,
+                orders: eligibleContext.orders
             });
         }
 
@@ -506,7 +738,7 @@ async function showHelpCenter(req, res) {
 
             return res.render('help-center', {
                 ...viewModel,
-                requests: await attachMessages(requests),
+                requests: await attachRefundHistory(await attachMessages(requests)),
                 orders
             });
         }
@@ -515,7 +747,7 @@ async function showHelpCenter(req, res) {
 
         return res.render('help-center', {
             ...viewModel,
-            requests: await attachMessages(requests)
+            requests: await attachRefundHistory(await attachMessages(requests))
         });
     } catch (error) {
         console.error(error);
@@ -551,13 +783,14 @@ async function replyToRequest(req, res) {
         }
 
         const messageBody = cleanText(req.body.messageBody, 1600);
-        const screenshot = req.file ? `/uploads/support/${req.file.filename}` : '';
+        const evidenceFiles = getUploadedSupportEvidence(req);
+        const screenshot = evidenceFiles[0] ? `/uploads/support/${evidenceFiles[0].filename}` : '';
 
-        if (!messageBody && !screenshot) {
+        if (!messageBody && !evidenceFiles.length) {
             throw new Error('Add a message or screenshot before sending.');
         }
 
-        await createSupportMessage({
+        const messageResult = await createSupportMessage({
             requestId: request.id,
             senderUserId: req.session.user.id,
             senderRole: req.session.user.role,
@@ -565,7 +798,55 @@ async function replyToRequest(req, res) {
             screenshotPath: screenshot
         });
 
-        const replyEventKey = `${request.id}-${Date.now()}`;
+        for (const file of evidenceFiles.slice(1)) {
+            await createSupportMessage({
+                requestId: request.id,
+                senderUserId: req.session.user.id,
+                senderRole: req.session.user.role,
+                messageBody: 'Additional evidence attached.',
+                screenshotPath: `/uploads/support/${file.filename}`
+            });
+        }
+
+        const replyEventKey = `support:${request.id}:reply:${messageResult?.insertId || 'submitted'}`;
+        const submittedMoreInformation = req.session.user.role === 'customer'
+            && isRefundRequest(request.requestType)
+            && request.status === 'more_information_required';
+        const submittedReturnInformation = req.session.user.role === 'customer'
+            && isRefundRequest(request.requestType)
+            && request.status === 'return_required';
+
+        if (submittedMoreInformation) {
+            const statusResult = await markMoreInformationSubmitted(request.id, req.session.user.id);
+
+            if (!statusResult.affectedRows) {
+                throw new Error('This refund request changed before your update could be saved. Please reload and try again.');
+            }
+
+            await createSupportMessage({
+                requestId: request.id,
+                senderUserId: req.session.user.id,
+                senderRole: 'system',
+                messageBody: 'Additional customer information was submitted. Status returned to under review.',
+                screenshotPath: ''
+            });
+        }
+
+        if (submittedReturnInformation) {
+            const statusResult = await markReturnSubmitted(request.id, req.session.user.id);
+
+            if (!statusResult.affectedRows) {
+                throw new Error('This return request changed before your update could be saved. Please reload and try again.');
+            }
+
+            await createSupportMessage({
+                requestId: request.id,
+                senderUserId: req.session.user.id,
+                senderRole: 'system',
+                messageBody: 'Customer submitted return tracking or drop-off information. Status returned to merchant review.',
+                screenshotPath: ''
+            });
+        }
 
         if (req.session.user.role !== 'admin') {
             notifyAdmins({
@@ -593,10 +874,14 @@ async function replyToRequest(req, res) {
             notifyMerchant(request.merchantUserId, {
                 actorUserId: req.session.user.id,
                 type: 'support_request',
-                title: `New reply on ticket #${request.id}`,
-                message: req.session.user.role === 'customer'
-                    ? `${req.session.user.name || 'A customer'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`
-                    : `Vaniday admin replied to ${(requestLabels[request.requestType] || 'a support ticket').toLowerCase()} #${request.id}.`,
+                title: submittedMoreInformation || submittedReturnInformation ? 'New refund evidence submitted' : `New reply on ticket #${request.id}`,
+                message: submittedMoreInformation
+                    ? `${req.session.user.name || 'A customer'} added the requested information and evidence for ${requestLabels[request.requestType] || 'refund request'} #${request.id}. It is back under review.`
+                    : submittedReturnInformation
+                        ? `${req.session.user.name || 'A customer'} submitted return tracking or drop-off information for ${requestLabels[request.requestType] || 'refund request'} #${request.id}. It is back under review.`
+                        : (req.session.user.role === 'customer'
+                            ? `${req.session.user.name || 'A customer'} replied to ${requestLabels[request.requestType] || 'a support ticket'}.`
+                            : `Vaniday admin replied to ${(requestLabels[request.requestType] || 'a support ticket').toLowerCase()} #${request.id}.`),
                 linkUrl: '/help-center',
                 dedupeKey: `support-reply-merchant-${replyEventKey}`
             });
@@ -604,7 +889,11 @@ async function replyToRequest(req, res) {
 
         return sendSupportResponse(req, res, {
             success: true,
-            message: `Reply added to ticket #${request.id}.`,
+            message: submittedMoreInformation
+                ? `Additional information was added to ticket #${request.id}. The request is back under review.`
+                : submittedReturnInformation
+                    ? `Return information was added to ticket #${request.id}. The request is back under merchant review.`
+                    : `Reply added to ticket #${request.id}.`,
             reply: {
                 requestId: request.id,
                 senderRole: req.session.user.role,
@@ -643,36 +932,88 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         throw new Error('This order could not be found on your account.');
     }
 
-    if (SHIPPED_STATUSES.includes(order.deliveryStatus)) {
-        throw new Error('This order has already been shipped, so it cannot be cancelled or refunded from the Help Center.');
-    }
-
-    if (order.deliveryStatus === 'cancelled') {
-        throw new Error('This order is already cancelled.');
-    }
-
-    if (order.refundStatus === 'refunded' || Number(order.refundedAmount || 0) > 0) {
-        throw new Error('This order has already been refunded.');
-    }
-
     if (!order.merchantUserIds[0]) {
         throw new Error('This order cannot be refunded through the Help Center because the merchant could not be verified.');
     }
+
+    const eligibility = evaluateOrder(order);
+    if (!eligibility.eligible) {
+        throw new Error(eligibility.blockedReason || 'This order is not eligible for a standard refund request.');
+    }
+
+    const issueCode = getSubmittedIssueCode(body);
+    const reasonValidation = validateEligibilityReason(eligibility, issueCode);
+    if (!reasonValidation.valid) {
+        throw new Error(reasonValidation.message);
+    }
+    const evidenceFiles = getUploadedSupportEvidence(req);
+    if (reasonValidation.reason.evidenceRequired && evidenceFiles.length === 0) {
+        throw new Error('Evidence is required for this refund reason.');
+    }
+
+    const reasonCategory = normalizeReasonCategory(mapEligibilityReasonToRefundCategory(reasonValidation.reason));
+    const grossRefundAmount = Math.min(
+        Number(body.requestedRefundAmount || eligibility.refundableAmount || order.totalAmount || 0),
+        Number(eligibility.refundableAmount || order.totalAmount || 0)
+    );
+    const acknowledgementAccepted = body.processingFeeAcknowledged === 'on';
+    const preliminary = transactionId
+        ? await calculateTransactionRefundPreview(transactionId, {
+            requestedGrossRefund: grossRefundAmount,
+            reasonCategory,
+            acknowledgementAccepted: false
+        })
+        : null;
+
+    if (preliminary?.acknowledgementRequired && !acknowledgementAccepted) {
+        throw new Error('Please acknowledge the disclosed payment-processing deduction before submitting this refund request.');
+    }
+
+    const calculation = transactionId
+        ? await calculateTransactionRefundPreview(transactionId, {
+            requestedGrossRefund: grossRefundAmount,
+            reasonCategory,
+            acknowledgementAccepted
+        })
+        : {
+            requestedGrossRefund: Number(order.totalAmount || 0),
+            netCustomerRefund: Number(order.totalAmount || 0),
+            processingFeeDeduction: 0,
+            originalProcessingFee: 0,
+            refundResponsibility: 'merchant',
+            refundReasonCategory: reasonCategory,
+            feeDeductionApplies: false
+        };
 
     return {
         customerUserId: req.session.user.id,
         merchantUserId: order.merchantUserIds[0] || null,
         requestType,
+        actionType: eligibility.actionType,
+        eligibilityStatusCode: eligibility.statusCode,
+        eligibilityDeadline: eligibility.deadline || null,
+        returnRequired: eligibility.returnRequired || reasonValidation.reason.returnRequired,
+        evidenceRequired: reasonValidation.reason.evidenceRequired,
         targetType: 'order',
         targetId: String(transactionId || parseOrderTransactionId(order.receiptId) || order.targetId || order.id),
         receiptId: order.receiptId,
         targetLabel: order.itemNames || 'Product order',
         paymentMethod: order.paymentMethod || order.paymentProvider || '',
         status: 'pending_merchant_review',
-        reason: cleanText(body.reason, 160),
+        reason: cleanText(issueCode, 160),
         customerNote: cleanText(body.customerNote),
-        refundAmount: Number(order.totalAmount || 0),
-        approvedRefundAmount: Number(order.totalAmount || 0),
+        refundAmount: calculation.requestedGrossRefund,
+        approvedRefundAmount: calculation.netCustomerRefund,
+        grossRefundAmount: calculation.requestedGrossRefund,
+        processingFeeDeduction: calculation.processingFeeDeduction,
+        netRefundAmount: calculation.netCustomerRefund,
+        originalProcessingFeeAmount: calculation.originalProcessingFee,
+        processingFeeSource: preliminary?.processingFeeSource || '',
+        refundReasonCategory: calculation.refundReasonCategory,
+        refundResponsibility: calculation.refundResponsibility,
+        feeDeductionApplies: calculation.feeDeductionApplies,
+        feeAcknowledgedAt: calculation.feeDeductionApplies ? new Date() : null,
+        feeAcknowledgementVersion: calculation.feeDeductionApplies ? REFUND_TERMS_VERSION : null,
         paymentTransactionId: transactionId || null,
         customerTermsAccepted: true,
         customerTermsVersion: REFUND_TERMS_VERSION,
@@ -699,41 +1040,86 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         throw new Error('This booking could not be found on your account.');
     }
 
-    if (booking.status === 'cancelled') {
-        throw new Error('This booking is already cancelled.');
+    const eligibility = evaluateBooking(booking);
+    if (!eligibility.eligible) {
+        throw new Error(eligibility.blockedReason || 'This booking is not eligible for a standard refund request.');
     }
-
-    if (!booking.transaction_id && booking.status !== 'paid') {
-        throw new Error('Only paid bookings can be submitted for refund review.');
+    const issueCode = getSubmittedIssueCode(body);
+    const reasonValidation = validateEligibilityReason(eligibility, issueCode);
+    if (!reasonValidation.valid) {
+        throw new Error(reasonValidation.message);
     }
-
+    const evidenceFiles = getUploadedSupportEvidence(req);
+    if (reasonValidation.reason.evidenceRequired && evidenceFiles.length === 0) {
+        throw new Error('Evidence is required for this refund reason.');
+    }
     const dayDifference = getDayDifferenceFromToday(booking.booking_date);
-    const isPastBooking = dayDifference !== null && dayDifference < 0;
-
-    if (isPastBooking && requestType !== 'booking_refund') {
-        throw new Error('Past bookings cannot be changed or cancelled from the Help Center.');
-    }
-
     const isLateCancellation = dayDifference !== null
         && dayDifference >= 0
         && dayDifference <= 1;
-    const refundAmount = Number(booking.service_price || 0);
+    const refundAmount = Number(eligibility.refundableAmount || booking.service_price || 0);
+    const reasonCategory = normalizeReasonCategory(mapEligibilityReasonToRefundCategory(reasonValidation.reason));
+    const acknowledgementAccepted = body.processingFeeAcknowledged === 'on';
+    const preliminary = booking.transaction_id
+        ? await calculateTransactionRefundPreview(booking.transaction_id, {
+            requestedGrossRefund: refundAmount,
+            reasonCategory,
+            acknowledgementAccepted: false,
+            lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0
+        })
+        : null;
+
+    if (preliminary?.acknowledgementRequired && !acknowledgementAccepted) {
+        throw new Error('Please acknowledge the disclosed payment-processing deduction before submitting this refund request.');
+    }
+
+    const calculation = booking.transaction_id
+        ? await calculateTransactionRefundPreview(booking.transaction_id, {
+            requestedGrossRefund: refundAmount,
+            reasonCategory,
+            acknowledgementAccepted,
+            lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0
+        })
+        : {
+            requestedGrossRefund: refundAmount,
+            netCustomerRefund: Math.max(0, refundAmount - (isLateCancellation ? calculateLateFee(refundAmount) : 0)),
+            processingFeeDeduction: 0,
+            originalProcessingFee: 0,
+            refundResponsibility: 'merchant',
+            refundReasonCategory: reasonCategory,
+            feeDeductionApplies: false
+        };
 
     return {
         customerUserId: req.session.user.id,
         merchantUserId: booking.merchant_user_id,
         requestType,
+        actionType: eligibility.actionType,
+        eligibilityStatusCode: eligibility.statusCode,
+        eligibilityDeadline: eligibility.deadline || null,
+        returnRequired: eligibility.returnRequired || reasonValidation.reason.returnRequired,
+        evidenceRequired: reasonValidation.reason.evidenceRequired,
         targetType: 'booking',
         targetId: String(booking.id),
         receiptId: String(booking.id),
         targetLabel: booking.service_name || 'Booking service',
         paymentMethod: booking.transaction_id ? 'original payment transaction' : 'booking payment',
         status: 'pending_merchant_review',
-        reason: cleanText(body.reason, 160),
+        reason: cleanText(issueCode, 160),
         customerNote: cleanText(body.customerNote),
         requestedChange: null,
-        refundAmount,
-        approvedRefundAmount: Math.max(0, refundAmount - (isLateCancellation ? calculateLateFee(refundAmount) : 0)),
+        refundAmount: calculation.requestedGrossRefund,
+        approvedRefundAmount: calculation.netCustomerRefund,
+        grossRefundAmount: calculation.requestedGrossRefund,
+        processingFeeDeduction: calculation.processingFeeDeduction,
+        netRefundAmount: calculation.netCustomerRefund,
+        originalProcessingFeeAmount: calculation.originalProcessingFee,
+        processingFeeSource: preliminary?.processingFeeSource || '',
+        refundReasonCategory: calculation.refundReasonCategory,
+        refundResponsibility: calculation.refundResponsibility,
+        feeDeductionApplies: calculation.feeDeductionApplies,
+        feeAcknowledgedAt: calculation.feeDeductionApplies ? new Date() : null,
+        feeAcknowledgementVersion: calculation.feeDeductionApplies ? REFUND_TERMS_VERSION : null,
         paymentTransactionId: booking.transaction_id || null,
         lateFeeAmount: isLateCancellation ? calculateLateFee(refundAmount) : 0,
         isLateCancellation,
@@ -805,7 +1191,8 @@ async function createRequest(req, res) {
             requestId,
             affectedRows: result.affectedRows
         });
-        const screenshotPath = req.file ? `/uploads/support/${req.file.filename}` : '';
+        const evidenceFiles = getUploadedSupportEvidence(req);
+        const screenshotPath = evidenceFiles[0] ? `/uploads/support/${evidenceFiles[0].filename}` : '';
 
         if (screenshotPath) {
             await createSupportMessage({
@@ -814,6 +1201,16 @@ async function createRequest(req, res) {
                 senderRole: req.session.user.role,
                 messageBody: 'Initial screenshot attached.',
                 screenshotPath
+            });
+        }
+
+        for (const file of evidenceFiles.slice(1)) {
+            await createSupportMessage({
+                requestId,
+                senderUserId: req.session.user.id,
+                senderRole: req.session.user.role,
+                messageBody: 'Additional initial evidence attached.',
+                screenshotPath: `/uploads/support/${file.filename}`
             });
         }
 
@@ -921,29 +1318,187 @@ async function adminSendToMerchant(req, res) {
     return res.redirect('/help-center');
 }
 
+function assertFreshMerchantRequest(req, request) {
+    const body = req.body || {};
+    const submittedStatus = cleanText(body.requestStatus, 40);
+    const submittedUpdatedAt = Date.parse(body.requestUpdatedAt || '');
+    const currentUpdatedAt = Date.parse(request.updatedAt || request.createdAt || '');
+
+    if (submittedStatus && submittedStatus !== request.status) {
+        throw new Error('This refund request changed since the page loaded. Reload the Help Center before taking action.');
+    }
+
+    if (
+        Number.isFinite(submittedUpdatedAt)
+        && Number.isFinite(currentUpdatedAt)
+        && Math.floor(submittedUpdatedAt / 1000) !== Math.floor(currentUpdatedAt / 1000)
+    ) {
+        throw new Error('This refund request has newer activity. Reload the Help Center before taking action.');
+    }
+}
+
+function isMerchantReviewStatus(status) {
+    return ['pending_merchant_review', 'under_review'].includes(String(status || ''));
+}
+
+async function merchantRefundPreview(req, res) {
+    try {
+        const body = req.body || {};
+        const request = await findSupportRequest(req.params.requestId);
+
+        if (!request || String(request.merchantUserId) !== String(req.session.user.id)) {
+            throw new Error('Refund request not found for your merchant account.');
+        }
+        if (!isRefundRequest(request.requestType)) {
+            throw new Error('Only refund requests can be previewed here.');
+        }
+        if (!isMerchantReviewStatus(request.status)) {
+            throw new Error('This refund request is not waiting for merchant review.');
+        }
+
+        const decision = normalizeMerchantRefundDecision(body.decision);
+        if (!['full_refund', 'partial_refund'].includes(decision)) {
+            throw new Error('Choose full refund or partial refund to preview.');
+        }
+
+        const percentage = decision === 'full_refund'
+            ? 100
+            : parseRefundPercentage(body.approvedPercentage, { allowFull: false });
+        const transactionId = request.paymentTransactionId || parseOrderTransactionId(request.targetId);
+        if (!transactionId) {
+            throw new Error('The original payment transaction could not be found.');
+        }
+
+        const calculation = await calculateTransactionRefundPreview(transactionId, {
+            requestedGrossRefund: request.refundAmount,
+            approvedPercentage: percentage,
+            reasonCategory: request.refundReasonCategory || normalizeReasonCategory(request.reason),
+            acknowledgementAccepted: Boolean(request.feeAcknowledgedAt || request.feeDeductionApplies),
+            lateFeeAmount: request.lateFeeAmount || 0
+        });
+        const transaction = await getTransactionById(transactionId);
+        const rewardEffects = transaction
+            ? await previewRefundRewardEffects({ transaction, calculation })
+            : {};
+        const previousRefunds = mapRefundRows(await getRefundsForTransaction(transactionId));
+
+        return res.json({
+            success: true,
+            calculation,
+            rewardEffects,
+            previousRefunds,
+            message: 'Refund preview recalculated from the latest payment and refund records.'
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Refund preview could not be calculated.'
+        });
+    }
+}
+
 async function merchantRespond(req, res) {
     let request = null;
     let refundOutcome = null;
     let processingStarted = false;
 
     try {
+        const body = req.body || {};
         request = await findSupportRequest(req.params.requestId);
 
         if (!request || String(request.merchantUserId) !== String(req.session.user.id)) {
             throw new Error('Support request not found for your merchant account.');
         }
 
-        const decision = req.body.decision === 'approved' ? 'approved' : 'rejected';
-        const merchantNote = cleanText(req.body.merchantNote);
-        const rejectionReason = cleanText(req.body.rejectionReason || req.body.merchantNote);
-        const internalNotes = cleanText(req.body.internalNotes);
+        const decision = normalizeMerchantRefundDecision(body.decision);
+        const merchantNote = cleanText(body.merchantNote);
+        const moreInfoMessage = cleanText(body.moreInfoMessage, 1200);
+        const partialReasonPreset = cleanText(body.partialReasonPreset);
+        const partialReason = cleanText(body.partialReason || body.merchantDecisionReason || (partialReasonPreset === 'Other.' ? '' : partialReasonPreset));
+        const rejectionReason = cleanText(body.rejectionReason || body.merchantNote);
+        const internalNotes = cleanText(body.internalNotes);
 
         if (!isRefundRequest(request.requestType)) {
             throw new Error('Only refund requests can be reviewed here.');
         }
 
-        if (request.status !== 'pending_merchant_review') {
+        assertFreshMerchantRequest(req, request);
+
+        if (!isMerchantReviewStatus(request.status)) {
             throw new Error('This refund request is not waiting for merchant review.');
+        }
+
+        if (!decision) {
+            throw new Error('Choose full refund, partial refund, request more information, require return, or reject.');
+        }
+
+        if (decision === 'request_more_information') {
+            if (moreInfoMessage.length < 12) {
+                throw new Error('Please enter a clear customer-visible message explaining what evidence or information is missing.');
+            }
+
+            const moreInfoResult = await markMoreInformationRequired(request.id, req.session.user.id, moreInfoMessage, internalNotes);
+            if (!moreInfoResult.affectedRows) {
+                throw new Error('This request changed before the information request could be saved. Reload and try again.');
+            }
+
+            await createSupportMessage({
+                requestId: request.id,
+                senderUserId: req.session.user.id,
+                senderRole: 'merchant',
+                messageBody: `More information requested: ${moreInfoMessage}`,
+                screenshotPath: ''
+            });
+
+            const customerMessage = `${requestLabels[request.requestType]} #${request.id} needs more information from you before the merchant can continue reviewing it. ${moreInfoMessage}`;
+            notifyCustomerMoreInformationChannels(request, customerMessage);
+
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Merchant requested more refund information',
+                message: `${req.session.user.name || 'Merchant'} requested more information on ${(requestLabels[request.requestType] || 'support request').toLowerCase()} #${request.id}.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-admin-merchant-${request.id}-more-info`
+            });
+
+            setFlash(req, 'success', `Request #${request.id} now requires more information from the customer.`);
+            return res.redirect('/help-center');
+        }
+
+        if (decision === 'return_required') {
+            if (!request.returnRequired) {
+                throw new Error('This request is not marked as requiring a product return.');
+            }
+            if (merchantNote.length < 8) {
+                throw new Error('Please tell the customer what return action is required.');
+            }
+
+            const returnResult = await markReturnRequired(request.id, req.session.user.id, merchantNote, internalNotes);
+            if (!returnResult.affectedRows) {
+                throw new Error('This return requirement could not be saved.');
+            }
+
+            notifyCustomer(request.customerUserId, {
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Return required before refund',
+                message: `${requestLabels[request.requestType]} #${request.id} requires a product return before the merchant can approve the refund. ${merchantNote}`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-customer-merchant-${request.id}-return-required`
+            });
+
+            notifyAdmins({
+                actorUserId: req.session.user.id,
+                type: 'support_request',
+                title: 'Merchant requested return before refund',
+                message: `${req.session.user.name || 'Merchant'} marked ${(requestLabels[request.requestType] || 'support request').toLowerCase()} #${request.id} as return required.`,
+                linkUrl: '/help-center',
+                dedupeKey: `support-admin-merchant-${request.id}-return-required`
+            });
+
+            setFlash(req, 'success', `Request #${request.id} was marked as return required.`);
+            return res.redirect('/help-center');
         }
 
         if (decision === 'rejected') {
@@ -979,7 +1534,44 @@ async function merchantRespond(req, res) {
             return res.redirect('/help-center');
         }
 
-        const approveResult = await markMerchantApproved(request.id, req.session.user.id, internalNotes || merchantNote);
+        if (request.returnRequired && request.merchantDecision !== 'return_submitted') {
+            throw new Error('This request requires the product return step before a refund can be approved.');
+        }
+
+        const percentage = decision === 'full_refund'
+            ? 100
+            : parseRefundPercentage(body.approvedPercentage, { allowFull: false });
+
+        if (decision === 'partial_refund' && partialReason.length < 8) {
+            throw new Error('Please add a customer-facing reason for the partial refund.');
+        }
+
+        const transactionId = request.paymentTransactionId || parseOrderTransactionId(request.targetId);
+        const approvalCalculation = await calculateTransactionRefundPreview(transactionId, {
+            requestedGrossRefund: request.refundAmount,
+            approvedPercentage: percentage,
+            reasonCategory: request.refundReasonCategory || normalizeReasonCategory(request.reason),
+            acknowledgementAccepted: Boolean(request.feeAcknowledgedAt || request.feeDeductionApplies),
+            lateFeeAmount: request.lateFeeAmount || 0
+        });
+
+        if (approvalCalculation.approvedGrossRefund <= 0 || approvalCalculation.netCustomerRefund <= 0) {
+            throw new Error('The calculated refund amount is zero. Check the remaining refundable balance.');
+        }
+
+        const customerFacingReason = decision === 'partial_refund'
+            ? partialReason
+            : (merchantNote || 'Full refund approved.');
+        const approveResult = await markMerchantApproved(request.id, req.session.user.id, merchantNote, {
+            customerFacingReason,
+            internalNotes,
+            approvedRefundPercentage: approvalCalculation.approvedRefundPercentage,
+            refundBaseAmount: approvalCalculation.refundBaseAmount,
+            grossRefundAmount: approvalCalculation.approvedGrossRefund,
+            processingFeeDeduction: approvalCalculation.processingFeeDeduction,
+            otherDeductionAmount: approvalCalculation.otherDeductions,
+            netRefundAmount: approvalCalculation.netCustomerRefund
+        });
 
         if (!approveResult.affectedRows) {
             throw new Error('This request is not ready for a merchant decision.');
@@ -993,18 +1585,23 @@ async function merchantRespond(req, res) {
         notifyCustomer(request.customerUserId, {
             actorUserId: req.session.user.id,
             type: 'support_request',
-            title: 'Merchant approved your refund request',
-            message: `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} was approved for $${getApprovedRefundAmount(request).toFixed(2)}. The refund is now processing.`,
+            title: decision === 'partial_refund' ? 'Your refund was partially approved' : 'Your refund was fully approved',
+            message: `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} was approved for ${approvalCalculation.approvedRefundPercentage.toFixed(2)}% of the valid refund base. Net refund S$${approvalCalculation.netCustomerRefund.toFixed(2)} is now processing.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-merchant-${request.id}-approved`
         });
 
-        refundOutcome = await processMerchantApprovedRefund(request, req.session.user.id, merchantNote || internalNotes);
+        refundOutcome = await processMerchantApprovedRefund(request, req.session.user.id, customerFacingReason, {
+            customerFacingReason,
+            approvedRefundPercentage: approvalCalculation.approvedRefundPercentage,
+            grossRefundAmount: approvalCalculation.approvedGrossRefund
+        });
         await markRefundSucceeded(request.id, req.session.user.id, refundOutcome);
 
         const completed = !refundOutcome.manualRequired;
+        const completionSummary = formatRewardEffectSummary(refundOutcome);
         const finalMessage = completed
-            ? `Refund request #${request.id} was completed for $${refundOutcome.amount.toFixed(2)}.`
+            ? `Refund request #${request.id} was completed: ${completionSummary}.`
             : `Refund request #${request.id} requires manual merchant action through ${refundOutcome.provider || 'the original payment provider'}.`;
 
         notifyCustomer(request.customerUserId, {
@@ -1012,7 +1609,7 @@ async function merchantRespond(req, res) {
             type: 'support_request',
             title: completed ? 'Refund completed' : 'Refund requires manual processing',
             message: completed
-                ? `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} has been refunded for $${refundOutcome.amount.toFixed(2)}.`
+                ? `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} has been ${refundOutcome.refundStatus === 'partially_refunded' ? 'partially ' : ''}refunded. ${completionSummary}.`
                 : `${requestLabels[request.requestType]} #${request.id} was approved, but this payment method needs manual merchant processing.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-refund-${request.id}-${completed ? 'refunded' : 'manual'}`
@@ -1022,7 +1619,9 @@ async function merchantRespond(req, res) {
             actorUserId: req.session.user.id,
             type: 'support_request',
             title: completed ? 'Refund completed' : 'Manual refund action required',
-            message: finalMessage,
+            message: completed
+                ? `${requestTargetReference}: gross refund S$${Number(refundOutcome.grossRefundAmount || 0).toFixed(2)}, ${completionSummary}. Provider ref: ${refundOutcome.providerRefundId || 'not provided'}.`
+                : finalMessage,
             linkUrl: '/help-center',
             dedupeKey: `support-merchant-refund-${request.id}-${completed ? 'refunded' : 'manual'}`
         });
@@ -1039,26 +1638,33 @@ async function merchantRespond(req, res) {
         setFlash(req, 'success', finalMessage);
     } catch (error) {
         if (processingStarted && request?.id) {
-            await markRefundFailed(request.id, req.session.user.id, error.message || 'Refund provider failed.').catch((markError) => {
+            const needsReconciliation = error.code === 'REFUND_RECONCILIATION_REQUIRED';
+            const markFailure = needsReconciliation ? markRefundReconciliationRequired : markRefundFailed;
+
+            await markFailure(request.id, req.session.user.id, error.message || 'Refund provider failed.').catch((markError) => {
                 console.error('Refund failure status could not be saved:', markError);
             });
 
             notifyCustomer(request.customerUserId, {
                 actorUserId: req.session.user.id,
                 type: 'support_request',
-                title: 'Refund processing failed',
-                message: `${requestLabels[request.requestType]} #${request.id} could not be processed automatically. The merchant has been notified to follow up.`,
+                title: needsReconciliation ? 'Refund needs manual review' : 'Refund processing failed',
+                message: needsReconciliation
+                    ? `${requestLabels[request.requestType]} #${request.id} needs manual payment reconciliation before it can be retried. The merchant has been notified.`
+                    : `${requestLabels[request.requestType]} #${request.id} could not be processed automatically. The merchant has been notified to follow up.`,
                 linkUrl: '/help-center',
-                dedupeKey: `support-customer-refund-${request.id}-failed`
+                dedupeKey: `support-customer-refund-${request.id}-${needsReconciliation ? 'reconciliation' : 'failed'}`
             });
 
             notifyMerchant(request.merchantUserId, {
                 actorUserId: req.session.user.id,
                 type: 'support_request',
-                title: 'Refund processing failed',
-                message: `Refund request #${request.id} failed during processing. Review the payment provider record and contact support if needed.`,
+                title: needsReconciliation ? 'Refund reconciliation required' : 'Refund processing failed',
+                message: needsReconciliation
+                    ? `Refund request #${request.id} may have reached the provider, but local reconciliation did not complete. Check the provider record and do not issue a second refund until reconciled.`
+                    : `Refund request #${request.id} failed during processing. Review the payment provider record and contact support if needed.`,
                 linkUrl: '/help-center',
-                dedupeKey: `support-merchant-refund-${request.id}-failed`
+                dedupeKey: `support-merchant-refund-${request.id}-${needsReconciliation ? 'reconciliation' : 'failed'}`
             });
         }
 
@@ -1138,8 +1744,11 @@ async function adminResolve(req, res) {
                 throw new Error('The order could not be found.');
             }
 
-            if (SHIPPED_STATUSES.includes(order.deliveryStatus)) {
-                throw new Error('This order has already shipped, so it cannot be refunded through the cancellation flow.');
+            if (
+                SHIPPED_STATUSES.includes(order.deliveryStatus)
+                && request.actionType === 'cancellation'
+            ) {
+                throw new Error('This order is already in delivery, so it cannot be refunded through the cancellation flow.');
             }
         }
 
@@ -1163,15 +1772,19 @@ async function adminResolve(req, res) {
                         merchantId: request.merchantUserId || null
                     });
 
-                    const deliveryResult = await updateDeliveryStatus(transactionId, 'cancelled', {});
-                    console.log('[refund:admin:order:delivery:update:result]', {
-                        transactionId,
-                        affectedRows: deliveryResult?.affectedRows,
-                        changedRows: deliveryResult?.changedRows
-                    });
+                    if (request.actionType === 'cancellation') {
+                        const deliveryResult = await updateDeliveryStatus(transactionId, 'cancelled', {});
+                        console.log('[refund:admin:order:delivery:update:result]', {
+                            transactionId,
+                            affectedRows: deliveryResult?.affectedRows,
+                            changedRows: deliveryResult?.changedRows
+                        });
+                    }
 
                     if (request.receiptId) {
-                        await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
+                        if (request.actionType === 'cancellation') {
+                            await updateHistoryDeliveryStatus(request.receiptId, 'cancelled');
+                        }
                         if (!refundOutcome.manualRequired) {
                             await recordHistoryRefund(request.receiptId, approvedRefundAmount);
                         }
@@ -1184,7 +1797,9 @@ async function adminResolve(req, res) {
                         approvedRefundAmount
                     });
 
-                    await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
+                    if (request.actionType === 'cancellation') {
+                        await updateHistoryDeliveryStatus(request.receiptId || request.targetId, 'cancelled');
+                    }
                     await recordHistoryRefund(request.receiptId || request.targetId, approvedRefundAmount);
                     await reverseCampaignCashback(request.receiptId || request.targetId);
                 }
@@ -1327,6 +1942,7 @@ async function updateOrderDeliveryStatus(req, res) {
 
 module.exports = {
     createRequest,
+    merchantRefundPreview,
     merchantRespond,
     replyToRequest,
     showHelpCenter,

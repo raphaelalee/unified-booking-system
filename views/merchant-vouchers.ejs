@@ -83,6 +83,7 @@
                         <div class="service-card-actions">
                             <a class="button secondary full" href="/merchant/vouchers/<%= voucher.id %>/edit">Edit</a>
                             <form action="/merchant/vouchers/<%= voucher.id %>/delete" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <button class="button secondary full danger-button" type="submit">Delete</button>
                             </form>
                         </div>

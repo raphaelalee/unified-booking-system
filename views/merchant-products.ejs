@@ -65,6 +65,7 @@
                             <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
                         </div>
                         <form action="/merchant/products/<%= product.id %>/feature" method="POST">
+                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
                             <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
                             <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
@@ -142,6 +143,7 @@
                         <% } %>
                     </div>
                     <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
+                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                         <input type="number" name="quantity" min="1" max="999" step="1" value="1" aria-label="Restock quantity">
                         <button class="restock-icon-button" type="submit" title="Restock <%= product.name %>" aria-label="Restock <%= product.name %>">+</button>
                     </form>
@@ -150,6 +152,7 @@
                         <details class="merchant-featured-editor">
                             <summary><%= product.isFeatured ? 'Edit featured' : 'Feature product' %></summary>
                             <form class="merchant-featured-form" action="/merchant/products/<%= product.id %>/feature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <label>
                                     <span>Priority</span>
                                     <input type="number" name="featuredOrder" min="0" max="99" value="<%= product.isFeatured ? Number(product.featuredOrder || 0) : Number(recommendation?.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
@@ -170,10 +173,12 @@
                         </details>
                         <% if (product.isFeatured) { %>
                             <form action="/merchant/products/<%= product.id %>/unfeature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <button class="button secondary" type="submit">Remove Featured</button>
                             </form>
                         <% } %>
                         <form action="/merchant/products/<%= product.id %>/delete" method="POST">
+                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <button class="button secondary danger-button" type="submit">Delete</button>
                         </form>
                     </div>

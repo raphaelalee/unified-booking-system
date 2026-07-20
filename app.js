@@ -255,6 +255,10 @@ function handleHistoryReviewMediaUpload(req, res, next) {
 function handleSupportScreenshotUpload(req, res, next) {
     uploadSupportScreenshot(req, res, (error) => {
         if (!error) {
+            const uploaded = req.files
+                ? Object.values(req.files).flat()
+                : [];
+            req.file = uploaded[0] || req.file;
             next();
             return;
         }
@@ -353,7 +357,8 @@ app.post('/notifications/clear-read', requireLogin, notificationController.clear
 app.get('/help-center', requireLogin, helpCenterController.showHelpCenter);
 app.post('/help-center/requests', requireCustomer, handleSupportScreenshotUpload, helpCenterController.createRequest);
 app.post('/help-center/requests/:requestId/replies', requireLogin, handleSupportScreenshotUpload, helpCenterController.replyToRequest);
-app.post('/help-center/requests/:requestId/merchant-response', requireRole('merchant'), helpCenterController.merchantRespond);
+app.post('/help-center/requests/:requestId/merchant-refund-preview', requireApprovedMerchant, helpCenterController.merchantRefundPreview);
+app.post('/help-center/requests/:requestId/merchant-response', requireApprovedMerchant, helpCenterController.merchantRespond);
 app.post('/help-center/orders/:transactionId/delivery-status', requireRole('merchant', 'admin'), helpCenterController.updateOrderDeliveryStatus);
 app.get('/profile/history', requireCustomer, profileController.showHistory);
 app.get('/reward-shop', requireCustomer, userController.showRewardShop);
@@ -438,6 +443,7 @@ app.get('/merchant/orders', requireApprovedMerchant, merchantDashboardController
 app.post('/merchant/orders/:transactionId/status', requireApprovedMerchant, merchantDashboardController.updateOrderStatus);
 app.get('/merchant/customers', requireApprovedMerchant, merchantDashboardController.showCustomers);
 app.get('/merchant/analytics', requireApprovedMerchant, merchantDashboardController.showAnalytics);
+app.post('/merchant/analytics/export', requireApprovedMerchant, merchantDashboardController.exportAnalytics);
 app.get('/merchant/support', requireRole('merchant'), merchantDashboardController.showSupport);
 app.get('/merchant/profile', requireRole('merchant'), merchantDashboardController.showProfile);
 app.post('/merchant/profile', requireRole('merchant'), merchantDashboardController.updateProfile);

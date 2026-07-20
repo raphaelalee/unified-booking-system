@@ -240,6 +240,24 @@ function ensureFulfilmentSchema(callback) {
         if (!fields.has('provider_metadata_json')) {
             alters.push('ADD COLUMN provider_metadata_json LONGTEXT DEFAULT NULL');
         }
+        if (!fields.has('processing_fee_amount')) {
+            alters.push('ADD COLUMN processing_fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+        }
+        if (!fields.has('processing_fee_currency')) {
+            alters.push("ADD COLUMN processing_fee_currency VARCHAR(10) NOT NULL DEFAULT 'SGD'");
+        }
+        if (!fields.has('processing_fee_percentage')) {
+            alters.push('ADD COLUMN processing_fee_percentage DECIMAL(7,4) DEFAULT NULL');
+        }
+        if (!fields.has('processing_fee_fixed_amount')) {
+            alters.push('ADD COLUMN processing_fee_fixed_amount DECIMAL(10,2) DEFAULT NULL');
+        }
+        if (!fields.has('processing_fee_source')) {
+            alters.push("ADD COLUMN processing_fee_source VARCHAR(40) NOT NULL DEFAULT 'unknown'");
+        }
+        if (!fields.has('processing_fee_captured_at')) {
+            alters.push('ADD COLUMN processing_fee_captured_at DATETIME DEFAULT NULL');
+        }
 
         if (alters.length === 0) {
             fulfilmentSchemaReady = true;
@@ -370,6 +388,148 @@ function buildPaymentAllocations(transactionId, paymentMethod, paymentProvider, 
     return allocations;
 }
 
+function updateRefundAllocationRows(executor, transactionId, refundOptions, callback) {
+    const explicitAllocations = Array.isArray(refundOptions.fundingAllocations)
+        ? refundOptions.fundingAllocations.filter((allocation) => Number(allocation.refundAmount || 0) > 0)
+        : [];
+
+    if (explicitAllocations.length) {
+        let index = 0;
+        const next = (error) => {
+            if (error || index >= explicitAllocations.length) {
+                callback(error || null);
+                return;
+            }
+
+            const allocation = explicitAllocations[index];
+            index += 1;
+            const amount = Number(allocation.refundAmount || 0);
+            const params = [amount, transactionId];
+            let where = 'transaction_id = ?';
+
+            if (allocation.allocationId) {
+                where += ' AND allocation_id = ?';
+                params.push(allocation.allocationId);
+            } else {
+                where += ' AND source_type = ?';
+                params.push(allocation.sourceType);
+                if (allocation.sourceReferenceId) {
+                    where += ' AND source_reference_id = ?';
+                    params.push(allocation.sourceReferenceId);
+                }
+            }
+
+            executor.query(`
+                UPDATE payment_allocations
+                SET refunded_amount = LEAST(allocated_amount, refunded_amount + ?)
+                WHERE ${where}
+            `, params, (allocationError, result) => {
+                if (allocationError) {
+                    next(allocationError);
+                    return;
+                }
+                if (result.affectedRows === 0) {
+                    next(new Error(`Refund allocation could not be recorded for ${allocation.sourceType || 'source'}.`));
+                    return;
+                }
+                next();
+            });
+        };
+
+        next();
+        return;
+    }
+
+    let remaining = Math.round(Number(refundOptions.allocationFallbackAmount || 0) * 100) / 100;
+    if (remaining <= 0) {
+        callback(null);
+        return;
+    }
+
+    executor.query(`
+        SELECT allocation_id, allocated_amount, refunded_amount
+        FROM payment_allocations
+        WHERE transaction_id = ?
+            AND source_type IN ('external', 'wallet', 'cashback', 'loyalty_points')
+            AND refunded_amount < allocated_amount
+        ORDER BY FIELD(source_type, 'external', 'wallet', 'cashback', 'loyalty_points'), allocation_id ASC
+        FOR UPDATE
+    `, [transactionId], (selectError, rows = []) => {
+        if (selectError) {
+            callback(selectError);
+            return;
+        }
+
+        let index = 0;
+        const next = (error) => {
+            if (error || index >= rows.length || remaining <= 0) {
+                callback(error || null);
+                return;
+            }
+
+            const row = rows[index];
+            index += 1;
+            const capacity = Math.max(Number(row.allocated_amount || 0) - Number(row.refunded_amount || 0), 0);
+            const amount = Math.min(capacity, remaining);
+            remaining = Math.round((remaining - amount) * 100) / 100;
+
+            executor.query(
+                'UPDATE payment_allocations SET refunded_amount = LEAST(allocated_amount, refunded_amount + ?) WHERE allocation_id = ?',
+                [amount, row.allocation_id],
+                next
+            );
+        };
+
+        next();
+    });
+}
+
+function validateRecordRefundSchema(callback) {
+    db.query('SHOW COLUMNS FROM transactions', (transactionError, transactionColumns = []) => {
+        if (transactionError) {
+            callback(transactionError);
+            return;
+        }
+
+        const transactionFields = new Set(transactionColumns.map((column) => column.Field));
+        const requiredTransactionFields = ['refunded_amount', 'refund_status', 'payment_status', 'refunded_at', 'provider_refund_id', 'refund_reason', 'refunded_by'];
+        const missingTransactionFields = requiredTransactionFields.filter((field) => !transactionFields.has(field));
+        if (missingTransactionFields.length) {
+            callback(new Error(`Missing transaction refund columns: ${missingTransactionFields.join(', ')}. Run the refund financial integrity migration or canonical schema.`));
+            return;
+        }
+
+        db.query('SHOW TABLES LIKE "orders"', (orderTableError, orderTables = []) => {
+            if (orderTableError) {
+                callback(orderTableError);
+                return;
+            }
+
+            if (!orderTables.length) {
+                callback(null);
+                return;
+            }
+
+            db.query('SHOW COLUMNS FROM orders', (orderColumnError, orderColumns = []) => {
+                if (orderColumnError) {
+                    callback(orderColumnError);
+                    return;
+                }
+
+                const orderFields = new Set(orderColumns.map((column) => column.Field));
+                const requiredOrderFields = ['transaction_id', 'refunded_amount', 'refund_status', 'payment_status', 'refunded_at', 'provider_refund_id', 'refund_reason', 'refunded_by'];
+                const missingOrderFields = requiredOrderFields.filter((field) => !orderFields.has(field));
+                if (missingOrderFields.length) {
+                    callback(new Error(`Missing order refund columns: ${missingOrderFields.join(', ')}. Run the refund financial integrity migration or canonical schema.`));
+                    return;
+                }
+
+                callback(null);
+            });
+        });
+    });
+}
+
 function ensureOrderRefundSchema(callback) {
     if (orderRefundSchemaReady) {
         callback(null);
@@ -458,6 +618,21 @@ function normalizeDeliveryStatus(status) {
     return allowed.includes(value) ? value : 'processing';
 }
 
+function isKnownDeliveryStatus(status) {
+    const value = String(status || '').trim().toLowerCase();
+    return [
+        'processing',
+        'packed',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'ready_for_pickup',
+        'delivered_to_pickup_location',
+        'completed',
+        'cancelled'
+    ].includes(value);
+}
+
 function normalizeFulfilmentType(value) {
     return String(value || '').trim().toLowerCase() === 'delivery' ? 'delivery' : 'pickup';
 }
@@ -496,6 +671,67 @@ function normalizePickupStatus(status, deliveryStatus, fulfilmentType = 'pickup'
     }
 
     return 'pending_pickup';
+}
+
+function buildStatusConflict(message) {
+    return {
+        affectedRows: 0,
+        changedRows: 0,
+        conflict: true,
+        message
+    };
+}
+
+function canTransitionOrderStatus(row, requestedStatus) {
+    const fulfilmentType = normalizeFulfilmentType(row.fulfilment_type);
+    const isPickup = fulfilmentType === 'pickup';
+    const currentDeliveryStatus = normalizeDeliveryStatus(row.delivery_status || 'processing');
+    const currentPickupStatus = normalizePickupStatus(row.pickup_status, currentDeliveryStatus, fulfilmentType);
+    const pickupAlreadyCollected = Number(row.pickup_qr_used || 0) === 1
+        || Boolean(row.pickup_verified_at)
+        || isPickupCollectedStatus(currentPickupStatus)
+        || currentDeliveryStatus === 'completed';
+
+    if (isPickup && pickupAlreadyCollected) {
+        return buildStatusConflict('Collected pickup orders cannot be moved back to an active status.');
+    }
+
+    const deliveryTransitions = {
+        processing: new Set(['packed', 'cancelled']),
+        packed: new Set(['shipped', 'cancelled']),
+        shipped: new Set(['out_for_delivery']),
+        out_for_delivery: new Set(['delivered']),
+        delivered: new Set([]),
+        cancelled: new Set([])
+    };
+    const pickupTransitions = {
+        processing: new Set(['packed', 'cancelled']),
+        packed: new Set(['ready_for_pickup', 'delivered_to_pickup_location', 'cancelled']),
+        ready_for_pickup: new Set(['delivered_to_pickup_location']),
+        delivered_to_pickup_location: new Set([]),
+        cancelled: new Set([])
+    };
+
+    const allowedStatuses = isPickup ? pickupTransitions : deliveryTransitions;
+    const currentStatus = isPickup
+        ? (isPickupReadyStatus(currentPickupStatus) ? currentPickupStatus : currentDeliveryStatus)
+        : currentDeliveryStatus;
+
+    if (!Object.prototype.hasOwnProperty.call(allowedStatuses, requestedStatus)) {
+        return buildStatusConflict(isPickup
+            ? 'This status is not valid for pickup orders.'
+            : 'This status is not valid for delivery orders.');
+    }
+
+    if (requestedStatus === currentStatus) {
+        return null;
+    }
+
+    if (!allowedStatuses[currentStatus] || !allowedStatuses[currentStatus].has(requestedStatus)) {
+        return buildStatusConflict('This order status change is no longer valid from the current order state.');
+    }
+
+    return null;
 }
 
 function createPaidTransaction(userId, amount, paymentMethod, items, options = {}, callback) {
@@ -581,9 +817,15 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                     provider_transaction_id,
                     provider_order_id,
                     provider_charge_id,
-                    provider_metadata_json
+                    provider_metadata_json,
+                    processing_fee_amount,
+                    processing_fee_currency,
+                    processing_fee_percentage,
+                    processing_fee_fixed_amount,
+                    processing_fee_source,
+                    processing_fee_captured_at
                 )
-                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+                VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             connection.query(transactionSql, [
@@ -613,7 +855,13 @@ function createPaidTransaction(userId, amount, paymentMethod, items, options = {
                 transactionOptions.providerTransactionId || transactionOptions.providerPaymentId || null,
                 transactionOptions.providerOrderId || transactionOptions.paypalOrderId || null,
                 transactionOptions.providerChargeId || null,
-                transactionOptions.providerMetadata ? JSON.stringify(transactionOptions.providerMetadata) : null
+                transactionOptions.providerMetadata ? JSON.stringify(transactionOptions.providerMetadata) : null,
+                Number(transactionOptions.processingFeeAmount || 0),
+                transactionOptions.processingFeeCurrency || transactionOptions.currency || 'SGD',
+                transactionOptions.processingFeePercentage ?? null,
+                transactionOptions.processingFeeFixedAmount ?? null,
+                transactionOptions.processingFeeSource || 'unknown',
+                transactionOptions.processingFeeCapturedAt || (transactionOptions.processingFeeSource ? new Date() : null)
             ], (insertError, transactionResult) => {
                 if (insertError) {
                     return connection.rollback(() => {
@@ -886,7 +1134,7 @@ function getPaymentSummary(transactionId, callback) {
                     END), 0) AS successful_refunded_amount,
                     MAX(CASE
                         WHEN pr.refund_status IN ('succeeded', 'refunded', 'manual_required')
-                            THEN COALESCE(pr.processed_at, pr.updated_at, pr.created_at)
+                            THEN COALESCE(pr.completed_at, pr.processing_at, pr.updated_at, pr.created_at)
                         ELSE NULL
                     END) AS last_refunded_at,
                     GROUP_CONCAT(DISTINCT CASE
@@ -1776,132 +2024,164 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
             return;
         }
 
-        const requestedStatus = normalizeDeliveryStatus(status);
-        const params = [transactionId];
-        let ownershipClause = '';
-
-        if (options.merchantUserId) {
-            ownershipClause = `
-                AND EXISTS (
-                    SELECT 1
-                    FROM order_items
-                    INNER JOIN products ON products.product_id = order_items.product_id
-                    INNER JOIN salons ON salons.salon_id = products.salon_id
-                    WHERE order_items.transaction_id = transactions.transaction_id
-                        AND salons.merchant_id = ?
-                )
-            `;
-            params.push(options.merchantUserId);
+        if (!isKnownDeliveryStatus(status)) {
+            callback(null, buildStatusConflict('Please choose a valid order status.'));
+            return;
         }
 
-        const lookupSql = `
-            SELECT
-                transaction_id,
-                fulfilment_type,
-                delivery_status,
-                pickup_status,
-                pickup_verified_at,
-                pickup_qr_used
-            FROM transactions
-            WHERE transaction_id = ?
-            ${ownershipClause}
-            LIMIT 1
-        `;
+        const requestedStatus = normalizeDeliveryStatus(status);
 
-        db.query(lookupSql, params, (lookupError, rows = []) => {
-            if (lookupError) {
-                callback(lookupError);
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
                 return;
             }
 
-            const row = rows[0];
-
-            if (!row) {
-                callback(null, { affectedRows: 0, changedRows: 0 });
-                return;
-            }
-
-            const fulfilmentType = normalizeFulfilmentType(row.fulfilment_type);
-            const isPickup = fulfilmentType === 'pickup';
-
-            if (isPickup && (Number(row.pickup_qr_used || 0) === 1 || row.pickup_verified_at || isPickupCollectedStatus(row.pickup_status))) {
-                callback(null, { affectedRows: 0, changedRows: 0 });
-                return;
-            }
-
-            const allowedForPickup = new Set(['processing', 'packed', 'ready_for_pickup', 'delivered_to_pickup_location', 'cancelled']);
-            const allowedForDelivery = new Set(['processing', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled']);
-
-            if ((isPickup && !allowedForPickup.has(requestedStatus)) || (!isPickup && !allowedForDelivery.has(requestedStatus))) {
-                callback(null, { affectedRows: 0, changedRows: 0 });
-                return;
-            }
-
-            const updateFields = [];
-            const updateValues = [];
-
-            updateFields.push('delivery_status = ?');
-            updateValues.push(requestedStatus);
-
-            if (requestedStatus === 'shipped' || requestedStatus === 'out_for_delivery') {
-                updateFields.push('shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)');
-            }
-
-            if (requestedStatus === 'delivered') {
-                updateFields.push('delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)');
-            }
-
-            if (isPickup) {
-                const pickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
-                    ? requestedStatus
-                    : requestedStatus === 'cancelled'
-                        ? 'cancelled'
-                        : 'pending_pickup';
-
-                updateFields.push('pickup_status = ?');
-                updateValues.push(pickupStatus);
-
-                if (isPickupReadyStatus(pickupStatus)) {
-                    updateFields.push('pickup_ready_at = COALESCE(pickup_ready_at, CURRENT_TIMESTAMP)');
-                }
-            }
-
-            const updateSql = `
-                UPDATE transactions
-                SET ${updateFields.join(', ')}
-                WHERE transaction_id = ?
-            `;
-
-            db.query(updateSql, [...updateValues, transactionId], (updateError, updateResult) => {
-                if (updateError || !updateResult?.affectedRows) {
-                    callback(updateError, updateResult);
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
                     return;
                 }
 
-                const receiptId = `order-${transactionId}`;
-                const historyFields = ['delivery_status = ?'];
-                const historyValues = [requestedStatus];
+                const rollback = (error, result) => connection.rollback(() => {
+                    connection.release();
+                    callback(error, result);
+                });
+                const params = [transactionId];
+                let ownershipClause = '';
 
-                if (isPickup) {
-                    const historyPickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
-                        ? requestedStatus
-                        : requestedStatus === 'cancelled'
-                            ? 'cancelled'
-                            : 'pending_pickup';
-
-                    historyFields.push('pickup_status = ?');
-                    historyValues.push(historyPickupStatus);
+                if (options.merchantUserId) {
+                    ownershipClause = `
+                        AND EXISTS (
+                            SELECT 1
+                            FROM order_items
+                            INNER JOIN products ON products.product_id = order_items.product_id
+                            INNER JOIN salons ON salons.salon_id = products.salon_id
+                            WHERE order_items.transaction_id = transactions.transaction_id
+                                AND salons.merchant_id = ?
+                        )
+                    `;
+                    params.push(options.merchantUserId);
                 }
 
-                const historySql = `
-                    UPDATE purchase_history
-                    SET ${historyFields.join(', ')}
-                    WHERE receipt_id = ?
-                        AND purchase_type = 'product'
+                const lookupSql = `
+                    SELECT
+                        transaction_id,
+                        fulfilment_type,
+                        delivery_status,
+                        pickup_status,
+                        pickup_verified_at,
+                        pickup_qr_used
+                    FROM transactions
+                    WHERE transaction_id = ?
+                    ${ownershipClause}
+                    LIMIT 1
+                    FOR UPDATE
                 `;
 
-                db.query(historySql, [...historyValues, receiptId], (historyError) => {
-                    callback(historyError, updateResult);
+                connection.query(lookupSql, params, (lookupError, rows = []) => {
+                    if (lookupError) {
+                        rollback(lookupError);
+                        return;
+                    }
+
+                    const row = rows[0];
+
+                    if (!row) {
+                        rollback(null, { affectedRows: 0, changedRows: 0 });
+                        return;
+                    }
+
+                    const transitionConflict = canTransitionOrderStatus(row, requestedStatus);
+
+                    if (transitionConflict) {
+                        rollback(null, transitionConflict);
+                        return;
+                    }
+
+                    const fulfilmentType = normalizeFulfilmentType(row.fulfilment_type);
+                    const isPickup = fulfilmentType === 'pickup';
+                    const updateFields = [];
+                    const updateValues = [];
+
+                    updateFields.push('delivery_status = ?');
+                    updateValues.push(requestedStatus);
+
+                    if (requestedStatus === 'shipped' || requestedStatus === 'out_for_delivery') {
+                        updateFields.push('shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)');
+                    }
+
+                    if (requestedStatus === 'delivered') {
+                        updateFields.push('delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                    }
+
+                    if (isPickup) {
+                        const pickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
+                            ? requestedStatus
+                            : requestedStatus === 'cancelled'
+                                ? 'cancelled'
+                                : 'pending_pickup';
+
+                        updateFields.push('pickup_status = ?');
+                        updateValues.push(pickupStatus);
+
+                        if (isPickupReadyStatus(pickupStatus)) {
+                            updateFields.push('pickup_ready_at = COALESCE(pickup_ready_at, CURRENT_TIMESTAMP)');
+                        }
+                    }
+
+                    const updateSql = `
+                        UPDATE transactions
+                        SET ${updateFields.join(', ')}
+                        WHERE transaction_id = ?
+                    `;
+
+                    connection.query(updateSql, [...updateValues, transactionId], (updateError, updateResult) => {
+                        if (updateError || !updateResult?.affectedRows) {
+                            rollback(updateError, updateResult);
+                            return;
+                        }
+
+                        const receiptId = `order-${transactionId}`;
+                        const historyFields = ['delivery_status = ?'];
+                        const historyValues = [requestedStatus];
+
+                        if (isPickup) {
+                            const historyPickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
+                                ? requestedStatus
+                                : requestedStatus === 'cancelled'
+                                    ? 'cancelled'
+                                    : 'pending_pickup';
+
+                            historyFields.push('pickup_status = ?');
+                            historyValues.push(historyPickupStatus);
+                        }
+
+                        const historySql = `
+                            UPDATE purchase_history
+                            SET ${historyFields.join(', ')}
+                            WHERE receipt_id = ?
+                                AND purchase_type = 'product'
+                        `;
+
+                        connection.query(historySql, [...historyValues, receiptId], (historyError) => {
+                            if (historyError) {
+                                rollback(historyError);
+                                return;
+                            }
+
+                            connection.commit((commitError) => {
+                                if (commitError) {
+                                    rollback(commitError);
+                                    return;
+                                }
+
+                                connection.release();
+                                callback(null, updateResult);
+                            });
+                        });
+                    });
                 });
             });
         });
@@ -2104,15 +2384,9 @@ function recordRefund(transactionId, amount, options = {}, callback) {
     const done = typeof options === 'function' ? options : callback;
     const refundOptions = typeof options === 'function' ? {} : options || {};
 
-    ensureFulfilmentSchema((schemaError) => {
+    validateRecordRefundSchema((schemaError) => {
         if (schemaError) {
             done(schemaError);
-            return;
-        }
-
-        ensureOrderRefundSchema((orderSchemaError) => {
-        if (orderSchemaError) {
-            done(orderSchemaError);
             return;
         }
 
@@ -2134,7 +2408,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                 END,
                 refunded_at = CURRENT_TIMESTAMP,
                 delivery_status = CASE
-                    WHEN ? IN ('refunded', 'partially_refunded', 'manual_required') THEN 'cancelled'
+                    WHEN ? = 1 AND ? IN ('refunded', 'manual_required') THEN 'cancelled'
                     ELSE delivery_status
                 END,
                 provider_refund_id = COALESCE(?, provider_refund_id),
@@ -2152,6 +2426,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
 
         console.log('[refund:sql:transactions:update:start]', {
             transactionId,
+            cancelFulfilment: refundOptions.cancelFulfilment ? 1 : 0,
             refundStatus,
             refundedAmount,
             providerRefundId,
@@ -2167,6 +2442,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
             refundStatus,
             refundedAmount,
             refundedAmount,
+            refundOptions.cancelFulfilment ? 1 : 0,
             refundStatus,
             providerRefundId,
             refundReason,
@@ -2189,7 +2465,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                 UPDATE orders
                 SET
                     order_status = CASE
-                        WHEN ? IN ('refunded', 'partially_refunded') THEN 'cancelled_refunded'
+                        WHEN ? = 1 AND ? = 'refunded' THEN 'cancelled_refunded'
                         WHEN ? = 'manual_required' THEN 'refund_pending'
                         ELSE order_status
                     END,
@@ -2222,6 +2498,7 @@ function recordRefund(transactionId, amount, options = {}, callback) {
             });
 
             executor.query(orderSql, [
+                refundOptions.cancelFulfilment ? 1 : 0,
                 refundStatus,
                 refundStatus,
                 refundedAmount,
@@ -2249,17 +2526,10 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                     changedRows: orderResult?.changedRows
                 });
 
-                const allocationSql = `
-                    UPDATE payment_allocations
-                    SET refunded_amount = LEAST(allocated_amount, refunded_amount + ?)
-                    WHERE transaction_id = ?
-                        AND source_type IN ('external', 'wallet', 'cashback')
-                        AND refunded_amount < allocated_amount
-                    ORDER BY FIELD(source_type, 'external', 'wallet', 'cashback'), allocation_id ASC
-                    LIMIT 1
-                `;
-
-                executor.query(allocationSql, [refundedAmount, transactionId], (allocationError) => {
+                updateRefundAllocationRows(executor, transactionId, {
+                    ...refundOptions,
+                    allocationFallbackAmount: refundedAmount
+                }, (allocationError) => {
                     if (allocationError) {
                         done(allocationError);
                         return;
@@ -2281,7 +2551,6 @@ function recordRefund(transactionId, amount, options = {}, callback) {
                     });
                 });
             });
-        });
         });
     });
 }
@@ -2313,6 +2582,26 @@ function getById(transactionId, callback) {
                 refund_reason,
                 refunded_by,
                 refunded_at,
+                original_amount,
+                gross_amount,
+                discount_amount,
+                voucher_discount_amount,
+                wallet_amount_used,
+                cashback_amount_used,
+                loyalty_points_used,
+                loyalty_points_value,
+                external_payment_amount,
+                paid_amount,
+                provider_transaction_id,
+                provider_order_id,
+                provider_charge_id,
+                provider_metadata_json,
+                processing_fee_amount,
+                processing_fee_currency,
+                processing_fee_percentage,
+                processing_fee_fixed_amount,
+                processing_fee_source,
+                processing_fee_captured_at,
                 created_at
              FROM transactions
              WHERE transaction_id = ?
@@ -2349,6 +2638,26 @@ function getById(transactionId, callback) {
                     refundReason: row.refund_reason || '',
                     refundedBy: row.refunded_by || null,
                     refundedAt: row.refunded_at,
+                    originalAmount: Number(row.original_amount || row.total_amount || 0),
+                    grossAmount: Number(row.gross_amount || row.original_amount || row.total_amount || 0),
+                    discountAmount: Number(row.discount_amount || 0),
+                    voucherDiscountAmount: Number(row.voucher_discount_amount || 0),
+                    walletAmountUsed: Number(row.wallet_amount_used || 0),
+                    cashbackAmountUsed: Number(row.cashback_amount_used || 0),
+                    loyaltyPointsUsed: Number(row.loyalty_points_used || 0),
+                    loyaltyPointsValue: Number(row.loyalty_points_value || 0),
+                    externalPaymentAmount: Number(row.external_payment_amount || 0),
+                    paidAmount: Number(row.paid_amount || row.total_amount || 0),
+                    providerTransactionId: row.provider_transaction_id || '',
+                    providerOrderId: row.provider_order_id || '',
+                    providerChargeId: row.provider_charge_id || '',
+                    providerMetadata: row.provider_metadata_json || '',
+                    processingFeeAmount: Number(row.processing_fee_amount || 0),
+                    processingFeeCurrency: row.processing_fee_currency || row.currency || 'SGD',
+                    processingFeePercentage: row.processing_fee_percentage == null ? null : Number(row.processing_fee_percentage),
+                    processingFeeFixedAmount: row.processing_fee_fixed_amount == null ? null : Number(row.processing_fee_fixed_amount),
+                    processingFeeSource: row.processing_fee_source || 'unknown',
+                    processingFeeCapturedAt: row.processing_fee_captured_at,
                     createdAt: row.created_at
                 });
             }

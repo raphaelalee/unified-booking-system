@@ -12,6 +12,7 @@ const Review = require('../models/Review');
 const Loyalty = require('../models/Loyalty');
 const AuditLog = require('../models/AuditLog');
 const SupportRequest = require('../models/SupportRequest');
+const MerchantAnalyticsExport = require('../services/merchantAnalyticsExport');
 const {
     getProductImagePath,
     deleteProductImageFile
@@ -1539,6 +1540,38 @@ const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
 const showOrders = renderPortalView('merchant-orders', 'Product Orders');
 
+function exportAnalytics(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, async (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return;
+        }
+
+        try {
+            const { workbook, filename } = await MerchantAnalyticsExport.buildExport({
+                merchant,
+                merchantUserId: req.session.user.id,
+                body: req.body || {}
+            });
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            await workbook.xlsx.write(res);
+            res.end();
+        } catch (error) {
+            const status = /unknown dataset|select at least|date/i.test(error.message || '') ? 400 : 500;
+            if (status >= 500) {
+                console.error('Merchant analytics export failed:', error);
+            }
+            res.status(status).json({
+                success: false,
+                message: error.message || 'Analytics export could not be generated.'
+            });
+        }
+    });
+}
+
 function showOnboarding(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
@@ -1595,7 +1628,9 @@ function updateOrderStatus(req, res) {
             }
 
             if (!result?.affectedRows) {
-                req.session.merchantError = 'Order status could not be updated. Pickup might already be verified or the selected status is not valid for this fulfilment type.';
+                req.session.merchantError = result?.conflict
+                    ? (result.message || 'Order status could not be updated because the order state changed.')
+                    : 'Order status could not be updated. Pickup might already be verified or the selected status is not valid for this fulfilment type.';
                 return res.redirect('/merchant/orders');
             }
 
@@ -1854,7 +1889,9 @@ function updateBookingStatus(req, res) {
         }
 
         if (!result?.affectedRows) {
-            req.session.merchantError = 'That booking was not found for your merchant account.';
+            req.session.merchantError = result?.conflict
+                ? (result.message || 'Booking status could not be updated because the booking state changed.')
+                : 'That booking was not found for your merchant account.';
             return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
         }
 
@@ -3894,6 +3931,7 @@ module.exports = {
     showBookings,
     showCustomers,
     showAnalytics,
+    exportAnalytics,
     showSupport,
     showProfile,
     showOnboarding,

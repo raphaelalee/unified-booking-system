@@ -37,6 +37,15 @@
     const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
     const formatDuration = (value) => Number(value || 0) > 0 ? `${Number(value)} mins` : 'Duration TBC';
     const formatRefundStatus = (value) => String(value || 'not_requested').replace(/_/g, ' ');
+    const formatRefundBadge = (value) => {
+        const normalized = String(value || '').toLowerCase();
+        if (normalized === 'refunded') return 'Fully Refunded';
+        if (normalized === 'partially_refunded') return 'Partially Refunded';
+        if (normalized === 'return_required') return 'Return Required';
+        if (normalized === 'refund_failed') return 'Refund Failed';
+        if (normalized === 'refund_reconciliation_required') return 'Manual Review Required';
+        return formatRefundStatus(normalized || 'not_requested');
+    };
     const profileImageFallback = '/images/vaniday-service-placeholder.svg';
     const profileGenderOptions = typeof genderOptions !== 'undefined' && Array.isArray(genderOptions) ? genderOptions : [];
     const profileGenderLabel = (profileGenderOptions.find((option) => option.value === profile.gender) || {}).label || 'Not set';
@@ -542,20 +551,42 @@
                     <% } else { %>
                         <div class="profile-wallet-list profile-history-list">
                             <% profilePurchaseHistory.slice(0, 8).forEach((entry) => { %>
-                                <a class="profile-wallet-row" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">
+                                <div class="profile-wallet-row">
                                     <div>
                                         <span><%= entry.type %></span>
                                         <strong><%= entry.itemNames || 'Purchase' %></strong>
                                         <small><%= formatBookingDateTime(entry.createdAt) %></small>
+                                        <% if (entry.supportEscalation && entry.supportEscalation.status === 'more_information_required') { %>
+                                            <small><strong>Refund needs more information</strong></small>
+                                        <% } %>
                                     </div>
                                     <div>
                                         <strong><%= formatMoney(Number(entry.remainingPaidAmount || entry.totalAmount || 0)) %></strong>
                                         <small><%= entry.paymentMethodLabel || entry.paymentMethod || 'Payment' %> · <%= entry.paymentStatusLabel || entry.paymentStatus || 'paid' %></small>
-                                        <% if (Number(entry.refundedAmount || 0) > 0) { %>
-                                            <small>Refunded <%= formatMoney(entry.refundedAmount) %></small>
+                                        <% if (entry.refund && Number(entry.refund.grossRefundTotal || 0) > 0) { %>
+                                            <small><strong><%= formatRefundBadge(entry.refundStatus) %></strong></small>
+                                            <small>Gross approved <%= formatMoney(entry.refund.grossRefundTotal) %>; external cash <%= formatMoney(entry.refund.externalRefundTotal || entry.refund.netRefundTotal) %></small>
+                                            <% if (Number(entry.refund.walletRestoredTotal || 0) > 0) { %>
+                                                <small>Wallet restored <%= formatMoney(entry.refund.walletRestoredTotal) %></small>
+                                            <% } %>
+                                            <% if (Number(entry.refund.pointsRestoredTotal || 0) > 0 || Number(entry.refund.pointsReversedTotal || 0) > 0) { %>
+                                                <small>Points restored <%= Number(entry.refund.pointsRestoredTotal || 0) %>; reversed <%= Number(entry.refund.pointsReversedTotal || 0) %></small>
+                                            <% } %>
+                                            <% if (Number(entry.refund.cashbackRestoredTotal || 0) > 0 || Number(entry.refund.cashbackReversedTotal || 0) > 0) { %>
+                                                <small>Cashback restored <%= formatMoney(entry.refund.cashbackRestoredTotal) %>; reversed <%= formatMoney(entry.refund.cashbackReversedTotal) %></small>
+                                            <% } %>
+                                            <small>Latest refund <%= entry.refund.latestRefundReference || '' %> <%= entry.refund.latestRefundDate ? formatBookingDateTime(entry.refund.latestRefundDate) : '' %></small>
                                         <% } %>
+                                        <span class="inline-actions">
+                                            <a class="button secondary" href="/receipt/<%= encodeURIComponent(entry.receiptId) %>">Receipt</a>
+                                            <% if (entry.supportEscalation && entry.supportEscalation.status === 'more_information_required') { %>
+                                                <a class="button primary" href="/help-center#support-tickets">Add Information</a>
+                                            <% } else if (entry.supportEscalation) { %>
+                                                <a class="button secondary" href="/help-center#support-tickets">Refund Request</a>
+                                            <% } %>
+                                        </span>
                                     </div>
-                                </a>
+                                </div>
                             <% }) %>
                         </div>
                     <% } %>

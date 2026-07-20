@@ -20,6 +20,7 @@ const { getBirthdayPromotionContext } = require('../utils/birthdayPromotions');
 const { getProfileImagePath, deleteProfileImageFile } = require('../utils/profileUpload');
 const { sendLoginOtpEmail } = require('../utils/emailNotifications');
 const { sendSms } = require('../utils/smsNotifications');
+const { getRefundSummariesForTransactions } = require('../services/refundSummary');
 
 const membershipTiers = [
     { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
@@ -215,10 +216,63 @@ function mapWalletHistoryRow(row) {
         type: row.purchase_type === 'booking' ? 'Booking' : 'Order',
         itemNames: row.item_names,
         totalAmount: Number(row.total_amount || 0),
+        refundedAmount: Number(row.refunded_amount || 0),
+        remainingPaidAmount: Math.max(Number(row.total_amount || 0) - Number(row.refunded_amount || 0), 0),
+        refundStatus: row.refund_status || 'none',
         paymentMethod: row.payment_method || 'paid',
         paymentStatus: row.payment_status || 'paid',
         createdAt: row.created_at
     };
+}
+
+function loadRefundSummariesForHistory(rows = [], callback) {
+    const transactionIds = [...new Set(rows
+        .map((row) => Number(String(row.receipt_id || '').replace(/^order-/, '')) || Number(row.transaction_id || 0))
+        .filter((id) => Number.isInteger(id) && id > 0))];
+
+    if (!transactionIds.length) {
+        callback(null, {});
+        return;
+    }
+
+    getRefundSummariesForTransactions(transactionIds)
+        .then((summaries) => callback(null, summaries))
+        .catch(callback);
+}
+
+function attachRefundSummariesToHistory(rows = [], summaries = {}) {
+    return rows.map((entry) => {
+        const transactionId = String(Number(String(entry.receiptId || '').replace(/^order-/, '')) || entry.transactionId || '');
+        const refund = summaries[transactionId] || null;
+        if (!refund) return entry;
+        return {
+            ...entry,
+            refund,
+            refundedAmount: refund.cumulativeGrossRefunded,
+            remainingPaidAmount: refund.remainingRefundableAmount,
+            refundStatus: refund.refundStatus || entry.refundStatus
+        };
+    });
+}
+
+function attachSupportRequestsToHistory(rows = [], supportRequests = []) {
+    const orderRefunds = (Array.isArray(supportRequests) ? supportRequests : [])
+        .filter((request) => request.targetType === 'order' && request.requestType === 'order_refund');
+    const byTransactionId = {};
+    const byReceiptId = {};
+
+    orderRefunds.forEach((request) => {
+        const transactionId = String(Number(request.paymentTransactionId || request.targetId || 0) || '');
+        if (transactionId) byTransactionId[transactionId] = request;
+        if (request.receiptId) byReceiptId[String(request.receiptId)] = request;
+    });
+
+    return rows.map((entry) => {
+        const transactionId = String(Number(String(entry.receiptId || '').replace(/^order-/, '')) || entry.transactionId || '');
+        const supportEscalation = byTransactionId[transactionId] || byReceiptId[String(entry.receiptId || '')] || null;
+
+        return supportEscalation ? { ...entry, supportEscalation } : entry;
+    });
 }
 
 function getWalletPaginationOptions(query = {}) {
@@ -473,7 +527,14 @@ function buildCustomerProfileExtras(req, accountUser, options = {}, callback) {
 
                     function awardNext() {
                         if (index >= receipts.length) {
-                            loadWallet();
+                            loadRefundSummariesForHistory(rows, (refundSummaryError, refundSummaries = {}) => {
+                                if (refundSummaryError) {
+                                    console.error(refundSummaryError);
+                                } else {
+                                    walletHistory = attachRefundSummariesToHistory(walletHistory, refundSummaries);
+                                }
+                                loadWallet();
+                            });
                             return;
                         }
 
@@ -505,6 +566,8 @@ function buildCustomerProfileExtras(req, accountUser, options = {}, callback) {
                         ]);
 
                         const continueWithSupport = (supportRequests = []) => {
+                            walletHistory = attachSupportRequestsToHistory(walletHistory, supportRequests);
+
                             supportRequests.forEach((request) => {
                                 if (request.targetType !== 'booking' || !supportIssueTypes.has(request.requestType)) {
                                     return;

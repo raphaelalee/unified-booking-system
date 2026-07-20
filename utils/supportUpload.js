@@ -23,22 +23,26 @@ const storage = multer.diskStorage({
 function fileFilter(req, file, callback) {
     const mime = String(file.mimetype || '').toLowerCase();
 
-    if (file.fieldname === 'screenshot' && mime.startsWith('image/')) {
+    if (['screenshot', 'screenshots', 'evidence'].includes(file.fieldname) && ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) {
         callback(null, true);
         return;
     }
 
-    callback(new Error('Support screenshots must be image files.'));
+    callback(new Error('Support evidence must be JPG, PNG, WebP, or GIF images.'));
 }
 
 const uploadSupportScreenshot = multer({
     storage,
     fileFilter,
     limits: {
-        files: 1,
+        files: 5,
         fileSize: 8 * 1024 * 1024
     }
-}).single('screenshot');
+}).fields([
+    { name: 'screenshot', maxCount: 5 },
+    { name: 'screenshots', maxCount: 5 },
+    { name: 'evidence', maxCount: 5 }
+]);
 
 module.exports = {
     uploadSupportScreenshot

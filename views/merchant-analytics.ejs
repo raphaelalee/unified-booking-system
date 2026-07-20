@@ -5,6 +5,16 @@
     const rewardRedemptions = appointments.rewardRedemptions || {};
     const customerInsights = customerReport?.insights || {};
     const sales = salesReport || {};
+    const exportDatasets = [
+        { id: 'salesRevenue', label: 'Sales or Revenue' },
+        { id: 'bookings', label: 'Bookings' },
+        { id: 'productOrders', label: 'Product Orders' },
+        { id: 'refunds', label: 'Refunds' },
+        { id: 'customers', label: 'Customers' },
+        { id: 'servicePerformance', label: 'Service Performance' },
+        { id: 'productPerformance', label: 'Product Performance' },
+        { id: 'payments', label: 'Payments' }
+    ];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
     const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
     const allBookings = Array.isArray(appointments.allBookings) ? appointments.allBookings : [];
@@ -35,25 +45,6 @@
         statusLabels: statusRows.length ? statusRows.map((row) => row.status.replace(/_/g, ' ')) : ['No bookings'],
         statusValues: statusRows.length ? statusRows.map((row) => row.count) : [0]
     };
-    const exportPayload = {
-        salesTrends: (sales.dailySales || []).map((day) => ({ label: day.label, revenue: Number(day.revenue || 0).toFixed(2), orders: Number(day.orders || 0) })),
-        bookingStatus: statusRows,
-        topServices: chartPayload.serviceLabels.map((label, index) => ({ service: label, bookings: chartPayload.serviceValues[index] || 0 })),
-        peakHours: chartPayload.hourLabels.map((label, index) => ({ hour: label, bookings: chartPayload.hourValues[index] || 0 })),
-        customers: topCustomers.map((customer) => ({
-            customerName: customer.customerName,
-            customerEmail: customer.customerEmail,
-            visits: customer.visits,
-            spend: Number(customer.spend || 0).toFixed(2),
-            lastBookingDate: customer.lastBookingDate
-        })),
-        rewardImpact: [{
-            rewardBookingCount: rewardRedemptions.rewardBookingCount || 0,
-            totalRedeemedValue: Number(rewardRedemptions.totalRedeemedValue || 0).toFixed(2),
-            loyaltyDrivenRevenue: Number(rewardRedemptions.loyaltyDrivenRevenue || 0).toFixed(2),
-            repeatRewardCustomers: rewardRedemptions.repeatRewardCustomers || 0
-        }]
-    };
 %>
 
 <section class="section compact merchant-analytics-page analytics-command-center">
@@ -65,18 +56,33 @@
                 <span>See what is selling, when customers book, which services pull demand, and download only the report you need.</span>
             </div>
             <div class="analytics-toolbar" data-export-scope="merchant">
-                <label>
-                    <span>Download dataset</span>
-                    <select data-export-select>
-                        <option value="salesTrends">Sales trends</option>
-                        <option value="bookingStatus">Booking status</option>
-                        <option value="topServices">Top services</option>
-                        <option value="peakHours">Peak hours</option>
-                        <option value="customers">Top customers</option>
-                        <option value="rewardImpact">Reward impact</option>
-                    </select>
-                </label>
-                <button class="button primary" type="button" data-export-button>Download CSV</button>
+                <div class="analytics-export-panel" data-export-panel>
+                    <div class="analytics-export-header">
+                        <span>Download datasets</span>
+                        <strong data-export-count>0 datasets selected</strong>
+                    </div>
+                    <div class="analytics-export-dates">
+                        <label><span>Start date</span><input type="date" data-export-start-date></label>
+                        <label><span>End date</span><input type="date" data-export-end-date></label>
+                    </div>
+                    <label class="analytics-export-option select-all">
+                        <input type="checkbox" data-export-select-all value="all">
+                        <span>Select All</span>
+                    </label>
+                    <div class="analytics-export-options">
+                        <% exportDatasets.forEach((dataset) => { %>
+                            <label class="analytics-export-option">
+                                <input type="checkbox" data-export-dataset value="<%= dataset.id %>">
+                                <span><%= dataset.label %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                    <div class="analytics-export-actions">
+                        <button class="button secondary" type="button" data-export-clear>Clear</button>
+                        <button class="button primary" type="button" data-export-button disabled>Download XLSX</button>
+                    </div>
+                    <p class="analytics-export-message" data-export-message role="status" aria-live="polite"></p>
+                </div>
             </div>
         </header>
 
@@ -162,7 +168,6 @@
 <script>
     (() => {
         const chartPayload = <%- JSON.stringify(chartPayload) %>;
-        const exportPayload = <%- JSON.stringify(exportPayload) %>;
         const palette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
         const mainCanvas = document.getElementById('merchantAnalyticsChart');
         const title = document.querySelector('[data-merchant-chart-title]');
@@ -233,25 +238,116 @@
         makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.28)' }] }, options: baseOptions });
         makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
 
-        const toCsv = (rows) => {
-            if (!rows || !rows.length) return '';
-            const headers = Object.keys(rows[0]);
-            const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-            return [headers.join(','), ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(','))].join('\n');
+        const exportPanel = document.querySelector('[data-export-panel]');
+        const selectAll = document.querySelector('[data-export-select-all]');
+        const datasetInputs = Array.from(document.querySelectorAll('[data-export-dataset]'));
+        const exportButton = document.querySelector('[data-export-button]');
+        const clearButton = document.querySelector('[data-export-clear]');
+        const countNode = document.querySelector('[data-export-count]');
+        const messageNode = document.querySelector('[data-export-message]');
+        const startDateInput = document.querySelector('[data-export-start-date]');
+        const endDateInput = document.querySelector('[data-export-end-date]');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        let exportInProgress = false;
+
+        const selectedDatasets = () => datasetInputs.filter((input) => input.checked).map((input) => input.value);
+        const setExportMessage = (message, tone = '') => {
+            if (!messageNode) return;
+            messageNode.textContent = message || '';
+            messageNode.dataset.tone = tone;
+        };
+        const syncExportState = () => {
+            const selected = selectedDatasets();
+            if (selectAll) {
+                selectAll.checked = selected.length === datasetInputs.length && datasetInputs.length > 0;
+                selectAll.indeterminate = selected.length > 0 && selected.length < datasetInputs.length;
+            }
+            if (countNode) {
+                countNode.textContent = `${selected.length} dataset${selected.length === 1 ? '' : 's'} selected`;
+            }
+            if (exportButton) {
+                exportButton.disabled = exportInProgress || selected.length === 0;
+            }
+        };
+        const getFilename = (response) => {
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="([^"]+)"/i) || disposition.match(/filename=([^;]+)/i);
+            return match ? match[1].trim() : 'merchant-analytics.xlsx';
         };
 
-        document.querySelector('[data-export-button]')?.addEventListener('click', () => {
-            const selected = document.querySelector('[data-export-select]')?.value || 'salesTrends';
-            const csv = toCsv(exportPayload[selected] || []);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `vaniday-merchant-${selected}.csv`;
-            link.click();
-            URL.revokeObjectURL(link.href);
+        selectAll?.addEventListener('change', () => {
+            datasetInputs.forEach((input) => {
+                input.checked = selectAll.checked;
+            });
+            setExportMessage('');
+            syncExportState();
+        });
+        datasetInputs.forEach((input) => {
+            input.addEventListener('change', () => {
+                setExportMessage('');
+                syncExportState();
+            });
+        });
+        clearButton?.addEventListener('click', () => {
+            datasetInputs.forEach((input) => {
+                input.checked = false;
+            });
+            setExportMessage('Select at least one dataset to enable download.', 'warning');
+            syncExportState();
+        });
+        exportButton?.addEventListener('click', async () => {
+            const datasets = selectedDatasets();
+            if (!datasets.length) {
+                setExportMessage('Select at least one dataset to export.', 'error');
+                syncExportState();
+                return;
+            }
+            if (exportInProgress) return;
+
+            exportInProgress = true;
+            exportButton.textContent = 'Generating...';
+            setExportMessage('Generating workbook...', 'loading');
+            syncExportState();
+
+            try {
+                const response = await fetch('/merchant/analytics/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        datasets,
+                        startDate: startDateInput?.value || '',
+                        endDate: endDateInput?.value || ''
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => ({}));
+                    throw new Error(errorPayload.message || 'Analytics export failed.');
+                }
+
+                const blob = await response.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = getFilename(response);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+                setExportMessage('Download started.', 'success');
+            } catch (error) {
+                setExportMessage(error.message || 'Analytics export failed.', 'error');
+            } finally {
+                exportInProgress = false;
+                exportButton.textContent = 'Download XLSX';
+                syncExportState();
+            }
         });
 
         renderMainChart('sales');
+        syncExportState();
     })();
 </script>
 

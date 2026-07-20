@@ -74,6 +74,7 @@
                             <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
                         </div>
                         <form action="/merchant/services/<%= service.id %>/feature" method="POST">
+                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
                             <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
                             <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
@@ -198,6 +199,7 @@
                         <details class="merchant-featured-editor">
                             <summary><%= service.isFeatured ? 'Edit featured' : 'Feature service' %></summary>
                             <form class="merchant-featured-form" action="/merchant/services/<%= service.id %>/feature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <label>
                                     <span>Priority</span>
                                     <input type="number" name="featuredOrder" min="0" max="99" value="<%= service.isFeatured ? Number(service.featuredOrder || 0) : Number(recommendation?.featuredOrder || 0) %>" placeholder="Order" aria-label="Featured order">
@@ -218,10 +220,12 @@
                         </details>
                         <% if (service.isFeatured) { %>
                             <form action="/merchant/services/<%= service.id %>/unfeature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                 <button class="button secondary" type="submit">Remove Featured</button>
                             </form>
                         <% } %>
                         <form action="/merchant/services/<%= service.id %>/delete" method="POST">
+                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                             <button class="button secondary danger-button" type="submit">Delete</button>
                         </form>
                     </div>

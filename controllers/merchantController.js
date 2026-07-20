@@ -32,6 +32,7 @@ const {
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
 const { buildBookingReference } = require('../utils/bookingReference');
+const { extractProviderFeeSnapshot } = require('../services/refundCalculation');
 const hitpay = require('../services/hitpay');
 const paypal = require('../services/paypal');
 const nets = require('../services/nets');
@@ -4102,13 +4103,26 @@ async function getStableHitPayStatus(requestId, redirectStatus) {
 
 async function finalizeHitPayPayment(req, requestId, pendingPayment) {
     if (shouldTrustHitPayRedirect()) {
+        const feeSnapshot = extractProviderFeeSnapshot({
+            provider: 'hitpay',
+            method: 'paynow',
+            amount: pendingPayment.amount,
+            providerResponse: {},
+            paymentChannel: 'paynow_online'
+        });
         const receiptId = await completeTrustedPayment(req, {
             ...pendingPayment,
             paymentProvider: 'hitpay',
             providerPaymentId: requestId,
             providerSessionId: requestId,
             hitpayRequestId: requestId,
-            hitpayStatus: 'redirect_completed'
+            hitpayStatus: 'redirect_completed',
+            processingFeeAmount: feeSnapshot.amount,
+            processingFeeCurrency: feeSnapshot.currency,
+            processingFeePercentage: feeSnapshot.percentage,
+            processingFeeFixedAmount: feeSnapshot.fixedAmount,
+            processingFeeSource: feeSnapshot.source,
+            processingFeeCapturedAt: new Date()
         }, 'PayNow');
 
         clearPendingHitPayPayment(req, requestId);
@@ -4143,13 +4157,27 @@ async function finalizeHitPayPayment(req, requestId, pendingPayment) {
         };
     }
 
+    const feeSnapshot = extractProviderFeeSnapshot({
+        provider: 'hitpay',
+        method: 'paynow',
+        amount: pendingPayment.amount,
+        providerResponse: paymentRequest,
+        paymentChannel: paymentRequest?.payment_method || 'paynow_online'
+    });
+
     const receiptId = await completeTrustedPayment(req, {
         ...pendingPayment,
         paymentProvider: 'hitpay',
         providerPaymentId: requestId,
         providerSessionId: requestId,
         hitpayRequestId: requestId,
-        hitpayStatus: actualStatus
+        hitpayStatus: actualStatus,
+        processingFeeAmount: feeSnapshot.amount,
+        processingFeeCurrency: feeSnapshot.currency,
+        processingFeePercentage: feeSnapshot.percentage,
+        processingFeeFixedAmount: feeSnapshot.fixedAmount,
+        processingFeeSource: feeSnapshot.source,
+        processingFeeCapturedAt: new Date()
     }, 'PayNow');
 
     clearPendingHitPayPayment(req, requestId);
@@ -4824,6 +4852,9 @@ function persistPaidTransaction(payment, paymentMethod) {
     const canonicalProvider = normalizePaymentProvider(payment.paymentProvider, canonicalMethod);
     const cashbackUsed = Number(payment.cashbackRedeemed || 0);
     const walletAmountUsed = canonicalMethod === 'wallet' ? Number(payment.amount || 0) : Number(payment.walletAmountUsed || 0);
+    const processingFeeSource = canonicalMethod === 'wallet'
+        ? 'none'
+        : (payment.processingFeeSource || 'unknown');
 
     return new Promise((resolve, reject) => {
         Transaction.createPaidTransaction(payment.userId, payment.amount, canonicalMethod, payment.items || [], {
@@ -4848,11 +4879,18 @@ function persistPaidTransaction(payment, paymentMethod) {
             providerCaptureId: payment.providerCaptureId || payment.paypalCaptureId || null,
             providerTransactionId: payment.providerTransactionId || payment.providerPaymentId || payment.stripePaymentIntentId || payment.hitpayRequestId || null,
             providerOrderId: payment.providerOrderId || payment.paypalOrderId || null,
+            processingFeeAmount: Number(payment.processingFeeAmount || 0),
+            processingFeeCurrency: payment.processingFeeCurrency || payment.currency || 'SGD',
+            processingFeePercentage: payment.processingFeePercentage ?? null,
+            processingFeeFixedAmount: payment.processingFeeFixedAmount ?? null,
+            processingFeeSource,
+            processingFeeCapturedAt: payment.processingFeeCapturedAt || null,
             providerMetadata: {
                 method: canonicalMethod,
                 provider: canonicalProvider,
                 hitpayStatus: payment.hitpayStatus || null,
                 paypalPayerEmail: payment.paypalPayerEmail || null,
+                processingFeeSource,
                 netsRetrievalRef: payment.txnRetrievalRef || null,
                 fulfilment: payment.kind === 'order'
                     ? {
@@ -5714,6 +5752,20 @@ async function capturePayPalOrder(req, res) {
             throw new Error('PayPal capture amount does not match the trusted payment amount.');
         }
 
+        const feeSnapshot = extractProviderFeeSnapshot({
+            provider: 'paypal',
+            method: 'paypal',
+            amount: details.value,
+            providerResponse: {
+                paypalFee: details.paypalFee,
+                seller_receivable_breakdown: {
+                    paypal_fee: { value: details.paypalFee },
+                    gross_amount: { value: details.grossAmount },
+                    net_amount: { value: details.netAmount }
+                }
+            }
+        });
+
         const receiptId = await completeTrustedPayment(req, {
             ...pendingPayment,
             paymentProvider: 'paypal',
@@ -5723,7 +5775,11 @@ async function capturePayPalOrder(req, res) {
             paypalOrderId: details.orderId,
             paypalCaptureId: details.captureId,
             paypalPayerEmail: details.payerEmail,
-            paypalPayerId: details.payerId
+            paypalPayerId: details.payerId,
+            processingFeeAmount: feeSnapshot.amount,
+            processingFeeCurrency: feeSnapshot.currency,
+            processingFeeSource: feeSnapshot.source,
+            processingFeeCapturedAt: new Date()
         }, 'PayPal');
 
         delete req.session.pendingPayPalOrders[orderId];
@@ -6085,6 +6141,13 @@ async function handleStripeReturn(req, res) {
             });
         }
 
+        let feeSnapshot = { amount: 0, currency: 'SGD', source: 'unknown' };
+        try {
+            feeSnapshot = await stripe.retrieveProcessingFeeSnapshot(paymentIntent);
+        } catch (feeError) {
+            console.error('Stripe processing fee could not be retrieved:', feeError.message);
+        }
+
         // Payment succeeded - complete the transaction
         const receiptId = await completeTrustedPayment(req, {
             ...pendingPayment,
@@ -6092,7 +6155,11 @@ async function handleStripeReturn(req, res) {
             providerPaymentId: paymentIntent.id,
             providerSessionId: sessionId,
             stripePaymentIntentId: paymentIntent.id,
-            stripeSessionId: sessionId
+            stripeSessionId: sessionId,
+            processingFeeAmount: feeSnapshot.amount,
+            processingFeeCurrency: feeSnapshot.currency,
+            processingFeeSource: feeSnapshot.source,
+            processingFeeCapturedAt: feeSnapshot.source === 'provider_reported' ? new Date() : null
         }, 'Stripe');
         delete req.session.pendingStripePayments[sessionId];
         req.session.lastPayment = { receiptId };

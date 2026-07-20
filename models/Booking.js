@@ -2060,9 +2060,9 @@ function completeBookingWithInventory(bookingId, merchantUserId, callback) {
                 return;
             }
 
-            const rollback = (error) => connection.rollback(() => {
+            const rollback = (error, result) => connection.rollback(() => {
                 connection.release();
-                callback(error);
+                callback(error, result);
             });
             const ownerJoin = merchantUserId
                 ? 'INNER JOIN salons ON salons.salon_id = bookings.merchant_id'
@@ -2072,6 +2072,7 @@ function completeBookingWithInventory(bookingId, merchantUserId, callback) {
             const lookupSql = `
                 SELECT
                     bookings.booking_id,
+                    bookings.status,
                     bookings.service_id,
                     service_inventory_links.product_id,
                     service_inventory_links.quantity_required,
@@ -2097,9 +2098,14 @@ function completeBookingWithInventory(bookingId, merchantUserId, callback) {
                 }
 
                 const booking = rows[0];
+                if (String(booking.status || '').toLowerCase() !== 'confirmed') {
+                    rollback(null, buildBookingStatusConflict('This booking cannot be completed from its current status.'));
+                    return;
+                }
+
                 const finish = () => {
                     connection.query(
-                        `UPDATE bookings SET status = 'completed' WHERE booking_id = ?`,
+                        `UPDATE bookings SET status = 'completed' WHERE booking_id = ? AND status = 'confirmed'`,
                         [bookingId],
                         (updateError, result) => {
                             if (updateError) {
@@ -2303,12 +2309,51 @@ function markCheckedInByToken(bookingId, callback) {
     });
 }
 
+function buildBookingStatusConflict(message) {
+    return {
+        affectedRows: 0,
+        changedRows: 0,
+        conflict: true,
+        message
+    };
+}
+
+function canTransitionMerchantBookingStatus(currentStatus, nextStatus) {
+    const current = String(currentStatus || '').trim().toLowerCase();
+    const transitions = {
+        pending: new Set(['confirmed', 'cancelled']),
+        confirmed: new Set(['completed', 'cancelled', 'no_show']),
+        completed: new Set([]),
+        cancelled: new Set([]),
+        no_show: new Set([])
+    };
+
+    if (!Object.prototype.hasOwnProperty.call(transitions, current)) {
+        return buildBookingStatusConflict('This booking has an unsupported current status.');
+    }
+
+    if (current === nextStatus) {
+        return buildBookingStatusConflict('This booking is already in the selected status.');
+    }
+
+    if (!transitions[current].has(nextStatus)) {
+        return buildBookingStatusConflict('This booking status change is no longer valid from the current booking state.');
+    }
+
+    return null;
+}
+
 function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
     const allowedStatuses = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
     const nextStatus = String(status || '').trim().toLowerCase();
 
     if (!allowedStatuses.has(nextStatus)) {
         callback(new Error('Invalid booking status.'));
+        return;
+    }
+
+    if (nextStatus === 'pending') {
+        callback(null, buildBookingStatusConflict('Bookings cannot be moved back to pending by the merchant.'));
         return;
     }
 
@@ -2323,6 +2368,36 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
             return;
         }
 
+        const lookupSql = `
+            SELECT bookings.status
+            FROM bookings
+            INNER JOIN services ON services.service_id = bookings.service_id
+            INNER JOIN salons ON salons.salon_id = services.salon_id
+            WHERE bookings.booking_id = ?
+                AND salons.merchant_id = ?
+            LIMIT 1
+        `;
+
+        db.query(lookupSql, [bookingId, merchantUserId], (lookupError, rows = []) => {
+            if (lookupError) {
+                callback(lookupError);
+                return;
+            }
+
+            const booking = rows[0];
+
+            if (!booking) {
+                callback(null, { affectedRows: 0, changedRows: 0 });
+                return;
+            }
+
+            const conflict = canTransitionMerchantBookingStatus(booking.status, nextStatus);
+
+            if (conflict) {
+                callback(null, conflict);
+                return;
+            }
+
         const sql = `
             UPDATE bookings
             INNER JOIN services ON services.service_id = bookings.service_id
@@ -2334,9 +2409,11 @@ function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
                 bookings.refund_status = CASE WHEN ? = 'cancelled' THEN 'merchant_cancelled_review' ELSE bookings.refund_status END
             WHERE bookings.booking_id = ?
                 AND salons.merchant_id = ?
+                AND bookings.status = ?
         `;
 
-        db.query(sql, [nextStatus, nextStatus, nextStatus, nextStatus, bookingId, merchantUserId], callback);
+            db.query(sql, [nextStatus, nextStatus, nextStatus, nextStatus, bookingId, merchantUserId, booking.status], callback);
+        });
     });
 }
 

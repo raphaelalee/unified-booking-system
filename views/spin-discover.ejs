@@ -31,7 +31,39 @@
         const text = String(value || '').trim();
         return text.length > max ? `${text.slice(0, max - 1)}...` : text;
     };
+    const wheelTitle = (reward) => {
+        if (reward.rewardType === 'cashback') return 'Cashback';
+        if (reward.rewardType === 'loyalty_points') return 'VaniGlints';
+        if (reward.rewardType === 'product_discount') return 'Product Deal';
+        if (reward.rewardType === 'service_discount') return 'Service Deal';
+        if (reward.rewardType === 'voucher') return 'Voucher';
+        if (reward.rewardType === 'try_again') return 'Try Again';
+        return shortTitle(reward.title, 22);
+    };
+    const wheelValue = (reward) => {
+        const value = Number(reward.value || 0);
+        const discountType = reward.payload?.discountType;
+        if (reward.rewardType === 'try_again') return 'Next time';
+        if (reward.rewardType === 'loyalty_points') return `+${Math.round(value || reward.payload?.points || 0)}`;
+        if (reward.rewardType === 'cashback' && reward.payload?.cashbackPercent) return `${Number(reward.payload.cashbackPercent || 0).toFixed(0)}%`;
+        if (discountType === 'percentage') return `${Number(reward.payload?.discountValue || value || 0).toFixed(0)}% off`;
+        if (value > 0) return `$${value.toFixed(value % 1 === 0 ? 0 : 2)}`;
+        return shortTitle(reward.title, 18);
+    };
     const rewardCategoryClass = (type) => `spin-category-${String(type || 'promotion').replace(/_/g, '-')}`;
+    const wheelColor = (type, index) => {
+        const palette = {
+            cashback: ['#7fa992', '#a8c8b5'],
+            loyalty_points: ['#bd7565', '#dfaa97'],
+            product_discount: ['#d9b35f', '#efd58e'],
+            service_discount: ['#83a474', '#bad19d'],
+            voucher: ['#b98a58', '#dfbf7c'],
+            promotion: ['#8eb1a0', '#c3d8cc'],
+            try_again: ['#8f9a86', '#c9d2c2']
+        };
+        const colors = palette[type] || palette.promotion;
+        return colors[index % colors.length];
+    };
     const wheelRewards = rewardList.length
         ? rewardList.slice(0, Math.min(10, rewardList.length))
         : [
@@ -40,6 +72,13 @@
             { rewardType: 'cashback', sourceType: 'fallback', sourceId: 'cashback', title: 'Cashback', description: 'Earn wallet rewards for future purchases.', payload: {} },
             { rewardType: 'loyalty_points', sourceType: 'fallback', sourceId: 'points', title: 'VaniGlints', description: 'Collect loyalty points for rewards.', payload: {} }
         ];
+    const segmentAngle = 360 / wheelRewards.length;
+    const gradientStart = -90 - (segmentAngle / 2);
+    const wheelGradient = wheelRewards.map((reward, index) => {
+        const start = gradientStart + (index * segmentAngle);
+        const end = start + segmentAngle;
+        return `${wheelColor(reward.rewardType, index)} ${start.toFixed(3)}deg ${end.toFixed(3)}deg`;
+    }).join(', ');
     const featuredRewards = rewardList.filter((reward) => reward.rewardType !== 'try_again').slice(0, 4);
     const latestPromotions = rewardList.filter((reward) => ['promotion', 'service_discount'].includes(reward.rewardType)).slice(0, 4);
     const popularDeals = rewardList.filter((reward) => ['product_discount', 'voucher', 'cashback'].includes(reward.rewardType)).slice(0, 4);
@@ -58,6 +97,9 @@
             sourceType: reward.sourceType,
             sourceId: reward.sourceId,
             title: reward.title,
+            wheelTitle: wheelTitle(reward),
+            wheelValue: wheelValue(reward),
+            value: reward.value,
             merchantName: reward.payload?.salonName || reward.payload?.merchantName || '',
             expiresAt: reward.payload?.expiresAt || '',
             description: reward.description || ''
@@ -120,13 +162,28 @@
         </div>
 
         <div class="spin-wheel-card">
-            <div class="spin-wheel-wrap" aria-label="Spin reward wheel">
+            <div class="spin-wheel-wrap" role="img" aria-label="Spin reward wheel. Prize categories are listed in the reward categories panel.">
                 <div class="spin-wheel-ring" aria-hidden="true"></div>
-                <div class="spin-wheel" data-spin-wheel style="--segment-count:<%= wheelRewards.length %>;">
+                <div class="spin-wheel" data-spin-wheel style="--segment-count:<%= wheelRewards.length %>; --wheel-gradient:<%- wheelGradient %>;">
                     <% wheelRewards.forEach((reward, index) => { %>
-                        <span class="spin-wheel-segment <%= rewardCategoryClass(reward.rewardType) %>" style="--i:<%= index %>;">
-                            <b><%= rewardIcon(reward.rewardType) %></b>
-                            <em><%= shortTitle(reward.title) %></em>
+                        <% const segmentRotation = index * segmentAngle; %>
+                        <% const displayRotation = ((segmentRotation % 360) + 360) % 360; %>
+                        <span
+                            class="spin-wheel-segment <%= rewardCategoryClass(reward.rewardType) %><%= displayRotation > 90 && displayRotation < 270 ? ' is-flipped' : '' %>"
+                            style="--i:<%= index %>; --segment-rotation:<%= segmentRotation.toFixed(3) %>deg;"
+                            data-spin-segment
+                            data-prize-index="<%= index %>"
+                            data-prize-title="<%= wheelTitle(reward) %>"
+                            data-prize-value="<%= wheelValue(reward) %>"
+                            aria-hidden="true"
+                        >
+                            <span class="spin-segment-content">
+                                <b><%= rewardIcon(reward.rewardType) %></b>
+                                <em>
+                                    <span><%= wheelTitle(reward) %></span>
+                                    <small><%= wheelValue(reward) %></small>
+                                </em>
+                            </span>
                         </span>
                     <% }) %>
                 </div>
@@ -144,6 +201,7 @@
                 <div class="spin-status-strip" data-spin-status>
                     <span><%= canSpin ? 'Tap spin to begin' : (isCustomer ? 'Complete bookings or orders to earn spins' : 'Log in to use spin chances') %></span>
                 </div>
+                <p class="visually-hidden" data-spin-announcer aria-live="polite"></p>
                 <% if (isCustomer && !canSpin) { %>
                     <div class="spin-no-chance-card">
                         <strong>No spin chance available</strong>
@@ -320,7 +378,7 @@
 
 <div class="spin-reveal-modal" data-spin-modal hidden>
     <div class="spin-reveal-backdrop" data-spin-close></div>
-    <article class="spin-reveal-card" role="dialog" aria-modal="true" aria-labelledby="spin-reveal-title">
+    <article class="spin-reveal-card" role="dialog" aria-modal="true" aria-labelledby="spin-reveal-title" tabindex="-1">
         <button class="spin-modal-close" type="button" data-spin-close aria-label="Close reward reveal">x</button>
         <div class="spin-reveal-visual">
             <span data-spin-modal-icon>%</span>
@@ -354,6 +412,6 @@
 <script>
     window.spinDiscoverConfig = <%- JSON.stringify(spinConfig) %>;
 </script>
-<script src="/js/spin-discover.js?v=2" defer></script>
+<script src="/js/spin-discover.js?v=3" defer></script>
 
 <%- include('partials/footer') %>

@@ -33,6 +33,75 @@ function isSmtpAuthError(error) {
         || /Invalid login|WebLoginRequired|Username and Password not accepted/i.test(message);
 }
 
+function escapeEmailText(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function sendSupportNotificationEmail(entry = {}) {
+    const config = getEmailConfig();
+    const email = String(entry.email || '').trim();
+    const subject = String(entry.subject || 'Vaniday support update').trim().slice(0, 160);
+    const message = String(entry.message || '').trim();
+    const linkUrl = String(entry.linkUrl || '').trim();
+
+    if (!isConfigured(config) || !email || !message) {
+        return { skipped: true };
+    }
+
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: {
+            user: config.user,
+            pass: config.pass
+        },
+        tls: {
+            rejectUnauthorized: config.rejectUnauthorized
+        }
+    });
+
+    const text = [
+        `Hi ${entry.customerName || 'there'},`,
+        '',
+        message,
+        linkUrl ? `Open Help Center: ${linkUrl}` : '',
+        '',
+        'Thank you,',
+        'Vaniday'
+    ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;padding:24px;color:#241f1a;">
+            <h2 style="margin:0 0 16px;font-size:22px;">${escapeEmailText(subject)}</h2>
+            <p style="font-size:15px;line-height:1.6;">Hi ${escapeEmailText(entry.customerName || 'there')},</p>
+            <p style="font-size:15px;line-height:1.6;">${escapeEmailText(message)}</p>
+            ${linkUrl ? `<p><a href="${escapeEmailText(linkUrl)}" style="display:inline-block;padding:11px 16px;background:#3f513a;color:#fffdf7;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;">Open Help Center</a></p>` : ''}
+            <p style="font-size:14px;line-height:1.6;color:#5f5448;">Thank you,<br>Vaniday</p>
+        </div>
+    `;
+
+    try {
+        return await transporter.sendMail({
+            from: config.from,
+            to: email,
+            subject,
+            text,
+            html
+        });
+    } catch (error) {
+        if (isSmtpAuthError(error)) {
+            console.error('Email support notification skipped: Gmail SMTP rejected the login. Use a Gmail app password in SMTP_PASS, not the normal account password.');
+            return { skipped: true, reason: 'smtp_auth_failed' };
+        }
+        throw error;
+    }
+}
+
 function buildBookingEmailText(booking) {
     return [
         `Hi ${booking.customerName},`,
@@ -535,5 +604,6 @@ module.exports = {
     sendBookingConfirmationEmail,
     sendGiftCardEmail,
     sendLoginOtpEmail,
+    sendSupportNotificationEmail,
     sendWalletTopupOtpEmail
 };

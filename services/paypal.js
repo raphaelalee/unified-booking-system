@@ -134,7 +134,7 @@ async function captureOrder(orderId) {
     });
 }
 
-async function refundCapture(captureId, { amount, currencyCode = 'SGD', reason = '' } = {}) {
+async function refundCapture(captureId, { amount, currencyCode = 'SGD', reason = '', idempotencyKey = '' } = {}) {
     const accessToken = await getAccessToken();
     const value = Number(amount || 0);
 
@@ -152,7 +152,7 @@ async function refundCapture(captureId, { amount, currencyCode = 'SGD', reason =
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             Prefer: 'return=representation',
-            'PayPal-Request-Id': crypto.randomUUID()
+            'PayPal-Request-Id': idempotencyKey || crypto.randomUUID()
         },
         body: JSON.stringify({
             amount: {
@@ -169,6 +169,11 @@ function extractCaptureDetails(order = {}) {
     const payments = purchaseUnit?.payments || {};
     const capture = Array.isArray(payments.captures) ? payments.captures[0] : null;
 
+    const breakdown = capture?.seller_receivable_breakdown || {};
+    const paypalFee = Number(breakdown?.paypal_fee?.value || 0);
+    const grossAmount = Number(breakdown?.gross_amount?.value || capture?.amount?.value || 0);
+    const netAmount = Number(breakdown?.net_amount?.value || 0);
+
     return {
         orderId: order.id || '',
         status: order.status || '',
@@ -176,6 +181,9 @@ function extractCaptureDetails(order = {}) {
         captureStatus: capture?.status || '',
         currencyCode: capture?.amount?.currency_code || purchaseUnit?.amount?.currency_code || '',
         value: Number(capture?.amount?.value || purchaseUnit?.amount?.value || 0),
+        paypalFee,
+        grossAmount,
+        netAmount,
         payerEmail: order?.payer?.email_address || '',
         payerId: order?.payer?.payer_id || ''
     };
