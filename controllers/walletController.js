@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 
 const TOPUP_2FA_TTL_MS = 5 * 60 * 1000;
+const MAX_TOPUP_AMOUNT = 1000;
 
 function getPublicBaseUrl(req) {
     return String(process.env.BASE_URL || process.env.APP_URL || `http://${req.get('host') || 'localhost'}`).replace(/\/$/, '');
@@ -280,6 +281,10 @@ function storeTopup2fa(req, amount, paymentMethod, code, delivery) {
 }
 
 async function startTopupPayment(req, res, amount, paymentMethod) {
+    if (!Number.isFinite(amount) || amount < 1 || amount > MAX_TOPUP_AMOUNT) {
+        throw new Error(`Top-up amount must be between $1.00 and $${MAX_TOPUP_AMOUNT.toFixed(2)}.`);
+    }
+
     const topup = await new Promise((resolve, reject) => {
         EWallet.createPendingTopup({
             userId: req.session.user.id,
@@ -489,7 +494,8 @@ async function showWallet(req, res) {
                 { key: 'paypal', label: 'PayPal' },
                 { key: 'hitpay', label: 'PayNow/HitPay' },
                 { key: 'nets', label: 'NETS QR' }
-            ]
+            ],
+            maxTopupAmount: MAX_TOPUP_AMOUNT
         });
     } catch (error) {
         console.error(error);
@@ -516,6 +522,11 @@ async function topupWallet(req, res) {
 
     if (amount < 1) {
         setWalletError(req, 'Minimum top-up amount is $1.00.');
+        return res.redirect('/profile/wallet');
+    }
+
+    if (amount > MAX_TOPUP_AMOUNT) {
+        setWalletError(req, `Top-up amount cannot exceed $${MAX_TOPUP_AMOUNT.toFixed(2)}.`);
         return res.redirect('/profile/wallet');
     }
 

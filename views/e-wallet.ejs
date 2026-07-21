@@ -7,6 +7,7 @@
 </section>
 
 <section class="section compact wallet-page">
+    <% const topupLimit = Number(typeof maxTopupAmount !== 'undefined' ? maxTopupAmount : 1000); %>
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
@@ -37,37 +38,78 @@
         </div>
 
         <div class="wallet-grid">
-            <form id="wallet-topup" class="account-panel wallet-topup-card" action="/profile/wallet/topup" method="POST">
+            <form id="wallet-topup" class="account-panel wallet-topup-card" action="/profile/wallet/topup" method="POST" data-wallet-topup-form data-max-amount="<%= topupLimit.toFixed(2) %>">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                 <div>
                     <p class="eyebrow">Top up</p>
-                    <h2>Add funds in seconds</h2>
-                    <p class="muted">Choose your preferred provider and continue with a secure checkout. Minimum top-up is $1.00.</p>
+                    <h2>Add wallet funds</h2>
+                    <p class="muted">Choose an amount from $1.00 to $<%= topupLimit.toFixed(2) %>, then verify before payment.</p>
                 </div>
 
-                <label>
-                    Amount (SGD)
-                    <input type="number" name="amount" min="1" step="0.01" value="10.00" required>
-                </label>
-
-                <label>
-                    Payment method
-                    <select name="payment_method" required>
-                        <% paymentProviders.forEach((provider) => { %>
-                            <option value="<%= provider.key %>"><%= provider.label %></option>
+                <div class="wallet-amount-picker">
+                    <label class="wallet-amount-label" for="walletTopupAmount">Amount (SGD)</label>
+                    <div class="wallet-amount-input">
+                        <span aria-hidden="true">$</span>
+                        <input
+                            id="walletTopupAmount"
+                            type="number"
+                            name="amount"
+                            min="1"
+                            max="<%= topupLimit.toFixed(2) %>"
+                            step="0.01"
+                            value="25.00"
+                            inputmode="decimal"
+                            required
+                            aria-describedby="walletTopupHelp walletTopupError"
+                        >
+                    </div>
+                    <div class="wallet-quick-amounts" aria-label="Quick top-up amounts">
+                        <% [10, 25, 50, 100, 200, 500].forEach((amount) => { %>
+                            <button class="wallet-amount-chip <%= amount === 25 ? 'is-selected' : '' %>" type="button" data-wallet-amount="<%= amount %>">$<%= amount %></button>
                         <% }) %>
-                    </select>
-                </label>
+                    </div>
+                    <p id="walletTopupHelp" class="wallet-field-hint">Maximum top-up per transaction is $<%= topupLimit.toFixed(2) %>.</p>
+                    <p id="walletTopupError" class="wallet-field-error" data-wallet-amount-error hidden></p>
+                </div>
+
+                <fieldset class="wallet-payment-fieldset">
+                    <legend>Payment method</legend>
+                    <div class="wallet-payment-options">
+                        <%
+                            const providerDescriptions = {
+                                stripe: 'Card checkout',
+                                paypal: 'PayPal balance or card',
+                                hitpay: 'PayNow transfer',
+                                nets: 'Scan QR code'
+                            };
+                        %>
+                        <% paymentProviders.forEach((provider) => { %>
+                            <label class="wallet-payment-option">
+                                <input type="radio" name="payment_method" value="<%= provider.key %>" <%= provider.key === 'stripe' ? 'checked' : '' %> required>
+                                <span class="wallet-payment-mark" aria-hidden="true"></span>
+                                <span>
+                                    <strong><%= provider.label %></strong>
+                                    <small><%= providerDescriptions[provider.key] || 'Secure payment' %></small>
+                                </span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </fieldset>
+
+                <div class="wallet-topup-summary">
+                    <span>You will add</span>
+                    <strong data-wallet-topup-preview>$25.00</strong>
+                </div>
 
                 <button class="button primary" type="submit">Continue to payment</button>
             </form>
 
             <div class="account-panel wallet-support-card">
-                <p class="eyebrow">How it works</p>
+                <p class="eyebrow">Good to know</p>
                 <ul>
-                    <li>Top up with Stripe, PayPal, PayNow or NETS QR.</li>
-                    <li>Use your balance for future bookings and orders.</li>
-                    <li>Every top-up and spend stays in the same history list.</li>
+                    <li><strong>$1.00 minimum</strong><span>Small top-ups are supported.</span></li>
+                    <li><strong>$<%= topupLimit.toFixed(2) %> maximum</strong><span>Per top-up transaction.</span></li>
+                    <li><strong>OTP protected</strong><span>You verify before leaving for payment.</span></li>
                 </ul>
             </div>
         </div>
@@ -124,5 +166,86 @@
         </div>
     <% } %>
 </section>
+
+<script>
+    (() => {
+        const form = document.querySelector('[data-wallet-topup-form]');
+        if (!form) return;
+
+        const input = form.querySelector('input[name="amount"]');
+        const preview = form.querySelector('[data-wallet-topup-preview]');
+        const error = form.querySelector('[data-wallet-amount-error]');
+        const amountButtons = Array.from(form.querySelectorAll('[data-wallet-amount]'));
+        const maxAmount = Number(form.dataset.maxAmount || 1000);
+
+        const formatMoney = (value) => '$' + Number(value || 0).toFixed(2);
+
+        function getAmount() {
+            return Number(input.value || 0);
+        }
+
+        function setError(message) {
+            if (!error) return;
+            error.textContent = message;
+            error.hidden = !message;
+            input.setAttribute('aria-invalid', message ? 'true' : 'false');
+        }
+
+        function updateAmountState() {
+            const amount = getAmount();
+            amountButtons.forEach((button) => {
+                button.classList.toggle('is-selected', Number(button.dataset.walletAmount) === amount);
+            });
+
+            if (preview) {
+                preview.textContent = formatMoney(Number.isFinite(amount) ? amount : 0);
+            }
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                setError('Enter an amount of at least $1.00.');
+                return false;
+            }
+
+            if (amount < 1) {
+                setError('Minimum top-up amount is $1.00.');
+                return false;
+            }
+
+            if (amount > maxAmount) {
+                setError('Top-up amount cannot exceed ' + formatMoney(maxAmount) + '.');
+                return false;
+            }
+
+            setError('');
+            return true;
+        }
+
+        amountButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                input.value = Number(button.dataset.walletAmount || 0).toFixed(2);
+                updateAmountState();
+                input.focus();
+            });
+        });
+
+        input.addEventListener('input', updateAmountState);
+        input.addEventListener('blur', () => {
+            const amount = getAmount();
+            if (Number.isFinite(amount) && amount > 0) {
+                input.value = amount.toFixed(2);
+            }
+            updateAmountState();
+        });
+
+        form.addEventListener('submit', (event) => {
+            if (!updateAmountState()) {
+                event.preventDefault();
+                input.focus();
+            }
+        });
+
+        updateAmountState();
+    })();
+</script>
 
 <%- include('partials/footer') %>
