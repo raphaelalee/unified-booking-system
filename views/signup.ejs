@@ -1,108 +1,164 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title auth-page-title">
-    <p class="eyebrow">Sign Up</p>
-    <h1>Create your Vaniday account.</h1>
-    <p>Sign up to save merchants, manage your profile, track cashback, and keep services in your cart.</p>
-</section>
-
-<section class="section compact">
-    <div class="login-layout">
-        <form class="login-form" action="/signup" method="POST" data-signup-form>
+<section class="section compact signup-page">
+    <div class="signup-shell">
+        <form class="login-form signup-card" action="/signup" method="POST" data-signup-form novalidate>
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-            <div>
+            <header class="signup-card-header">
                 <p class="eyebrow">Customer Account</p>
-                <h2>Sign up</h2>
-            </div>
+                <h1>Create your account</h1>
+                <p>Book services, check in with QR, and keep rewards in one profile.</p>
+            </header>
 
             <% if (error) { %>
                 <div class="notice error"><p><%= error %></p></div>
             <% } %>
 
-            <label>
-                Full name
-                <input type="text" name="name" value="<%= form.name || '' %>" placeholder="Enter your name" required>
-            </label>
+            <div class="signup-validation-summary" data-signup-summary hidden></div>
 
-            <label>
-                Email
-                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" required>
-            </label>
+            <div class="signup-section">
+                <div class="signup-section-heading">
+                    <span>1</span>
+                    <div>
+                        <h2>Contact</h2>
+                        <p>Used for booking updates and QR check-in receipts.</p>
+                    </div>
+                </div>
 
-            <label>
-                Handphone number
-                <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8" required>
-            </label>
+                <div class="signup-field-grid">
+                    <label class="signup-field span-2">
+                        <span>Full name</span>
+                        <input type="text" name="name" value="<%= form.name || '' %>" placeholder="Mary Tan" autocomplete="name" data-validate="name" required>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Age
-                <input type="number" name="age" value="<%= form.age || '' %>" placeholder="21" min="1" max="120" required>
-            </label>
+                    <label class="signup-field">
+                        <span>Email</span>
+                        <input type="email" name="email" value="<%= form.email || '' %>" placeholder="mary@example.com" autocomplete="email" data-validate="email" required>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Birthday
-                <input type="date" name="birthday" value="<%= form.birthday || '' %>" max="<%= new Date().toISOString().slice(0, 10) %>" required>
-            </label>
+                    <label class="signup-field">
+                        <span>Handphone</span>
+                        <input type="tel" name="phone" value="<%= form.phone || '' %>" placeholder="81234567" maxlength="8" inputmode="numeric" autocomplete="tel" data-validate="phone" required>
+                        <small data-field-message></small>
+                    </label>
+                </div>
+            </div>
 
-            <label>
-                Gender
-                <select name="gender" required>
-                    <option value="">Select gender</option>
-                    <option value="female" <%= form.gender === 'female' ? 'selected' : '' %>>Female</option>
-                    <option value="male" <%= form.gender === 'male' ? 'selected' : '' %>>Male</option>
-                    <option value="non_binary" <%= form.gender === 'non_binary' ? 'selected' : '' %>>Non-binary</option>
-                    <option value="prefer_not_to_say" <%= form.gender === 'prefer_not_to_say' ? 'selected' : '' %>>Prefer not to say</option>
-                    <option value="other" <%= form.gender === 'other' ? 'selected' : '' %>>Other</option>
-                </select>
-            </label>
+            <div class="signup-section">
+                <div class="signup-section-heading">
+                    <span>2</span>
+                    <div>
+                        <h2>Profile</h2>
+                        <p>Helps merchants prepare for the right customer details.</p>
+                    </div>
+                </div>
 
-            <label>
-                Postal code
-                <input type="text" name="postalCode" value="<%= form.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" required>
-            </label>
+                <div class="signup-field-grid">
+                    <label class="signup-field">
+                        <span>Birthday</span>
+                        <input type="date" name="birthday" value="<%= form.birthday || '' %>" max="<%= new Date().toISOString().slice(0, 10) %>" data-validate="birthday" required>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Preferred contact method
-                <select name="preferredContactMethod" required>
-                    <option value="">Select contact method</option>
-                    <option value="email" <%= form.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
-                    <option value="phone" <%= form.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
-                    <option value="whatsapp" <%= form.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
-                </select>
-            </label>
+                    <label class="signup-field">
+                        <span>Age</span>
+                        <input type="number" name="age" value="<%= form.age || '' %>" placeholder="Auto" min="1" max="120" inputmode="numeric" data-validate="age" required>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Password
-                <input type="password" name="password" placeholder="At least 8 characters" required>
-            </label>
+                    <label class="signup-field">
+                        <span>Gender</span>
+                        <select name="gender" data-validate="gender" required>
+                            <option value="">Select</option>
+                            <option value="female" <%= form.gender === 'female' ? 'selected' : '' %>>Female</option>
+                            <option value="male" <%= form.gender === 'male' ? 'selected' : '' %>>Male</option>
+                            <option value="non_binary" <%= form.gender === 'non_binary' ? 'selected' : '' %>>Non-binary</option>
+                            <option value="prefer_not_to_say" <%= form.gender === 'prefer_not_to_say' ? 'selected' : '' %>>Prefer not to say</option>
+                            <option value="other" <%= form.gender === 'other' ? 'selected' : '' %>>Other</option>
+                        </select>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Confirm password
-                <input type="password" name="confirmPassword" placeholder="Re-enter password" required>
-            </label>
+                    <label class="signup-field">
+                        <span>Postal code</span>
+                        <input type="text" name="postalCode" value="<%= form.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" data-validate="postalCode" required>
+                        <small data-field-message></small>
+                    </label>
 
-            <label>
-                Referral code <span class="muted">(optional)</span>
-                <input type="text" name="referralCode" value="<%= form.referralCode || '' %>" placeholder="VANI0001" autocomplete="off">
-            </label>
+                    <label class="signup-field span-2">
+                        <span>Preferred contact</span>
+                        <select name="preferredContactMethod" data-validate="preferredContactMethod" required>
+                            <option value="">Select contact method</option>
+                            <option value="email" <%= form.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
+                            <option value="phone" <%= form.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
+                            <option value="whatsapp" <%= form.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
+                        </select>
+                        <small data-field-message></small>
+                    </label>
+                </div>
+            </div>
 
-            <label class="terms-check">
+            <div class="signup-section">
+                <div class="signup-section-heading">
+                    <span>3</span>
+                    <div>
+                        <h2>Security</h2>
+                        <p>Choose a password and add a referral code if you have one.</p>
+                    </div>
+                </div>
+
+                <div class="signup-field-grid">
+                    <label class="signup-field">
+                        <span>Password</span>
+                        <input type="password" name="password" placeholder="At least 8 characters" autocomplete="new-password" data-validate="password" required>
+                        <small data-field-message></small>
+                    </label>
+
+                    <label class="signup-field">
+                        <span>Confirm password</span>
+                        <input type="password" name="confirmPassword" placeholder="Re-enter password" autocomplete="new-password" data-validate="confirmPassword" required>
+                        <small data-field-message></small>
+                    </label>
+
+                    <label class="signup-field span-2">
+                        <span>Referral code <em>optional</em></span>
+                        <input type="text" name="referralCode" value="<%= form.referralCode || '' %>" placeholder="VANI0001" autocomplete="off" data-validate="referralCode">
+                        <small data-field-message></small>
+                    </label>
+                </div>
+
+                <div class="signup-password-rules" data-password-rules>
+                    <span data-rule="length">8+ characters</span>
+                    <span data-rule="letter">Letter</span>
+                    <span data-rule="number">Number</span>
+                </div>
+            </div>
+
+            <label class="terms-check signup-terms-card">
                 <input type="checkbox" name="termsAccepted" value="on" required data-terms-checkbox <%= form.termsAccepted ? 'checked' : '' %>>
-                <span>I agree to the <a class="text-link" href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a class="text-link" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+                <span class="terms-checkmark" aria-hidden="true"></span>
+                <span class="terms-copy">I agree to the <a class="text-link" href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a class="text-link" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
             </label>
 
             <button class="button primary full" type="submit" data-create-account disabled>Create account</button>
-            <p class="auth-switch">Already have an account? <a class="text-link" href="/login">Log in</a></p>
+            <div class="auth-switch-card">
+                <span>Already have an account?</span>
+                <a class="button secondary auth-switch-action" href="/login">Log in</a>
+            </div>
         </form>
 
-        <aside class="login-benefits">
-            <p class="eyebrow">Why sign up?</p>
-            <h2>Your beauty booking companion.</h2>
+        <aside class="signup-aside">
+            <div>
+                <p class="eyebrow">Vaniday Rewards</p>
+                <h2>Book now, earn later.</h2>
+                <p>You earn points after QR check-in and appointment completion. Redeemed points are refunded when eligible cancellations happen.</p>
+            </div>
             <ul>
-                <li>Save favourite salons and wellness merchants</li>
-                <li>Manage personal details in your profile</li>
-                <li>View cashback and reward points</li>
-                <li>Access your cart faster before booking</li>
+                <li><strong>QR check-in</strong><span>Skip account checks at the counter.</span></li>
+                <li><strong>Wallet history</strong><span>See earned, redeemed, and refunded points.</span></li>
+                <li><strong>Faster booking</strong><span>Your contact details stay ready for the next appointment.</span></li>
             </ul>
         </aside>
     </div>

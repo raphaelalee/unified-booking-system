@@ -1,36 +1,37 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title auth-page-title">
-    <p class="eyebrow">Log In</p>
-    <h1>Welcome back to Vaniday.</h1>
-    <p>Log in to manage your profile, saved merchants, cashback, rewards, and cart.</p>
-</section>
-
-<section class="section compact">
-    <div class="login-layout">
-        <form class="login-form" action="/login" method="POST">
+<section class="section compact signin-page">
+    <div class="signin-shell">
+        <form class="login-form signin-card" action="/login" method="POST" data-login-form novalidate>
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <% if (form.returnTo) { %>
                 <input type="hidden" name="returnTo" value="<%= form.returnTo %>">
             <% } %>
-            <div>
+            <header class="signin-card-header">
                 <p class="eyebrow">Customer Account</p>
-                <h2>Log in</h2>
-            </div>
+                <h1>Welcome back</h1>
+                <p>Continue to bookings, rewards, wallet, and saved merchants.</p>
+            </header>
 
             <% if (error) { %>
                 <div class="notice error"><p><%= error %></p></div>
             <% } %>
 
-            <label>
-                Email
-                <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" required>
-            </label>
+            <div class="signin-validation-summary" data-login-summary hidden></div>
 
-            <label>
-                Password
-                <input type="password" name="password" placeholder="Enter your password" required>
-            </label>
+            <div class="signin-field-stack">
+                <label class="signin-field">
+                    <span>Email</span>
+                    <input type="email" name="email" value="<%= form.email || '' %>" placeholder="name@example.com" autocomplete="email" data-login-validate="email" required>
+                    <small data-field-message></small>
+                </label>
+
+                <label class="signin-field">
+                    <span>Password</span>
+                    <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password" data-login-validate="password" required>
+                    <small data-field-message></small>
+                </label>
+            </div>
 
             <button class="button primary full" type="submit">Log In</button>
             <div class="auth-divider"><span>or</span></div>
@@ -38,17 +39,22 @@
                 <span class="google-mark" aria-hidden="true">G</span>
                 Continue with Google
             </a>
-            <p class="auth-switch">New to Vaniday? <a class="text-link" href="/signup">Create an account</a></p>
+            <div class="auth-switch-card">
+                <span>New to Vaniday?</span>
+                <a class="button secondary auth-switch-action" href="/signup">Create account</a>
+            </div>
         </form>
 
-        <aside class="login-benefits">
-            <p class="eyebrow">Profile Benefits</p>
-            <h2>One place for your bookings.</h2>
+        <aside class="signin-aside">
+            <div>
+                <p class="eyebrow">Vaniday</p>
+                <h2>Your appointments stay organized.</h2>
+                <p>Check upcoming visits, loyalty points, receipts, and wallet activity after signing in.</p>
+            </div>
             <ul>
-                <li>Edit name, email, and handphone number</li>
-                <li>Track cashback and rewards</li>
-                <li>View saved merchants</li>
-                <li>Keep selected services in your cart</li>
+                <li><strong>QR check-in</strong><span>Open booking details faster.</span></li>
+                <li><strong>Loyalty wallet</strong><span>Track earned and redeemed points.</span></li>
+                <li><strong>Receipts</strong><span>View service and product history.</span></li>
             </ul>
         </aside>
     </div>

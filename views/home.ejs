@@ -201,12 +201,11 @@
         <h1>Vaniday</h1>
         <p class="home-hero-tagline">Your salon, spa, and grooming bookings in a reassuring sage-green experience.</p>
         <p class="hero-text">
-            Discover trusted merchants, compare services with transparent pricing, book with ease, and get digital confirmations for every appointment.
+            Discover trusted merchants, compare services, and book appointments with clear prices and confirmations.
         </p>
         <div class="hero-actions">
             <a class="button primary" href="/services">Explore Services</a>
             <a class="button secondary" href="/merchants">Find Merchants</a>
-            <a class="button secondary" href="/services#service-catalog">Start Booking</a>
         </div>
         <div class="home-hero-stats" aria-label="Vaniday platform summary">
             <span><strong><%= stats.merchantCount %></strong> merchants</span>
@@ -278,7 +277,26 @@
     </form>
 </section>
 
-<section class="home-section routine-home-cta">
+<section class="home-section home-quick-links" aria-label="Browse Vaniday">
+    <a href="/services">
+        <span>Services</span>
+        <strong>Book appointments</strong>
+    </a>
+    <a href="/merchants">
+        <span>Merchants</span>
+        <strong>Find salons</strong>
+    </a>
+    <a href="/promotions">
+        <span>Promotions</span>
+        <strong>Use offers</strong>
+    </a>
+    <a href="/routine-finder">
+        <span>Routine Finder</span>
+        <strong>Get matches</strong>
+    </a>
+</section>
+
+<section class="home-section routine-home-cta home-secondary-section">
     <div>
         <p class="eyebrow">Not sure what to book?</p>
         <h2>Use the Beauty Routine Finder for live service and product matches.</h2>
@@ -395,7 +413,7 @@
 </section>
 
 <% if (featuredMonthMerchant) { %>
-    <section class="home-section">
+    <section class="home-section home-featured-content-section">
         <article class="home-month-spotlight">
             <div class="home-month-spotlight-copy">
                 <p class="eyebrow">Featured Salon of the Month</p>
@@ -421,7 +439,7 @@
 <% } %>
 
 <% if (featuredServiceItems.length > 0) { %>
-    <section class="home-section">
+    <section class="home-section home-featured-content-section">
         <div class="home-section-heading">
             <div>
                 <p class="eyebrow">Featured Services</p>
@@ -433,7 +451,7 @@
             <% featuredServiceItems.slice(0, 4).forEach((service) => { %>
                 <article class="storefront-service-card">
                     <div class="home-card-image <%= getFeaturedServiceImageClass(service) %>"<% if (service.imageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.05), rgba(79, 104, 71, 0.18)), url('<%= service.imageUrl %>');"<% } %>></div>
-                    <span class="tag">⭐ Featured Service</span>
+                    <span class="tag">Featured Service</span>
                     <h3><%= service.name %></h3>
                     <p class="muted"><%= service.merchantName %> · <%= service.duration %></p>
                     <a class="button secondary" href="<%= getBookingHref(service) %>">Book</a>
@@ -444,7 +462,7 @@
 <% } %>
 
 <% if (featuredProductItems.length > 0) { %>
-    <section class="home-section">
+    <section class="home-section home-featured-content-section">
         <div class="home-section-heading">
             <div>
                 <p class="eyebrow">Featured Products</p>
@@ -457,7 +475,7 @@
                 <% const displayImageUrl = product.imageUrl || product.fallbackImageUrl || ''; %>
                 <article class="storefront-product-card">
                     <div class="home-card-image home-product-image"<% if (displayImageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.24)), url('<%= displayImageUrl %>');"<% } %>></div>
-                    <span class="tag">⭐ Featured Product</span>
+                    <span class="tag">Featured Product</span>
                     <h3><%= product.name %></h3>
                     <p class="muted"><%= product.salonName || 'Vaniday merchant' %></p>
                     <div>
@@ -471,18 +489,18 @@
 <% } %>
 
 <% if (trendingMerchantItems.length > 0) { %>
-    <section class="home-section">
+    <section class="home-section home-featured-content-section">
         <div class="home-section-heading">
             <div>
                 <p class="eyebrow">Trending Merchants</p>
-                <h2>🔥 Merchants with current featured momentum.</h2>
+                <h2>Merchants with current featured momentum.</h2>
             </div>
             <a class="button secondary" href="/merchants">View merchants</a>
         </div>
         <div class="storefront-product-strip">
             <% trendingMerchantItems.slice(0, 4).forEach((merchant) => { %>
                 <article>
-                    <span class="tag">🔥 Trending Merchant</span>
+                    <span class="tag">Trending Merchant</span>
                     <h3><%= merchant.name %></h3>
                     <p class="muted"><%= merchant.location || 'Singapore' %></p>
                     <a class="button secondary" href="/merchants/<%= merchant.id %>?from=home">View</a>
@@ -492,7 +510,7 @@
     </section>
 <% } %>
 
-<section class="home-section">
+<section class="home-section home-secondary-section">
     <div class="home-section-heading">
         <div>
             <p class="eyebrow">Popular services</p>
@@ -516,7 +534,7 @@
     </div>
 </section>
 
-<section class="home-section home-benefits-section">
+<section class="home-section home-benefits-section home-secondary-section">
     <div class="home-section-heading">
         <div>
             <p class="eyebrow">Why choose Vaniday</p>
@@ -534,7 +552,7 @@
     </div>
 </section>
 
-<section class="home-section">
+<section class="home-section home-secondary-section">
     <div class="home-section-heading">
         <div>
             <p class="eyebrow">Promotions</p>
@@ -556,7 +574,7 @@
     </div>
 </section>
 
-<section class="home-section home-how-section">
+<section class="home-section home-how-section home-secondary-section">
     <div class="home-section-heading">
         <div>
             <p class="eyebrow">How it works</p>
@@ -582,7 +600,7 @@
     </div>
 </section>
 
-<section class="home-section">
+<section class="home-section home-secondary-section">
     <div class="home-section-heading">
         <div>
             <p class="eyebrow">Recommended merchants</p>

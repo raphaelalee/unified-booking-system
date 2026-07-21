@@ -141,7 +141,7 @@
                 <% } %>
             </section>
 
-            <section class="storefront-section" id="storefront-products">
+            <section class="storefront-section storefront-products-section" id="storefront-products">
                 <div class="storefront-section-heading">
                     <div>
                         <p class="eyebrow">Products</p>
@@ -151,13 +151,17 @@
                 </div>
 
                 <% if (highlightedProducts.length > 0) { %>
-                    <div class="storefront-product-strip">
+                    <div class="storefront-product-strip storefront-featured-products">
                         <% highlightedProducts.forEach((product) => { %>
-                            <article>
-                                <span class="tag">⭐ Featured Product</span>
-                                <h3><%= product.name %></h3>
-                                <p class="muted"><%= product.description %></p>
-                                <div>
+                            <% const featuredImageUrl = product.imageUrl || product.fallbackImageUrl || ''; %>
+                            <article class="storefront-product-card-clean is-featured">
+                                <div class="storefront-product-card-media home-product-image"<% if (featuredImageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.2)), url('<%= featuredImageUrl %>');"<% } %>></div>
+                                <div class="storefront-product-card-body">
+                                    <span class="tag">Featured Product</span>
+                                    <h3><%= product.name %></h3>
+                                    <p class="muted"><%= product.description %></p>
+                                </div>
+                                <div class="storefront-product-card-footer">
                                     <strong>$<%= Number(product.price || 0).toFixed(2) %></strong>
                                     <a class="button secondary" href="/products/<%= product.id %>">View</a>
                                 </div>
@@ -171,13 +175,17 @@
                         <p>No products are listed for this studio yet.</p>
                     </div>
                 <% } else { %>
-                    <div class="storefront-product-strip">
-                        <% merchantProducts.slice(0, 3).forEach((product) => { %>
-                            <article>
-                                <span class="tag"><%= product.salonName || merchant.name %></span>
-                                <h3><%= product.name %></h3>
-                                <p class="muted"><%= product.description %></p>
-                                <div>
+                    <div class="storefront-product-strip storefront-products-grid">
+                        <% merchantProducts.slice(0, 6).forEach((product) => { %>
+                            <% const productImageUrl = product.imageUrl || product.fallbackImageUrl || ''; %>
+                            <article class="storefront-product-card-clean">
+                                <div class="storefront-product-card-media home-product-image"<% if (productImageUrl) { %> style="background-image: linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(79, 104, 71, 0.2)), url('<%= productImageUrl %>');"<% } %>></div>
+                                <div class="storefront-product-card-body">
+                                    <span class="tag"><%= product.salonName || merchant.name %></span>
+                                    <h3><%= product.name %></h3>
+                                    <p class="muted"><%= product.description %></p>
+                                </div>
+                                <div class="storefront-product-card-footer">
                                     <strong>$<%= Number(product.price || 0).toFixed(2) %></strong>
                                     <a class="button secondary" href="/products/<%= product.id %>">View</a>
                                 </div>
