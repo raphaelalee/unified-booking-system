@@ -23,6 +23,17 @@ function roundMoney(value) {
     return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function bookingPointsAwardedSelect() {
+    return `
+        (
+            SELECT COALESCE(SUM(loyalty_transactions.points_delta), 0)
+            FROM loyalty_transactions
+            WHERE loyalty_transactions.source_receipt_id = CONCAT('booking-', bookings.booking_id)
+                AND loyalty_transactions.transaction_type = 'EARNED'
+        ) AS booking_points_awarded
+    `;
+}
+
 function ensureServiceInventoryUsageSchema(callback) {
     if (serviceInventoryUsageSchemaReady) {
         callback(null);
@@ -619,7 +630,8 @@ function getAllInDatabase(callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -664,6 +676,7 @@ function getByMerchantUserId(userId, callback) {
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()},
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
@@ -692,7 +705,8 @@ function getUpcomingByUserId(userId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -732,7 +746,8 @@ function getNextManageableByUserId(userId, callback) {
                 bookings.points_redeemed,
                 bookings.reward_discount_amount,
                 bookings.final_amount_payable,
-                bookings.reward_points_refunded_at
+                bookings.reward_points_refunded_at,
+                ${bookingPointsAwardedSelect()}
             FROM bookings
             INNER JOIN services ON services.service_id = bookings.service_id
             INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -782,7 +797,8 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -1204,12 +1220,7 @@ function autoConfirmBookingUnlocked(bookingData, callback) {
                     }
 
                     const pendingReasons = [];
-
-                    if (settings.autoApproveBookings === false) {
-                        pendingReasons.push('auto_approval_disabled');
-                    }
-
-                    const nextStatus = pendingReasons.length ? 'pending' : 'confirmed';
+                    const nextStatus = 'confirmed';
 
                     const redemption = bookingData.loyaltyRedemption || {};
                     const originalServicePrice = roundMoney(bookingData.originalServicePrice || bookingData.servicePrice || 0);
@@ -1339,6 +1350,7 @@ function getByUserId(userId, callback) {
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()},
             CASE
                 WHEN bookings.status = 'cancelled' THEN 'past'
                 WHEN bookings.status IN ('completed', 'checked_in') THEN 'past'
@@ -1886,7 +1898,8 @@ function getSupportBookingsByUserId(userId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -1914,7 +1927,8 @@ function findSupportBookingForCustomer(bookingId, userId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -1960,7 +1974,8 @@ function getManageableByIdForCustomer(bookingId, userId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -2020,6 +2035,7 @@ function getReceiptById(bookingId, callback) {
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()},
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
@@ -2061,7 +2077,8 @@ function getNotificationDetailsById(bookingId, callback) {
             bookings.points_redeemed,
             bookings.reward_discount_amount,
             bookings.final_amount_payable,
-            bookings.reward_points_refunded_at
+            bookings.reward_points_refunded_at,
+            ${bookingPointsAwardedSelect()}
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -2132,7 +2149,8 @@ function getWhatsAppReminderCandidates(startAt, endAt, reminderType, callback) {
                     bookings.points_redeemed,
                     bookings.reward_discount_amount,
                     bookings.final_amount_payable,
-                    bookings.reward_points_refunded_at
+                    bookings.reward_points_refunded_at,
+                    ${bookingPointsAwardedSelect()}
                 FROM bookings
                 LEFT JOIN users ON users.user_id = bookings.user_id
                 INNER JOIN services ON services.service_id = bookings.service_id
@@ -2205,6 +2223,63 @@ function markCompleted(bookingId, callback) {
     completeBookingWithInventory(bookingId, null, callback);
 }
 
+function getAutoCompletionCandidates(limit = 25, graceMinutes = 0, callback) {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 25));
+    const safeGraceMinutes = Math.max(0, Math.min(1440, Number(graceMinutes) || 0));
+
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                bookings.booking_id AS id,
+                bookings.booking_date,
+                TIME_FORMAT(bookings.timeslot, '%H:%i') AS booking_time,
+                bookings.status,
+                bookings.checked_in_at,
+                services.duration_mins,
+                services.service_name,
+                salons.salon_name AS merchant_name
+            FROM bookings
+            INNER JOIN services ON services.service_id = bookings.service_id
+            INNER JOIN salons ON salons.salon_id = services.salon_id
+            WHERE bookings.status = 'checked_in'
+                AND bookings.checked_in_at IS NOT NULL
+                AND bookings.booking_date IS NOT NULL
+                AND bookings.timeslot IS NOT NULL
+                AND TIMESTAMPDIFF(MINUTE, TIMESTAMP(bookings.booking_date, bookings.timeslot), NOW()) >= (COALESCE(services.duration_mins, 60) + ?)
+            ORDER BY bookings.booking_date ASC, bookings.timeslot ASC, bookings.booking_id ASC
+            LIMIT ?
+        `;
+
+        db.query(sql, [safeGraceMinutes, safeLimit], callback);
+    });
+}
+
+function autoConfirmPendingBookings(limit = 100, callback) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            UPDATE bookings
+            SET status = 'confirmed'
+            WHERE status = 'pending'
+            ORDER BY booking_date ASC, timeslot ASC, booking_id ASC
+            LIMIT ?
+        `;
+
+        db.query(sql, [safeLimit], callback);
+    });
+}
+
 function autoConfirmBooking(bookingData, callback) {
     const merchantId = Number(bookingData.merchantId);
     const bookingDate = String(bookingData.bookingDate || '').slice(0, 10);
@@ -2234,13 +2309,7 @@ function autoConfirmBooking(bookingData, callback) {
 }
 
 function completeBookingWithInventory(bookingId, merchantUserId, callback) {
-    ensureServiceInventoryUsageSchema((schemaError) => {
-        if (schemaError) {
-            callback(schemaError);
-            return;
-        }
-
-        db.getConnection((connectionError, connection) => {
+    db.getConnection((connectionError, connection) => {
         if (connectionError) {
             callback(connectionError);
             return;
@@ -2257,21 +2326,31 @@ function completeBookingWithInventory(bookingId, merchantUserId, callback) {
                 connection.release();
                 callback(error, result);
             });
-            const ownerJoin = merchantUserId
-                ? 'INNER JOIN salons ON salons.salon_id = bookings.merchant_id'
-                : '';
             const ownerWhere = merchantUserId ? 'AND salons.merchant_id = ?' : '';
             const params = merchantUserId ? [bookingId, merchantUserId] : [bookingId];
             const lookupSql = `
                 SELECT
-                    bookings.booking_id,
+                    bookings.booking_id AS id,
+                    bookings.user_id,
+                    bookings.booking_date,
                     bookings.status,
+                    bookings.checked_in_at,
+                    COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+                    COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS original_service_price,
+                    bookings.reward_discount_amount,
+                    bookings.final_amount_payable,
+                    users.birthday AS customer_birthday,
+                    salons.salon_id AS merchant_id,
+                    salons.salon_name AS merchant_name,
+                    services.service_name,
                     bookings.service_id,
                     service_inventory_links.product_id,
                     service_inventory_links.quantity_required,
                     products.stock_quantity
                 FROM bookings
-                ${ownerJoin}
+                LEFT JOIN users ON users.user_id = bookings.user_id
+                INNER JOIN services ON services.service_id = bookings.service_id
+                INNER JOIN salons ON salons.salon_id = services.salon_id
                 LEFT JOIN service_inventory_links ON service_inventory_links.service_id = bookings.service_id
                 LEFT JOIN products ON products.product_id = service_inventory_links.product_id
                 WHERE bookings.booking_id = ?
@@ -2291,79 +2370,146 @@ function completeBookingWithInventory(bookingId, merchantUserId, callback) {
                 }
 
                 const booking = rows[0];
-                if (String(booking.status || '').toLowerCase() !== 'confirmed') {
-                    rollback(null, buildBookingStatusConflict('This booking cannot be completed from its current status.'));
+                const currentStatus = String(booking.status || '').toLowerCase();
+
+                if (['cancelled', 'no_show'].includes(currentStatus)) {
+                    rollback(null, buildBookingStatusConflict('Cancelled and no-show bookings cannot be completed.'));
+                    return;
+                }
+
+                if (currentStatus === 'completed') {
+                    rollback(null, buildBookingStatusConflict('This booking is already completed.'));
+                    return;
+                }
+
+                if (currentStatus !== 'checked_in') {
+                    rollback(null, buildBookingStatusConflict('Only checked-in bookings can be completed.'));
                     return;
                 }
 
                 const finish = () => {
-                    connection.query(
-                        `UPDATE bookings SET status = 'completed' WHERE booking_id = ? AND status = 'confirmed'`,
-                        [bookingId],
-                        (updateError, result) => {
-                            if (updateError) {
-                                rollback(updateError);
+                    const bookingReference = buildBookingReference(booking.id, booking.booking_date);
+                    const awardCompletionPoints = Loyalty.awardPointsForCompletedBookingWithConnection;
+
+                    if (typeof awardCompletionPoints !== 'function') {
+                        rollback(new Error('Loyalty booking completion award helper is unavailable.'));
+                        return;
+                    }
+
+                    try {
+                        awardCompletionPoints(connection, {
+                            ...booking,
+                            bookingReference,
+                            serviceName: booking.service_name,
+                            merchantName: booking.merchant_name,
+                            merchantId: booking.merchant_id,
+                            serviceId: booking.service_id,
+                            completedAt: new Date()
+                        }, (awardError, awardResult = {}) => {
+                            if (awardError) {
+                                rollback(awardError);
                                 return;
                             }
 
-                            connection.commit((commitError) => {
-                                connection.release();
-                                callback(commitError, result);
-                            });
-                        }
-                    );
+                            if (awardResult.duplicate) {
+                                rollback(null, buildBookingStatusConflict('Loyalty points have already been awarded for this booking.'));
+                                return;
+                            }
+
+                            connection.query(
+                                `UPDATE bookings SET status = 'completed' WHERE booking_id = ? AND status = 'checked_in'`,
+                                [bookingId],
+                                (updateError, result) => {
+                                    if (updateError) {
+                                        rollback(updateError);
+                                        return;
+                                    }
+
+                                    if (!result.affectedRows) {
+                                        rollback(null, buildBookingStatusConflict('This booking is no longer checked in.'));
+                                        return;
+                                    }
+
+                                    connection.commit((commitError) => {
+                                        connection.release();
+                                        callback(commitError, {
+                                            ...result,
+                                            loyaltyAward: awardResult
+                                        });
+                                    });
+                                }
+                            );
+                        });
+                    } catch (awardException) {
+                        rollback(awardException);
+                    }
                 };
 
-                if (!booking.product_id) {
+                const inventoryRows = rows.filter((row) => row.product_id);
+
+                if (!inventoryRows.length) {
                     finish();
                     return;
                 }
 
-                const quantity = Math.max(1, Number(booking.quantity_required || 1));
-                const usageSql = `
-                    INSERT IGNORE INTO service_inventory_usage
-                        (booking_id, service_id, product_id, quantity_used)
-                    VALUES (?, ?, ?, ?)
-                `;
+                let index = 0;
 
-                connection.query(
-                    usageSql,
-                    [bookingId, booking.service_id, booking.product_id, quantity],
-                    (usageError, usageResult) => {
-                        if (usageError) {
-                            rollback(usageError);
-                            return;
-                        }
-
-                        if (usageResult.affectedRows === 0) {
-                            finish();
-                            return;
-                        }
-
-                        connection.query(
-                            `UPDATE products
-                             SET stock_quantity = stock_quantity - ?
-                             WHERE product_id = ? AND stock_quantity >= ?`,
-                            [quantity, booking.product_id, quantity],
-                            (stockError, stockResult) => {
-                                if (stockError) {
-                                    rollback(stockError);
-                                    return;
-                                }
-
-                                if (stockResult.affectedRows === 0) {
-                                    rollback(new Error('The linked service inventory does not have enough stock.'));
-                                    return;
-                                }
-
-                                finish();
-                            }
-                        );
+                function useNextInventoryItem() {
+                    if (index >= inventoryRows.length) {
+                        finish();
+                        return;
                     }
-                );
+
+                    const item = inventoryRows[index];
+                    index += 1;
+
+                    const quantity = Math.max(1, Number(item.quantity_required || 1));
+                    const usageSql = `
+                        INSERT IGNORE INTO service_inventory_usage
+                            (booking_id, service_id, product_id, quantity_used)
+                        VALUES (?, ?, ?, ?)
+                    `;
+
+                    connection.query(
+                        usageSql,
+                        [bookingId, booking.service_id, item.product_id, quantity],
+                        (usageError, usageResult) => {
+                            if (usageError) {
+                                rollback(usageError);
+                                return;
+                            }
+
+                            if (usageResult.affectedRows === 0) {
+                                useNextInventoryItem();
+                                return;
+                            }
+
+                            connection.query(
+                                `UPDATE products
+                                 SET stock_quantity = stock_quantity - ?
+                                 WHERE product_id = ? AND stock_quantity >= ?`,
+                                [quantity, item.product_id, quantity],
+                                (stockError, stockResult) => {
+                                    if (stockError) {
+                                        rollback(stockError);
+                                        return;
+                                    }
+
+                                    if (stockResult.affectedRows === 0) {
+                                        rollback(new Error('The linked service inventory does not have enough stock.'));
+                                        return;
+                                    }
+
+                                    useNextInventoryItem();
+                                }
+                            );
+                        }
+                    );
+                }
+
+                useNextInventoryItem();
             });
         });
-    });
     });
 }
 
@@ -2592,6 +2738,8 @@ function markCheckedIn(bookingId, merchantUserId, callback) {
             bookings.checked_in_at = COALESCE(bookings.checked_in_at, CURRENT_TIMESTAMP)
         WHERE bookings.booking_id = ?
             AND salons.merchant_id = ?
+            AND bookings.status IN ('confirmed', 'paid')
+            AND bookings.checked_in_at IS NULL
     `;
 
     ensureBookingManagementSchema((schemaError) => {
@@ -2604,15 +2752,23 @@ function markCheckedIn(bookingId, merchantUserId, callback) {
     });
 }
 
-function markCheckedInByToken(bookingId, callback) {
+function markCheckedInByToken(bookingId, userId, callback) {
+    const params = [bookingId];
+    const userWhere = userId ? 'AND user_id = ?' : '';
+
+    if (userId) {
+        params.push(userId);
+    }
+
     const sql = `
         UPDATE bookings
         SET
             status = 'checked_in',
             checked_in_at = COALESCE(checked_in_at, CURRENT_TIMESTAMP)
         WHERE booking_id = ?
-            AND status = 'confirmed'
+            AND status IN ('confirmed', 'paid')
             AND checked_in_at IS NULL
+            ${userWhere}
     `;
 
     ensureBookingManagementSchema((schemaError) => {
@@ -2621,7 +2777,7 @@ function markCheckedInByToken(bookingId, callback) {
             return;
         }
 
-        db.query(sql, [bookingId], callback);
+        db.query(sql, params, callback);
     });
 }
 
@@ -2637,8 +2793,10 @@ function buildBookingStatusConflict(message) {
 function canTransitionMerchantBookingStatus(currentStatus, nextStatus) {
     const current = String(currentStatus || '').trim().toLowerCase();
     const transitions = {
-        pending: new Set(['confirmed', 'cancelled']),
-        confirmed: new Set(['completed', 'cancelled', 'no_show']),
+        pending: new Set([]),
+        confirmed: new Set(['cancelled', 'no_show']),
+        paid: new Set(['cancelled', 'no_show']),
+        checked_in: new Set([]),
         completed: new Set([]),
         cancelled: new Set([]),
         no_show: new Set([])
@@ -2660,7 +2818,7 @@ function canTransitionMerchantBookingStatus(currentStatus, nextStatus) {
 }
 
 function updateStatusForMerchant(bookingId, merchantUserId, status, callback) {
-    const allowedStatuses = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
+    const allowedStatuses = new Set(['pending', 'confirmed', 'cancelled', 'no_show']);
     const nextStatus = String(status || '').trim().toLowerCase();
 
     if (!allowedStatuses.has(nextStatus)) {
@@ -2792,6 +2950,8 @@ module.exports = {
     markCancelled,
     markRefundStatus,
     markCompleted,
+    getAutoCompletionCandidates,
+    autoConfirmPendingBookings,
     markConfirmedForCustomer,
     markCheckedIn,
     markCheckedInByToken,

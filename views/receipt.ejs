@@ -21,6 +21,9 @@
         <% if (appointmentLabel) { %>
             <p>Appointment: <strong><%= appointmentLabel %></strong></p>
         <% } %>
+        <% if (String(receipt.status || '').toLowerCase() === 'completed' && Number(receipt.pointsAwarded || 0) > 0) { %>
+            <p><strong><%= Number(receipt.pointsAwarded || 0) %> loyalty points have been added to your wallet.</strong></p>
+        <% } %>
     <% } else { %>
         <p>
             <strong><%= receipt.userName %></strong> paid
@@ -89,6 +92,9 @@
                     <p><span>Appointment</span><strong><%= appointmentLabel || '-' %></strong></p>
                     <% if (receipt.checkedInAt) { %>
                         <p><span>Checked-in At</span><strong><%= checkedInAtLabel || '-' %></strong></p>
+                    <% } %>
+                    <% if (String(receipt.status || '').toLowerCase() === 'completed' && Number(receipt.pointsAwarded || 0) > 0) { %>
+                        <p><span>Loyalty points awarded</span><strong><%= Number(receipt.pointsAwarded || 0) %> pts</strong></p>
                     <% } %>
                 <% } else { %>
                     <p><span>User</span><strong><%= receipt.userName %></strong></p>
@@ -169,6 +175,12 @@
                     <span>Amount payable at merchant</span>
                     <strong>$<%= Number((receipt.amountPayableAtMerchant ?? receipt.totalAmount) || 0).toFixed(2) %></strong>
                 </div>
+                <% if (String(receipt.status || '').toLowerCase() === 'completed' && Number(receipt.pointsAwarded || 0) > 0) { %>
+                    <div class="receipt-total">
+                        <span>Loyalty points awarded</span>
+                        <strong><%= Number(receipt.pointsAwarded || 0) %> pts</strong>
+                    </div>
+                <% } %>
                 <p class="muted">You will pay the remaining amount during your appointment.</p>
             <% } %>
             <% if (paymentBreakdown.length > 0) { %>

@@ -738,40 +738,9 @@ function confirmBooking(req, res) {
             });
         }
 
-        return Booking.markCompleted(req.params.bookingId, (updateError) => {
-            if (updateError) {
-                console.error(updateError);
-                return res.status(500).render('error', {
-                    title: 'Booking Error',
-                    message: 'The booking could not be confirmed.'
-                });
-            }
-
-            notifyUser(booking.user_id, 'customer', {
-                actorUserId: booking.merchant_user_id,
-                type: 'booking_completed',
-                title: 'Booking completed',
-                message: `${booking.service_name} at ${booking.merchant_name} has been marked completed.`,
-                linkUrl: '/profile#bookings',
-                dedupeKey: `booking-completed-customer-${booking.id}`
-            });
-            notifyUser(booking.merchant_user_id, 'merchant', {
-                actorUserId: booking.user_id,
-                type: 'booking_completed',
-                title: 'Booking completed',
-                message: `${booking.customer_name || 'A customer'} completed ${booking.service_name}.`,
-                linkUrl: '/merchant/bookings',
-                dedupeKey: `booking-completed-merchant-${booking.id}`
-            });
-
-            return res.render('booking-confirmed', {
-                title: 'Booking Confirmed',
-                booking: {
-                    ...booking,
-                    displayReference: buildBookingReference(booking.id, booking.paid_at || booking.booking_date),
-                    status: 'completed'
-                }
-            });
+        return res.status(405).render('error', {
+            title: 'Completion Requires Merchant Action',
+            message: 'Appointments can only be completed from the merchant booking controls after QR check-in.'
         });
     });
 }
@@ -980,13 +949,24 @@ function showCheckIn(req, res) {
         }
 
         const routeTarget = `/checking/${req.params.signedToken}`;
+        const bookingStatus = String(booking.status || '').toLowerCase();
+
+        const pointsAwarded = Number(booking.booking_points_awarded || 0);
+        const completedMessage = pointsAwarded > 0
+            ? `Appointment completed. ${pointsAwarded} loyalty points have been added to your wallet.`
+            : 'This appointment has already been completed.';
 
         return res.render('booking-checkin', {
-            title: 'Scan to Check In',
+            title: bookingStatus === 'completed' ? 'Appointment Completed' : 'Scan to Check In',
             booking,
             appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
             checkinAction: routeTarget,
-            canConfirmCheckIn: String(booking.status || '').toLowerCase() === 'confirmed' && !booking.checked_in_at,
+            canConfirmCheckIn: ['confirmed', 'paid'].includes(bookingStatus) && !booking.checked_in_at,
+            message: bookingStatus === 'completed'
+                ? completedMessage
+                : bookingStatus === 'checked_in'
+                    ? 'This appointment has already been checked in. Loyalty points will be added after the merchant completes the service.'
+                    : '',
             showQrDebug: process.env.NODE_ENV === 'development',
             checkinUrl: getBookingCheckInUrl(req, bookingId),
             qrDebug: {
@@ -1056,18 +1036,28 @@ function confirmCheckIn(req, res) {
         if (bookingStatus === 'checked_in' || booking.checked_in_at) {
             return renderCheckIn(409, {
                 title: 'Already Checked In',
-                message: 'This appointment has already been checked in.'
+                message: 'This appointment has already been checked in. Loyalty points will be added after the merchant completes the service.'
             });
         }
 
-        if (bookingStatus !== 'confirmed') {
+        if (bookingStatus === 'completed') {
+            const pointsAwarded = Number(booking.booking_points_awarded || 0);
+            return renderCheckIn(200, {
+                title: 'Appointment Completed',
+                message: pointsAwarded > 0
+                    ? `Appointment completed. ${pointsAwarded} loyalty points have been added to your wallet.`
+                    : 'This appointment has already been completed.'
+            });
+        }
+
+        if (!['confirmed', 'paid'].includes(bookingStatus)) {
             return renderCheckIn(409, {
                 title: 'Check-In Not Available',
                 message: 'Only confirmed bookings can be checked in.'
             });
         }
 
-        return Booking.markCheckedInByToken(bookingId, (updateError, updateResult) => {
+        return Booking.markCheckedInByToken(bookingId, null, (updateError, updateResult) => {
             if (updateError) {
                 console.error(updateError);
                 return res.status(500).render('error', {
@@ -1104,7 +1094,7 @@ function confirmCheckIn(req, res) {
                 title: 'Checked In',
                 booking: { ...booking, status: 'checked_in' },
                 appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
-                success: 'You are checked in for this appointment.',
+                success: 'You are checked in for this appointment. Loyalty points will be added after the merchant completes the service.',
                 checkinAction: routeTarget,
                 checkinUrl: getBookingCheckInUrl(req, bookingId),
                 canConfirmCheckIn: false,

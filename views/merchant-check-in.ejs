@@ -10,6 +10,9 @@
     <% if (typeof success !== 'undefined' && success) { %>
         <div class="notice success"><p><%= success %></p></div>
     <% } %>
+    <% if (typeof error !== 'undefined' && error) { %>
+        <div class="notice error"><p><%= error %></p></div>
+    <% } %>
 
     <article class="dashboard-report-card">
         <p class="eyebrow">Booking #<%= booking.id %></p>
@@ -23,13 +26,26 @@
             <p><span>Status</span><strong><%= booking.status %></strong></p>
         </div>
 
-        <% if (alreadyCheckedIn) { %>
+        <% if (typeof alreadyCompleted !== 'undefined' && alreadyCompleted) { %>
+            <% const awardedPoints = Number(booking.booking_points_awarded || booking.pointsAwarded || 0); %>
+            <p class="muted">
+                Service completed.
+                <% if (awardedPoints > 0) { %>
+                    <strong><%= awardedPoints %> loyalty points awarded.</strong>
+                <% } %>
+            </p>
             <a class="button secondary" href="/merchant/bookings">Back to bookings</a>
-        <% } else { %>
+        <% } else if (alreadyCheckedIn) { %>
+            <p class="muted">This booking is checked in.</p>
+            <a class="button secondary" href="/merchant/bookings">Back to bookings</a>
+        <% } else if (typeof canCheckIn !== 'undefined' ? canCheckIn : true) { %>
             <form method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                 <button class="button primary" type="submit">Check in booking</button>
             </form>
+        <% } else { %>
+            <p class="muted">Check-in is not available for this booking.</p>
+            <a class="button secondary" href="/merchant/bookings">Back to bookings</a>
         <% } %>
     </article>
 </section>

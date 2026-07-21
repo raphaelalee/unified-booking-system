@@ -26,6 +26,7 @@ const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
 const { uploadProductImage } = require('./utils/productUpload');
 const { uploadProfileImage } = require('./utils/profileUpload');
+const { startBookingAutoCompletionScheduler } = require('./services/bookingAutoCompletion');
 const { startSmsReminderScheduler } = require('./services/smsAutomation');
 const { startWhatsAppReminderScheduler } = require('./services/whatsappAutomation');
 const { startWhatsAppWebClient } = require('./services/whatsappWebClient');
@@ -823,6 +824,7 @@ initializeDatabaseSchemas((schemaError) => {
         startWhatsAppWebClient({ onMessage: whatsappController.handleIncomingMessage }).catch((error) => {
             console.error('WhatsApp Web client startup failed:', error.message || error);
         });
+        startBookingAutoCompletionScheduler();
         startWhatsAppReminderScheduler();
         startSmsReminderScheduler();
     });

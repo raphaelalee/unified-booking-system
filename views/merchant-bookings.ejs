@@ -56,7 +56,7 @@
             <div>
                 <p class="eyebrow">Bookings</p>
                 <h1>Appointment operations</h1>
-                <span>Approve appointments, review reschedule requests, and manage booking rules for <%= merchant.name %>.</span>
+                <span>Service bookings confirm automatically. Review reschedule requests and manage booking rules for <%= merchant.name %>.</span>
             </div>
             <div class="merchant-hero-actions">
                 <a class="button secondary" href="/merchant/schedule">Open calendar</a>
@@ -65,56 +65,51 @@
 
         <section class="merchant-kpi-grid" aria-label="Booking summary">
             <article class="merchant-kpi-card accent-green"><span>Upcoming</span><strong><%= upcomingBookings.length %></strong><small>next appointments</small></article>
-            <article class="merchant-kpi-card accent-yellow"><span>Pending approvals</span><strong><%= pendingAppointments.length %></strong><small>need action</small></article>
+            <article class="merchant-kpi-card accent-yellow"><span>Booking mode</span><strong>Auto</strong><small>available slots confirm</small></article>
             <article class="merchant-kpi-card accent-orange"><span>Reschedule reviews</span><strong><%= pendingRescheduleReviews.length %></strong><small>manual review queue</small></article>
             <article class="merchant-kpi-card accent-blue"><span>Auto-approved</span><strong><%= autoApprovedReschedules.length %></strong><small>handled by rules</small></article>
         </section>
 
         <section class="merchant-dashboard-lower-grid" id="reschedule-requests">
+            <% if (pendingRescheduleReviews.length) { %>
             <article class="merchant-alert-card">
                 <div class="merchant-card-heading">
                     <div><p class="eyebrow">Reschedules</p><h2>Pending manual reviews</h2></div>
                 </div>
-                <% if (!pendingRescheduleReviews.length) { %>
-                    <p class="muted">No reschedule requests need manual review.</p>
-                <% } else { %>
-                    <div class="merchant-appointment-list">
-                        <% pendingRescheduleReviews.forEach((request) => { %>
-                            <article>
-                                <span class="merchant-status-badge status-pending"><%= request.confidenceLevel %> confidence</span>
-                                <div>
-                                    <strong><%= request.customerName %></strong>
-                                    <small><%= request.serviceName %> - <%= String(request.oldBookingDate).slice(0, 10) %> <%= request.oldBookingTime || '' %> to <%= String(request.requestedBookingDate).slice(0, 10) %> at <%= request.requestedBookingTime %></small>
-                                    <small><%= request.decisionReason || 'Merchant review recommended.' %></small>
-                                </div>
-                                <div class="merchant-booking-actions">
-                                    <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
-                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                        <input type="hidden" name="action" value="approve">
-                                        <button class="button secondary" type="submit">Approve</button>
-                                    </form>
-                                    <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
-                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                        <input type="hidden" name="action" value="reject">
-                                        <button class="button secondary danger-button" type="submit">Reject</button>
-                                    </form>
-                                </div>
-                            </article>
-                        <% }) %>
-                    </div>
-                <% } %>
+                <div class="merchant-appointment-list">
+                    <% pendingRescheduleReviews.forEach((request) => { %>
+                        <article>
+                            <span class="merchant-status-badge status-pending"><%= request.confidenceLevel %> confidence</span>
+                            <div>
+                                <strong><%= request.customerName %></strong>
+                                <small><%= request.serviceName %> - <%= String(request.oldBookingDate).slice(0, 10) %> <%= request.oldBookingTime || '' %> to <%= String(request.requestedBookingDate).slice(0, 10) %> at <%= request.requestedBookingTime %></small>
+                                <small><%= request.decisionReason || 'Merchant review recommended.' %></small>
+                            </div>
+                            <div class="merchant-booking-actions">
+                                <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <input type="hidden" name="action" value="approve">
+                                    <button class="button secondary" type="submit">Approve</button>
+                                </form>
+                                <form action="/merchant/reschedule-requests/<%= request.id %>/review" method="POST">
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <input type="hidden" name="action" value="reject">
+                                    <button class="button secondary danger-button" type="submit">Reject</button>
+                                </form>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
             </article>
+            <% } %>
 
             <article class="merchant-alert-card">
                 <div class="merchant-card-heading">
-                    <div><p class="eyebrow">Auto-approval Rules</p><h2>Booking and reschedule settings</h2></div>
+                    <div><p class="eyebrow">Reschedule Rules</p><h2>Booking and reschedule settings</h2></div>
                 </div>
                 <form class="merchant-quick-actions merchant-reschedule-settings" action="/merchant/reschedule-settings" method="POST">
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                    <label class="merchant-toggle-row merchant-settings-wide">
-                        <input type="checkbox" name="autoApproveBookings" value="1" <%= Number(rescheduleSettings.autoApproveBookings ?? 1) ? 'checked' : '' %>>
-                        <span><strong>Auto approve available bookings</strong><small>Confirm new bookings immediately when the selected slot is available.</small></span>
-                    </label>
+                    <input type="hidden" name="autoApproveBookings" value="1">
                     <label class="merchant-toggle-row merchant-settings-wide">
                         <input type="checkbox" name="autoApproveEnabled" value="1" <%= Number(rescheduleSettings.autoApproveEnabled) ? 'checked' : '' %>>
                         <span><strong>Auto approve simple requests</strong><small>Approve low-risk reschedules when rules pass.</small></span>
@@ -165,40 +160,9 @@
 
         <section class="merchant-orders-card">
             <div class="merchant-card-heading">
-                <div><p class="eyebrow">Approvals</p><h2>Pending appointments</h2></div>
+                <div><p class="eyebrow">Automation</p><h2>Booking approvals</h2></div>
             </div>
-            <% if (!pendingAppointments.length) { %>
-                <p class="muted">No appointments are waiting for approval.</p>
-            <% } else { %>
-                <div class="merchant-appointment-list">
-                    <% pendingAppointments.forEach((booking) => { %>
-                        <article>
-                            <span class="merchant-status-badge status-<%= booking.status %>"><%= statusLabels[booking.status] || booking.status %></span>
-                            <div>
-                                <strong><%= booking.customerName %></strong>
-                                <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
-                                <% if (Number(booking.pointsDiscount || 0) > 0) { %>
-                                    <small>Points discount: -$<%= Number(booking.pointsDiscount || 0).toFixed(2) %> (<%= Number(booking.pointsRedeemed || 0) %> pts). Amount payable at merchant: $<%= Number(booking.amountPayableAtMerchant || 0).toFixed(2) %>.</small>
-                                <% } else { %>
-                                    <small>Amount payable at merchant: $<%= Number(booking.amountPayableAtMerchant || booking.amount || 0).toFixed(2) %>.</small>
-                                <% } %>
-                            </div>
-                            <div class="merchant-booking-actions">
-                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <input type="hidden" name="status" value="confirmed">
-                                    <button class="button secondary" type="submit">Approve</button>
-                                </form>
-                                <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">
-                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <input type="hidden" name="status" value="cancelled">
-                                    <button class="button secondary danger-button" type="submit">Reject</button>
-                                </form>
-                            </div>
-                        </article>
-                    <% }) %>
-                </div>
-            <% } %>
+            <p class="muted">Available service bookings are confirmed automatically. Customers pay the remaining amount during the appointment.</p>
         </section>
     </div>
 </section>

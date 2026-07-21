@@ -708,7 +708,7 @@ function notifyCustomers(notification) {
 
 function normalizeMerchantBookingStatus(value) {
     const status = String(value || '').trim().toLowerCase();
-    const allowed = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
+    const allowed = new Set(['cancelled', 'no_show']);
     return allowed.has(status) ? status : '';
 }
 
@@ -949,7 +949,8 @@ function buildAppointmentReport(bookings = []) {
             amountPayableAtMerchant: Number(booking.reward_discount_amount || booking.pointsDiscount || 0) > 0
                 ? Number(booking.final_amount_payable || booking.amountPayableAtMerchant || 0)
                 : Number(booking.final_amount_payable || booking.amountPayableAtMerchant || booking.service_price || booking.price || 0),
-            rewardPointsRefundedAt: booking.reward_points_refunded_at || booking.rewardPointsRefundedAt || ''
+            rewardPointsRefundedAt: booking.reward_points_refunded_at || booking.rewardPointsRefundedAt || '',
+            pointsAwarded: Number(booking.booking_points_awarded || booking.pointsAwarded || 0)
         };
     });
 
@@ -982,7 +983,7 @@ function buildAppointmentReport(bookings = []) {
             .filter((booking) => booking.bookingDate >= todayKey && booking.status !== 'cancelled')
             .sort((a, b) => `${a.bookingDate} ${a.bookingTime}`.localeCompare(`${b.bookingDate} ${b.bookingTime}`))
             .slice(0, 8),
-        pendingAppointments: normalizedBookings.filter((booking) => booking.status === 'pending'),
+        pendingAppointments: [],
         repeatCustomers: Object.values(customerCounts).filter((count) => count > 1).length,
         qrWalkIns: normalizedBookings.filter((booking) => {
             return booking.bookingDate === todayKey && ['checked_in', 'completed'].includes(booking.status);
@@ -1888,62 +1889,79 @@ function updateBookingStatus(req, res) {
         return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
     }
 
-    return Booking.updateStatusForMerchant(bookingId, req.session.user.id, status, (error, result) => {
-        if (error) {
-            console.error(error);
-            req.session.merchantError = 'Booking status could not be updated.';
-            return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
-        }
+    const redirectPath = req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings';
+    const handleErrorRedirect = (message = 'Booking status could not be updated.') => {
+        req.session.merchantError = message;
+        return res.redirect(redirectPath);
+    };
 
-        if (!result?.affectedRows) {
-            req.session.merchantError = result?.conflict
-                ? (result.message || 'Booking status could not be updated because the booking state changed.')
-                : 'That booking was not found for your merchant account.';
-            return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
-        }
-
-        const statusCopy = status.replace(/_/g, ' ');
-        Booking.getNotificationDetailsById(bookingId, (lookupError, booking) => {
-            if (lookupError) {
-                console.error(lookupError);
-                return;
+    try {
+        return Booking.updateStatusForMerchant(bookingId, req.session.user.id, status, (error, result) => {
+            if (error) {
+                console.error(error);
+                return handleErrorRedirect();
             }
 
-            if (!booking) {
-                return;
+            if (!result?.affectedRows) {
+                return handleErrorRedirect(result?.conflict
+                    ? (result.message || 'Booking status could not be updated because the booking state changed.')
+                    : 'That booking was not found for your merchant account.');
             }
 
-            if (status === 'cancelled' && Number(booking.points_redeemed || 0) > 0) {
-                Booking.refundRedeemedPointsForCancellation(bookingId, booking.user_id, (pointsRefundError) => {
-                    if (pointsRefundError) {
-                        console.error('Merchant cancellation reward points refund failed:', pointsRefundError);
-                    }
-                });
-            }
+            const statusCopy = status.replace(/_/g, ' ');
+            Booking.getNotificationDetailsById(bookingId, (lookupError, booking) => {
+                if (lookupError) {
+                    console.error(lookupError);
+                    return;
+                }
 
-            const customerMessages = {
-                pending: 'Your booking is pending merchant review.',
-                confirmed: 'Your booking has been confirmed by the merchant.',
-                completed: 'Your booking has been completed.',
-                cancelled: 'Your booking was cancelled by the merchant.',
-                no_show: 'Your booking was marked as no show by the merchant.'
-            };
+                if (!booking) {
+                    return;
+                }
 
-            Notification.create({
-                recipientUserId: booking.user_id,
-                recipientRole: 'customer',
-                actorUserId: req.session.user.id,
-                type: `booking_${status}`,
-                title: `Booking ${statusCopy}`,
-                message: `${customerMessages[status] || `Your booking is now ${statusCopy}.`} ${booking.service_name} at ${booking.merchant_name}.`,
-                linkUrl: '/profile#bookings',
-                dedupeKey: `merchant-booking-status-${bookingId}-${status}`
-            }, logNotificationError);
+                if (status === 'cancelled' && Number(booking.points_redeemed || 0) > 0) {
+                    Booking.refundRedeemedPointsForCancellation(bookingId, booking.user_id, (pointsRefundError) => {
+                        if (pointsRefundError) {
+                            console.error('Merchant cancellation reward points refund failed:', pointsRefundError);
+                        }
+                    });
+                }
+
+                const loyaltyAward = result?.loyaltyAward || {};
+                const awardedPoints = Number(loyaltyAward.points || booking.booking_points_awarded || 0);
+                const customerMessages = {
+                    pending: 'Your booking is pending merchant review.',
+                    confirmed: 'Your booking has been confirmed by the merchant.',
+                    completed: awardedPoints > 0
+                        ? `Appointment completed. ${awardedPoints} loyalty points have been added to your wallet.`
+                        : 'Appointment completed.',
+                    cancelled: 'Your booking was cancelled by the merchant.',
+                    no_show: 'Your booking was marked as no show by the merchant.'
+                };
+
+                Notification.create({
+                    recipientUserId: booking.user_id,
+                    recipientRole: 'customer',
+                    actorUserId: req.session.user.id,
+                    type: `booking_${status}`,
+                    title: `Booking ${statusCopy}`,
+                    message: `${customerMessages[status] || `Your booking is now ${statusCopy}.`} ${booking.service_name} at ${booking.merchant_name}.`,
+                    linkUrl: '/profile#bookings',
+                    dedupeKey: `merchant-booking-status-${bookingId}-${status}`
+                }, logNotificationError);
+            });
+
+            const successAward = result?.loyaltyAward;
+            const pointsCopy = status === 'completed' && Number(successAward?.points || 0) > 0
+                ? ` ${Number(successAward.points)} loyalty points awarded.`
+                : '';
+            req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.${pointsCopy}`;
+            return res.redirect(redirectPath);
         });
-
-        req.session.merchantSuccess = `Booking #${bookingId} marked as ${statusCopy}.`;
-        return res.redirect(req.body.returnTo === 'schedule' ? '/merchant/schedule' : '/merchant/bookings');
-    });
+    } catch (error) {
+        console.error(error);
+        return handleErrorRedirect();
+    }
 }
 
 function normalizeTimeInput(value, fallback) {

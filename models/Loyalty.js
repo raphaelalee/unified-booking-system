@@ -387,6 +387,10 @@ function getDisplaySubtitle(row = {}, type, displayOrderReference = '') {
         return 'Expired points';
     }
 
+    if (type === ACTIVITY_TYPES.EARNED && hasBookingReference(row) && description && !isInternalDescription(description)) {
+        return description;
+    }
+
     if (merchantName) {
         return merchantName;
     }
@@ -1302,6 +1306,271 @@ function redeemPointsForPayment(userId, points, discount, sourceReceiptId, optio
             });
         });
     });
+}
+
+function queryOneWithConnection(connection, sql, params, callback) {
+    connection.query(sql, params, (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        callback(null, rows[0] || null);
+    });
+}
+
+function getCompletionAwardRulesWithConnection(connection, booking = {}, callback) {
+    const merchantId = Number(booking.merchantId || booking.merchant_id || 0);
+    const serviceId = Number(booking.serviceId || booking.service_id || 0);
+
+    queryOneWithConnection(
+        connection,
+        'SELECT * FROM loyalty_rules WHERE rule_id = 1 LIMIT 1',
+        [],
+        (rulesError, rulesRow) => {
+            if (rulesError) {
+                callback(rulesError);
+                return;
+            }
+
+            const adminRules = mapRules(rulesRow);
+
+            if (!adminRules.isEnabled || !merchantId) {
+                callback(null, {
+                    enabled: false,
+                    reason: !adminRules.isEnabled ? 'Platform loyalty is paused.' : 'Merchant loyalty rules are unavailable.',
+                    adminRules,
+                    merchantRules: mapMerchantRules(),
+                    serviceEnabled: false
+                });
+                return;
+            }
+
+            queryOneWithConnection(
+                connection,
+                'SELECT * FROM merchant_loyalty_rules WHERE merchant_id = ? LIMIT 1',
+                [merchantId],
+                (merchantError, merchantRow) => {
+                    if (merchantError) {
+                        callback(merchantError);
+                        return;
+                    }
+
+                    const merchantRules = mapMerchantRules(merchantRow);
+
+                    queryOneWithConnection(
+                        connection,
+                        'SELECT redemption_enabled FROM merchant_loyalty_services WHERE merchant_id = ? AND service_id = ? LIMIT 1',
+                        [merchantId, serviceId],
+                        (serviceError, serviceRow) => {
+                            if (serviceError) {
+                                callback(serviceError);
+                                return;
+                            }
+
+                            const serviceEnabled = serviceRow === null || serviceRow === undefined
+                                ? true
+                                : Boolean(Number(serviceRow.redemption_enabled));
+                            const enabled = Boolean(adminRules.isEnabled && merchantRules.isEnabled && serviceEnabled);
+
+                            callback(null, {
+                                enabled,
+                                reason: enabled ? '' : !merchantRules.isEnabled
+                                    ? 'Merchant loyalty is disabled.'
+                                    : 'Service loyalty is disabled.',
+                                adminRules,
+                                merchantRules,
+                                serviceEnabled
+                            });
+                        }
+                    );
+                }
+            );
+        }
+    );
+}
+
+function getBookingEligibleEarningAmount(booking = {}) {
+    const originalAmount = roundMoney(
+        booking.originalServicePrice
+        ?? booking.original_service_price
+        ?? booking.servicePrice
+        ?? booking.service_price
+        ?? booking.price
+        ?? 0
+    );
+    const pointsDiscount = roundMoney(booking.pointsDiscount ?? booking.reward_discount_amount ?? 0);
+    const submittedFinalAmount = booking.finalAmountPayable ?? booking.final_amount_payable;
+    const calculatedFinalAmount = roundMoney(Math.max(0, originalAmount - pointsDiscount));
+    const finalAmount = submittedFinalAmount === null || submittedFinalAmount === undefined || submittedFinalAmount === ''
+        ? calculatedFinalAmount
+        : roundMoney(submittedFinalAmount);
+
+    return roundMoney(Math.max(0, Math.min(finalAmount, calculatedFinalAmount, originalAmount)));
+}
+
+function getBookingBirthdayMultiplier(booking = {}) {
+    const birthday = booking.customerBirthday || booking.customer_birthday;
+    const completionDate = booking.completedAt || booking.completed_at || new Date();
+    const birthdayApplied = isBirthdayMonthForDate(birthday, completionDate);
+
+    return {
+        multiplier: birthdayApplied ? 2 : 1,
+        birthdayApplied
+    };
+}
+
+function awardPointsForCompletedBookingWithConnection(connection, booking = {}, callback) {
+    const bookingId = Number(booking.id || booking.booking_id || 0);
+    const userId = Number(booking.userId || booking.user_id || 0);
+    const sourceReceiptId = `booking-${bookingId}`;
+
+    if (!bookingId || !userId) {
+        callback(null, { awarded: false, points: 0, missing: true });
+        return;
+    }
+
+    queryOneWithConnection(
+        connection,
+        `SELECT loyalty_transaction_id
+         FROM loyalty_transactions
+         WHERE source_receipt_id = ?
+            AND transaction_type = 'EARNED'
+         LIMIT 1`,
+        [sourceReceiptId],
+        (duplicateError, duplicateRow) => {
+            if (duplicateError) {
+                callback(duplicateError);
+                return;
+            }
+
+            if (duplicateRow) {
+                callback(null, { awarded: false, duplicate: true, points: 0 });
+                return;
+            }
+
+            getCompletionAwardRulesWithConnection(connection, booking, (rulesError, rulesContext) => {
+                if (rulesError) {
+                    callback(rulesError);
+                    return;
+                }
+
+                if (!rulesContext.enabled) {
+                    callback(null, {
+                        awarded: false,
+                        disabled: true,
+                        points: 0,
+                        reason: rulesContext.reason
+                    });
+                    return;
+                }
+
+                const eligibleAmount = getBookingEligibleEarningAmount(booking);
+                const pointsPerDollar = Math.max(0, Math.floor(Number(rulesContext.adminRules.pointsPerDollar || 0)));
+                const basePoints = Math.floor(eligibleAmount * pointsPerDollar);
+                const merchantMultiplier = Math.max(0, Math.min(Number(rulesContext.merchantRules.promotionMultiplier || 1), 1));
+                const merchantAdjustedPoints = Math.floor(basePoints * merchantMultiplier);
+                const birthdayReward = getBookingBirthdayMultiplier(booking);
+                const birthdayMultiplier = Number(birthdayReward.multiplier || 1);
+                const multiplier = Math.round(merchantMultiplier * birthdayMultiplier * 100) / 100;
+                const points = Math.floor(merchantAdjustedPoints * birthdayMultiplier);
+                const bonusPoints = Math.max(0, points - merchantAdjustedPoints);
+
+                if (points <= 0) {
+                    callback(null, {
+                        awarded: false,
+                        points: 0,
+                        eligibleAmount,
+                        basePoints,
+                        merchantMultiplier,
+                        multiplier,
+                        birthdayApplied: Boolean(birthdayReward.birthdayApplied)
+                    });
+                    return;
+                }
+
+                const serviceName = String(booking.serviceName || booking.service_name || 'service booking').trim();
+                const bookingReference = String(booking.bookingReference || booking.booking_reference || sourceReceiptId).trim();
+                const description = `Earned from ${serviceName}. Points added after appointment completion.`;
+                const expiresDays = Math.max(1, Number(rulesContext.adminRules.pointsExpiryDays || DEFAULT_RULES.pointsExpiryDays));
+                const detailedInsertSql = `
+                    INSERT IGNORE INTO loyalty_transactions
+                        (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, expires_at, booking_reference, merchant_name, reward_discount)
+                     VALUES (?, ?, 'EARNED', ?, 0, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY), ?, ?, ?)
+                `;
+                const detailedInsertParams = [
+                    userId,
+                    sourceReceiptId,
+                    points,
+                    description,
+                    expiresDays,
+                    bookingReference,
+                    booking.merchantName || booking.merchant_name || '',
+                    roundMoney(booking.pointsDiscount ?? booking.reward_discount_amount ?? 0)
+                ];
+                const coreInsertSql = `
+                    INSERT IGNORE INTO loyalty_transactions
+                        (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, expires_at)
+                     VALUES (?, ?, 'EARNED', ?, 0, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY))
+                `;
+                const coreInsertParams = [
+                    userId,
+                    sourceReceiptId,
+                    points,
+                    description,
+                    expiresDays
+                ];
+                const insertAwardTransaction = (sql, params, allowFallback = true) => {
+                    connection.query(sql, params, (insertError, insertResult) => {
+                        if (insertError) {
+                            if (allowFallback && insertError.code === 'ER_BAD_FIELD_ERROR') {
+                                insertAwardTransaction(coreInsertSql, coreInsertParams, false);
+                                return;
+                            }
+
+                            callback(insertError);
+                            return;
+                        }
+
+                        if (!insertResult.affectedRows) {
+                            callback(null, { awarded: false, duplicate: true, points: 0 });
+                            return;
+                        }
+
+                        connection.query(
+                            `INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
+                             VALUES (?, ?, 0, ?)
+                             ON DUPLICATE KEY UPDATE
+                                points_balance = points_balance + VALUES(points_balance),
+                                lifetime_points = lifetime_points + VALUES(lifetime_points)`,
+                            [userId, points, points],
+                            (walletError) => {
+                                if (walletError) {
+                                    callback(walletError);
+                                    return;
+                                }
+
+                                callback(null, {
+                                    awarded: true,
+                                    points,
+                                    eligibleAmount,
+                                    basePoints,
+                                    bonusPoints,
+                                    merchantMultiplier,
+                                    multiplier,
+                                    birthdayApplied: Boolean(birthdayReward.birthdayApplied),
+                                    sourceReceiptId,
+                                    bookingReference
+                                });
+                            }
+                        );
+                    });
+                };
+
+                insertAwardTransaction(detailedInsertSql, detailedInsertParams);
+            });
+        }
+    );
 }
 
 function redeemPointsForBookingWithConnection(connection, options = {}, callback) {
@@ -2339,6 +2608,7 @@ module.exports = {
     awardForReceipt,
     awardCampaignCashbackForReceipt,
     awardPointsForReceipt,
+    awardPointsForCompletedBookingWithConnection,
     awardReviewBonus,
     ensureWallet,
     estimateCampaignCashback,

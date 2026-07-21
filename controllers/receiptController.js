@@ -347,6 +347,7 @@ function mapBookingReceipt(row, req) {
     const originalServicePrice = Number(row.service_price || 0);
     const pointsRedeemed = Number(row.points_redeemed || 0);
     const pointsDiscount = Number(row.reward_discount_amount || 0);
+    const pointsAwarded = Number(row.booking_points_awarded || 0);
     const amountPayableAtMerchant = pointsDiscount > 0
         ? Number(row.final_amount_payable || 0)
         : Number(row.final_amount_payable || originalServicePrice);
@@ -374,6 +375,7 @@ function mapBookingReceipt(row, req) {
         totalAmount: originalServicePrice,
         pointsRedeemed,
         pointsDiscount,
+        pointsAwarded,
         amountPayableAtMerchant,
         paymentMethod: row.payment_method || 'pay_at_merchant',
         paymentProvider: row.payment_provider || '',

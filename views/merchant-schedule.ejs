@@ -454,9 +454,7 @@
                 `);
             };
 
-            if (booking.status === 'pending') addForm('confirmed', 'Confirm');
-            if (['confirmed', 'checked_in', 'paid'].includes(booking.status)) addForm('completed', 'Mark Completed');
-            if (!['completed', 'cancelled', 'no_show'].includes(booking.status)) addForm('no_show', 'Mark No-show');
+            if (['confirmed', 'paid'].includes(booking.status)) addForm('no_show', 'Mark No-show');
 
             return forms.join('');
         }
@@ -541,6 +539,7 @@
                 <p><span>Booking status</span><strong>${escapeHtml(formatStatus(booking.status))}</strong></p>
                 <p><span>Payment status</span><strong>${escapeHtml(formatPaymentStatus(booking.paymentStatus))}</strong></p>
                 <p><span>QR/check-in status</span><strong>${escapeHtml(booking.qrStatus)}</strong></p>
+                ${Number(booking.pointsAwarded || 0) > 0 ? `<p><span>Loyalty points awarded</span><strong>${Number(booking.pointsAwarded || 0)} pts</strong></p>` : ''}
                 <p><span>Receipt</span><strong>${booking.receiptUrl ? `<a class="text-link" href="${escapeHtml(booking.receiptUrl)}">Open Receipt</a>` : 'Receipt not available'}</strong></p>
             `;
             modal.querySelector('[data-detail-actions]').innerHTML = `

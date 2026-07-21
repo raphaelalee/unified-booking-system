@@ -3155,31 +3155,65 @@ function loadCheckInBooking(req, res, callback) {
 
 function showBookingCheckIn(req, res) {
     return loadCheckInBooking(req, res, (bookingId, booking) => {
+        const status = String(booking.status || '').toLowerCase();
+
         res.render('merchant-check-in', {
             title: 'Booking Check-In',
+            token: req.params.token,
             booking,
-            alreadyCheckedIn: String(booking.status || '').toLowerCase() === 'checked_in'
+            alreadyCheckedIn: status === 'checked_in',
+            alreadyCompleted: status === 'completed',
+            canCheckIn: ['confirmed', 'paid'].includes(status) && !booking.checked_in_at
         });
     });
 }
 
 function confirmBookingCheckIn(req, res) {
     return loadCheckInBooking(req, res, (bookingId, booking) => {
-        if (String(booking.status || '').toLowerCase() === 'checked_in') {
+        const status = String(booking.status || '').toLowerCase();
+
+        if (status === 'checked_in' || booking.checked_in_at) {
             return res.render('merchant-check-in', {
                 title: 'Booking Check-In',
+                token: req.params.token,
                 booking,
                 alreadyCheckedIn: true,
+                alreadyCompleted: false,
+                canCheckIn: false,
                 success: 'This booking was already checked in.'
             });
         }
 
-        return Booking.markCheckedIn(bookingId, req.session.user.id, (error) => {
+        if (!['confirmed', 'paid'].includes(status)) {
+            return res.status(409).render('merchant-check-in', {
+                title: 'Booking Check-In',
+                token: req.params.token,
+                booking,
+                alreadyCheckedIn: false,
+                alreadyCompleted: status === 'completed',
+                canCheckIn: false,
+                error: 'Only confirmed bookings can be checked in.'
+            });
+        }
+
+        return Booking.markCheckedIn(bookingId, req.session.user.id, (error, result) => {
             if (error) {
                 console.error(error);
                 return res.status(500).render('error', {
                     title: 'Check-In Error',
                     message: 'Booking could not be checked in. Please try again.'
+                });
+            }
+
+            if (!result?.affectedRows) {
+                return res.status(409).render('merchant-check-in', {
+                    title: 'Booking Check-In',
+                    token: req.params.token,
+                    booking,
+                    alreadyCheckedIn: false,
+                    alreadyCompleted: false,
+                    canCheckIn: false,
+                    error: 'This booking could not be checked in. It may already be completed, cancelled, or checked in.'
                 });
             }
 
@@ -3190,8 +3224,11 @@ function confirmBookingCheckIn(req, res) {
 
                 return res.render('merchant-check-in', {
                     title: 'Booking Check-In',
+                    token: req.params.token,
                     booking: updatedBooking || { ...booking, status: 'checked_in' },
                     alreadyCheckedIn: true,
+                    alreadyCompleted: false,
+                    canCheckIn: false,
                     success: 'Booking checked in successfully.'
                 });
             });

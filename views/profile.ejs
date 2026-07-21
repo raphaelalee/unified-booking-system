@@ -493,8 +493,15 @@
                                             <% } %>
                                             <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
                                         </div>
-                                        <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
+                                        <% if (Number(booking.reward_discount_amount || 0) > 0 || (String(booking.status || '').toLowerCase() === 'completed' && Number(booking.booking_points_awarded || 0) > 0)) { %>
                                             <dl class="profile-booking-meta">
+                                                <% if (String(booking.status || '').toLowerCase() === 'completed' && Number(booking.booking_points_awarded || 0) > 0) { %>
+                                                    <div>
+                                                        <dt>Appointment completed</dt>
+                                                        <dd><%= Number(booking.booking_points_awarded || 0) %> loyalty points have been added to your wallet</dd>
+                                                    </div>
+                                                <% } %>
+                                                <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
                                                 <div>
                                                     <dt>Points discount</dt>
                                                     <dd>-<%= formatMoney(booking.reward_discount_amount) %> (<%= Number(booking.points_redeemed || 0) %> pts)</dd>
@@ -503,6 +510,7 @@
                                                     <dt>Amount payable at merchant</dt>
                                                     <dd><%= formatMoney(Number(Number(booking.reward_discount_amount || 0) > 0 ? booking.final_amount_payable || 0 : booking.final_amount_payable || booking.service_price || 0)) %></dd>
                                                 </div>
+                                                <% } %>
                                             </dl>
                                         <% } %>
                                     </div>
