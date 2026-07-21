@@ -5,19 +5,24 @@
     const rewardRedemptions = appointments.rewardRedemptions || {};
     const customerInsights = customerReport?.insights || {};
     const sales = salesReport || {};
+    const safeStats = typeof stats !== 'undefined' && stats ? stats : {};
+    const safeRefundStats = typeof refundStats !== 'undefined' && refundStats ? refundStats : {};
     const exportDatasets = [
-        { id: 'salesRevenue', label: 'Sales or Revenue' },
-        { id: 'bookings', label: 'Bookings' },
-        { id: 'productOrders', label: 'Product Orders' },
-        { id: 'refunds', label: 'Refunds' },
-        { id: 'customers', label: 'Customers' },
-        { id: 'servicePerformance', label: 'Service Performance' },
-        { id: 'productPerformance', label: 'Product Performance' },
-        { id: 'payments', label: 'Payments' }
+        { id: 'salesRevenue', label: 'Sales or Revenue', description: 'Daily revenue, references, fees and net revenue.' },
+        { id: 'bookings', label: 'Bookings', description: 'Service bookings, statuses, staff and payment details.' },
+        { id: 'productOrders', label: 'Product Orders', description: 'Product order lines, fulfilment and payment status.' },
+        { id: 'refunds', label: 'Refunds', description: 'Refund references, deductions and customer refund amounts.' },
+        { id: 'customers', label: 'Customers', description: 'Customer spend, frequency and recent activity.' },
+        { id: 'servicePerformance', label: 'Service Performance', description: 'Booking counts, completion and service revenue.' },
+        { id: 'productPerformance', label: 'Product Performance', description: 'Units sold, discounts, refunds and net revenue.' },
+        { id: 'payments', label: 'Payments', description: 'Transactions, methods, providers and refund status.' }
     ];
     const formatCurrency = (value) => Number(value || 0).toFixed(2);
+    const formatPercent = (value) => Number(value || 0).toFixed(1);
     const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase().replace(/\s+/g, '_');
     const allBookings = Array.isArray(appointments.allBookings) ? appointments.allBookings : [];
+    const allOrders = Array.isArray(sales.allOrders) ? sales.allOrders : [];
+    const recentOrders = Array.isArray(sales.recentOrders) ? sales.recentOrders : allOrders.slice(0, 5);
     const uniqueBookings = Array.from(new Map(allBookings.map((booking, index) => {
         const key = booking.id || `${booking.customerEmail || booking.email || booking.customerName || 'customer'}-${booking.bookingDate || booking.booking_date || index}-${booking.bookingTime || booking.booking_time || ''}-${booking.serviceName || booking.service_name || ''}`;
         return [String(key), booking];
@@ -28,6 +33,19 @@
         return counts;
     }, {})).map(([status, count]) => ({ status, count }));
     const topCustomers = Array.isArray(customerInsights.topCustomers) ? customerInsights.topCustomers : [];
+    const paymentRows = Object.values(allOrders.reduce((rows, order) => {
+        const method = String(order.paymentMethod || order.payment_method || 'Not set').trim() || 'Not set';
+        if (!rows[method]) rows[method] = { method, count: 0, amount: 0 };
+        rows[method].count += 1;
+        rows[method].amount += Number(order.totalAmount || order.paidAmount || order.amount || 0);
+        return rows;
+    }, {})).sort((left, right) => right.amount - left.amount);
+    const refundTotal = Object.values(safeRefundStats).reduce((sum, value) => sum + Number(value || 0), 0);
+    const hasSalesData = (sales.dailySales || []).some((day) => Number(day.revenue || 0) > 0 || Number(day.orders || 0) > 0);
+    const hasBookingData = uniqueBookings.length > 0;
+    const hasOrderData = allOrders.length > 0;
+    const hasCustomerData = topCustomers.length > 0;
+    const hasRefundData = refundTotal > 0;
     const chartPayload = {
         salesLabels: (sales.dailySales || []).map((day) => day.label),
         salesRevenue: (sales.dailySales || []).map((day) => Number(day.revenue || 0)),
@@ -43,60 +61,79 @@
         hourLabels: customerInsights.chartPayload?.hourLabels || ['No bookings'],
         hourValues: customerInsights.chartPayload?.hourValues || [0],
         statusLabels: statusRows.length ? statusRows.map((row) => row.status.replace(/_/g, ' ')) : ['No bookings'],
-        statusValues: statusRows.length ? statusRows.map((row) => row.count) : [0]
+        statusValues: statusRows.length ? statusRows.map((row) => row.count) : [0],
+        paymentLabels: paymentRows.length ? paymentRows.map((row) => row.method.replace(/_/g, ' ')) : ['No payments'],
+        paymentValues: paymentRows.length ? paymentRows.map((row) => row.amount) : [0]
     };
 %>
 
-<section class="section compact merchant-analytics-page analytics-command-center">
+<section class="section compact merchant-analytics-page merchant-analytics-redesign">
     <div class="merchant-analytics-shell">
-        <header class="merchant-dashboard-hero analytics-hero-panel">
-            <div>
+        <header class="merchant-analytics-header">
+            <div class="merchant-analytics-title-block">
                 <p class="eyebrow">Merchant Analytics</p>
-                <h1>Revenue, Customers, and Demand</h1>
-                <span>See what is selling, when customers book, which services pull demand, and download only the report you need.</span>
+                <h1>Revenue, customers and demand</h1>
+                <p>Track booking demand, product orders, customer patterns, refunds and report exports from one compact workspace.</p>
             </div>
-            <div class="analytics-toolbar" data-export-scope="merchant">
-                <div class="analytics-export-panel" data-export-panel>
-                    <div class="analytics-export-header">
-                        <span>Download datasets</span>
-                        <strong data-export-count>0 datasets selected</strong>
-                    </div>
-                    <div class="analytics-export-dates">
-                        <label><span>Start date</span><input type="date" data-export-start-date></label>
-                        <label><span>End date</span><input type="date" data-export-end-date></label>
-                    </div>
-                    <label class="analytics-export-option select-all">
-                        <input type="checkbox" data-export-select-all value="all">
-                        <span>Select All</span>
-                    </label>
-                    <div class="analytics-export-options">
-                        <% exportDatasets.forEach((dataset) => { %>
-                            <label class="analytics-export-option">
-                                <input type="checkbox" data-export-dataset value="<%= dataset.id %>">
-                                <span><%= dataset.label %></span>
-                            </label>
-                        <% }) %>
-                    </div>
-                    <div class="analytics-export-actions">
-                        <button class="button secondary" type="button" data-export-clear>Clear</button>
-                        <button class="button primary" type="button" data-export-button disabled>Download XLSX</button>
-                    </div>
-                    <p class="analytics-export-message" data-export-message role="status" aria-live="polite"></p>
-                </div>
+
+            <div class="merchant-analytics-header-controls" data-export-scope="merchant">
+                <label>
+                    <span>Start date</span>
+                    <input type="date" data-report-start-date>
+                </label>
+                <label>
+                    <span>End date</span>
+                    <input type="date" data-report-end-date>
+                </label>
+                <button class="button secondary" type="button" data-report-apply>Apply filter</button>
+                <button class="button primary" type="button" data-export-open>Export report</button>
+                <p class="merchant-analytics-control-message" data-report-message role="status" aria-live="polite"></p>
             </div>
         </header>
 
-        <section class="analytics-kpi-strip">
-            <article class="analytics-kpi-card accent-green"><span>Monthly revenue</span><strong>$<%= formatCurrency(appointments.monthlyRevenue) %></strong><small>service booking revenue</small></article>
-            <article class="analytics-kpi-card accent-blue"><span>Bookings</span><strong><%= uniqueBookings.length %></strong><small><%= appointments.pendingAppointments?.length || 0 %> pending approvals</small></article>
-            <article class="analytics-kpi-card accent-orange"><span>Repeat customers</span><strong><%= appointments.repeatCustomers || 0 %></strong><small><%= customerInsights.repeatRate || 0 %>% repeat rate</small></article>
-            <article class="analytics-kpi-card accent-yellow"><span>Top service</span><strong><%= customerInsights.topServiceName || 'No service' %></strong><small>highest demand service</small></article>
+        <% if (typeof databaseError !== 'undefined' && databaseError) { %>
+            <div class="merchant-analytics-alert" role="alert">
+                Some analytics data could not be loaded. Available sections are still shown below.
+            </div>
+        <% } %>
+
+        <section class="merchant-analytics-kpi-grid" aria-label="Merchant analytics summary">
+            <article class="merchant-analytics-kpi-card">
+                <span>Total revenue</span>
+                <strong>$<%= formatCurrency(safeStats.totalRevenue || appointments.monthlyRevenue) %></strong>
+                <small>Bookings and product orders</small>
+            </article>
+            <article class="merchant-analytics-kpi-card">
+                <span>Total bookings</span>
+                <strong><%= safeStats.bookingCount || uniqueBookings.length %></strong>
+                <small><%= appointments.pendingAppointments?.length || 0 %> pending approvals</small>
+            </article>
+            <article class="merchant-analytics-kpi-card">
+                <span>Product orders</span>
+                <strong><%= safeStats.totalOrders || allOrders.length %></strong>
+                <small><%= recentOrders.length %> recent order<%= recentOrders.length === 1 ? '' : 's' %></small>
+            </article>
+            <article class="merchant-analytics-kpi-card">
+                <span>Customers</span>
+                <strong><%= safeStats.customerCount || customerReport?.totalCustomers || 0 %></strong>
+                <small><%= formatPercent(customerInsights.repeatRate) %>% repeat rate</small>
+            </article>
+            <article class="merchant-analytics-kpi-card">
+                <span>Refunds</span>
+                <strong><%= refundTotal %></strong>
+                <small><%= safeRefundStats.pendingCount || 0 %> pending review</small>
+            </article>
+            <article class="merchant-analytics-kpi-card">
+                <span>Average order value</span>
+                <strong>$<%= formatCurrency(safeStats.averageOrderValue) %></strong>
+                <small>Across supported sales data</small>
+            </article>
         </section>
 
-        <section class="analytics-control-panel">
+        <section class="merchant-analytics-chart-tabs" aria-label="Chart focus">
             <div>
-                <p class="eyebrow">Interactive View</p>
-                <h2>Focus the chart on the decision you are making</h2>
+                <p class="eyebrow">Interactive view</p>
+                <h2 data-merchant-chart-title>Sales trend</h2>
             </div>
             <div class="analytics-segmented-control" role="group" aria-label="Merchant analytics chart view">
                 <button type="button" class="active" data-merchant-chart-mode="sales">Sales</button>
@@ -106,45 +143,143 @@
             </div>
         </section>
 
-        <section class="merchant-insight-grid">
-            <article class="merchant-chart-card span-8 analytics-chart-panel">
-                <div class="merchant-card-heading">
-                    <div><p class="eyebrow">Performance</p><h2 data-merchant-chart-title>Sales trend</h2></div>
-                    <span class="analytics-data-note">Products + booking signal</span>
+        <section class="merchant-analytics-grid">
+            <article class="merchant-analytics-card merchant-analytics-card-wide">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Revenue trend</h3>
+                        <p>Daily revenue and order count from current analytics data.</p>
+                    </div>
+                    <span class="merchant-analytics-status-pill"><%= hasSalesData ? 'Live data' : 'No sales yet' %></span>
                 </div>
-                <div class="merchant-chart-box analytics-main-chart"><canvas id="merchantAnalyticsChart"></canvas></div>
-            </article>
-            <article class="merchant-chart-card span-4 analytics-action-card">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Best Next Action</p><h2>What merchant can do</h2></div></div>
-                <div class="analytics-insight-list">
-                    <p><strong>Staff peak hours</strong><span><%= customerInsights.peakHour || 'No bookings' %> is currently your strongest timing signal.</span></p>
-                    <p><strong>Promote the winner</strong><span><%= customerInsights.suggestedFocus || 'Customer patterns will appear after more bookings.' %></span></p>
-                    <p><strong>Reward loyal buyers</strong><span><%= rewardRedemptions.repeatRewardCustomers || 0 %> repeat reward customers can be targeted with follow-up offers.</span></p>
+                <div class="merchant-chart-box merchant-analytics-chart-large">
+                    <canvas id="merchantAnalyticsChart"></canvas>
                 </div>
+                <% if (!hasSalesData) { %>
+                    <p class="merchant-analytics-empty">No analytics data is available for the selected period. Try a wider date range after orders are recorded.</p>
+                <% } %>
             </article>
 
-            <article class="merchant-chart-card span-4">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Demand</p><h2>Booking status</h2></div></div>
-                <div class="merchant-chart-box small"><canvas id="merchantStatusChart"></canvas></div>
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Booking status</h3>
+                        <p>Current status mix across merchant bookings.</p>
+                    </div>
+                </div>
+                <div class="merchant-chart-box merchant-analytics-chart-small">
+                    <canvas id="merchantStatusChart"></canvas>
+                </div>
+                <% if (!hasBookingData) { %>
+                    <p class="merchant-analytics-empty">No analytics data is available for the selected period.</p>
+                <% } %>
             </article>
-            <article class="merchant-chart-card span-4">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Customers</p><h2>Top customers</h2></div></div>
-                <div class="analytics-ranking-list">
-                    <% topCustomers.slice(0, 5).forEach((customer, index) => { %>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Product performance</h3>
+                        <p>Recent product orders and value.</p>
+                    </div>
+                </div>
+                <div class="merchant-analytics-table-list">
+                    <% recentOrders.slice(0, 5).forEach((order) => { %>
                         <article>
-                            <span><%= index + 1 %></span>
-                            <div><strong><%= customer.customerName || 'Customer' %></strong><small><%= customer.visits %> visits · last <%= customer.lastBookingDate || 'n/a' %></small></div>
-                            <b>$<%= formatCurrency(customer.spend) %></b>
+                            <div>
+                                <strong><%= order.orderNumber || order.order_number || order.receiptId || `Order #${order.id || ''}` %></strong>
+                                <span><%= order.itemNames || order.item_names || 'Product order' %></span>
+                            </div>
+                            <b>$<%= formatCurrency(order.totalAmount || order.paidAmount || order.amount) %></b>
                         </article>
                     <% }) %>
-                    <% if (!topCustomers.length) { %>
-                        <p class="muted">Customer rankings appear after bookings are recorded.</p>
+                    <% if (!hasOrderData) { %>
+                        <p class="merchant-analytics-empty">No analytics data is available for the selected period.</p>
                     <% } %>
                 </div>
             </article>
-            <article class="merchant-chart-card span-4">
-                <div class="merchant-card-heading"><div><p class="eyebrow">Rewards</p><h2>Loyalty impact</h2></div></div>
-                <div class="analytics-mini-table">
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Service performance</h3>
+                        <p>Top services by booking volume.</p>
+                    </div>
+                </div>
+                <div class="merchant-chart-box merchant-analytics-chart-small">
+                    <canvas id="merchantServiceChart"></canvas>
+                </div>
+                <% if (!hasBookingData) { %>
+                    <p class="merchant-analytics-empty">No analytics data is available for the selected period.</p>
+                <% } %>
+            </article>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Payment-method breakdown</h3>
+                        <p>Order value grouped by stored payment method.</p>
+                    </div>
+                </div>
+                <div class="merchant-chart-box merchant-analytics-chart-small">
+                    <canvas id="merchantPaymentChart"></canvas>
+                </div>
+                <% if (!paymentRows.length) { %>
+                    <p class="merchant-analytics-empty">No analytics data is available for the selected period.</p>
+                <% } %>
+            </article>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Customer insights</h3>
+                        <p>Top customers by visits and spend.</p>
+                    </div>
+                </div>
+                <div class="analytics-ranking-list merchant-analytics-ranking">
+                    <% topCustomers.slice(0, 5).forEach((customer, index) => { %>
+                        <article>
+                            <span><%= index + 1 %></span>
+                            <div>
+                                <strong><%= customer.customerName || 'Customer' %></strong>
+                                <small><%= customer.visits %> visits, last <%= customer.lastBookingDate || 'n/a' %></small>
+                            </div>
+                            <b>$<%= formatCurrency(customer.spend) %></b>
+                        </article>
+                    <% }) %>
+                    <% if (!hasCustomerData) { %>
+                        <p class="merchant-analytics-empty">No analytics data is available for the selected period.</p>
+                    <% } %>
+                </div>
+            </article>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Refund summary</h3>
+                        <p>Current refund queue and completed outcomes.</p>
+                    </div>
+                </div>
+                <div class="merchant-analytics-metric-list">
+                    <p><span>Pending</span><strong><%= safeRefundStats.pendingCount || 0 %></strong></p>
+                    <p><span>Approved</span><strong><%= safeRefundStats.approvedCount || 0 %></strong></p>
+                    <p><span>Processing</span><strong><%= safeRefundStats.processingCount || 0 %></strong></p>
+                    <p><span>Refunded</span><strong><%= safeRefundStats.refundedCount || 0 %></strong></p>
+                    <p><span>Rejected</span><strong><%= safeRefundStats.rejectedCount || 0 %></strong></p>
+                    <p><span>Failed</span><strong><%= safeRefundStats.failedCount || 0 %></strong></p>
+                </div>
+                <% if (!hasRefundData) { %>
+                    <p class="merchant-analytics-empty">No refund activity is available for the selected period.</p>
+                <% } %>
+            </article>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Loyalty impact</h3>
+                        <p>Reward use and loyalty-driven revenue.</p>
+                    </div>
+                </div>
+                <div class="merchant-analytics-metric-list">
                     <p><span>Reward bookings</span><strong><%= rewardRedemptions.rewardBookingCount || 0 %></strong></p>
                     <p><span>Redeemed value</span><strong>$<%= formatCurrency(rewardRedemptions.totalRedeemedValue) %></strong></p>
                     <p><span>Loyalty revenue</span><strong>$<%= formatCurrency(rewardRedemptions.loyaltyDrivenRevenue) %></strong></p>
@@ -152,23 +287,82 @@
                 </div>
             </article>
 
-            <article class="merchant-chart-card span-6">
-                <div class="merchant-card-heading"><div><p class="eyebrow">User Analysis</p><h2>Age segments</h2></div></div>
-                <div class="merchant-chart-box small"><canvas id="merchantAgeChart"></canvas></div>
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Age segments</h3>
+                        <p>Customer age mix where profile data is available.</p>
+                    </div>
+                </div>
+                <div class="merchant-chart-box merchant-analytics-chart-small">
+                    <canvas id="merchantAgeChart"></canvas>
+                </div>
             </article>
-            <article class="merchant-chart-card span-6">
-                <div class="merchant-card-heading"><div><p class="eyebrow">User Analysis</p><h2>Gender mix</h2></div></div>
-                <div class="merchant-chart-box small"><canvas id="merchantGenderChart"></canvas></div>
+
+            <article class="merchant-analytics-card">
+                <div class="merchant-analytics-card-heading">
+                    <div>
+                        <h3>Gender mix</h3>
+                        <p>Customer gender mix where profile data is available.</p>
+                    </div>
+                </div>
+                <div class="merchant-chart-box merchant-analytics-chart-small">
+                    <canvas id="merchantGenderChart"></canvas>
+                </div>
             </article>
         </section>
     </div>
 </section>
 
+<div class="merchant-export-modal" data-export-modal hidden>
+    <div class="merchant-export-dialog" role="dialog" aria-modal="true" aria-labelledby="merchantExportTitle" aria-describedby="merchantExportDescription">
+        <header class="merchant-export-dialog-header">
+            <div>
+                <h2 id="merchantExportTitle">Export report</h2>
+                <p id="merchantExportDescription">Choose one or more merchant analytics datasets and download a single XLSX workbook.</p>
+            </div>
+            <button class="merchant-export-close" type="button" data-export-close aria-label="Close export report">x</button>
+        </header>
+        <div class="merchant-export-dialog-body">
+            <div class="merchant-export-date-grid">
+                <label>
+                    <span>Start date</span>
+                    <input type="date" data-export-start-date>
+                </label>
+                <label>
+                    <span>End date</span>
+                    <input type="date" data-export-end-date>
+                </label>
+            </div>
+            <div class="merchant-export-selection-bar">
+                <label class="analytics-export-option select-all">
+                    <input type="checkbox" data-export-select-all value="all">
+                    <span>Select all</span>
+                </label>
+                <strong data-export-count>0 datasets selected</strong>
+            </div>
+            <div class="merchant-export-options" aria-label="Export datasets">
+                <% exportDatasets.forEach((dataset) => { %>
+                    <label class="analytics-export-option">
+                        <input type="checkbox" data-export-dataset value="<%= dataset.id %>">
+                        <span><strong><%= dataset.label %></strong><small><%= dataset.description %></small></span>
+                    </label>
+                <% }) %>
+            </div>
+            <p class="analytics-export-message" data-export-message role="status" aria-live="polite"></p>
+        </div>
+        <footer class="merchant-export-dialog-footer">
+            <button class="button secondary" type="button" data-export-clear>Clear</button>
+            <button class="button primary" type="button" data-export-button disabled>Download XLSX</button>
+        </footer>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     (() => {
         const chartPayload = <%- JSON.stringify(chartPayload) %>;
-        const palette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
+        const palette = { green: '#3f6b3a', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
         const mainCanvas = document.getElementById('merchantAnalyticsChart');
         const title = document.querySelector('[data-merchant-chart-title]');
         let mainChart;
@@ -184,7 +378,7 @@
                 type: 'line',
                 labels: chartPayload.salesLabels,
                 datasets: [
-                    { label: 'Revenue', data: chartPayload.salesRevenue, borderColor: palette.green, backgroundColor: 'rgba(79,104,71,.14)', fill: true, tension: 0.35 },
+                    { label: 'Revenue', data: chartPayload.salesRevenue, borderColor: palette.green, backgroundColor: 'rgba(63,107,58,.12)', fill: true, tension: 0.35 },
                     { label: 'Orders', data: chartPayload.salesOrders, borderColor: palette.blue, backgroundColor: 'rgba(32,137,156,.12)', tension: 0.35 }
                 ]
             },
@@ -192,14 +386,14 @@
                 title: 'Top services by bookings',
                 type: 'bar',
                 labels: chartPayload.serviceLabels,
-                datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(79,104,71,.32)' }],
+                datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(63,107,58,.28)' }],
                 options: { ...baseOptions, indexAxis: 'y' }
             },
             hours: {
                 title: 'Peak booking hours',
                 type: 'bar',
                 labels: chartPayload.hourLabels,
-                datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223,124,22,.32)' }]
+                datasets: [{ label: 'Bookings', data: chartPayload.hourValues, backgroundColor: 'rgba(223,124,22,.28)' }]
             },
             customers: {
                 title: 'Customer contact preference',
@@ -235,22 +429,32 @@
         });
 
         makeChart('merchantStatusChart', { type: 'doughnut', data: { labels: chartPayload.statusLabels, datasets: [{ data: chartPayload.statusValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
-        makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.28)' }] }, options: baseOptions });
+        makeChart('merchantServiceChart', { type: 'bar', data: { labels: chartPayload.serviceLabels, datasets: [{ label: 'Bookings', data: chartPayload.serviceValues, backgroundColor: 'rgba(63,107,58,.28)' }] }, options: { ...baseOptions, indexAxis: 'y' } });
+        makeChart('merchantPaymentChart', { type: 'doughnut', data: { labels: chartPayload.paymentLabels, datasets: [{ data: chartPayload.paymentValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+        makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.24)' }] }, options: baseOptions });
         makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
 
-        const exportPanel = document.querySelector('[data-export-panel]');
+        const modal = document.querySelector('[data-export-modal]');
+        const openButton = document.querySelector('[data-export-open]');
+        const closeButton = document.querySelector('[data-export-close]');
         const selectAll = document.querySelector('[data-export-select-all]');
         const datasetInputs = Array.from(document.querySelectorAll('[data-export-dataset]'));
         const exportButton = document.querySelector('[data-export-button]');
         const clearButton = document.querySelector('[data-export-clear]');
         const countNode = document.querySelector('[data-export-count]');
         const messageNode = document.querySelector('[data-export-message]');
+        const reportMessage = document.querySelector('[data-report-message]');
+        const reportStartDate = document.querySelector('[data-report-start-date]');
+        const reportEndDate = document.querySelector('[data-report-end-date]');
+        const reportApply = document.querySelector('[data-report-apply]');
         const startDateInput = document.querySelector('[data-export-start-date]');
         const endDateInput = document.querySelector('[data-export-end-date]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
         let exportInProgress = false;
+        let lastFocusedElement = null;
 
         const selectedDatasets = () => datasetInputs.filter((input) => input.checked).map((input) => input.value);
+        const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
         const setExportMessage = (message, tone = '') => {
             if (!messageNode) return;
             messageNode.textContent = message || '';
@@ -274,6 +478,58 @@
             const match = disposition.match(/filename="([^"]+)"/i) || disposition.match(/filename=([^;]+)/i);
             return match ? match[1].trim() : 'merchant-analytics.xlsx';
         };
+        const syncDatesToModal = () => {
+            if (startDateInput && reportStartDate) startDateInput.value = reportStartDate.value || '';
+            if (endDateInput && reportEndDate) endDateInput.value = reportEndDate.value || '';
+        };
+        const openModal = () => {
+            if (!modal) return;
+            lastFocusedElement = document.activeElement;
+            syncDatesToModal();
+            modal.hidden = false;
+            document.body.classList.add('modal-open');
+            setExportMessage('');
+            syncExportState();
+            setTimeout(() => modal.querySelector(focusableSelector)?.focus(), 0);
+        };
+        const closeModal = () => {
+            if (!modal) return;
+            modal.hidden = true;
+            document.body.classList.remove('modal-open');
+            lastFocusedElement?.focus?.();
+        };
+
+        reportApply?.addEventListener('click', () => {
+            syncDatesToModal();
+            if (reportMessage) {
+                reportMessage.textContent = 'Date range applied to the export report.';
+                reportMessage.dataset.tone = 'success';
+            }
+        });
+        openButton?.addEventListener('click', openModal);
+        closeButton?.addEventListener('click', closeModal);
+        modal?.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        modal?.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeModal();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(modal.querySelectorAll(focusableSelector)).filter((node) => !node.disabled && node.offsetParent !== null);
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        });
 
         selectAll?.addEventListener('change', () => {
             datasetInputs.forEach((input) => {

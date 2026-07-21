@@ -168,119 +168,164 @@
                     </ul>
                 </section>
                 <section id="contact-support" class="support-section support-contact-panel is-collapsed" data-support-form-panel>
-                    <div class="support-section-heading">
+                    <div class="support-section-heading support-form-heading">
                         <div>
                             <p class="eyebrow">Contact Support</p>
-                            <h2>Escalate an unresolved issue</h2>
+                            <h2>Request help with a refund or cancellation</h2>
+                            <span>Six quick steps. Your merchant receives the request after the server confirms eligibility.</span>
                         </div>
                         <button class="button secondary" type="button" data-close-support-form>Hide</button>
                     </div>
                     <div class="support-suggestions compact">
-                        <strong>Suggested articles</strong>
-                        <a href="#faq">Refund policies</a>
-                        <a href="#faq">Booking policies</a>
-                        <a href="#faq">Payment troubleshooting</a>
+                        <strong>Quick help</strong>
+                        <a href="#faq">Refund policy</a>
+                        <a href="#faq">Booking changes</a>
+                        <a href="#faq">Payment issue</a>
                     </div>
-                    <form action="/help-center/requests?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data" data-support-create-form>
+                    <form action="/help-center/requests?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data" class="support-guided-form" data-support-create-form>
                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                         <input type="hidden" name="responseType" value="json">
-                        <label>
-                            Issue
-                            <select name="requestType" class="form-select" required>
-                                <option value="booking_refund">Booking cancellation or service refund</option>
-                                <option value="order_refund">Order cancellation, return or refund</option>
-                            </select>
-                        </label>
-                        <label>
-                            Reference
-                            <select name="targetId" class="form-select" required>
-                                <option value="">Choose booking or order</option>
-                                <% safeBookings.forEach((booking) => {
-                                    const eligibility = booking.refundEligibility || {};
-                                %>
-                                    <option value="<%= booking.id %>"
-                                        data-target-type="booking"
-                                        data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
-                                        data-action-type="<%= eligibility.actionType || '' %>"
-                                        data-action-label="<%= actionLabel(eligibility.actionType) %>"
-                                        data-status-code="<%= eligibility.statusCode || '' %>"
-                                        data-blocked-reason="<%= eligibility.blockedReason || '' %>"
-                                        data-deadline="<%= eligibility.deadlineLabel || '' %>"
-                                        data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
-                                        data-reasons='<%- optionReasonJson(eligibility) %>'
-                                        data-refund-amount="<%= Number(eligibility.refundableAmount || booking.service_price || booking.price || 0).toFixed(2) %>"
-                                        data-payment-method="<%= booking.paymentMethodLabel || booking.payment_method || 'Original payment method' %>"
-                                        <%= !eligibility.eligible ? 'disabled' : '' %>
-                                        <%= String(selectedTarget.bookingId) === String(booking.id) ? 'selected' : '' %>>
-                                        Booking #<%= booking.id %> - <%= booking.service_name %>
-                                        <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
-                                    </option>
-                                <% }) %>
-                                <% safeOrders.forEach((order) => {
-                                    const eligibility = order.refundEligibility || {};
-                                %>
-                                    <option value="<%= order.targetId || order.id %>"
-                                        data-target-type="order"
-                                        data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
-                                        data-action-type="<%= eligibility.actionType || '' %>"
-                                        data-action-label="<%= actionLabel(eligibility.actionType) %>"
-                                        data-status-code="<%= eligibility.statusCode || '' %>"
-                                        data-blocked-reason="<%= eligibility.blockedReason || '' %>"
-                                        data-deadline="<%= eligibility.deadlineLabel || '' %>"
-                                        data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
-                                        data-reasons='<%- optionReasonJson(eligibility) %>'
-                                        data-refund-amount="<%= Number(eligibility.refundableAmount || order.remainingRefundableAmount || order.totalAmount || 0).toFixed(2) %>"
-                                        data-payment-method="<%= order.paymentMethodLabel || order.paymentMethod || 'Original payment method' %>"
-                                        <%= !eligibility.eligible ? 'disabled' : '' %>
-                                        <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
-                                        Order <%= order.order_number || order.orderNumber || order.receiptId || ('#' + order.id) %> - <%= order.itemNames %>
-                                        <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
-                                    </option>
-                                <% }) %>
-                            </select>
-                        </label>
+                        <input type="hidden" name="requestType" value="booking_refund" data-support-request-type>
                         <input type="hidden" name="targetType" value="booking" data-support-target-type>
-                        <label>
-                            Refund reason category
-                            <select name="reasonCategory" class="form-select" data-refund-reason-category required>
-                                <option value="">Choose a reference first</option>
-                            </select>
-                        </label>
                         <input type="hidden" name="reason" value="customer_cancellation" data-refund-reason-hidden>
-                        <label>
-                            Requested refund amount
-                            <input type="number" name="requestedRefundAmount" class="form-control" min="0.01" step="0.01" data-requested-refund-amount>
-                        </label>
-                        <section class="support-refund-preview" data-refund-preview>
-                            <div><span>Original payment method</span><strong data-preview-payment-method>Choose a reference</strong></div>
-                            <div><span>Gross refund amount</span><strong data-preview-gross>S$0.00</strong></div>
-                            <div><span>Payment-processing deduction</span><strong data-preview-fee>S$0.00</strong></div>
-                            <div class="support-refund-net"><span>Estimated net refund</span><strong data-preview-net>S$0.00</strong></div>
-                            <p data-preview-note>No processing-fee deduction is estimated in the browser. The server recalculates the final amount from the original transaction.</p>
-                        </section>
-                        <section class="support-refund-preview support-eligibility-preview" data-eligibility-preview>
-                            <div><span>Request type</span><strong data-eligibility-action>Choose a reference</strong></div>
-                            <div><span>Deadline</span><strong data-eligibility-deadline>-</strong></div>
-                            <p data-eligibility-message>Eligibility is checked again by the server before the request is stored.</p>
-                        </section>
-                        <label class="merchant-toggle-row" data-processing-fee-ack-row hidden>
-                            <input type="checkbox" name="processingFeeAcknowledged" data-processing-fee-ack>
-                            <span><strong>I understand the disclosed payment-processing deduction</strong><small data-processing-fee-ack-copy>The exact deduction is calculated again by the server before the request is stored.</small></span>
-                        </label>
-                        <label>
-                            Details
-                            <textarea name="customerNote" class="form-control" rows="3" maxlength="1200" placeholder="Briefly explain what happened and what help you need." required></textarea>
-                        </label>
-                        <label>
-                            Evidence images
-                            <input type="file" name="screenshot" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
-                        </label>
-                        <label class="merchant-toggle-row">
-                            <input type="checkbox" name="acceptRefundTerms" required>
-                            <span><strong>I accept the refund terms</strong><small>I confirm the information is accurate and understand the merchant must approve before a refund can be processed.</small></span>
-                        </label>
-                        <p class="support-form-note" data-support-create-feedback>For rescheduling, use Profile > Bookings instead.</p>
-                        <button class="button primary full" type="submit">Submit Refund Request</button>
+
+                        <div class="support-form-main">
+                            <section class="support-form-step">
+                                <div class="support-step-title"><span>1</span><div><strong>What do you need help with?</strong><small>Choose the closest issue so the form can show matching references.</small></div></div>
+                                <div class="support-issue-grid" role="radiogroup" aria-label="Issue type">
+                                    <button type="button" class="support-issue-card is-selected" data-issue-card data-request-type="booking_refund">
+                                        <strong>Booking refund</strong>
+                                        <span>Cancel a booking or ask for service refund review.</span>
+                                    </button>
+                                    <button type="button" class="support-issue-card" data-issue-card data-request-type="order_refund">
+                                        <strong>Order refund or return</strong>
+                                        <span>Report cancellation, delivery, pickup, damage, or return issues.</span>
+                                    </button>
+                                </div>
+                            </section>
+
+                            <section class="support-form-step">
+                                <div class="support-step-title"><span>2</span><div><strong>Select the booking or order</strong><small>Unavailable references stay blocked and show the reason.</small></div></div>
+                                <label class="support-field">
+                                    Reference
+                                    <select name="targetId" class="form-select" required data-support-reference-select>
+                                        <option value="">Choose booking or order</option>
+                                        <% safeBookings.forEach((booking) => {
+                                            const eligibility = booking.refundEligibility || {};
+                                        %>
+                                            <option value="<%= booking.id %>"
+                                                data-target-type="booking"
+                                                data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
+                                                data-action-type="<%= eligibility.actionType || '' %>"
+                                                data-action-label="<%= actionLabel(eligibility.actionType) %>"
+                                                data-status-code="<%= eligibility.statusCode || '' %>"
+                                                data-blocked-reason="<%= eligibility.blockedReason || '' %>"
+                                                data-deadline="<%= eligibility.deadlineLabel || '' %>"
+                                                data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
+                                                data-reasons='<%- optionReasonJson(eligibility) %>'
+                                                data-refund-amount="<%= Number(eligibility.refundableAmount || booking.service_price || booking.price || 0).toFixed(2) %>"
+                                                data-payment-method="<%= booking.paymentMethodLabel || booking.payment_method || 'Original payment method' %>"
+                                                <%= !eligibility.eligible ? 'disabled' : '' %>
+                                                <%= String(selectedTarget.bookingId) === String(booking.id) ? 'selected' : '' %>>
+                                                Booking #<%= booking.id %> - <%= booking.service_name %>
+                                                <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
+                                            </option>
+                                        <% }) %>
+                                        <% safeOrders.forEach((order) => {
+                                            const eligibility = order.refundEligibility || {};
+                                        %>
+                                            <option value="<%= order.targetId || order.id %>"
+                                                data-target-type="order"
+                                                data-eligible="<%= eligibility.eligible ? '1' : '0' %>"
+                                                data-action-type="<%= eligibility.actionType || '' %>"
+                                                data-action-label="<%= actionLabel(eligibility.actionType) %>"
+                                                data-status-code="<%= eligibility.statusCode || '' %>"
+                                                data-blocked-reason="<%= eligibility.blockedReason || '' %>"
+                                                data-deadline="<%= eligibility.deadlineLabel || '' %>"
+                                                data-return-required="<%= eligibility.returnRequired ? '1' : '0' %>"
+                                                data-reasons='<%- optionReasonJson(eligibility) %>'
+                                                data-refund-amount="<%= Number(eligibility.refundableAmount || order.remainingRefundableAmount || order.totalAmount || 0).toFixed(2) %>"
+                                                data-payment-method="<%= order.paymentMethodLabel || order.paymentMethod || 'Original payment method' %>"
+                                                <%= !eligibility.eligible ? 'disabled' : '' %>
+                                                <%= String(selectedTarget.orderId) === String(order.id) ? 'selected' : '' %>>
+                                                Order <%= order.order_number || order.orderNumber || order.receiptId || ('#' + order.id) %> - <%= order.itemNames %>
+                                                <%= !eligibility.eligible && eligibility.blockedReason ? ` (${eligibility.blockedReason})` : '' %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </label>
+                                <div class="support-reference-card" data-reference-summary>
+                                    <strong>Choose a reference to continue</strong>
+                                    <span>The next steps will show only reasons supported for that booking or order.</span>
+                                </div>
+                            </section>
+
+                            <section class="support-form-step" data-reason-stage>
+                                <div class="support-step-title"><span>3</span><div><strong>Pick the reason</strong><small>Reason availability follows the selected reference and current eligibility rules.</small></div></div>
+                                <label class="support-field support-native-select">
+                                    Refund reason category
+                                    <select name="reasonCategory" class="form-select" data-refund-reason-category required>
+                                        <option value="">Choose a reference first</option>
+                                    </select>
+                                </label>
+                                <div class="support-reason-list" data-reason-card-list aria-live="polite"></div>
+                            </section>
+
+                            <section class="support-form-step support-two-fields" data-amount-stage>
+                                <div class="support-step-title"><span>4</span><div><strong>Refund amount</strong><small>The server caps this against the remaining refundable amount.</small></div></div>
+                                <label class="support-field">
+                                    Requested refund amount
+                                    <input type="number" name="requestedRefundAmount" class="form-control" min="0.01" step="0.01" data-requested-refund-amount>
+                                </label>
+                                <section class="support-refund-preview" data-refund-preview>
+                                    <div><span>Gross refund amount</span><strong data-preview-gross>S$0.00</strong></div>
+                                    <div><span>Payment-processing deduction</span><strong data-preview-fee>S$0.00</strong></div>
+                                    <div class="support-refund-net"><span>Estimated net refund</span><strong data-preview-net>S$0.00</strong></div>
+                                    <p data-preview-note>No processing-fee deduction is estimated in the browser. The server recalculates the final amount from the original transaction.</p>
+                                </section>
+                            </section>
+
+                            <section class="support-form-step">
+                                <div class="support-step-title"><span>5</span><div><strong>Tell us what happened</strong><small>Include dates, item names, and what outcome you expect.</small></div></div>
+                                <label class="support-field">
+                                    Details
+                                    <textarea name="customerNote" class="form-control" rows="5" maxlength="1200" placeholder="Example: The item arrived damaged. I uploaded photos and would like a refund for the affected quantity." required data-support-details></textarea>
+                                </label>
+                                <div class="support-character-row"><span data-details-counter>0 / 1200</span><span>Minimum 8 characters</span></div>
+                            </section>
+
+                            <section class="support-form-step">
+                                <div class="support-step-title"><span>6</span><div><strong>Add evidence</strong><small>Photos help merchants review damage, missing items, payment errors, and return claims.</small></div></div>
+                                <label class="support-upload-zone" data-upload-zone>
+                                    <input type="file" name="screenshot" accept="image/png,image/jpeg,image/webp,image/gif" multiple data-support-evidence-input>
+                                    <span>Drop images here or browse</span>
+                                    <small>PNG, JPG, WEBP or GIF. Keep the original issue visible.</small>
+                                </label>
+                                <div class="support-evidence-preview" data-evidence-preview></div>
+                            </section>
+                        </div>
+
+                        <aside class="support-form-sidebar">
+                            <section class="support-refund-preview support-eligibility-preview" data-eligibility-preview>
+                                <div><span>Request type</span><strong data-eligibility-action>Choose a reference</strong></div>
+                                <div><span>Deadline</span><strong data-eligibility-deadline>-</strong></div>
+                                <div><span>Payment method</span><strong data-preview-payment-method>Choose a reference</strong></div>
+                                <p data-eligibility-message>Eligibility is checked again by the server before the request is stored.</p>
+                            </section>
+                            <label class="merchant-toggle-row support-fee-ack" data-processing-fee-ack-row hidden>
+                                <input type="checkbox" name="processingFeeAcknowledged" data-processing-fee-ack>
+                                <span><strong>I understand the disclosed payment-processing deduction</strong><small data-processing-fee-ack-copy>The exact deduction is calculated again by the server before the request is stored.</small></span>
+                            </label>
+                            <label class="merchant-toggle-row support-terms-row">
+                                <input type="checkbox" name="acceptRefundTerms" required data-support-terms>
+                                <span><strong>I accept the refund terms</strong><small>I confirm the information is accurate and understand the merchant must approve before a refund can be processed.</small></span>
+                            </label>
+                            <p class="support-form-note" data-support-create-feedback>For rescheduling, use Profile > Bookings instead.</p>
+                            <div class="support-form-actions">
+                                <button class="button secondary" type="button" data-close-support-form>Cancel</button>
+                                <button class="button primary" type="submit" disabled>Submit Refund Request</button>
+                            </div>
+                        </aside>
                     </form>
                     <div class="support-confirm-modal" data-refund-confirm-modal hidden>
                         <div class="support-confirm-dialog">
@@ -468,19 +513,27 @@
                 supportFormPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         });
-        document.querySelector('[data-close-support-form]')?.addEventListener('click', () => {
+        document.querySelectorAll('[data-close-support-form]').forEach((button) => button.addEventListener('click', () => {
             supportFormPanel?.classList.add('is-collapsed');
-        });
+        }));
 
         document.querySelectorAll('[data-support-create-form]').forEach((form) => {
-            const requestType = form.querySelector('[name="requestType"]');
+            const requestType = form.querySelector('[data-support-request-type]');
+            const issueCards = Array.from(form.querySelectorAll('[data-issue-card]'));
             const targetSelect = form.querySelector('[name="targetId"]');
             const targetType = form.querySelector('[data-support-target-type]');
             const reasonCategory = form.querySelector('[data-refund-reason-category]');
+            const reasonCardList = form.querySelector('[data-reason-card-list]');
             const reasonHidden = form.querySelector('[data-refund-reason-hidden]');
             const requestedAmount = form.querySelector('[data-requested-refund-amount]');
             const feeAckRow = form.querySelector('[data-processing-fee-ack-row]');
             const feeAck = form.querySelector('[data-processing-fee-ack]');
+            const terms = form.querySelector('[data-support-terms]');
+            const details = form.querySelector('[data-support-details]');
+            const detailsCounter = form.querySelector('[data-details-counter]');
+            const referenceSummary = form.querySelector('[data-reference-summary]');
+            const evidenceInput = form.querySelector('[data-support-evidence-input]');
+            const evidencePreview = form.querySelector('[data-evidence-preview]');
             const previewMethod = form.querySelector('[data-preview-payment-method]');
             const previewGross = form.querySelector('[data-preview-gross]');
             const previewFee = form.querySelector('[data-preview-fee]');
@@ -496,10 +549,32 @@
             const feedback = form.querySelector('[data-support-create-feedback]');
             const submitButton = form.querySelector('button[type="submit"]');
             let submitConfirmed = false;
+            let selectedFiles = [];
             const money = (value) => `S$${Number(value || 0).toFixed(2)}`;
             const selectedRefundAmount = () => Number(requestedAmount?.value || targetSelect.selectedOptions[0]?.dataset.refundAmount || 0);
             const selectedReasonOption = () => reasonCategory?.selectedOptions?.[0] || null;
             const feeAcknowledgementLikelyRequired = () => selectedReasonOption()?.dataset.responsibility === 'customer';
+            const reasonCopy = {
+                customer_cancellation: { label: 'I changed my mind or cannot attend', description: 'Customer-requested cancellation. Any allowed deduction must be confirmed before submission.' },
+                merchant_cancellation: { label: 'Merchant cancelled or cannot fulfil', description: 'Use when the merchant cancelled, cannot provide the service, or cannot supply the item.' },
+                duplicate_charge: { label: 'Duplicate charge', description: 'Use when you were charged more than once for the same booking or order.' },
+                incorrect_charge: { label: 'Incorrect charge', description: 'Use when the amount charged does not match the confirmed price.' },
+                platform_error: { label: 'Platform or payment error', description: 'Use for checkout, payment, voucher, or system problems that affected the transaction.' },
+                damaged_defective: { label: 'Damaged or defective item', description: 'Upload clear photos showing the product condition and packaging where possible.' },
+                missing_item: { label: 'Missing item', description: 'Tell the merchant which item or quantity was missing from the order.' },
+                wrong_item: { label: 'Wrong item received', description: 'Upload photos of the received item and the order details.' },
+                return_refund: { label: 'Return and refund request', description: 'Use when the item must be returned before the merchant makes a final decision.' },
+                other: { label: 'Other refund issue', description: 'Explain the issue clearly so support can route it correctly.' }
+            };
+            const getReasonCopy = (reason) => {
+                const copy = reasonCopy[reason.code] || {};
+                return {
+                    label: copy.label || reason.label || String(reason.code || 'Reason').replace(/_/g, ' '),
+                    description: copy.description || (reason.evidenceRequired
+                        ? 'Evidence is required for this reason.'
+                        : 'The merchant will review this reason against the selected reference.')
+                };
+            };
             const parseReasons = (selected) => {
                 try {
                     return JSON.parse(selected?.dataset.reasons || '[]');
@@ -512,24 +587,108 @@
                 const previous = reasonCategory.value;
                 const reasons = parseReasons(selected);
                 reasonCategory.innerHTML = '';
+                if (reasonCardList) reasonCardList.innerHTML = '';
                 const placeholder = document.createElement('option');
                 placeholder.value = '';
                 placeholder.textContent = reasons.length ? 'Choose reason' : 'No valid reasons available';
                 reasonCategory.appendChild(placeholder);
+                if (!reasons.length && reasonCardList) {
+                    const empty = document.createElement('p');
+                    empty.className = 'support-reason-empty';
+                    empty.textContent = selected?.value
+                        ? 'No refund reasons are available for this reference.'
+                        : 'Choose an eligible booking or order to see available reasons.';
+                    reasonCardList.appendChild(empty);
+                }
                 reasons.forEach((reason) => {
+                    const copy = getReasonCopy(reason);
                     const option = document.createElement('option');
                     option.value = reason.code;
-                    option.textContent = reason.label;
+                    option.textContent = copy.label;
                     option.dataset.responsibility = reason.responsibility || '';
                     option.dataset.evidenceRequired = reason.evidenceRequired ? '1' : '0';
                     option.dataset.returnRequired = reason.returnRequired ? '1' : '0';
                     reasonCategory.appendChild(option);
+                    if (reasonCardList) {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'support-reason-card';
+                        button.dataset.reasonCode = reason.code;
+                        const title = document.createElement('strong');
+                        title.textContent = copy.label;
+                        const description = document.createElement('span');
+                        description.textContent = copy.description;
+                        button.append(title, description);
+                        if (reason.evidenceRequired) {
+                            const badge = document.createElement('em');
+                            badge.textContent = 'Evidence required';
+                            button.appendChild(badge);
+                        }
+                        button.addEventListener('click', () => {
+                            reasonCategory.value = reason.code;
+                            syncPreview();
+                        });
+                        reasonCardList.appendChild(button);
+                    }
                 });
                 if (reasons.some((reason) => reason.code === previous)) {
                     reasonCategory.value = previous;
                 } else if (reasons.length === 1) {
                     reasonCategory.value = reasons[0].code;
                 }
+            };
+            const syncReasonCards = () => {
+                const value = reasonCategory?.value || '';
+                form.querySelectorAll('[data-reason-code]').forEach((card) => {
+                    card.classList.toggle('is-selected', card.dataset.reasonCode === value);
+                });
+            };
+            const syncReferenceSummary = (selected, isEligible) => {
+                if (!referenceSummary) return;
+                const label = selected?.value ? selected.textContent.trim() : 'Choose a reference to continue';
+                const amount = selected?.dataset.refundAmount ? money(selected.dataset.refundAmount) : '-';
+                const deadline = selected?.dataset.deadline || '-';
+                const blocked = selected?.dataset.blockedReason || '';
+                referenceSummary.replaceChildren();
+                const title = document.createElement('strong');
+                title.textContent = label;
+                const description = document.createElement('span');
+                description.textContent = isEligible ? `Remaining refundable amount: ${amount}` : (blocked || 'Select an eligible booking or order.');
+                const deadlineCopy = document.createElement('small');
+                deadlineCopy.textContent = `Deadline: ${deadline}`;
+                referenceSummary.append(title, description, deadlineCopy);
+                referenceSummary.classList.toggle('is-blocked', Boolean(selected?.value) && !isEligible);
+            };
+            const syncDetailsCounter = () => {
+                if (!detailsCounter || !details) return;
+                detailsCounter.textContent = `${details.value.length} / ${details.getAttribute('maxlength') || 1200}`;
+            };
+            const syncFiles = () => {
+                if (!evidencePreview || !evidenceInput) return;
+                evidencePreview.innerHTML = '';
+                selectedFiles.forEach((file, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'support-evidence-item';
+                    const image = document.createElement('img');
+                    image.alt = file.name;
+                    image.src = URL.createObjectURL(file);
+                    image.addEventListener('load', () => URL.revokeObjectURL(image.src), { once: true });
+                    const meta = document.createElement('span');
+                    meta.textContent = file.name;
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.textContent = 'Remove';
+                    remove.addEventListener('click', () => {
+                        selectedFiles.splice(index, 1);
+                        const transfer = new DataTransfer();
+                        selectedFiles.forEach((nextFile) => transfer.items.add(nextFile));
+                        evidenceInput.files = transfer.files;
+                        syncFiles();
+                        syncPreview();
+                    });
+                    item.append(image, meta, remove);
+                    evidencePreview.appendChild(item);
+                });
             };
             const syncPreview = () => {
                 const selected = targetSelect.selectedOptions[0];
@@ -563,12 +722,31 @@
                 }
                 if (feeAckRow) feeAckRow.hidden = !showAck;
                 if (feeAck && !showAck) feeAck.checked = false;
-                if (submitButton) submitButton.disabled = !isEligible || !reasonCategory?.value;
+                syncReasonCards();
+                syncReferenceSummary(selected, isEligible);
+                syncDetailsCounter();
+                const detailsValid = !details || details.value.trim().length >= 8;
+                const termsAccepted = !terms || terms.checked;
+                const evidenceRequired = selectedReasonOption()?.dataset.evidenceRequired === '1';
+                const evidenceProvided = !evidenceRequired || selectedFiles.length > 0 || (evidenceInput?.files?.length || 0) > 0;
+                const amountValid = gross > 0;
+                if (submitButton) submitButton.disabled = !isEligible || !reasonCategory?.value || !detailsValid || !termsAccepted || !evidenceProvided || !amountValid;
+                if (feedback) {
+                    feedback.textContent = !isEligible
+                        ? 'Choose an eligible booking or order.'
+                        : evidenceRequired && !evidenceProvided
+                        ? 'This reason needs at least one evidence image.'
+                        : !detailsValid
+                        ? 'Add a short explanation before submitting.'
+                        : !termsAccepted
+                        ? 'Accept the refund terms to continue.'
+                        : 'Ready to review before submission.';
+                }
             };
             const syncTarget = () => {
                 const selected = targetSelect.selectedOptions[0];
                 const inferredType = selected?.dataset.targetType || (requestType.value === 'order_refund' ? 'order' : 'booking');
-                targetType.value = inferredType;
+                if (targetType) targetType.value = inferredType;
                 if (requestType.value === 'order_refund') {
                     Array.from(targetSelect.options).forEach((option) => option.hidden = option.dataset.targetType === 'booking');
                 } else {
@@ -584,10 +762,28 @@
                 populateReasons(targetSelect.selectedOptions[0]);
                 syncPreview();
             };
-            requestType.addEventListener('change', syncTarget);
+            issueCards.forEach((card) => {
+                card.addEventListener('click', () => {
+                    if (requestType) requestType.value = card.dataset.requestType || 'booking_refund';
+                    issueCards.forEach((nextCard) => nextCard.classList.toggle('is-selected', nextCard === card));
+                    syncTarget();
+                });
+            });
             targetSelect.addEventListener('change', syncTarget);
             reasonCategory?.addEventListener('change', syncPreview);
             requestedAmount?.addEventListener('input', syncPreview);
+            details?.addEventListener('input', syncPreview);
+            terms?.addEventListener('change', syncPreview);
+            evidenceInput?.addEventListener('change', () => {
+                selectedFiles = Array.from(evidenceInput.files || []);
+                syncFiles();
+                syncPreview();
+            });
+            const initialTargetType = targetSelect.selectedOptions[0]?.dataset.targetType;
+            if (initialTargetType === 'order' && requestType) requestType.value = 'order_refund';
+            issueCards.forEach((card) => {
+                card.classList.toggle('is-selected', card.dataset.requestType === requestType?.value);
+            });
             syncTarget();
 
             form.addEventListener('submit', (event) => {

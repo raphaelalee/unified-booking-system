@@ -5196,6 +5196,495 @@ body:not(.flappy-page) .notification-count {
     }
 }
 
+/* Merchant analytics redesign */
+.merchant-analytics-redesign {
+    background: #f7f8f6;
+}
+
+.merchant-analytics-redesign .merchant-analytics-shell {
+    width: min(1480px, 100%);
+    display: grid;
+    gap: 18px;
+}
+
+.merchant-analytics-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(420px, auto);
+    gap: 18px;
+    align-items: end;
+    padding: 18px;
+    border: 1px solid rgba(30, 41, 59, 0.08);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
+}
+
+.merchant-analytics-title-block {
+    min-width: 0;
+}
+
+.merchant-analytics-title-block h1 {
+    margin: 0;
+    color: #172019;
+    font-size: clamp(1.85rem, 3vw, 2.65rem);
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.merchant-analytics-title-block p:not(.eyebrow) {
+    max-width: 720px;
+    margin: 8px 0 0;
+    color: #667085;
+    font-weight: 650;
+}
+
+.merchant-analytics-header-controls {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(130px, 1fr)) auto auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.merchant-analytics-header-controls label,
+.merchant-export-date-grid label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: #475467;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.merchant-analytics-header-controls label span,
+.merchant-export-date-grid label span {
+    overflow-wrap: anywhere;
+}
+
+.merchant-analytics-header-controls input,
+.merchant-export-date-grid input {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 11px;
+    border: 1px solid rgba(30, 41, 59, 0.14);
+    border-radius: 10px;
+    background: #ffffff;
+    color: #172019;
+    font-weight: 750;
+}
+
+.merchant-analytics-header-controls .button {
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+.merchant-analytics-control-message {
+    grid-column: 1 / -1;
+    min-height: 18px;
+    margin: -2px 0 0;
+    color: #667085;
+    font-size: 0.86rem;
+    font-weight: 750;
+}
+
+.merchant-analytics-control-message[data-tone="success"] {
+    color: #3f6b3a;
+}
+
+.merchant-analytics-alert {
+    padding: 12px 14px;
+    border: 1px solid rgba(166, 64, 50, 0.18);
+    border-radius: 12px;
+    background: #fff7f5;
+    color: #9f2f24;
+    font-weight: 800;
+}
+
+.merchant-analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merchant-analytics-kpi-card,
+.merchant-analytics-card {
+    min-width: 0;
+    border: 1px solid rgba(30, 41, 59, 0.08);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.055);
+}
+
+.merchant-analytics-kpi-card {
+    min-height: 112px;
+    padding: 14px;
+    display: grid;
+    gap: 7px;
+    align-content: start;
+}
+
+.merchant-analytics-kpi-card span,
+.merchant-analytics-kpi-card small,
+.merchant-analytics-card-heading p,
+.merchant-analytics-empty,
+.merchant-analytics-metric-list span,
+.merchant-analytics-table-list span {
+    color: #667085;
+    font-weight: 700;
+}
+
+.merchant-analytics-kpi-card span {
+    font-size: 0.82rem;
+}
+
+.merchant-analytics-kpi-card strong {
+    color: #172019;
+    font-size: clamp(1.32rem, 2vw, 1.82rem);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+}
+
+.merchant-analytics-kpi-card small {
+    font-size: 0.82rem;
+}
+
+.merchant-analytics-chart-tabs {
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid rgba(30, 41, 59, 0.08);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.045);
+}
+
+.merchant-analytics-chart-tabs h2 {
+    margin: 0;
+    color: #172019;
+    font-size: 1.12rem;
+}
+
+.merchant-analytics-redesign .analytics-segmented-control {
+    background: #f2f4f7;
+    border-color: rgba(30, 41, 59, 0.1);
+    border-radius: 12px;
+}
+
+.merchant-analytics-redesign .analytics-segmented-control button {
+    border-radius: 9px;
+    color: #475467;
+}
+
+.merchant-analytics-redesign .analytics-segmented-control button.active {
+    background: #172019;
+    color: #ffffff;
+}
+
+.merchant-analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.merchant-analytics-card {
+    grid-column: span 4;
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+    align-content: start;
+}
+
+.merchant-analytics-card-wide {
+    grid-column: span 8;
+}
+
+.merchant-analytics-card-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+}
+
+.merchant-analytics-card-heading h3 {
+    margin: 0;
+    color: #172019;
+    font-size: 1.05rem;
+}
+
+.merchant-analytics-card-heading p {
+    margin: 4px 0 0;
+    font-size: 0.9rem;
+}
+
+.merchant-analytics-status-pill {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #eef7ee;
+    color: #3f6b3a;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.merchant-analytics-chart-large {
+    min-height: 320px;
+}
+
+.merchant-analytics-chart-small {
+    min-height: 240px;
+}
+
+.merchant-analytics-empty {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px dashed rgba(30, 41, 59, 0.16);
+    border-radius: 10px;
+    background: #f9fafb;
+    font-size: 0.9rem;
+}
+
+.merchant-analytics-table-list,
+.merchant-analytics-metric-list {
+    display: grid;
+    gap: 9px;
+}
+
+.merchant-analytics-table-list article,
+.merchant-analytics-metric-list p {
+    margin: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 11px;
+    border-radius: 10px;
+    background: #f9fafb;
+}
+
+.merchant-analytics-table-list strong,
+.merchant-analytics-table-list b,
+.merchant-analytics-metric-list strong {
+    color: #172019;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+}
+
+.merchant-analytics-table-list div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.merchant-analytics-table-list span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merchant-analytics-ranking article {
+    background: #f9fafb;
+}
+
+.merchant-export-modal[hidden] {
+    display: none;
+}
+
+.merchant-export-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(15, 23, 42, 0.52);
+}
+
+.merchant-export-dialog {
+    width: min(760px, 100%);
+    max-height: min(760px, calc(100vh - 36px));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.merchant-export-dialog-header,
+.merchant-export-dialog-footer {
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-color: rgba(30, 41, 59, 0.09);
+}
+
+.merchant-export-dialog-header {
+    border-bottom: 1px solid rgba(30, 41, 59, 0.09);
+}
+
+.merchant-export-dialog-footer {
+    border-top: 1px solid rgba(30, 41, 59, 0.09);
+    background: #f9fafb;
+}
+
+.merchant-export-dialog-header h2 {
+    margin: 0;
+    color: #172019;
+    font-size: 1.28rem;
+}
+
+.merchant-export-dialog-header p {
+    margin: 4px 0 0;
+    color: #667085;
+    font-weight: 650;
+}
+
+.merchant-export-close {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    border: 1px solid rgba(30, 41, 59, 0.1);
+    border-radius: 10px;
+    background: #ffffff;
+    color: #172019;
+    font-size: 1.1rem;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.merchant-export-dialog-body {
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 18px;
+    display: grid;
+    gap: 14px;
+}
+
+.merchant-export-date-grid,
+.merchant-export-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.merchant-export-selection-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.merchant-export-selection-bar strong {
+    color: #172019;
+    font-weight: 850;
+}
+
+.merchant-export-options .analytics-export-option {
+    align-items: start;
+    min-height: 66px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.merchant-export-options .analytics-export-option span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.merchant-export-options .analytics-export-option strong {
+    color: #172019;
+    font-size: 0.92rem;
+}
+
+.merchant-export-options .analytics-export-option small {
+    color: #667085;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.merchant-export-dialog-footer .button {
+    min-width: 138px;
+}
+
+@media (max-width: 1180px) {
+    .merchant-analytics-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .merchant-analytics-card,
+    .merchant-analytics-card-wide {
+        grid-column: span 6;
+    }
+}
+
+@media (max-width: 900px) {
+    .merchant-analytics-header {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .merchant-analytics-header-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .merchant-analytics-chart-tabs {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 700px) {
+    .merchant-analytics-kpi-grid,
+    .merchant-analytics-header-controls,
+    .merchant-export-date-grid,
+    .merchant-export-options {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-analytics-card,
+    .merchant-analytics-card-wide {
+        grid-column: 1 / -1;
+    }
+
+    .merchant-analytics-card-heading,
+    .merchant-export-dialog-header,
+    .merchant-export-dialog-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .merchant-export-dialog-footer .button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 420px) {
+    .merchant-analytics-redesign .merchant-analytics-shell {
+        gap: 14px;
+    }
+
+    .merchant-analytics-header,
+    .merchant-analytics-card,
+    .merchant-analytics-kpi-card {
+        padding: 13px;
+        border-radius: 12px;
+    }
+
+    .merchant-analytics-chart-large,
+    .merchant-analytics-chart-small {
+        min-height: 230px;
+    }
+}
+
 /* Customer storefront and marketplace refinements */
 .merchant-storefront,
 .products-marketplace-page {
@@ -8648,6 +9137,257 @@ form.is-submitting button[type="submit"] {
     display: none;
 }
 
+.support-form-heading span {
+    display: block;
+    margin-top: 4px;
+    color: var(--sage-readable);
+    font-weight: 800;
+}
+
+.support-guided-form {
+    align-items: start;
+}
+
+.support-contact-panel form.support-guided-form {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 18px;
+}
+
+.support-form-main,
+.support-form-sidebar,
+.support-form-step {
+    min-width: 0;
+}
+
+.support-form-main,
+.support-form-sidebar {
+    display: grid;
+    gap: 14px;
+}
+
+.support-form-step {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 253, 247, 0.76);
+}
+
+.support-step-title {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.support-step-title > span {
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: var(--sage-strong);
+    color: #fffdf7;
+    font-weight: 950;
+}
+
+.support-step-title strong,
+.support-field {
+    color: var(--sage-ink);
+    font-weight: 950;
+}
+
+.support-step-title small,
+.support-character-row,
+.support-upload-zone small {
+    color: var(--sage-readable);
+    font-weight: 750;
+}
+
+.support-issue-grid,
+.support-reason-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.support-issue-card,
+.support-reason-card {
+    display: grid;
+    gap: 5px;
+    width: 100%;
+    min-height: 96px;
+    padding: 13px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: #fffdf7;
+    color: var(--sage-ink);
+    text-align: left;
+    box-shadow: 0 10px 24px rgba(79, 104, 71, 0.08);
+}
+
+.support-issue-card:hover,
+.support-reason-card:hover,
+.support-issue-card.is-selected,
+.support-reason-card.is-selected {
+    border-color: rgba(79, 104, 71, 0.48);
+    background: rgba(238, 244, 233, 0.72);
+}
+
+.support-issue-card span,
+.support-reason-card span,
+.support-reference-card span,
+.support-reference-card small {
+    color: var(--sage-readable);
+    font-weight: 750;
+}
+
+.support-reason-card em {
+    justify-self: start;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(166, 64, 50, 0.09);
+    color: #8b3229;
+    font-size: 0.78rem;
+    font-style: normal;
+    font-weight: 950;
+}
+
+.support-reason-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 12px;
+    border: 1px dashed rgba(79, 104, 71, 0.22);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.36);
+    color: var(--sage-readable);
+    font-weight: 850;
+}
+
+.support-field,
+.support-native-select {
+    display: grid;
+    gap: 7px;
+}
+
+.support-native-select {
+    margin: 0;
+}
+
+.support-reference-card {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.42);
+}
+
+.support-reference-card.is-blocked {
+    border-color: rgba(166, 64, 50, 0.28);
+    background: rgba(166, 64, 50, 0.06);
+}
+
+.support-two-fields {
+    grid-template-columns: minmax(220px, 0.72fr) minmax(260px, 1fr);
+}
+
+.support-two-fields .support-step-title {
+    grid-column: 1 / -1;
+}
+
+.support-character-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: -4px;
+    font-size: 0.84rem;
+}
+
+.support-upload-zone {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    padding: 22px;
+    border: 1px dashed rgba(79, 104, 71, 0.36);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.36);
+    text-align: center;
+    cursor: pointer;
+}
+
+.support-upload-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.support-upload-zone span {
+    color: var(--sage-ink);
+    font-weight: 950;
+}
+
+.support-evidence-preview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.support-evidence-item {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: #fffdf7;
+}
+
+.support-evidence-item img {
+    width: 100%;
+    aspect-ratio: 1 / 0.72;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.support-evidence-item span {
+    overflow: hidden;
+    color: var(--sage-readable);
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.support-evidence-item button {
+    border: 0;
+    background: transparent;
+    color: #8b3229;
+    font-weight: 950;
+    text-align: left;
+}
+
+.support-form-sidebar {
+    position: sticky;
+    top: 88px;
+}
+
+.support-terms-row,
+.support-fee-ack {
+    padding: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background: #fffdf7;
+}
+
+.support-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .support-contact-panel textarea,
 .support-contact-panel .support-form-note,
 .support-contact-panel .button.full {
@@ -8795,8 +9535,20 @@ form.is-submitting button[type="submit"] {
     .support-ticket-meta,
     .support-order-row,
     .support-contact-panel form,
+    .support-contact-panel form.support-guided-form,
+    .support-issue-grid,
+    .support-reason-list,
+    .support-two-fields,
     .support-suggestions.compact {
         grid-template-columns: 1fr;
+    }
+
+    .support-form-sidebar {
+        position: static;
+    }
+
+    .support-form-actions {
+        display: grid;
     }
 
     .support-ticket-header,
