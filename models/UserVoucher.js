@@ -927,6 +927,43 @@ function markRedeemed(userVoucherId, usageContext, callback) {
             return;
         }
 
+        const amountUsed = Math.max(0, Math.round(Number(context?.amountUsed || 0) * 100) / 100);
+
+        if (amountUsed > 0) {
+            db.query(
+                `
+                    UPDATE user_vouchers
+                    SET status = CASE
+                            WHEN source_type = 'gift_card' AND GREATEST(0, remaining_value - ?) > 0 THEN 'active'
+                            ELSE 'used'
+                        END,
+                        used_at = CASE
+                            WHEN source_type = 'gift_card' AND GREATEST(0, remaining_value - ?) > 0 THEN used_at
+                            ELSE CURRENT_TIMESTAMP
+                        END,
+                        remaining_value = CASE
+                            WHEN source_type = 'gift_card' THEN GREATEST(0, remaining_value - ?)
+                            ELSE 0.00
+                        END,
+                        redeemed_at = COALESCE(redeemed_at, CURRENT_TIMESTAMP),
+                        used_booking_id = COALESCE(?, used_booking_id),
+                        used_transaction_id = COALESCE(?, used_transaction_id)
+                    WHERE user_voucher_id = ?
+                        AND status = 'active'
+                `,
+                [
+                    amountUsed,
+                    amountUsed,
+                    amountUsed,
+                    context?.bookingId || null,
+                    context?.transactionId || null,
+                    userVoucherId
+                ],
+                done
+            );
+            return;
+        }
+
         db.query(
             `
                 UPDATE user_vouchers

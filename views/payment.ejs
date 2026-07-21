@@ -23,10 +23,11 @@
             const smartVoucherMessageView = typeof smartVoucherMessage !== 'undefined' ? String(smartVoucherMessage || '').trim() : '';
             const paymentBirthdayPromotion = typeof birthdayPromotion !== 'undefined' ? birthdayPromotion : null;
             const paymentSelectedVouchers = paymentVoucherList.filter((voucher) => paymentSelectedVoucherIds.includes(String(voucher.id)));
+            const paymentSelectedGiftCards = paymentSelectedVouchers.filter((voucher) => voucher.sourceType === 'gift_card');
             const paymentItems = typeof items !== 'undefined' && Array.isArray(items) ? items : [];
             const paymentPickupOptions = typeof pickupMerchantOptions !== 'undefined' && Array.isArray(pickupMerchantOptions) ? pickupMerchantOptions : [];
+            const defaultPickupOption = paymentPickupOptions.find((merchant) => String(merchant.id) === String(pickupMerchantId || '')) || paymentPickupOptions[0] || null;
             const checkoutHasProductItems = isCartPayment && paymentItems.some((item) => item.type === 'Product');
-            const pickupRequiresGroupedFlow = checkoutHasProductItems && paymentPickupOptions.length > 1;
             const paymentDeliveryFee = Number(typeof deliveryFee !== 'undefined' ? deliveryFee || 0 : shippingFee || 0);
             const paymentSummaryView = typeof paymentSummary !== 'undefined' && paymentSummary ? paymentSummary : null;
             const merchantVoucherView = voucherRecommendationView?.voucher || null;
@@ -63,10 +64,18 @@
             const campaignCashbackView = typeof campaignCashback !== 'undefined' && campaignCashback ? campaignCashback : { total: 0, breakdown: [] };
             const campaignCashbackTotal = paymentSummaryView ? Number(paymentSummaryView.campaignCashback || 0) : Number(campaignCashbackView.total || 0);
             const paymentAmountDue = paymentSummaryView ? Number(paymentSummaryView.finalAmount || amount || 0) : Math.max(Number(amount || 0) - paymentVoucherEstimate - paymentPointEstimate - paymentCashbackEstimate, 0);
+            const paymentIsFullyCovered = paymentAmountDue <= 0;
+            const paymentVoucherSummaryLabel = paymentSelectedGiftCards.length && paymentSelectedGiftCards.length === paymentSelectedVouchers.length
+                ? 'Gift card balance'
+                : paymentSelectedGiftCards.length
+                    ? 'Gift card & promo voucher'
+                    : 'Platform vouchers';
             const eWalletView = typeof eWallet !== 'undefined' && eWallet ? eWallet : null;
             const eWalletBalance = Number(eWalletView && eWalletView.balance || 0);
             const walletCanPay = eWalletBalance >= paymentAmountDue;
-            const initialPaymentMethod = walletCanPay
+            const initialPaymentMethod = paymentIsFullyCovered
+                ? 'covered'
+                : walletCanPay
                 ? 'wallet'
                 : ((paypalEnabled && paypalClientId) ? 'paypal' : 'stripe');
             const fulfilmentLabel = fulfilment === 'delivery'
@@ -91,6 +100,9 @@
             <input id="payment-shipping-input" type="hidden" name="shippingFee" value="<%= Number(shippingFee || 0).toFixed(2) %>">
             <input type="hidden" name="merchantName" value="<%= merchantName %>">
             <input type="hidden" name="serviceName" value="<%= serviceName %>">
+            <% if (paymentIsFullyCovered) { %>
+                <input id="payment-covered-method-input" type="hidden" name="paymentMethod" value="covered">
+            <% } %>
             <input type="hidden" name="cartItemId" value="<%= cartItemId || '' %>">
             <input type="hidden" name="cartCheckout" value="<%= cartCheckout ? 'true' : 'false' %>">
             <input type="hidden" name="checkoutId" value="<%= typeof checkoutId !== 'undefined' ? checkoutId : '' %>">
@@ -154,13 +166,20 @@
 
                         <div class="payment-fulfilment-details">
                             <div id="payment-pickup-options" class="fulfilment-panel payment-pickup-panel">
-                                <% if (pickupRequiresGroupedFlow) { %>
-                                    <input type="hidden" name="pickupMerchantId" value="grouped">
-                                    <input type="hidden" name="pickupMerchantAddress" value="">
-                                    <p class="muted payment-pickup-grouped-note">This order contains items from multiple merchants. Pickup is grouped by merchant and each merchant keeps its own pickup location.</p>
+                                <% if (paymentPickupOptions.length <= 1 && defaultPickupOption) { %>
+                                    <input type="hidden" name="pickupMerchantId" value="<%= defaultPickupOption.id %>">
+                                    <input id="payment-pickup-address-input" type="hidden" name="pickupMerchantAddress" value="<%= defaultPickupOption.address || '' %>">
+                                    <article class="payment-pickup-merchant-card payment-pickup-single-card">
+                                        <span class="eyebrow">Pickup merchant</span>
+                                        <h4><%= defaultPickupOption.name %></h4>
+                                        <p><strong>Pickup address:</strong> <%= defaultPickupOption.address || 'Address not available' %></p>
+                                        <% if (defaultPickupOption.pickupInstructions) { %>
+                                            <p><strong>Pickup instructions:</strong> <%= defaultPickupOption.pickupInstructions %></p>
+                                        <% } %>
+                                    </article>
                                 <% } else { %>
                                     <label class="pickup-field">
-                                        Pickup merchant
+                                        Choose pickup store
                                         <select id="payment-pickup-merchant-select" name="pickupMerchantId">
                                             <% paymentPickupOptions.forEach((merchant) => { %>
                                                 <option value="<%= merchant.id %>" data-pickup-address="<%= merchant.address || '' %>" <%= String(pickupMerchantId || '') === String(merchant.id) ? 'selected' : '' %>><%= merchant.name %></option>
@@ -170,17 +189,19 @@
                                     <input id="payment-pickup-address-input" type="hidden" name="pickupMerchantAddress" value="<%= pickupMerchantAddress || (paymentPickupOptions[0] ? paymentPickupOptions[0].address || '' : '') %>">
                                 <% } %>
 
-                                <div class="payment-pickup-merchant-list" aria-label="Pickup merchant details">
-                                    <% paymentPickupOptions.forEach((merchant) => { %>
-                                        <article class="payment-pickup-merchant-card">
-                                            <h4><%= merchant.name %></h4>
-                                            <p><strong>Pickup address:</strong> <%= merchant.address || 'Address not available' %></p>
-                                            <% if (merchant.pickupInstructions) { %>
-                                                <p><strong>Pickup instructions:</strong> <%= merchant.pickupInstructions %></p>
-                                            <% } %>
-                                        </article>
-                                    <% }) %>
-                                </div>
+                                <% if (paymentPickupOptions.length > 1) { %>
+                                    <div class="payment-pickup-merchant-list" aria-label="Pickup merchant details">
+                                        <% paymentPickupOptions.forEach((merchant) => { %>
+                                            <article class="payment-pickup-merchant-card" data-pickup-card="<%= merchant.id %>">
+                                                <h4><%= merchant.name %></h4>
+                                                <p><strong>Pickup address:</strong> <%= merchant.address || 'Address not available' %></p>
+                                                <% if (merchant.pickupInstructions) { %>
+                                                    <p><strong>Pickup instructions:</strong> <%= merchant.pickupInstructions %></p>
+                                                <% } %>
+                                            </article>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
                             </div>
 
                             <div id="payment-delivery-options" class="fulfilment-panel payment-delivery-panel" style="display:none;">
@@ -218,7 +239,7 @@
                         <p>Discounts from your cart are locked in and verified on the server.</p>
                     </div>
                     <div class="cart-totals">
-                        <p><span>Voucher discount</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
+                        <p><span><%= paymentVoucherSummaryLabel %></span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
                         <p><span>Points discount</span><strong>-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                         <p><span>Cashback discount</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                         <p class="cart-total-line"><span>Final payable amount</span><strong id="payment-summary-final-payable">$<%= paymentAmountDue.toFixed(2) %></strong></p>
@@ -234,7 +255,7 @@
                         <p>Rewards from cart are locked for this checkout and validated again on the server.</p>
                     </div>
                     <div class="cart-totals">
-                        <p><span>Voucher discount</span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
+                        <p><span><%= paymentVoucherSummaryLabel %></span><strong>-$<%= paymentVoucherEstimate.toFixed(2) %></strong></p>
                         <p><span>Points discount</span><strong>-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                         <p><span>Cashback discount</span><strong>-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                         <p class="cart-total-line"><span>Final payable amount</span><strong id="payment-summary-final-payable">$<%= paymentAmountDue.toFixed(2) %></strong></p>
@@ -245,17 +266,23 @@
                 </section>
             <% } %>
 
-            <section class="checkout-card payment-method-card-wrap">
+            <section class="checkout-card payment-method-card-wrap <%= paymentIsFullyCovered ? 'payment-covered-card' : '' %>">
                 <div class="checkout-card-header payment-section-heading">
-                    <h3>Payment method</h3>
-                    <p>Select one method to continue.</p>
+                    <h3><%= paymentIsFullyCovered ? 'Payment covered' : 'Payment method' %></h3>
+                    <p><%= paymentIsFullyCovered ? 'No e-wallet or card payment is needed for this checkout.' : 'Select one method to continue.' %></p>
                 </div>
 
-                <fieldset class="payment-methods">
+                <% if (paymentIsFullyCovered) { %>
+                    <div class="payment-covered-summary">
+                        <strong>$0.00 due</strong>
+                        <span>Covered by <%= paymentSelectedGiftCards.length ? 'gift card balance' : 'rewards' %>.</span>
+                    </div>
+                <% } %>
+                <fieldset class="payment-methods" style="<%= paymentIsFullyCovered ? 'display:none;' : '' %>">
                     <legend class="eyebrow">Select payment method</legend>
                     <div class="payment-method-grid">
                     <label class="payment-method-card payment-method-card-wallet <%= initialPaymentMethod === 'wallet' ? 'is-selected' : '' %> <%= walletCanPay ? '' : 'is-disabled' %>" <%= walletCanPay ? '' : 'aria-disabled="true"' %>>
-                        <input type="radio" name="paymentMethod" value="wallet" <%= initialPaymentMethod === 'wallet' ? 'checked' : '' %> <%= walletCanPay ? '' : 'disabled' %>>
+                        <input type="radio" name="paymentMethod" value="wallet" <%= initialPaymentMethod === 'wallet' ? 'checked' : '' %> <%= walletCanPay && !paymentIsFullyCovered ? '' : 'disabled' %>>
                         <span class="payment-method-main">
                             <span class="payment-method-brand payment-brand-wallet" aria-hidden="true">Vaniday Wallet</span>
                             <span class="payment-method-copy">
@@ -269,7 +296,7 @@
                         <span class="payment-method-radio" aria-hidden="true"></span>
                     </label>
                     <label class="payment-method-card <%= initialPaymentMethod === 'paypal' ? 'is-selected' : '' %>">
-                        <input type="radio" name="paymentMethod" value="paypal" <%= initialPaymentMethod === 'paypal' ? 'checked' : '' %>>
+                        <input type="radio" name="paymentMethod" value="paypal" <%= initialPaymentMethod === 'paypal' ? 'checked' : '' %> <%= paymentIsFullyCovered ? 'disabled' : '' %>>
                         <span class="payment-method-main">
                             <span class="payment-method-brand payment-brand-paypal" aria-hidden="true">PayPal</span>
                             <span class="payment-method-copy"><strong>PayPal</strong><small>Fast checkout with your PayPal account</small></span>
@@ -277,7 +304,7 @@
                         <span class="payment-method-radio" aria-hidden="true"></span>
                     </label>
                     <label class="payment-method-card <%= initialPaymentMethod === 'stripe' ? 'is-selected' : '' %>">
-                        <input type="radio" name="paymentMethod" value="stripe" <%= initialPaymentMethod === 'stripe' ? 'checked' : '' %>>
+                        <input type="radio" name="paymentMethod" value="stripe" <%= initialPaymentMethod === 'stripe' ? 'checked' : '' %> <%= paymentIsFullyCovered ? 'disabled' : '' %>>
                         <span class="payment-method-main">
                             <span class="payment-method-brand payment-brand-stripe" aria-hidden="true">stripe</span>
                             <span class="payment-method-copy"><strong>Card (Stripe)</strong><small>Visa, Mastercard, and digital wallets</small></span>
@@ -285,7 +312,7 @@
                         <span class="payment-method-radio" aria-hidden="true"></span>
                     </label>
                     <label class="payment-method-card <%= initialPaymentMethod === 'nets' ? 'is-selected' : '' %>">
-                        <input type="radio" name="paymentMethod" value="nets" <%= initialPaymentMethod === 'nets' ? 'checked' : '' %>>
+                        <input type="radio" name="paymentMethod" value="nets" <%= initialPaymentMethod === 'nets' ? 'checked' : '' %> <%= paymentIsFullyCovered ? 'disabled' : '' %>>
                         <span class="payment-method-main">
                             <span class="payment-method-brand payment-brand-nets" aria-hidden="true">NETS</span>
                             <span class="payment-method-copy"><strong>NETS QR</strong><small>Scan the QR with your banking app</small></span>
@@ -293,7 +320,7 @@
                         <span class="payment-method-radio" aria-hidden="true"></span>
                     </label>
                     <label class="payment-method-card <%= initialPaymentMethod === 'paynow' ? 'is-selected' : '' %>">
-                        <input type="radio" name="paymentMethod" value="paynow" <%= initialPaymentMethod === 'paynow' ? 'checked' : '' %>>
+                        <input type="radio" name="paymentMethod" value="paynow" <%= initialPaymentMethod === 'paynow' ? 'checked' : '' %> <%= paymentIsFullyCovered ? 'disabled' : '' %>>
                         <span class="payment-method-main">
                             <span class="payment-method-brand payment-brand-paynow" aria-hidden="true">PayNow</span>
                             <span class="payment-method-copy"><strong>PayNow (HitPay)</strong><small>Secure transfer from your bank</small></span>
@@ -303,7 +330,7 @@
                     </div>
                 </fieldset>
 
-                <div class="payment-method-notes">
+                <div class="payment-method-notes" style="<%= paymentIsFullyCovered ? 'display:none;' : '' %>">
                     <p id="nets-payment-note" class="muted payment-note" style="display:none;">
                         Continue to generate a NETS QR code for this payment.
                     </p>
@@ -322,8 +349,8 @@
             </section>
 
             <div class="payment-submit-wrap">
-                <button id="payment-submit-button" class="button primary full" type="submit">Pay with E-wallet</button>
-                <p class="payment-submit-assurance">By continuing, you agree to complete this purchase securely via the selected payment provider.</p>
+                <button id="payment-submit-button" class="button primary full" type="submit"><%= paymentIsFullyCovered ? 'Complete order' : 'Pay with E-wallet' %></button>
+                <p class="payment-submit-assurance"><%= paymentIsFullyCovered ? 'Your gift card or rewards balance will be applied when the order is completed.' : 'By continuing, you agree to complete this purchase securely via the selected payment provider.' %></p>
             </div>
         </form>
 
@@ -351,7 +378,7 @@
                 <p><span>Subtotal</span><strong>$<%= Number(itemSubtotal || amount).toFixed(2) %></strong></p>
                 <p id="payment-shipping-row" style="<%= Number(shippingFee || 0) > 0 ? '' : 'display:none;' %>"><span>Delivery fee</span><strong id="payment-shipping-value">$<%= Number(shippingFee || 0).toFixed(2) %></strong></p>
                 <p id="payment-merchant-voucher-row" style="<%= merchantVoucherEstimate > 0 ? '' : 'display:none;' %>"><span>Merchant voucher</span><strong>-$<%= merchantVoucherEstimate.toFixed(2) %></strong></p>
-                <p id="payment-voucher-row" style="<%= platformVoucherEstimate > 0 ? '' : 'display:none;' %>"><span id="payment-voucher-label">Platform vouchers</span><strong id="payment-voucher-value">-$<%= platformVoucherEstimate.toFixed(2) %></strong></p>
+                <p id="payment-voucher-row" style="<%= platformVoucherEstimate > 0 ? '' : 'display:none;' %>"><span id="payment-voucher-label"><%= paymentVoucherSummaryLabel %></span><strong id="payment-voucher-value">-$<%= platformVoucherEstimate.toFixed(2) %></strong></p>
                 <p id="payment-points-row" style="<%= paymentPointEstimate > 0 ? '' : 'display:none;' %>"><span>Points</span><strong id="payment-points-value">-$<%= paymentPointEstimate.toFixed(2) %></strong></p>
                 <p id="payment-cashback-row" style="<%= paymentCashbackEstimate > 0 ? '' : 'display:none;' %>"><span>Wallet cashback used</span><strong id="payment-cashback-value">-$<%= paymentCashbackEstimate.toFixed(2) %></strong></p>
                 <% if (campaignCashbackTotal > 0) { %>
@@ -372,6 +399,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const form = document.querySelector('.payment-form');
     const methodField = document.querySelector('[name="paymentMethod"]');
+    const coveredPaymentInput = document.getElementById('payment-covered-method-input');
+    const paymentMethods = document.querySelector('.payment-methods');
+    const paymentMethodNotes = document.querySelector('.payment-method-notes');
+    const coveredSummary = document.querySelector('.payment-covered-summary');
     const methodInputs = Array.from(document.querySelectorAll('input[name="paymentMethod"]'));
     const netsNote = document.getElementById('nets-payment-note');
     const paynowNote = document.getElementById('paynow-payment-note');
@@ -393,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const deliveryPanel = document.getElementById('payment-delivery-options');
     const pickupSelect = document.getElementById('payment-pickup-merchant-select');
     const pickupAddressInput = document.getElementById('payment-pickup-address-input');
-    const hasGroupedPickupFlow = Boolean(form?.querySelector('input[name="pickupMerchantId"][value="grouped"]'));
+    const pickupCards = Array.from(document.querySelectorAll('[data-pickup-card]'));
     const deliveryFields = Array.from(document.querySelectorAll('[data-payment-delivery-required]'));
     const fulfilmentPill = document.querySelector('.payment-fulfilment-pill');
     const summaryFulfilment = document.getElementById('payment-summary-fulfilment');
@@ -541,8 +572,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function syncWalletAvailability(totalDue) {
         const walletBalance = Number(form?.dataset.ewalletBalance || 0);
+        const isCovered = Number(totalDue || 0) <= 0;
         const shortfall = Math.max(Number(totalDue || 0) - walletBalance, 0);
         const walletAvailable = shortfall <= 0;
+
+        if (coveredPaymentInput) {
+            coveredPaymentInput.disabled = !isCovered;
+        }
+
+        if (paymentMethods) {
+            paymentMethods.style.display = isCovered ? 'none' : '';
+        }
+
+        if (paymentMethodNotes) {
+            paymentMethodNotes.style.display = isCovered ? 'none' : '';
+        }
+
+        if (coveredSummary) {
+            coveredSummary.style.display = isCovered ? '' : 'none';
+        }
 
         if (ewalletBalanceCopy) {
             ewalletBalanceCopy.textContent = 'Available: ' + formatMoney(walletBalance);
@@ -559,8 +607,13 @@ document.addEventListener('DOMContentLoaded', function () {
             ewalletShortfallCopy.textContent = 'Top up needed: ' + formatMoney(shortfall);
         }
 
+        methodInputs.forEach((input) => {
+            if (input !== coveredPaymentInput) {
+                input.disabled = isCovered ? true : (input.value === 'wallet' ? !walletAvailable : false);
+            }
+        });
+
         if (walletMethodInput) {
-            walletMethodInput.disabled = !walletAvailable;
             if (!walletAvailable && walletMethodInput.checked) {
                 const fallbackInput = methodInputs.find((input) => !input.disabled && input.value !== 'wallet')
                     || methodInputs.find((input) => !input.disabled);
@@ -624,8 +677,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (pickupPanel) pickupPanel.style.display = selected === 'pickup' ? '' : 'none';
         if (deliveryPanel) deliveryPanel.style.display = selected === 'delivery' ? '' : 'none';
         if (pickupSelect) {
-            pickupSelect.disabled = selected !== 'pickup' || hasGroupedPickupFlow;
-            pickupSelect.required = selected === 'pickup' && !hasGroupedPickupFlow;
+            pickupSelect.disabled = selected !== 'pickup';
+            pickupSelect.required = selected === 'pickup';
         }
         deliveryFields.forEach((field) => {
             const isDelivery = selected === 'delivery';
@@ -645,14 +698,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (summaryPickupRow) summaryPickupRow.style.display = selected === 'pickup' ? '' : 'none';
         if (summaryDeliveryRow) summaryDeliveryRow.style.display = selected === 'delivery' ? '' : 'none';
         if (summaryPickup) {
-            if (selected === 'pickup' && hasGroupedPickupFlow) {
-                summaryPickup.textContent = 'Grouped by merchant';
-            } else if (pickupSelect) {
+            if (pickupSelect) {
                 const selectedOption = pickupSelect.options[pickupSelect.selectedIndex];
                 summaryPickup.textContent = selectedOption?.text || 'Pickup merchant';
                 if (pickupAddressInput) {
                     pickupAddressInput.value = selectedOption?.dataset.pickupAddress || '';
                 }
+                pickupCards.forEach((card) => {
+                    card.classList.toggle('is-selected', String(card.dataset.pickupCard || '') === String(pickupSelect.value || ''));
+                });
             }
         }
         if (summaryDelivery) summaryDelivery.textContent = getDeliverySummary();
@@ -660,6 +714,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncPaymentMethod() {
+        const isCovered = Boolean(coveredPaymentInput && !coveredPaymentInput.disabled);
+        if (isCovered) {
+            if (paypalButtonContainer) paypalButtonContainer.style.display = 'none';
+            if (submitButton) {
+                submitButton.style.display = '';
+                submitButton.textContent = 'Complete order';
+            }
+            setPayPalMessage('');
+            return;
+        }
+
         let selectedInput = methodInputs.find((input) => input.checked);
         if (!selectedInput || selectedInput.disabled) {
             const fallbackInput = methodInputs.find((input) => !input.disabled);
@@ -740,6 +805,16 @@ document.addEventListener('DOMContentLoaded', function () {
     methodField?.addEventListener('change', syncPaymentMethod);
     fulfilmentRadios.forEach((input) => input.addEventListener('change', syncCheckoutFulfilment));
     if (pickupSelect) pickupSelect.addEventListener('change', syncCheckoutFulfilment);
+    pickupCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            if (!pickupSelect || pickupSelect.disabled) {
+                return;
+            }
+
+            pickupSelect.value = String(card.dataset.pickupCard || '');
+            syncCheckoutFulfilment();
+        });
+    });
     deliveryFields.forEach((field) => {
         field.addEventListener('blur', () => {
             validateDeliveryField(field);

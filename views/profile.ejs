@@ -77,8 +77,12 @@
 
         return Number(voucher.remainingValue || 0) > 0;
     };
-    const activeProfileVouchers = profileVouchers.filter(voucherIsActive);
-    const inactiveProfileVouchers = profileVouchers.filter((voucher) => !voucherIsActive(voucher));
+    const profileGiftCardRecords = profileVouchers.filter((voucher) => voucher.sourceType === 'gift_card');
+    const profileGiftCards = profileGiftCardRecords.filter(voucherIsActive);
+    const profileGiftCardBalance = profileGiftCards.reduce((sum, voucher) => sum + Number(voucher.remainingValue || 0), 0);
+    const nonGiftProfileVouchers = profileVouchers.filter((voucher) => voucher.sourceType !== 'gift_card');
+    const activeProfileVouchers = nonGiftProfileVouchers.filter(voucherIsActive);
+    const inactiveProfileVouchers = nonGiftProfileVouchers.filter((voucher) => !voucherIsActive(voucher));
     const usedProfileVouchers = inactiveProfileVouchers.filter((voucher) => {
         const status = String(voucher.status || '').toLowerCase();
         return status !== 'expired' && (status === 'used' || voucher.redeemedAt || voucher.usedAt);
@@ -86,18 +90,19 @@
     const expiredProfileVouchers = inactiveProfileVouchers.filter((voucher) => String(voucher.status || '').toLowerCase() === 'expired');
     const otherInactiveProfileVouchers = inactiveProfileVouchers.filter((voucher) => !usedProfileVouchers.includes(voucher) && !expiredProfileVouchers.includes(voucher));
     const activePlatformVouchers = activeProfileVouchers.filter((voucher) =>
-        voucher.bookingOnly !== false
-        && voucher.sourceType !== 'reward_shop_merchant'
+        voucher.bookingOnly !== false && voucher.sourceType !== 'reward_shop_merchant'
     );
     const activeServiceVouchers = activeProfileVouchers.filter((voucher) =>
         voucher.bookingOnly !== false
         && voucher.sourceType === 'reward_shop_merchant'
     );
-    const activeProductVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly === false);
+    const activeProductVouchers = activeProfileVouchers.filter((voucher) => voucher.bookingOnly === false && voucher.sourceType !== 'gift_card');
     const voucherSourceLabel = (voucher) => voucher.sourceType === 'referral'
         ? 'Referral'
         : voucher.sourceType === 'birthday'
             ? 'Birthday'
+            : voucher.sourceType === 'gift_card'
+                ? 'Gift card'
             : voucher.merchantName
                 ? 'Merchant voucher'
                 : 'Reward shop';
@@ -105,6 +110,10 @@
         ? `${Number(voucher.discountPercent || 0)}% OFF`
         : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}`;
     const voucherUsageLabel = (voucher) => {
+        if (voucher.sourceType === 'gift_card') {
+            return 'Gift card balance';
+        }
+
         if (voucher.expiresAt) {
             const expiryLabel = formatProfileDate(voucher.expiresAt);
             if (expiryLabel) {
@@ -148,7 +157,10 @@
             terms.push(voucher.detail);
         }
 
-        if (voucher.bookingOnly === false) {
+        if (voucher.sourceType === 'gift_card') {
+            terms.push('Valid on Vaniday booking payments and eligible product checkout items.');
+            terms.push('Unused balance stays available until the gift card expires.');
+        } else if (voucher.bookingOnly === false) {
             terms.push(voucher.linkedItemName
                 ? `Only eligible product offer item: ${voucher.linkedItemName}.`
                 : 'Valid only on eligible product checkout items.');
@@ -177,7 +189,9 @@
             }
         }
 
-        terms.push('Applies only to eligible offer items; other items in the cart are not discounted by this voucher.');
+        if (voucher.sourceType !== 'gift_card') {
+            terms.push('Applies only to eligible offer items; other items in the cart are not discounted by this voucher.');
+        }
         terms.push('Cannot be combined with wallet cashback in the same checkout.');
         terms.push('The best eligible voucher is selected automatically at checkout unless you choose not to use a voucher.');
 
@@ -1265,164 +1279,207 @@
                     <div class="account-panel-header">
                         <div>
                             <p class="eyebrow">Wallet</p>
-                            <h2>Loyalty wallet</h2>
+                            <h2>Wallet</h2>
                         </div>
                         <a class="button secondary" href="#history" data-profile-tab-link="history">Purchase history</a>
                     </div>
 
-                    <div class="profile-wallet-dashboard">
-                        <div class="profile-wallet-hero">
-                            <section class="profile-wallet-balance">
-                                <p class="eyebrow">Real-money balance</p>
+                    <div class="profile-wallet-dashboard profile-wallet-clean">
+                        <section class="profile-wallet-overview-grid">
+                            <article class="profile-wallet-stat-card is-primary">
+                                <p class="eyebrow">E-wallet</p>
                                 <strong>$<%= Number(profileEWallet.balance || 0).toFixed(2) %></strong>
-                                <span><%= profileEWallet.currency || 'SGD' %></span>
-                            </section>
-                            <section class="profile-wallet-action">
-                                <p class="eyebrow">Top up</p>
-                                <h3>Add funds</h3>
-                                <p class="muted">Use Stripe, PayPal, PayNow/HitPay, or NETS QR.</p>
-                                <div class="hero-actions">
-                                    <a class="button primary" href="/profile/wallet">Top up</a>
-                                    <a class="button secondary" href="/profile/wallet">View wallet</a>
-                                </div>
-                            </section>
-                        </div>
-                        <% if (profileEWalletTransactions.length) { %>
-                            <div class="profile-wallet-block">
-                                <div class="wallet-section-heading">
-                                    <div>
-                                        <p class="eyebrow">Recent activity</p>
-                                        <h3>Latest top-ups</h3>
-                                    </div>
-                                    <a class="text-button" href="/profile/wallet">View all</a>
-                                </div>
-                                <div class="profile-wallet-list">
-                                    <% profileEWalletTransactions.forEach((entry) => { %>
-                                        <article class="profile-wallet-row">
-                                            <div>
-                                                <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
-                                                <strong><%= entry.description || 'Wallet transaction' %></strong>
-                                                <small><%= entry.paymentMethod || 'SYSTEM' %></small>
-                                            </div>
-                                            <div>
-                                                <strong>$<%= Number(entry.amount || 0).toFixed(2) %></strong>
-                                                <small><%= String(entry.status || '').toUpperCase() %></small>
-                                            </div>
-                                        </article>
-                                    <% }) %>
-                                </div>
+                                <span><%= profileEWallet.currency || 'SGD' %> available</span>
+                            </article>
+                            <article class="profile-wallet-stat-card">
+                                <p class="eyebrow">Gift cards</p>
+                                <strong>$<%= profileGiftCardBalance.toFixed(2) %></strong>
+                                <span><%= profileGiftCards.length %> active gift card<%= profileGiftCards.length === 1 ? '' : 's' %></span>
+                            </article>
+                            <article class="profile-wallet-stat-card">
+                                <p class="eyebrow">Points</p>
+                                <strong><%= loyalty ? loyalty.wallet.pointsBalance : 0 %></strong>
+                                <span><%= loyalty ? `${loyalty.rules.pointsPerDollar} pts per $1 spent` : 'Not loaded' %></span>
+                            </article>
+                            <article class="profile-wallet-stat-card">
+                                <p class="eyebrow">Cashback</p>
+                                <strong>$<%= loyalty ? Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) : '0.00' %></strong>
+                                <span><%= loyalty ? loyaltyDisplaySummary.displayCashbackSummary : 'Not loaded' %></span>
+                            </article>
+                        </section>
+
+                        <section class="profile-wallet-actions-panel">
+                            <div>
+                                <p class="eyebrow">Manage wallet</p>
+                                <h3>Top up, convert, or spend</h3>
                             </div>
-                        <% } else { %>
-                            <p class="muted">You have no wallet transactions yet.</p>
-                        <% } %>
-                    </div>
-
-                    <% if (loyalty) { %>
-                        <div class="profile-wallet-dashboard">
-                            <div class="profile-wallet-hero">
-                                <section class="profile-wallet-balance">
-                                    <p class="eyebrow">Available points</p>
-                                    <strong><%= loyalty.wallet.pointsBalance %></strong>
-                                    <span><%= loyalty.rules.pointsPerDollar %> pts earned per $1 spent</span>
-                                </section>
-
-                                <form class="profile-wallet-action" action="/customer/wallet/redeem" method="POST">
+                            <div class="profile-wallet-action-grid">
+                                <a class="button primary" href="/profile/wallet">Top up e-wallet</a>
+                                <form class="profile-wallet-inline-form profile-giftcard-redeem-form" action="/giftcards/redeem" method="POST">
                                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <div>
-                                        <p class="eyebrow">Convert</p>
-                                        <h3>Points to cashback</h3>
-                                        <p class="muted">Minimum <%= loyalty.rules.minPointsToRedeem %> points. Cashback appears in this wallet immediately.</p>
-                                    </div>
                                     <label>
-                                        Points
-                                        <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                        Gift card code
+                                        <input type="text" name="code" placeholder="VANI-XXXXXXXX" autocomplete="off" inputmode="text" required>
                                     </label>
-                                    <button class="button primary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Convert points</button>
+                                    <button class="button secondary" type="submit">Redeem gift card</button>
                                 </form>
-
-                                <section class="profile-wallet-cashback">
-                                    <p class="eyebrow">Cashback</p>
-                                    <strong>$<%= Number(loyalty.wallet.cashbackBalance || 0).toFixed(2) %></strong>
-                                    <span><%= loyaltyDisplaySummary.displayCashbackSummary %></span>
+                                <% if (loyalty) { %>
+                                    <form class="profile-wallet-inline-form" action="/customer/wallet/redeem" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <label>
+                                            Points
+                                            <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                        </label>
+                                        <button class="button secondary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Convert points</button>
+                                    </form>
                                     <form action="/customer/checkout/apply-cashback" method="POST">
                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                        <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use in cart</button>
+                                        <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use cashback in cart</button>
                                     </form>
+                                <% } %>
+                            </div>
+                            <% if (loyalty) { %>
+                                <div class="profile-wallet-rules">
+                                    <span><strong><%= loyalty.rules.cashbackPercent %>%</strong> cashback rate</span>
+                                    <span><strong><%= loyalty.rules.minPointsToRedeem %></strong> min points</span>
+                                    <span><strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %></strong> per point</span>
+                                    <span><strong><%= loyalty.wallet.lifetimePoints %></strong> lifetime points</span>
+                                </div>
+                            <% } %>
+                        </section>
+
+                        <section class="profile-wallet-history-hub">
+                            <div class="wallet-section-heading">
+                                <div>
+                                    <p class="eyebrow">History</p>
+                                    <h3>Wallet activity</h3>
+                                </div>
+                                <a class="text-button" href="#history" data-profile-tab-link="history">Purchase history</a>
+                            </div>
+
+                            <div class="profile-wallet-history-grid">
+                                <section class="profile-wallet-block">
+                                    <div class="wallet-section-heading compact">
+                                        <div>
+                                            <p class="eyebrow">E-wallet</p>
+                                            <h3>Top-ups and payments</h3>
+                                        </div>
+                                        <a class="text-button" href="/profile/wallet">View all</a>
+                                    </div>
+                                    <% if (profileEWalletTransactions.length) { %>
+                                        <div class="profile-wallet-list">
+                                            <% profileEWalletTransactions.forEach((entry) => { %>
+                                                <article class="profile-wallet-row">
+                                                    <div>
+                                                        <span><%= new Date(entry.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></span>
+                                                        <strong><%= entry.description || 'Wallet transaction' %></strong>
+                                                        <small><%= entry.paymentMethod || 'SYSTEM' %></small>
+                                                    </div>
+                                                    <div>
+                                                        <strong>$<%= Number(entry.amount || 0).toFixed(2) %></strong>
+                                                        <small><%= String(entry.status || '').toUpperCase() %></small>
+                                                    </div>
+                                                </article>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <p class="muted">No e-wallet activity yet.</p>
+                                    <% } %>
+                                </section>
+
+                                <section class="profile-wallet-block">
+                                    <div class="wallet-section-heading compact">
+                                        <div>
+                                            <p class="eyebrow">Gift cards</p>
+                                            <h3>Gift card history</h3>
+                                        </div>
+                                        <span><%= profileGiftCardRecords.length %> total</span>
+                                    </div>
+                                    <% if (profileGiftCardRecords.length) { %>
+                                        <div class="profile-wallet-list">
+                                            <% profileGiftCardRecords.forEach((giftCard) => { %>
+                                                <article class="profile-wallet-row profile-giftcard-row <%= voucherIsActive(giftCard) ? '' : 'is-muted' %>">
+                                                    <div>
+                                                        <span><%= voucherStatusLabel(giftCard) %></span>
+                                                        <strong><%= giftCard.title %></strong>
+                                                        <small><%= giftCard.code %></small>
+                                                        <% if (giftCard.expiresAt) { %>
+                                                            <small>Expires <%= formatProfileDate(giftCard.expiresAt) %></small>
+                                                        <% } %>
+                                                    </div>
+                                                    <div>
+                                                        <strong>$<%= Number(giftCard.remainingValue || 0).toFixed(2) %></strong>
+                                                        <small>Remaining</small>
+                                                    </div>
+                                                </article>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <p class="muted">No gift cards redeemed yet.</p>
+                                    <% } %>
+                                </section>
+
+                                <section class="profile-wallet-block profile-wallet-history-block">
+                                    <div class="wallet-section-heading compact">
+                                        <div>
+                                            <p class="eyebrow">Rewards</p>
+                                            <h3>Points and cashback</h3>
+                                        </div>
+                                        <span>Page <%= walletPagination.page %> of <%= walletPagination.totalPages %></span>
+                                    </div>
+                                    <div class="profile-wallet-history-controls">
+                                        <p class="muted">Showing <%= walletStartIndex %>-<%= walletEndIndex %> of <%= walletPagination.totalCount %></p>
+                                        <div class="profile-wallet-page-size" role="group" aria-label="Wallet transaction page size">
+                                            <a class="button secondary compact <%= walletPagination.pageSize === 10 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 10) %>">10</a>
+                                            <a class="button secondary compact <%= walletPagination.pageSize === 20 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 20) %>">20</a>
+                                        </div>
+                                    </div>
+
+                                    <% if (!walletTransactions.length) { %>
+                                        <p class="muted">No rewards activity yet.</p>
+                                    <% } else { %>
+                                        <div class="profile-wallet-list">
+                                            <% walletTransactions.forEach((entry) => { %>
+                                                <article class="profile-wallet-row">
+                                                    <div>
+                                                        <span><%= entry.displayDate || '' %></span>
+                                                        <strong><%= entry.displayTitle %></strong>
+                                                        <% if (entry.displaySubtitle) { %>
+                                                            <small>Item: <%= entry.displaySubtitle %></small>
+                                                        <% } %>
+                                                        <% if (entry.displayMerchantName) { %>
+                                                            <small>Merchant: <%= entry.displayMerchantName %></small>
+                                                        <% } %>
+                                                        <% if (entry.displayOrderReference) { %>
+                                                            <small>Reference: <%= entry.displayOrderReference %></small>
+                                                        <% } %>
+                                                    </div>
+                                                    <div>
+                                                        <strong class="<%= entry.displayPointsTone || 'neutral' %>">Points: <%= entry.displayPointsDelta || '0 pts' %></strong>
+                                                        <small class="<%= entry.displayCashbackTone || 'neutral' %>">Cashback: <%= entry.displayCashbackDelta || '$0.00' %></small>
+                                                    </div>
+                                                </article>
+                                            <% }) %>
+                                        </div>
+
+                                        <nav class="profile-wallet-pagination" aria-label="Wallet history pagination">
+                                            <% if (walletPagination.hasPrevious) { %>
+                                                <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page - 1, walletPagination.pageSize) %>">Previous</a>
+                                            <% } else { %>
+                                                <span class="button secondary compact is-disabled" aria-disabled="true">Previous</span>
+                                            <% } %>
+
+                                            <% if (walletPagination.hasNext) { %>
+                                                <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page + 1, walletPagination.pageSize) %>">Next</a>
+                                            <% } else { %>
+                                                <span class="button secondary compact is-disabled" aria-disabled="true">Next</span>
+                                            <% } %>
+                                        </nav>
+                                    <% } %>
                                 </section>
                             </div>
-
-                            <div class="profile-wallet-rules">
-                                <span><strong><%= loyalty.rules.cashbackPercent %>%</strong> cashback rate</span>
-                                <span><strong><%= loyalty.rules.minPointsToRedeem %></strong> min points</span>
-                                <span><strong>$<%= Number(loyalty.rules.pointsToCashRate || 0).toFixed(2) %></strong> per point</span>
-                                <span><strong><%= loyalty.wallet.lifetimePoints %></strong> lifetime points</span>
-                            </div>
-
-                            <div class="profile-wallet-history-controls">
-                                <p class="muted">Showing <%= walletStartIndex %>-<%= walletEndIndex %> of <%= walletPagination.totalCount %> transactions</p>
-                                <div class="profile-wallet-page-size" role="group" aria-label="Wallet transaction page size">
-                                    <a class="button secondary compact <%= walletPagination.pageSize === 10 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 10) %>">10 per page</a>
-                                    <a class="button secondary compact <%= walletPagination.pageSize === 20 ? 'is-active' : '' %>" href="<%= walletPageHref(1, 20) %>">20 per page</a>
-                                </div>
-                            </div>
-
-                            <section class="profile-wallet-block profile-wallet-history-block">
-                                <div class="wallet-section-heading">
-                                    <div>
-                                        <p class="eyebrow">Activity</p>
-                                        <h3>Wallet transaction history</h3>
-                                    </div>
-                                    <span>Page <%= walletPagination.page %> of <%= walletPagination.totalPages %></span>
-                                </div>
-
-                                <% if (!walletTransactions.length) { %>
-                                    <p class="muted">No wallet transactions yet. Complete a paid booking or checkout to earn rewards.</p>
-                                <% } else { %>
-                                    <div class="profile-wallet-list">
-                                        <% walletTransactions.forEach((entry) => { %>
-                                            <article class="profile-wallet-row">
-                                                <div>
-                                                    <span><%= entry.displayDate || '' %></span>
-                                                    <strong><%= entry.displayTitle %></strong>
-                                                    <% if (entry.displaySubtitle) { %>
-                                                        <small>Item: <%= entry.displaySubtitle %></small>
-                                                    <% } %>
-                                                    <% if (entry.displayMerchantName) { %>
-                                                        <small>Merchant: <%= entry.displayMerchantName %></small>
-                                                    <% } %>
-                                                    <% if (entry.displayOrderReference) { %>
-                                                        <small>Reference: <%= entry.displayOrderReference %></small>
-                                                    <% } %>
-                                                </div>
-                                                <div>
-                                                    <strong class="<%= entry.displayPointsTone || 'neutral' %>">Points: <%= entry.displayPointsDelta || '0 pts' %></strong>
-                                                    <small class="<%= entry.displayCashbackTone || 'neutral' %>">Cashback: <%= entry.displayCashbackDelta || '$0.00' %></small>
-                                                </div>
-                                            </article>
-                                        <% }) %>
-                                    </div>
-
-                                    <nav class="profile-wallet-pagination" aria-label="Wallet history pagination">
-                                        <% if (walletPagination.hasPrevious) { %>
-                                            <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page - 1, walletPagination.pageSize) %>">Previous</a>
-                                        <% } else { %>
-                                            <span class="button secondary compact is-disabled" aria-disabled="true">Previous</span>
-                                        <% } %>
-
-                                        <% if (walletPagination.hasNext) { %>
-                                            <a class="button secondary compact" href="<%= walletPageHref(walletPagination.page + 1, walletPagination.pageSize) %>">Next</a>
-                                        <% } else { %>
-                                            <span class="button secondary compact is-disabled" aria-disabled="true">Next</span>
-                                        <% } %>
-                                    </nav>
-                                <% } %>
-
-                                <a class="text-button profile-wallet-history-link" href="#history" data-profile-tab-link="history">View purchase history</a>
-                            </section>
-                        </div>
-                    <% } else { %>
-                        <p class="muted">Wallet details could not be loaded right now.</p>
-                    <% } %>
+                        </section>
+                    </div>
                 </section>
 
                 <% if (favourites.length > 0) { %>

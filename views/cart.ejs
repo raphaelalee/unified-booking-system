@@ -26,6 +26,8 @@
             const giftCardCount = cart.filter((item) => item.type === 'Gift Card').length;
             const serviceCount = cart.filter((item) => item.type !== 'Product' && item.type !== 'Gift Card').length;
             const cartVoucherList = typeof availableVouchers !== 'undefined' && Array.isArray(availableVouchers) ? availableVouchers : [];
+            const cartGiftCardList = cartVoucherList.filter((voucher) => voucher.sourceType === 'gift_card');
+            const cartPromoVoucherList = cartVoucherList.filter((voucher) => voucher.sourceType !== 'gift_card');
         %>
 
         <div class="cart-layout cart-organized-layout">
@@ -156,22 +158,25 @@
                     <section class="cart-rewards-section">
                         <div class="cart-voucher-heading">
                             <div>
-                                <strong>Rewards</strong>
-                                <small>Choose a voucher and decide whether to use wallet cashback.</small>
+                                <strong>Gift cards & rewards</strong>
+                                <small>Use gift card balance first, or choose a promo voucher.</small>
                             </div>
-                            <span><%= cartVoucherList.length %> voucher<%= cartVoucherList.length === 1 ? '' : 's' %></span>
+                            <span><%= cartGiftCardList.length %> gift card<%= cartGiftCardList.length === 1 ? '' : 's' %> · <%= cartPromoVoucherList.length %> voucher<%= cartPromoVoucherList.length === 1 ? '' : 's' %></span>
                         </div>
 
                         <% if (cartVoucherList.length) { %>
                             <div class="cart-voucher-choice-list">
                                 <label class="cart-voucher-choice">
-                                    <input type="radio" name="selectedVoucherId" value="none" data-discount-type="none" checked required>
+                                    <input type="radio" name="selectedVoucherId" value="none" data-discount-type="none" data-source-type="none" checked required>
                                     <span>
-                                        <strong>No platform voucher</strong>
-                                        <small>Merchant vouchers are applied automatically at checkout.</small>
+                                        <strong>No gift card or promo voucher</strong>
+                                        <small>Merchant smart vouchers are still checked at checkout.</small>
                                     </span>
                                 </label>
-                                <% cartVoucherList.forEach((voucher) => { %>
+                                <% if (cartGiftCardList.length) { %>
+                                    <p class="cart-voucher-group-label">Gift card balance</p>
+                                <% } %>
+                                <% cartGiftCardList.forEach((voucher) => { %>
                                     <label class="cart-voucher-choice">
                                         <input
                                             type="radio"
@@ -180,10 +185,32 @@
                                             data-discount-type="<%= voucher.discountType || 'fixed' %>"
                                             data-discount-percent="<%= Number(voucher.discountPercent || 0) %>"
                                             data-discount-value="<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>"
+                                            data-source-type="<%= voucher.sourceType || '' %>"
+                                            required>
+                                        <span>
+                                            <strong>Gift card balance</strong>
+                                            <small><%= voucher.code %> · Remaining $<%= Number(voucher.remainingValue || 0).toFixed(2) %></small>
+                                        </span>
+                                        <b><%= voucher.discountType === 'percentage' ? `${Number(voucher.discountPercent || 0)}% OFF` : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %></b>
+                                    </label>
+                                <% }) %>
+                                <% if (cartPromoVoucherList.length) { %>
+                                    <p class="cart-voucher-group-label">Promo vouchers</p>
+                                <% } %>
+                                <% cartPromoVoucherList.forEach((voucher) => { %>
+                                    <label class="cart-voucher-choice">
+                                        <input
+                                            type="radio"
+                                            name="selectedVoucherId"
+                                            value="<%= voucher.id %>"
+                                            data-discount-type="<%= voucher.discountType || 'fixed' %>"
+                                            data-discount-percent="<%= Number(voucher.discountPercent || 0) %>"
+                                            data-discount-value="<%= Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2) %>"
+                                            data-source-type="<%= voucher.sourceType || '' %>"
                                             required>
                                         <span>
                                             <strong><%= voucher.title %></strong>
-                                            <small>Voucher ID: <%= voucher.id %> &middot; Code: <%= voucher.code %></small>
+                                            <small>Voucher ID: <%= voucher.id %> · Code: <%= voucher.code %></small>
                                         </span>
                                         <b><%= voucher.discountType === 'percentage' ? `${Number(voucher.discountPercent || 0)}% OFF` : `$${Number(voucher.remainingValue || voucher.voucherValue || 0).toFixed(2)}` %></b>
                                     </label>
@@ -191,7 +218,7 @@
                             </div>
                         <% } else { %>
                             <input type="hidden" name="selectedVoucherId" value="none">
-                            <p class="muted">No eligible vouchers for the selected cart items.</p>
+                            <p class="muted">No eligible gift cards or promo vouchers for the selected cart items.</p>
                         <% } %>
 
                         <div class="loyalty-redemption-card cart-cashback-card">
@@ -215,7 +242,7 @@
 
                     <div class="cart-totals cart-summary-totals">
                         <p><span>Items subtotal</span><strong id="cart-subtotal-value">$<%= Number(total).toFixed(2) %></strong></p>
-                        <p id="cart-voucher-row" style="display:none;"><span>Voucher</span><strong id="cart-voucher-value">-$0.00</strong></p>
+                        <p id="cart-voucher-row" style="display:none;"><span id="cart-voucher-label">Voucher</span><strong id="cart-voucher-value">-$0.00</strong></p>
                         <% if (cashbackApplied > 0) { %>
                             <p><span>Wallet cashback used</span><strong id="cart-cashback-value">-$<%= cashbackApplied.toFixed(2) %></strong></p>
                         <% } %>
@@ -254,6 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const summaryCountPlural = document.getElementById('cart-summary-count-plural');
     const subtotalValue = document.getElementById('cart-subtotal-value');
     const voucherRow = document.getElementById('cart-voucher-row');
+    const voucherLabel = document.getElementById('cart-voucher-label');
     const voucherValue = document.getElementById('cart-voucher-value');
     const cashbackValue = document.getElementById('cart-cashback-value');
     const dueValue = document.getElementById('cart-due-value');
@@ -303,6 +331,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (summaryCountPlural) summaryCountPlural.textContent = lineCount === 1 ? '' : 's';
         if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
         if (voucherRow) voucherRow.style.display = voucherDiscount > 0 ? '' : 'none';
+        if (voucherLabel && selectedVoucher) {
+            voucherLabel.textContent = selectedVoucher.dataset.sourceType === 'gift_card'
+                ? 'Gift card balance'
+                : 'Promo voucher';
+        }
         if (voucherValue) voucherValue.textContent = '-' + formatMoney(voucherDiscount);
         if (cashbackValue) cashbackValue.textContent = '-' + formatMoney(cashbackApplied);
         if (dueValue) dueValue.textContent = formatMoney(due);

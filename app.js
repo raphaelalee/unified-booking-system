@@ -770,6 +770,8 @@ app.post('/customer/checkout/apply-cashback', requireCustomer, loyaltyController
 app.get('/cashback', requireCustomer, (req, res) => res.redirect('/profile#wallet'));
 
 app.get('/giftcards', requireCustomer, merchantController.showGiftCards);
+app.get('/giftcards/redeem', requireCustomer, merchantController.redeemGiftCard);
+app.post('/giftcards/redeem', requireCustomer, merchantController.redeemGiftCard);
 app.get('/giftcards/add', requireCustomer, (req, res) => {
     res.redirect('/giftcards');
 });

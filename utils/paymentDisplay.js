@@ -8,6 +8,8 @@ function normalizePaymentMethod(value = '') {
     if (['e_wallet', 'ewallet', 'wallet', 'internal_wallet'].includes(text)) return 'wallet';
     if (['cashback', 'cashback_wallet'].includes(text)) return 'cashback_wallet';
     if (['rewards', 'points', 'loyalty_points'].includes(text)) return 'loyalty_points';
+    if (['gift_card', 'giftcard', 'gift_cards'].includes(text)) return 'gift_card';
+    if (['covered', 'no_payment_due', 'no_payment'].includes(text)) return 'covered';
     if (['voucher', 'discount'].includes(text)) return text;
 
     return text || 'unknown';
@@ -24,7 +26,7 @@ function normalizePaymentProvider(value = '', method = '') {
     if (['internal_wallet', 'wallet', 'ewallet'].includes(provider)) return 'internal_wallet';
     if (['cashback_wallet'].includes(provider)) return 'internal_wallet';
     if (['direct', 'manual', ''].includes(provider)) {
-        if (normalizedMethod === 'wallet' || normalizedMethod === 'cashback_wallet' || normalizedMethod === 'loyalty_points') return 'internal_wallet';
+        if (normalizedMethod === 'wallet' || normalizedMethod === 'cashback_wallet' || normalizedMethod === 'loyalty_points' || normalizedMethod === 'gift_card' || normalizedMethod === 'covered') return 'internal_wallet';
         if (normalizedMethod === 'paynow') return 'hitpay';
         if (normalizedMethod === 'nets_qr') return 'nets';
         if (normalizedMethod === 'paypal') return 'paypal';
@@ -51,6 +53,8 @@ function formatPaymentMethod(method = '', provider = '', details = {}) {
     if (normalizedMethod === 'wallet') return 'E-Wallet';
     if (normalizedMethod === 'cashback_wallet') return 'Cashback Wallet';
     if (normalizedMethod === 'loyalty_points') return 'Loyalty Points';
+    if (normalizedMethod === 'gift_card') return 'Gift Card';
+    if (normalizedMethod === 'covered') return 'No Payment Due';
     if (normalizedMethod === 'voucher') return 'Voucher';
     if (normalizedMethod === 'discount') return 'Discount';
 

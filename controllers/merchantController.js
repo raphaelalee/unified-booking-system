@@ -369,10 +369,29 @@ function buildPickupMerchantOptions(cart = [], salonRows = []) {
     const salonMap = new Map((salonRows || []).map((row) => [
         String(row.salon_id),
         {
+            id: String(row.salon_id),
+            name: String(row.salon_name || 'Pickup store').trim(),
             address: normalizeAddressText(row.address),
             pickupInstructions: normalizeAddressText(row.description)
         }
     ]));
+
+    (salonRows || []).forEach((row) => {
+        const merchantId = String(row.salon_id || '').trim();
+        const merchantName = String(row.salon_name || '').trim();
+
+        if (!merchantId || !merchantName) {
+            return;
+        }
+
+        optionMap.set(merchantId, {
+            id: merchantId,
+            name: merchantName,
+            address: normalizeAddressText(row.address),
+            pickupInstructions: normalizeAddressText(row.description),
+            items: []
+        });
+    });
 
     (cart || []).forEach((item) => {
         const merchantId = String(item.merchantId || '').trim();
@@ -384,7 +403,7 @@ function buildPickupMerchantOptions(cart = [], salonRows = []) {
 
         const existing = optionMap.get(merchantId) || {
             id: merchantId,
-            name: merchantName,
+            name: salonMap.get(merchantId)?.name || merchantName,
             address: salonMap.get(merchantId)?.address || '',
             pickupInstructions: salonMap.get(merchantId)?.pickupInstructions || '',
             items: []
@@ -416,7 +435,13 @@ async function resolvePickupMerchantOptions(cart = []) {
     const baseOptions = buildPickupMerchantOptions(cart, []);
 
     if (!baseOptions.length) {
-        return [];
+        try {
+            const salonRows = await getApprovedSalons();
+            return buildPickupMerchantOptions([], salonRows);
+        } catch (error) {
+            console.error('Pickup merchant options could not be loaded:', error);
+            return [];
+        }
     }
 
     try {
@@ -778,6 +803,20 @@ function getGiftCardExpiryDate(validityMonths = 12) {
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + Math.max(1, Number(validityMonths || 12)));
     return expiry.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function isLocalRequest(req) {
+    const host = String(req.get('host') || '').toLowerCase();
+    return host.startsWith('localhost:') || host.startsWith('127.0.0.1:') || host === 'localhost' || host === '127.0.0.1';
+}
+
+function buildGiftCardRedeemLink(req, voucherCode) {
+    const requestBaseUrl = `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
+    const baseUrl = isLocalRequest(req)
+        ? requestBaseUrl
+        : getPublicBaseUrl(req);
+
+    return `${baseUrl}/giftcards/redeem?code=${encodeURIComponent(voucherCode || '')}`;
 }
 
 function parseGiftCardForm(body, sessionUser) {
@@ -3448,6 +3487,28 @@ function showGiftCards(req, res) {
     });
 }
 
+function redeemGiftCard(req, res) {
+    const code = String(req.query.code || req.body?.code || '').trim();
+
+    GiftCardVoucher.claimForUser(req.session.user, code, (error, result = {}) => {
+        if (error) {
+            req.session.profileError = error.message || 'Gift card could not be redeemed.';
+            return res.redirect('/profile#wallet');
+        }
+
+        if (result.alreadyClaimed) {
+            const remainingValue = Number(result.remainingValue || 0);
+            req.session.profileSuccess = remainingValue > 0
+                ? `This gift card is already in your wallet with $${remainingValue.toFixed(2)} remaining.`
+                : 'This gift card is already in your wallet and has no remaining balance.';
+            return res.redirect('/profile#wallet');
+        }
+
+        req.session.profileSuccess = `Gift card ${result.code} has been added to your wallet.`;
+        return res.redirect('/profile#wallet');
+    });
+}
+
 function addGiftCardToCart(req, res) {
     const giftCard = parseGiftCardForm(req.body, req.session.user);
 
@@ -3593,9 +3654,8 @@ async function checkout(req, res) {
     const checkoutId = `ORD-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const userName = req.session.profile?.name || req.session.user?.name || 'Customer';
     const pickupMerchants = await resolvePickupMerchantOptions(selectedItems);
-    const isMultiMerchantPickup = pickupMerchants.length > 1;
-    const defaultPickupMerchantId = pickupMerchants.length === 1 ? String(pickupMerchants[0].id) : 'grouped';
-    const defaultPickupMerchantAddress = pickupMerchants.length === 1 ? String(pickupMerchants[0].address || '') : '';
+    const defaultPickupMerchantId = pickupMerchants.length ? String(pickupMerchants[0].id) : '';
+    const defaultPickupMerchantAddress = pickupMerchants.length ? String(pickupMerchants[0].address || '') : '';
     const fulfilmentMerchantName = hasProductItems ? 'Any merchant' : 'Cart checkout';
     const selectedVoucherId = String(req.body.selectedVoucherId || 'none').trim();
     const hasSelectedVoucher = Boolean(selectedVoucherId && selectedVoucherId !== 'none');
@@ -3632,16 +3692,17 @@ async function checkout(req, res) {
             price: Number(item.price || 0),
             unitPrice: Number(item.price || 0),
             lineTotal: Number(item.lineTotal || 0),
-            detail: item.merchantName || ''
+            detail: item.merchantName || '',
+            giftCard: item.giftCard || null
         })),
         selectedItemIds: selectedItems.map((item) => String(item.id)).join(','),
         selectedVoucherId,
         useCashback,
         fulfilment,
-        pickupMerchantId: isMultiMerchantPickup ? 'grouped' : pickupMerchantId,
+        pickupMerchantId: defaultPickupMerchantId || pickupMerchantId,
         pickupMerchantAddress: defaultPickupMerchantAddress,
-        pickupMode: isMultiMerchantPickup ? 'grouped' : 'single',
-        pickupMerchantName: '',
+        pickupMode: defaultPickupMerchantId ? 'selected' : '',
+        pickupMerchantName: pickupMerchants[0]?.name || '',
         pickupMerchantOptions: pickupMerchants,
         ...deliveryDetails
     };
@@ -4438,36 +4499,19 @@ function applyCheckoutFulfilment(pending, payment) {
         ? pending.pickupMerchantOptions
         : buildPickupMerchantOptions(items);
     const pickupMerchantMap = new Map(pickupMerchants.map((merchant) => [String(merchant.id), merchant]));
-    const hasMultiplePickupMerchants = pickupMerchants.length > 1;
-    const pickupGroups = pickupMerchants.map((merchant) => ({
-        merchantId: String(merchant.id || ''),
-        merchantName: merchant.name || '',
-        pickupAddress: normalizeAddressText(merchant.address || ''),
-        pickupInstructions: normalizeAddressText(merchant.pickupInstructions || ''),
-        items: Array.isArray(merchant.items) ? merchant.items : []
-    }));
-
     if (fulfilment === 'pickup') {
-        if (hasMultiplePickupMerchants) {
-            if (pickupMerchantId && pickupMerchantId !== 'grouped') {
-                throw new Error('This order includes multiple merchants. Pickup is grouped by merchant and cannot be reassigned to a single location.');
-            }
-        } else {
-            const expectedMerchant = pickupMerchants[0] || null;
-            const expectedMerchantId = expectedMerchant ? String(expectedMerchant.id || '') : '';
+        const selectedMerchantId = pickupMerchantId === 'any' || !pickupMerchantId
+            ? String(pickupMerchants[0]?.id || '')
+            : pickupMerchantId;
+        const selectedMerchant = pickupMerchantMap.get(selectedMerchantId);
 
-            if (!expectedMerchantId) {
-                throw new Error('No valid pickup merchant is available for this cart.');
-            }
+        if (!selectedMerchant) {
+            throw new Error('Please select a valid pickup store.');
+        }
 
-            if (pickupMerchantId && pickupMerchantId !== expectedMerchantId && pickupMerchantId !== 'any') {
-                throw new Error('Please select a valid pickup merchant from your cart.');
-            }
-
-            const expectedAddress = normalizeAddressText(expectedMerchant.address || '');
-            if (pickupMerchantAddress && expectedAddress && pickupMerchantAddress !== expectedAddress) {
-                throw new Error('Selected pickup address does not match the selected merchant.');
-            }
+        const expectedAddress = normalizeAddressText(selectedMerchant.address || '');
+        if (pickupMerchantAddress && expectedAddress && pickupMerchantAddress !== expectedAddress) {
+            throw new Error('Selected pickup address does not match the selected store.');
         }
     }
 
@@ -4476,15 +4520,22 @@ function applyCheckoutFulfilment(pending, payment) {
         throw new Error(deliveryValidation.errors.join(' '));
     }
 
-    const resolvedSinglePickupMerchantId = !hasMultiplePickupMerchants && (pickupMerchantId === 'any' || !pickupMerchantId)
+    const resolvedPickupMerchantId = pickupMerchantId === 'any' || !pickupMerchantId
         ? String(pickupMerchants[0]?.id || '')
         : String(pickupMerchantId || '');
-    const selectedPickupMerchant = fulfilment === 'pickup' && !hasMultiplePickupMerchants
-        ? pickupMerchantMap.get(resolvedSinglePickupMerchantId)
+    const selectedPickupMerchant = fulfilment === 'pickup'
+        ? pickupMerchantMap.get(resolvedPickupMerchantId)
         : null;
-    const selectedPickupName = selectedPickupMerchant?.name || (hasMultiplePickupMerchants && fulfilment === 'pickup' ? 'Grouped by merchant' : '');
+    const selectedPickupName = selectedPickupMerchant?.name || '';
     const selectedPickupAddress = selectedPickupMerchant?.address || '';
     const selectedPickupInstructions = selectedPickupMerchant?.pickupInstructions || '';
+    const pickupGroups = selectedPickupMerchant ? [{
+        merchantId: String(selectedPickupMerchant.id || ''),
+        merchantName: selectedPickupMerchant.name || '',
+        pickupAddress: normalizeAddressText(selectedPickupMerchant.address || ''),
+        pickupInstructions: normalizeAddressText(selectedPickupMerchant.pickupInstructions || ''),
+        items: items.filter((item) => String(item.type || '') === 'Product')
+    }] : [];
     const shippingFee = fulfilment === 'delivery' ? CART_DELIVERY_FEE : 0;
     const amount = Math.round((itemSubtotal + shippingFee) * 100) / 100;
     const deliveryDetails = fulfilment === 'delivery'
@@ -4505,12 +4556,12 @@ function applyCheckoutFulfilment(pending, payment) {
         merchantName: fulfilment === 'delivery' ? 'Delivery' : (selectedPickupName || 'Any merchant'),
         fulfilment,
         pickupMerchantId: fulfilment === 'pickup'
-            ? (hasMultiplePickupMerchants ? 'grouped' : String(selectedPickupMerchant?.id || pickupMerchants[0]?.id || ''))
+            ? String(selectedPickupMerchant?.id || pickupMerchants[0]?.id || '')
             : '',
         pickupMerchantName: selectedPickupName,
         pickupMerchantAddress: fulfilment === 'pickup' ? normalizeAddressText(selectedPickupAddress) : '',
         pickupInstructions: fulfilment === 'pickup' ? normalizeAddressText(selectedPickupInstructions) : '',
-        pickupMode: fulfilment === 'pickup' ? (hasMultiplePickupMerchants ? 'grouped' : 'single') : '',
+        pickupMode: fulfilment === 'pickup' ? 'selected' : '',
         pickupGroups: fulfilment === 'pickup' ? pickupGroups : [],
         pickupMerchantOptions: pickupMerchants,
         ...deliveryDetails
@@ -4872,6 +4923,11 @@ async function applyVoucherRedemption(req, payment) {
         ...payment,
         selectedVoucherId: selectedVoucherIds.join(','),
         voucherIds: appliedVouchers.map((entry) => entry.voucher.id),
+        voucherRedemptions: appliedVouchers.map((entry) => ({
+            id: entry.voucher.id,
+            discount: Number(entry.discount || 0)
+        })),
+        voucherSources: appliedVouchers.map((entry) => entry.voucher.sourceType || '').filter(Boolean),
         voucherId: primaryVoucher.id,
         voucherCode: appliedVouchers.map((entry) => entry.voucher.code).filter(Boolean).join(', '),
         voucherTitle: appliedVouchers.map((entry) => entry.voucher.title).join(' + '),
@@ -5473,12 +5529,30 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
         });
     }
 
-    const redeemedVoucherIds = Array.from(new Set((paidPayment.voucherIds || [paidPayment.voucherId]).map(Number).filter((id) => id > 0)));
-    for (const voucherId of redeemedVoucherIds) {
+    const voucherRedemptions = Array.isArray(paidPayment.voucherRedemptions) && paidPayment.voucherRedemptions.length
+        ? paidPayment.voucherRedemptions.reduce((entries, entry) => {
+            const voucherId = Number(entry?.id || 0);
+            if (!voucherId) {
+                return entries;
+            }
+
+            const existing = entries.find((item) => item.id === voucherId);
+            if (existing) {
+                existing.discount += Number(entry.discount || 0);
+            } else {
+                entries.push({ id: voucherId, discount: Number(entry.discount || 0) });
+            }
+
+            return entries;
+        }, [])
+        : Array.from(new Set((paidPayment.voucherIds || [paidPayment.voucherId]).map(Number).filter((id) => id > 0)))
+            .map((id) => ({ id, discount: 0 }));
+    for (const voucherRedemption of voucherRedemptions) {
         await new Promise((resolve, reject) => {
-            UserVoucher.markRedeemed(voucherId, {
+            UserVoucher.markRedeemed(voucherRedemption.id, {
                 bookingId: paidPayment.kind === 'booking' ? paidPayment.bookingId || null : null,
-                transactionId: paidPayment.transactionId || null
+                transactionId: paidPayment.transactionId || null,
+                amountUsed: voucherRedemption.discount
             }, (error) => error ? reject(error) : resolve());
         });
     }
@@ -5498,7 +5572,7 @@ async function completeTrustedPaymentWork(req, payment, paymentMethod) {
                 voucherCode: giftCard.voucherCode,
                 message: giftCard.message,
                 expiryDate: giftCard.expiryDate,
-                redeemLink: process.env.BASE_URL ? `${String(process.env.BASE_URL).replace(/\/$/, '')}` : 'https://vaniday.sg',
+                redeemLink: buildGiftCardRedeemLink(req, giftCard.voucherCode),
                 deliveryOption: giftCard.deliveryOption
             });
             console.log(`Gift card email sent to ${emailTarget}`);
@@ -5698,7 +5772,15 @@ async function confirmPayment(req, res) {
     if (trustedPayment.amount === 0) {
         try {
             const durablePayment = await savePaymentAttempt('direct', `zero-${trustedPayment.receiptId}`, trustedPayment);
-            const receiptId = await completeTrustedPayment(req, durablePayment, trustedPayment.pointsRedeemed ? 'Rewards' : 'Cashback');
+            const voucherSources = Array.isArray(trustedPayment.voucherSources) ? trustedPayment.voucherSources : [];
+            const directPaymentLabel = voucherSources.includes('gift_card')
+                ? 'Gift Card'
+                : Number(trustedPayment.pointsRedeemed || 0) > 0
+                    ? 'Rewards'
+                    : Number(trustedPayment.cashbackRedeemed || 0) > 0
+                        ? 'Cashback'
+                        : 'No payment due';
+            const receiptId = await completeTrustedPayment(req, durablePayment, directPaymentLabel);
             return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
         } catch (error) {
             console.error(error);
@@ -6454,6 +6536,7 @@ module.exports = {
     createBooking,
     addToCart,
     showGiftCards,
+    redeemGiftCard,
     addProductToCart,
     addGiftCardToCart,
     showCart,
