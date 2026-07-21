@@ -31,6 +31,44 @@
     const renderStars = (rating) => '&#9733;'.repeat(Math.round(Number(rating || 0))) + '&#9734;'.repeat(Math.max(0, 5 - Math.round(Number(rating || 0))));
     const highlightedServices = Array.isArray(featuredServices) ? featuredServices : [];
     const highlightedProducts = Array.isArray(featuredProducts) ? featuredProducts : [];
+    const studioDisplayProfiles = {
+        1: {
+            awards: ['Vaniday Customer Choice 2026', 'Orchard Beauty Excellence finalist', 'Top Rated Hair & Facial Studio'],
+            features: ['Private facial suite', 'Bright styling stations', 'Sterilised tools between appointments', 'Refreshment corner for longer visits'],
+            notes: ['Senior stylists for colour and cut consultations', 'Skin prep review before facial treatments', 'Quiet appointment slots available on request'],
+            galleryLabels: ['Reception lounge', 'Styling stations', 'Private treatment suite']
+        },
+        2: {
+            awards: ['Wellness Guest Favourite 2026', 'Best Neighbourhood Spa shortlist', 'Vaniday Relaxation Service Award'],
+            features: ['Low-noise treatment rooms', 'Heated massage beds', 'Aromatherapy consultation before sessions', 'Private post-treatment lounge'],
+            notes: ['Therapists trained in pressure adjustment', 'Body treatments planned around comfort level', 'Couple and solo appointment flow supported'],
+            galleryLabels: ['Spa reception', 'Treatment suite', 'Relaxation room']
+        },
+        3: {
+            awards: ['Northside Grooming Pick 2026', 'Vaniday Fast Service Recognition', 'Student Favourite Barber Studio'],
+            features: ['Classic barber chairs', 'Dedicated fade and beard stations', 'Hot towel preparation counter', 'Walk-in waiting bench'],
+            notes: ['Barbers handle skin fades and line-ups daily', 'Student-friendly appointment timing', 'Beard shaping mapped before trimming'],
+            galleryLabels: ['Barber floor', 'Cutting station', 'Grooming counter']
+        }
+    };
+    const categoryProfile = String(merchant.category || '').toLowerCase().includes('spa')
+        ? studioDisplayProfiles[2]
+        : String(merchant.category || '').toLowerCase().includes('barber')
+            ? studioDisplayProfiles[3]
+            : studioDisplayProfiles[1];
+    const studioProfile = studioDisplayProfiles[Number(merchant.id)] || categoryProfile;
+    const studioAwards = Array.isArray(merchant.awards) && merchant.awards.length
+        ? merchant.awards
+        : studioProfile.awards;
+    const studioFeatures = Array.isArray(merchant.studioFeatures) && merchant.studioFeatures.length
+        ? merchant.studioFeatures
+        : studioProfile.features;
+    const specialistNotes = Array.isArray(merchant.specialistNotes) && merchant.specialistNotes.length
+        ? merchant.specialistNotes
+        : studioProfile.notes;
+    const galleryLabels = Array.isArray(merchant.galleryLabels) && merchant.galleryLabels.length >= 3
+        ? merchant.galleryLabels
+        : studioProfile.galleryLabels;
 %>
 
 <section class="merchant-storefront">
@@ -80,9 +118,32 @@
         <a href="#storefront-about">About</a>
     </nav>
 
+    <div class="storefront-overview-strip" aria-label="Studio summary">
+        <article>
+            <span>Rating</span>
+            <strong><%= ratingCopy %></strong>
+            <small><%= reviewCount > 0 ? `${reviewCount} review${reviewCount === 1 ? '' : 's'}` : 'New studio' %></small>
+        </article>
+        <article>
+            <span>Services</span>
+            <strong><%= detailServices.length %></strong>
+            <small><%= categories.slice(0, 2).join(' / ') || merchant.category || 'Beauty menu' %></small>
+        </article>
+        <article>
+            <span>Starts from</span>
+            <strong><%= startingPrice > 0 ? '$' + startingPrice.toFixed(2) : 'Menu' %></strong>
+            <small>Transparent pricing</small>
+        </article>
+        <article>
+            <span>Availability</span>
+            <strong><%= statusCopy %></strong>
+            <small><%= hoursCopy %></small>
+        </article>
+    </div>
+
     <div class="merchant-storefront-layout">
         <div class="merchant-storefront-main">
-            <section class="storefront-section" id="storefront-services">
+            <section class="storefront-section storefront-services-section" id="storefront-services">
                 <div class="storefront-section-heading">
                     <div>
                         <p class="eyebrow">Services</p>
@@ -90,6 +151,7 @@
                     </div>
                     <span><%= detailServices.length %> service<%= detailServices.length === 1 ? '' : 's' %></span>
                 </div>
+                <p class="storefront-section-subcopy">Browse live appointment options, compare duration and price, then choose the treatment that fits your visit.</p>
 
                 <% if (highlightedServices.length > 0) { %>
                     <div class="storefront-product-strip">
@@ -237,10 +299,10 @@
                         <h2>A look inside</h2>
                     </div>
                 </div>
-                <div class="storefront-gallery-grid">
-                    <div class="merchant-thumb-<%= merchant.id %>"></div>
-                    <div></div>
-                    <div></div>
+                <div class="storefront-gallery-grid storefront-gallery-merchant-<%= merchant.id %>">
+                    <div class="storefront-gallery-tile storefront-gallery-main"><span><%= galleryLabels[0] %></span></div>
+                    <div class="storefront-gallery-tile storefront-gallery-room"><span><%= galleryLabels[1] %></span></div>
+                    <div class="storefront-gallery-tile storefront-gallery-detail"><span><%= galleryLabels[2] %></span></div>
                 </div>
             </section>
 
@@ -257,6 +319,33 @@
                     <span><strong><%= slotCount %></strong> available times</span>
                     <span>From <strong><%= startingPrice > 0 ? '$' + startingPrice : 'menu pricing' %></strong></span>
                 </div>
+
+                <div class="storefront-studio-detail-grid">
+                    <article>
+                        <span>Recognition</span>
+                        <ul>
+                            <% studioAwards.forEach((award) => { %>
+                                <li><%= award %></li>
+                            <% }) %>
+                        </ul>
+                    </article>
+                    <article>
+                        <span>Inside the studio</span>
+                        <ul>
+                            <% studioFeatures.forEach((feature) => { %>
+                                <li><%= feature %></li>
+                            <% }) %>
+                        </ul>
+                    </article>
+                    <article>
+                        <span>Specialist care</span>
+                        <ul>
+                            <% specialistNotes.forEach((note) => { %>
+                                <li><%= note %></li>
+                            <% }) %>
+                        </ul>
+                    </article>
+                </div>
             </section>
         </div>
 
@@ -266,6 +355,12 @@
                 <h2><%= merchant.name %></h2>
                 <p><%= merchant.description %></p>
             </section>
+
+            <div class="storefront-side-stats" aria-label="Studio quick facts">
+                <span><strong><%= ratingCopy %></strong><small>rating</small></span>
+                <span><strong><%= detailServices.length %></strong><small>services</small></span>
+                <span><strong><%= startingPrice > 0 ? '$' + startingPrice.toFixed(0) : 'Menu' %></strong><small>from</small></span>
+            </div>
 
             <div class="storefront-side-actions">
                 <% if (typeof whatsappEnquiryUrl !== 'undefined' && whatsappEnquiryUrl) { %>
@@ -277,6 +372,15 @@
             <section>
                 <h3>Store policies</h3>
                 <p class="muted">Bookings are subject to live availability. Please arrive on time and contact the studio early for changes.</p>
+            </section>
+
+            <section>
+                <h3>Awards & recognition</h3>
+                <ul class="storefront-side-list">
+                    <% studioAwards.slice(0, 3).forEach((award) => { %>
+                        <li><%= award %></li>
+                    <% }) %>
+                </ul>
             </section>
 
             <section>

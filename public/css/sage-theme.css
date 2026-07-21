@@ -22,6 +22,15 @@
     --nails-img: url("https://images.unsplash.com/photo-1610992015732-2449b76344bc?auto=format&fit=crop&w=1200&q=84");
     --barber-img: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=84");
     --product-img: url("https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1200&q=84");
+    --studio-beauty-reception: url("https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1400&q=84");
+    --studio-beauty-treatment: url("https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1400&q=84");
+    --studio-beauty-detail: url("https://images.unsplash.com/photo-1600948836101-f9ffda59d250?auto=format&fit=crop&w=1400&q=84");
+    --studio-spa-suite: url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1400&q=84");
+    --studio-spa-room: url("https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=1400&q=84");
+    --studio-spa-detail: url("https://images.unsplash.com/photo-1600334129128-685c5582fd35?auto=format&fit=crop&w=1400&q=84");
+    --studio-barber-floor: url("https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1400&q=84");
+    --studio-barber-chair: url("https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=1400&q=84");
+    --studio-barber-detail: url("https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1400&q=84");
 }
 
 html {
@@ -6027,6 +6036,51 @@ body:not(.flappy-page) .notification-count {
     color: var(--paper);
 }
 
+.storefront-overview-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.storefront-overview-strip article {
+    min-width: 0;
+    min-height: 124px;
+    padding: 18px;
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(79, 104, 71, 0.14);
+    border-radius: 8px;
+    background:
+        linear-gradient(135deg, rgba(255, 253, 247, 0.94), rgba(238, 244, 233, 0.72)),
+        var(--paper);
+    box-shadow: 0 14px 34px rgba(49, 69, 44, 0.07);
+}
+
+.storefront-overview-strip span,
+.storefront-overview-strip small,
+.storefront-side-stats small {
+    color: rgba(51, 66, 49, 0.68);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.storefront-overview-strip strong {
+    min-width: 0;
+    color: var(--sage-readable);
+    font-size: clamp(1.45rem, 2.2vw, 2rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+}
+
+.storefront-overview-strip small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-transform: none;
+}
+
 .merchant-storefront-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
@@ -6057,6 +6111,12 @@ body:not(.flappy-page) .notification-count {
     padding: clamp(22px, 3vw, 34px);
 }
 
+.storefront-services-section {
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(248, 250, 245, 0.9)),
+        var(--paper);
+}
+
 .storefront-section-heading,
 .marketplace-heading-row,
 .marketplace-product-footer {
@@ -6074,6 +6134,14 @@ body:not(.flappy-page) .notification-count {
     line-height: 0.98;
 }
 
+.storefront-section-subcopy {
+    max-width: 760px;
+    margin: -8px 0 0;
+    color: var(--sage-muted-readable);
+    font-weight: 750;
+    line-height: 1.65;
+}
+
 .storefront-service-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6081,14 +6149,27 @@ body:not(.flappy-page) .notification-count {
 }
 
 .storefront-service-card {
+    position: relative;
     min-width: 0;
     display: grid;
     gap: 16px;
     padding: 20px;
+    overflow: hidden;
     border: 1px solid rgba(79, 104, 71, 0.13);
     border-radius: 10px;
-    background: rgba(255, 255, 252, 0.88);
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(248, 250, 245, 0.9)),
+        rgba(255, 255, 252, 0.88);
     transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.storefront-service-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: linear-gradient(90deg, var(--sage-strong), rgba(169, 119, 8, 0.62));
+    opacity: 0.88;
 }
 
 .storefront-service-card:hover,
@@ -6120,9 +6201,17 @@ body:not(.flappy-page) .notification-count {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    padding: 12px 0 4px;
+    border-top: 1px solid rgba(79, 104, 71, 0.1);
 }
 
 .storefront-service-meta span {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(79, 104, 71, 0.09);
     color: var(--sage-muted);
     font-weight: 800;
 }
@@ -6284,13 +6373,34 @@ body:not(.flappy-page) .notification-count {
 }
 
 .storefront-gallery-grid div {
+    position: relative;
     min-height: 230px;
+    overflow: hidden;
     border-radius: 10px;
     background:
         linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(79, 104, 71, 0.14)),
         var(--spa-img);
     background-position: center;
     background-size: cover;
+}
+
+.storefront-gallery-grid div::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 42%;
+    background: linear-gradient(180deg, rgba(28, 39, 26, 0), rgba(28, 39, 26, 0.54));
+}
+
+.storefront-gallery-grid span {
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    left: 14px;
+    z-index: 1;
+    color: var(--paper);
+    font-weight: 900;
+    text-shadow: 0 1px 10px rgba(28, 39, 26, 0.28);
 }
 
 .storefront-gallery-grid div:nth-child(2) {
@@ -6305,12 +6415,142 @@ body:not(.flappy-page) .notification-count {
         var(--product-img);
 }
 
+.merchant-storefront-image.merchant-thumb-1 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-beauty-reception) !important;
+}
+
+.merchant-storefront-image.merchant-thumb-2 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-spa-suite) !important;
+}
+
+.merchant-storefront-image.merchant-thumb-3 {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-barber-floor) !important;
+}
+
+.storefront-gallery-merchant-1 .storefront-gallery-main {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-beauty-reception) !important;
+}
+
+.storefront-gallery-merchant-1 .storefront-gallery-room {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-beauty-treatment) !important;
+}
+
+.storefront-gallery-merchant-1 .storefront-gallery-detail {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-beauty-detail) !important;
+}
+
+.storefront-gallery-merchant-2 .storefront-gallery-main {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-spa-suite) !important;
+}
+
+.storefront-gallery-merchant-2 .storefront-gallery-room {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-spa-room) !important;
+}
+
+.storefront-gallery-merchant-2 .storefront-gallery-detail {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-spa-detail) !important;
+}
+
+.storefront-gallery-merchant-3 .storefront-gallery-main {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-barber-floor) !important;
+}
+
+.storefront-gallery-merchant-3 .storefront-gallery-room {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-barber-chair) !important;
+}
+
+.storefront-gallery-merchant-3 .storefront-gallery-detail {
+    background-image:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(28, 39, 26, 0.2)),
+        var(--studio-barber-detail) !important;
+}
+
+.storefront-studio-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.storefront-studio-detail-grid article {
+    min-width: 0;
+    padding: 18px;
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgba(79, 104, 71, 0.13);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.58);
+}
+
+.storefront-studio-detail-grid article > span {
+    color: var(--sage-strong);
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.storefront-studio-detail-grid ul,
+.storefront-side-list {
+    display: grid;
+    gap: 9px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.storefront-studio-detail-grid li,
+.storefront-side-list li {
+    position: relative;
+    min-width: 0;
+    padding-left: 18px;
+    color: var(--sage-readable);
+    font-weight: 760;
+    line-height: 1.45;
+}
+
+.storefront-studio-detail-grid li::before,
+.storefront-side-list li::before {
+    content: "";
+    position: absolute;
+    top: 0.62em;
+    left: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--sage-strong);
+}
+
 .storefront-side-card {
     position: sticky;
     top: 166px;
     display: grid;
     gap: 20px;
     padding: 22px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 247, 0.98), rgba(248, 250, 245, 0.88)),
+        var(--paper);
 }
 
 .storefront-side-card section {
@@ -6338,6 +6578,31 @@ body:not(.flappy-page) .notification-count {
 .storefront-side-actions {
     display: grid;
     gap: 10px;
+}
+
+.storefront-side-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.storefront-side-stats span {
+    min-width: 0;
+    min-height: 78px;
+    padding: 12px 10px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 8px;
+    background: rgba(238, 244, 233, 0.62);
+}
+
+.storefront-side-stats strong {
+    color: var(--sage-readable);
+    font-size: 1.22rem;
+    line-height: 1;
+    overflow-wrap: anywhere;
 }
 
 .products-marketplace-page {
@@ -6627,13 +6892,18 @@ body:not(.flappy-page) .notification-count {
         grid-template-columns: 1fr;
     }
 
+    .storefront-overview-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .storefront-side-card,
     .storefront-tabs {
         position: static;
     }
 
     .storefront-service-grid,
-    .storefront-product-strip {
+    .storefront-product-strip,
+    .storefront-studio-detail-grid {
         grid-template-columns: 1fr;
     }
 
@@ -6669,6 +6939,11 @@ body:not(.flappy-page) .notification-count {
     .storefront-gallery-grid,
     .marketplace-controls,
     .products-marketplace-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .storefront-overview-strip,
+    .storefront-side-stats {
         grid-template-columns: 1fr;
     }
 

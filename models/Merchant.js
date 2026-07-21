@@ -40,6 +40,22 @@ const merchants = [
         rating: '4.8',
         promotion: '20% off first booking',
         description: 'Hair styling, facials, and beauty treatments from trusted Vaniday merchants.',
+        awards: [
+            'Vaniday Customer Choice 2026',
+            'Orchard Beauty Excellence finalist',
+            'Top Rated Hair & Facial Studio'
+        ],
+        studioFeatures: [
+            'Private facial suite',
+            'Bright styling stations',
+            'Sterilised tools between appointments',
+            'Refreshment corner for longer visits'
+        ],
+        specialistNotes: [
+            'Senior stylists for colour and cut consultations',
+            'Skin prep review before facial treatments',
+            'Quiet appointment slots available on request'
+        ],
         services: [
             {
                 id: 101,
@@ -93,6 +109,22 @@ const merchants = [
         rating: '4.6',
         promotion: 'Free add-on massage for bookings above $80',
         description: 'Relaxing spa services with simple online booking and clear appointment slots.',
+        awards: [
+            'Wellness Guest Favourite 2026',
+            'Best Neighbourhood Spa shortlist',
+            'Vaniday Relaxation Service Award'
+        ],
+        studioFeatures: [
+            'Low-noise treatment rooms',
+            'Heated massage beds',
+            'Aromatherapy consultation before sessions',
+            'Private post-treatment lounge'
+        ],
+        specialistNotes: [
+            'Therapists trained in pressure adjustment',
+            'Body treatments planned around comfort level',
+            'Couple and solo appointment flow supported'
+        ],
         services: [
             {
                 id: 201,
@@ -133,6 +165,22 @@ const merchants = [
         rating: '4.7',
         promotion: '$5 student discount',
         description: 'Fast grooming services for walk-in style retail merchants using digital booking.',
+        awards: [
+            'Northside Grooming Pick 2026',
+            'Vaniday Fast Service Recognition',
+            'Student Favourite Barber Studio'
+        ],
+        studioFeatures: [
+            'Classic barber chairs',
+            'Dedicated fade and beard stations',
+            'Hot towel preparation counter',
+            'Walk-in waiting bench'
+        ],
+        specialistNotes: [
+            'Barbers handle skin fades and line-ups daily',
+            'Student-friendly appointment timing',
+            'Beard shaping mapped before trimming'
+        ],
         services: [
             {
                 id: 301,
