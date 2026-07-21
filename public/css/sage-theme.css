@@ -3442,6 +3442,10 @@ body:has(.admin-nav-toggle) .nav {
     gap: 12px;
 }
 
+.review-comment-input {
+    font-size: 1.125rem;
+}
+
 @media (max-width: 960px) {
     .history-card {
         padding: 16px;
