@@ -1304,6 +1304,72 @@ function redeemPointsForPayment(userId, points, discount, sourceReceiptId, optio
     });
 }
 
+function redeemPointsForBookingWithConnection(connection, options = {}, callback) {
+    const userId = Number(options.userId || 0);
+    const bookingId = Number(options.bookingId || 0);
+    const requestedPoints = Math.floor(Number(options.points || 0));
+    const redeemDiscount = roundMoney(options.discount || 0);
+    const sourceReceiptId = `booking-${bookingId}`;
+
+    if (!connection || !userId || !bookingId || requestedPoints <= 0 || redeemDiscount <= 0) {
+        callback(null, { redeemed: false, points: 0, discount: 0 });
+        return;
+    }
+
+    ensureTables((tableError) => {
+        if (tableError) {
+            callback(tableError);
+            return;
+        }
+
+        const insertSql = `
+            INSERT IGNORE INTO loyalty_transactions
+                (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, booking_reference, merchant_name, reward_discount)
+            VALUES (?, ?, 'POINTS_USED', ?, 0, ?, ?, ?, ?)
+        `;
+
+        connection.query(insertSql, [
+            userId,
+            sourceReceiptId,
+            -requestedPoints,
+            `Redeemed ${requestedPoints} points for $${redeemDiscount.toFixed(2)} booking discount`,
+            options.bookingReference || String(bookingId),
+            options.merchantName || '',
+            redeemDiscount
+        ], (insertError, insertResult) => {
+            if (insertError) {
+                callback(insertError);
+                return;
+            }
+
+            if (!insertResult.affectedRows) {
+                callback(null, { redeemed: false, duplicate: true, points: 0, discount: 0 });
+                return;
+            }
+
+            const updateSql = `
+                UPDATE loyalty_wallets
+                SET points_balance = points_balance - ?
+                WHERE user_id = ?
+                    AND points_balance >= ?
+            `;
+
+            connection.query(updateSql, [requestedPoints, userId, requestedPoints], (updateError, updateResult) => {
+                if (updateError || updateResult.affectedRows === 0) {
+                    callback(updateError || new Error('Not enough points to redeem.'));
+                    return;
+                }
+
+                callback(null, {
+                    redeemed: true,
+                    points: requestedPoints,
+                    discount: redeemDiscount
+                });
+            });
+        });
+    });
+}
+
 function getReceiptBirthdayMultiplier(receipt, callback) {
     if (!receipt?.userId || String(receipt.type || '').toLowerCase() !== 'booking') {
         callback(null, {
@@ -2286,6 +2352,7 @@ module.exports = {
     getCampaignCashbackForReceipt,
     getWalletView,
     redeemCashback,
+    redeemPointsForBookingWithConnection,
     redeemPointsForPayment,
     redeemPointsForCashback,
     reverseCampaignCashbackForReceipt,

@@ -942,7 +942,14 @@ function buildAppointmentReport(bookings = []) {
             customerGender: formatCustomerGender(booking.customer_gender || booking.customerGender),
             customerPostalCode: booking.customer_postal_code || booking.customerPostalCode || '',
             customerPreferredContactMethod: formatPreferredContactMethod(booking.customer_preferred_contact_method || booking.customerPreferredContactMethod),
-            amount: Number(booking.service_price || booking.price || 0)
+            amount: Number(booking.service_price || booking.price || 0),
+            originalServicePrice: Number(booking.service_price || booking.price || 0),
+            pointsRedeemed: Number(booking.points_redeemed || booking.pointsRedeemed || 0),
+            pointsDiscount: Number(booking.reward_discount_amount || booking.pointsDiscount || 0),
+            amountPayableAtMerchant: Number(booking.reward_discount_amount || booking.pointsDiscount || 0) > 0
+                ? Number(booking.final_amount_payable || booking.amountPayableAtMerchant || 0)
+                : Number(booking.final_amount_payable || booking.amountPayableAtMerchant || booking.service_price || booking.price || 0),
+            rewardPointsRefundedAt: booking.reward_points_refunded_at || booking.rewardPointsRefundedAt || ''
         };
     });
 
@@ -1904,6 +1911,14 @@ function updateBookingStatus(req, res) {
 
             if (!booking) {
                 return;
+            }
+
+            if (status === 'cancelled' && Number(booking.points_redeemed || 0) > 0) {
+                Booking.refundRedeemedPointsForCancellation(bookingId, booking.user_id, (pointsRefundError) => {
+                    if (pointsRefundError) {
+                        console.error('Merchant cancellation reward points refund failed:', pointsRefundError);
+                    }
+                });
             }
 
             const customerMessages = {

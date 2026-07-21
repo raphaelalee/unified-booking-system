@@ -123,14 +123,121 @@
         const serviceSelect = form.querySelector('.js-service-select');
         const selectedOption = getSelectedOption(serviceSelect);
         const selectedCard = form.querySelector('[data-service-card].is-selected');
+        let reward = {};
+
+        try {
+            reward = JSON.parse(selectedCard?.dataset.reward || selectedOption?.dataset.reward || '{}');
+        } catch (error) {
+            reward = {};
+        }
 
         return {
             id: serviceSelect?.value || '',
             purchaseType: getSelectedPurchaseType(serviceSelect),
             name: selectedCard?.dataset.serviceName || selectedOption?.dataset.serviceName || selectedOption?.textContent.trim() || '',
             duration: selectedCard?.dataset.serviceDuration || selectedOption?.dataset.serviceDuration || '',
-            price: selectedCard?.dataset.servicePrice || selectedOption?.dataset.servicePrice || ''
+            price: selectedCard?.dataset.servicePrice || selectedOption?.dataset.servicePrice || '',
+            reward
         };
+    }
+
+    function formatMoney(value) {
+        return `$${Number(value || 0).toFixed(2)}`;
+    }
+
+    function formatPoints(value) {
+        const points = Math.max(0, Math.floor(Number(value || 0)));
+        return `${points} pt${points === 1 ? '' : 's'}`;
+    }
+
+    function calculateRewardEstimate(serviceData, requestedPoints) {
+        const reward = serviceData.reward || {};
+        const price = Number(serviceData.price || 0);
+        const walletPoints = Math.max(0, Math.floor(Number(reward.walletPoints || 0)));
+        const minPoints = Math.max(0, Math.floor(Number(reward.minPointsToRedeem || 0)));
+        const rate = Number(reward.pointsToCashRate || 0);
+        const maxPercent = Math.max(0, Number(reward.maxDiscountPercent || 0));
+        const maxDiscount = Math.min(price, price * (maxPercent / 100));
+        const maxPointsByDiscount = rate > 0 ? Math.floor(maxDiscount / rate) : 0;
+        const maxEligiblePoints = Math.max(0, Math.min(walletPoints, maxPointsByDiscount));
+        const selectedPoints = Math.max(0, Math.min(Math.floor(Number(requestedPoints || 0)), maxEligiblePoints));
+        const validSelectedPoints = selectedPoints >= minPoints ? selectedPoints : 0;
+        const discount = Math.min(price, maxDiscount, validSelectedPoints * rate);
+
+        return {
+            enabled: Boolean(reward.enabled) && price > 0,
+            reason: reward.reason || '',
+            price,
+            walletPoints,
+            minPoints,
+            rate,
+            maxPercent,
+            maxDiscount,
+            maxEligiblePoints,
+            selectedPoints,
+            appliedPoints: validSelectedPoints,
+            discount,
+            finalAmount: Math.max(0, price - discount)
+        };
+    }
+
+    function updateRewardSummary(form, serviceData) {
+        const rewardPanel = form.querySelector('[data-booking-rewards]');
+
+        if (!rewardPanel) {
+            return;
+        }
+
+        const toggle = rewardPanel.querySelector('[data-reward-toggle]');
+        const pointsInput = rewardPanel.querySelector('[data-reward-points]');
+        const maxButton = rewardPanel.querySelector('[data-reward-max]');
+        const requestedPoints = toggle?.checked ? pointsInput?.value : 0;
+        const estimate = calculateRewardEstimate(serviceData, requestedPoints);
+        const setText = (selector, value) => {
+            const node = rewardPanel.querySelector(selector);
+            if (node) node.textContent = value;
+        };
+
+        const canRedeem = estimate.enabled && estimate.maxEligiblePoints >= estimate.minPoints && estimate.minPoints > 0;
+
+        setText('[data-reward-available]', formatPoints(estimate.walletPoints));
+        setText('[data-reward-min]', formatPoints(estimate.minPoints));
+        setText('[data-reward-rate]', estimate.rate > 0 ? `${Math.round(1 / estimate.rate)} pts = $1.00` : 'Unavailable');
+        setText('[data-reward-max-discount]', `${formatMoney(estimate.maxDiscount)} (${estimate.maxPercent}%)`);
+        setText('[data-reward-original]', formatMoney(estimate.price));
+        setText('[data-reward-selected]', formatPoints(toggle?.checked ? estimate.selectedPoints : 0));
+        setText('[data-reward-discount]', formatMoney(toggle?.checked ? estimate.discount : 0));
+        setText('[data-reward-final]', formatMoney(toggle?.checked ? estimate.finalAmount : estimate.price));
+        setText(
+            '[data-reward-status]',
+            !serviceData.id
+                ? 'Select a service to check reward eligibility.'
+                : canRedeem
+                    ? `You can redeem up to ${formatPoints(estimate.maxEligiblePoints)}.`
+                    : (estimate.reason || 'Not enough eligible points for this booking.')
+        );
+
+        if (toggle) {
+            toggle.disabled = !canRedeem;
+            if (!canRedeem) {
+                toggle.checked = false;
+            }
+        }
+
+        if (pointsInput) {
+            pointsInput.disabled = !canRedeem || !toggle?.checked;
+            pointsInput.min = canRedeem ? String(estimate.minPoints) : '0';
+            pointsInput.max = String(estimate.maxEligiblePoints);
+            if (!toggle?.checked) {
+                pointsInput.value = '0';
+            } else if (Number(pointsInput.value || 0) > estimate.maxEligiblePoints) {
+                pointsInput.value = String(estimate.maxEligiblePoints);
+            }
+        }
+
+        if (maxButton) {
+            maxButton.disabled = !canRedeem || !toggle?.checked;
+        }
     }
 
     function setServiceSelection(form, serviceId, purchaseType = 'single') {
@@ -514,6 +621,8 @@
             priceSummary.textContent = serviceData.price ? `$${Number(serviceData.price).toFixed(2)}` : '$0.00';
         }
 
+        updateRewardSummary(form, serviceData);
+
         if (confirmButton) {
             confirmButton.disabled = !hasReadySelection;
         }
@@ -576,6 +685,21 @@
         });
 
         timeSelect?.addEventListener('change', () => syncTimePills(form));
+
+        const rewardPanel = form.querySelector('[data-booking-rewards]');
+        const rewardToggle = rewardPanel?.querySelector('[data-reward-toggle]');
+        const rewardPoints = rewardPanel?.querySelector('[data-reward-points]');
+        const rewardMax = rewardPanel?.querySelector('[data-reward-max]');
+
+        rewardToggle?.addEventListener('change', () => updateSummary(form));
+        rewardPoints?.addEventListener('input', () => updateSummary(form));
+        rewardMax?.addEventListener('click', () => {
+            const estimate = calculateRewardEstimate(getSelectedServiceData(form), rewardPoints?.value || 0);
+            if (rewardPoints) {
+                rewardPoints.value = String(estimate.maxEligiblePoints || 0);
+            }
+            updateSummary(form);
+        });
 
         form.addEventListener('submit', (event) => {
             if (!serviceSelect.value || !dateInput?.value || !timeSelect?.value) {

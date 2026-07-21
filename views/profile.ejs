@@ -439,8 +439,18 @@
                                                 <dd><%= formatDuration(booking.duration_mins) %></dd>
                                             </div>
                                             <div>
-                                                <dt>Price</dt>
+                                                <dt>Original service price</dt>
                                                 <dd><%= formatMoney(booking.service_price) %></dd>
+                                            </div>
+                                            <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
+                                                <div>
+                                                    <dt>Points discount</dt>
+                                                    <dd>-<%= formatMoney(booking.reward_discount_amount) %> (<%= Number(booking.points_redeemed || 0) %> pts)</dd>
+                                                </div>
+                                            <% } %>
+                                            <div>
+                                                <dt>Amount payable at merchant</dt>
+                                                <dd><%= formatMoney(Number(Number(booking.reward_discount_amount || 0) > 0 ? booking.final_amount_payable || 0 : booking.final_amount_payable || booking.service_price || 0)) %></dd>
                                             </div>
                                         </dl>
                                         <div class="profile-booking-actions">
@@ -483,6 +493,18 @@
                                             <% } %>
                                             <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
                                         </div>
+                                        <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
+                                            <dl class="profile-booking-meta">
+                                                <div>
+                                                    <dt>Points discount</dt>
+                                                    <dd>-<%= formatMoney(booking.reward_discount_amount) %> (<%= Number(booking.points_redeemed || 0) %> pts)</dd>
+                                                </div>
+                                                <div>
+                                                    <dt>Amount payable at merchant</dt>
+                                                    <dd><%= formatMoney(Number(Number(booking.reward_discount_amount || 0) > 0 ? booking.final_amount_payable || 0 : booking.final_amount_payable || booking.service_price || 0)) %></dd>
+                                                </div>
+                                            </dl>
+                                        <% } %>
                                     </div>
                                 </article>
                             <% }) %>
@@ -519,6 +541,16 @@
                                                 <dt>Refund status</dt>
                                                 <dd><%= formatRefundStatus(booking.refund_status) %></dd>
                                             </div>
+                                            <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
+                                                <div>
+                                                    <dt>Points discount</dt>
+                                                    <dd>-<%= formatMoney(booking.reward_discount_amount) %> (<%= Number(booking.points_redeemed || 0) %> pts)</dd>
+                                                </div>
+                                                <div>
+                                                    <dt>Points refund</dt>
+                                                    <dd><%= booking.reward_points_refunded_at ? 'Refunded' : 'Not refunded' %></dd>
+                                                </div>
+                                            <% } %>
                                             <div>
                                                 <dt>Cancelled</dt>
                                                 <dd><%= formatBookingDateTime(booking.cancelled_at) %></dd>

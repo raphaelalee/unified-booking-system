@@ -344,6 +344,12 @@ function mapBookingReceipt(row, req) {
     }
 
     const appointmentLabel = formatAppointmentDateTime(row.booking_date, row.booking_time);
+    const originalServicePrice = Number(row.service_price || 0);
+    const pointsRedeemed = Number(row.points_redeemed || 0);
+    const pointsDiscount = Number(row.reward_discount_amount || 0);
+    const amountPayableAtMerchant = pointsDiscount > 0
+        ? Number(row.final_amount_payable || 0)
+        : Number(row.final_amount_payable || originalServicePrice);
 
     return {
         id: row.id,
@@ -360,13 +366,16 @@ function mapBookingReceipt(row, req) {
                 name: row.service_name,
                 type: 'Service',
                 quantity: 1,
-                unitPrice: Number(row.service_price || 0),
-                lineTotal: Number(row.service_price || 0),
+                unitPrice: originalServicePrice,
+                lineTotal: originalServicePrice,
                 detail: appointmentLabel
             }
         ],
-        totalAmount: Number(row.service_price || 0),
-        paymentMethod: row.payment_method || 'card',
+        totalAmount: originalServicePrice,
+        pointsRedeemed,
+        pointsDiscount,
+        amountPayableAtMerchant,
+        paymentMethod: row.payment_method || 'pay_at_merchant',
         paymentProvider: row.payment_provider || '',
         paymentStatus: row.payment_status || row.status,
         refundStatus: row.refund_status || 'none',
@@ -601,6 +610,24 @@ async function enrichReceiptPayment(receipt) {
         || (receipt.type === 'order' ? getOrderId(receipt) : null);
     let summary = null;
     let refundSummary = null;
+
+    if (receipt.type === 'booking' && !transactionId) {
+        return {
+            ...receipt,
+            paymentMethodLabel: 'Pay at merchant',
+            paymentBreakdown: [],
+            paidAmount: 0,
+            originalAmount: Number(receipt.totalAmount || 0),
+            loyaltyPointsUsed: Number(receipt.pointsRedeemed || 0),
+            loyaltyPointsValue: Number(receipt.pointsDiscount || 0),
+            externalPaymentAmount: Number(receipt.amountPayableAtMerchant || receipt.totalAmount || 0),
+            remainingPaidAmount: 0,
+            remainingRefundableAmount: 0,
+            paymentStatus: receipt.paymentStatus || receipt.status || 'pending',
+            refundStatus: receipt.refundStatus || 'none',
+            paidAt: receipt.paidAt
+        };
+    }
 
     try {
         summary = await getPaymentSummary(transactionId);
@@ -1055,12 +1082,18 @@ function buildFallbackPdf(data) {
                 );
             }
 
-            const summaryLines = [
-                ['Original total', Number(receipt.totalAmount || receipt.originalAmount || 0)],
-                ['Total paid', Number(receipt.paidAmount || receipt.totalAmount || 0)],
-                ['Refunded', -Number(receipt.refundedAmount || 0)],
-                ['Net retained', Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0)]
-            ];
+            const summaryLines = data.isBooking
+                ? [
+                    ['Original service price', Number(receipt.totalAmount || receipt.originalAmount || 0)],
+                    ['Points discount', -Number(receipt.pointsDiscount || 0)],
+                    ['Amount payable at merchant', Number(receipt.amountPayableAtMerchant ?? receipt.totalAmount ?? 0)]
+                ]
+                : [
+                    ['Original total', Number(receipt.totalAmount || receipt.originalAmount || 0)],
+                    ['Total paid', Number(receipt.paidAmount || receipt.totalAmount || 0)],
+                    ['Refunded', -Number(receipt.refundedAmount || 0)],
+                    ['Net retained', Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0)]
+                ];
             let summaryY = totalY;
             summaryLines.forEach(([label, value]) => {
                 doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text(label.toUpperCase(), left + contentWidth - 210, summaryY);
@@ -1086,9 +1119,9 @@ function buildFallbackPdf(data) {
             });
 
             doc.roundedRect(left + contentWidth - 210, summaryY + 4, 210, 58, 8).fill(sage);
-            doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text('NET AMOUNT RETAINED', left + contentWidth - 190, summaryY + 17);
+            doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text(data.isBooking ? 'AMOUNT PAYABLE AT MERCHANT' : 'NET AMOUNT RETAINED', left + contentWidth - 190, summaryY + 17);
             doc.fillColor(brandGreen).font('Helvetica-Bold').fontSize(22).text(
-                `$${Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0).toFixed(2)}`,
+                `$${Number(data.isBooking ? (receipt.amountPayableAtMerchant ?? receipt.totalAmount ?? 0) : (receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0)).toFixed(2)}`,
                 left + contentWidth - 190,
                 summaryY + 32,
                 { width: 170, align: 'right' }

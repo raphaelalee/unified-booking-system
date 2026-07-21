@@ -45,13 +45,18 @@
                     <p><span>Service</span><strong><%= bookingReceipt.serviceName %></strong></p>
                     <p><span>Merchant</span><strong><%= bookingReceipt.merchantName %></strong></p>
                     <p><span>Date & time</span><strong><%= bookingReceipt.appointmentLabel %></strong></p>
-                    <p><span>Amount</span><strong>$<%= Number(bookingReceipt.servicePrice || 0).toFixed(2) %></strong></p>
+                    <p><span>Original service price</span><strong>$<%= Number(bookingReceipt.servicePrice || 0).toFixed(2) %></strong></p>
+                    <% if (Number(bookingReceipt.pointsDiscount || 0) > 0) { %>
+                        <p><span>Points discount</span><strong>-$<%= Number(bookingReceipt.pointsDiscount || 0).toFixed(2) %></strong></p>
+                        <p><span>Points redeemed</span><strong><%= Number(bookingReceipt.pointsRedeemed || 0) %> pts</strong></p>
+                    <% } %>
+                    <p><span>Amount payable at merchant</span><strong>$<%= Number((bookingReceipt.amountPayableAtMerchant ?? bookingReceipt.servicePrice) || 0).toFixed(2) %></strong></p>
                 </div>
                 <div class="notice success" style="margin: 0;">
                     <p>
                         <%= isPendingBooking
                             ? 'This appointment request is waiting for merchant approval. You will receive an update shortly.'
-                            : 'Bring this QR code to the merchant counter to complete check-in.' %>
+                            : 'Bring this QR code to the merchant counter to complete check-in. You will pay the remaining amount during your appointment.' %>
                     </p>
                 </div>
             </article>

@@ -24,12 +24,15 @@
                 <p><span>Merchant</span><strong><%= booking.merchant_name %></strong></p>
                 <p><span>Date</span><strong><%= String(booking.booking_date).slice(0, 10) %></strong></p>
                 <p><span>Time</span><strong><%= booking.booking_time %></strong></p>
-                <p><span>Price</span><strong>$<%= Number(booking.service_price || 0).toFixed(2) %></strong></p>
-                <p><span>Payment</span><strong><%= String(booking.payment_status || 'paid').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) %></strong></p>
+                <p><span>Original service price</span><strong>$<%= Number(booking.service_price || 0).toFixed(2) %></strong></p>
+                <% if (Number(booking.reward_discount_amount || 0) > 0) { %>
+                    <p><span>Points discount</span><strong>-$<%= Number(booking.reward_discount_amount || 0).toFixed(2) %> (<%= Number(booking.points_redeemed || 0) %> pts)</strong></p>
+                <% } %>
+                <p><span>Amount payable at merchant</span><strong>$<%= Number(Number(booking.reward_discount_amount || 0) > 0 ? booking.final_amount_payable || 0 : booking.final_amount_payable || booking.service_price || 0).toFixed(2) %></strong></p>
             </div>
 
             <div class="notice success">
-                <p>Your appointment has been recorded and completed in the system. You can access the booking receipt or review your upcoming services.</p>
+                <p>Your appointment has been recorded and completed in the system. This booking is not marked as paid online.</p>
             </div>
 
             <div class="receipt-total">

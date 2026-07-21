@@ -984,7 +984,7 @@ function notifyBooking(booking) {
     notifyBookingBySms(booking);
 }
 
-async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validation, bookingDate, bookingTime, checkInUrl }) {
+async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validation, bookingDate, bookingTime, checkInUrl, loyaltyRedemption = null }) {
     if (!bookingId || !checkInUrl) {
         return null;
     }
@@ -1002,7 +1002,10 @@ async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validat
         email: validation.email || req.session.user?.email || '',
         merchantName: merchant.name,
         serviceName: validation.serviceName,
-        servicePrice: Number(validation.bookableItem?.price || validation.service?.price || 0),
+        servicePrice: Number(loyaltyRedemption?.originalServicePrice || validation.bookableItem?.price || validation.service?.price || 0),
+        pointsRedeemed: Number(loyaltyRedemption?.points || 0),
+        pointsDiscount: Number(loyaltyRedemption?.discount || 0),
+        amountPayableAtMerchant: Number(loyaltyRedemption?.finalAmountPayable ?? loyaltyRedemption?.originalServicePrice ?? validation.bookableItem?.price ?? validation.service?.price ?? 0),
         bookingDate,
         bookingTime,
         appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
@@ -1389,19 +1392,27 @@ function renderBookingPage(req, res, merchant, options = {}) {
 
     const featuredRecommendedServices = sortServicesByFeatured((merchant.services || []).filter((service) => service.isFeatured)).slice(0, 3);
 
-    return Promise.all(scopedServices.map(async (service) => ({
-        ...service,
-        campaignCashback: await getCampaignCashbackEstimate({
-            kind: 'booking',
-            receiptId: `booking-service-${service.id}`,
-            userId: req.session.user?.id || 0,
-            merchantId: bookingMerchant.id,
-            merchantName: bookingMerchant.name,
-            serviceId: service.id,
-            serviceName: service.name,
-            amount: Number(service.price || 0)
-        })
-    }))).then((cashbackScopedServices) => res.status(options.status || 200).render('booking', {
+    return Promise.all(scopedServices.map(async (service) => {
+        const amount = Number(service.price || 0);
+        const rewardRedemption = req.session.user?.id
+            ? await getRewardRedemptionView(req.session.user.id, bookingMerchant.id, service.id, amount)
+            : null;
+
+        return {
+            ...service,
+            rewardRedemption,
+            campaignCashback: await getCampaignCashbackEstimate({
+                kind: 'booking',
+                receiptId: `booking-service-${service.id}`,
+                userId: req.session.user?.id || 0,
+                merchantId: bookingMerchant.id,
+                merchantName: bookingMerchant.name,
+                serviceId: service.id,
+                serviceName: service.name,
+                amount
+            })
+        };
+    })).then((cashbackScopedServices) => res.status(options.status || 200).render('booking', {
         title: `Book ${merchant.name}`,
         merchant: bookingMerchant,
         scopedServices: cashbackScopedServices,
@@ -1654,6 +1665,83 @@ function validateBooking(merchant, form) {
         phone,
         bookingTime: normalizedBookingTime
     };
+}
+
+function getRequestedBookingRedeemPoints(body = {}) {
+    const wantsRedemption = body.redeemRewards === '1' || body.redeemRewards === 'on';
+
+    if (!wantsRedemption) {
+        return 0;
+    }
+
+    const raw = String(body.redeemPoints || '').trim();
+
+    if (!/^\d+$/.test(raw)) {
+        return NaN;
+    }
+
+    return Math.floor(Number(raw));
+}
+
+function prepareBookingLoyaltyRedemption(req, merchant, validation, callback) {
+    const requestedPoints = getRequestedBookingRedeemPoints(req.body);
+    const originalServicePrice = Number(validation.bookableItem?.price || validation.service?.price || 0);
+
+    if (Number.isNaN(requestedPoints)) {
+        callback(new Error('Points to redeem must be a positive whole number.'));
+        return;
+    }
+
+    if (requestedPoints === 0) {
+        callback(null, {
+            requestedPoints: 0,
+            points: 0,
+            discount: 0,
+            originalServicePrice,
+            finalAmountPayable: originalServicePrice
+        });
+        return;
+    }
+
+    if (!req.session.user?.id) {
+        callback(new Error('Please log in before redeeming loyalty points.'));
+        return;
+    }
+
+    if (!Number.isInteger(requestedPoints) || requestedPoints <= 0) {
+        callback(new Error('Points to redeem must be a positive whole number.'));
+        return;
+    }
+
+    Loyalty.calculatePointRedemption({
+        userId: req.session.user.id,
+        merchantId: merchant.id,
+        serviceId: validation.service.id,
+        amount: originalServicePrice,
+        requestedPoints
+    }, (error, redemption = {}) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const points = Math.max(0, Math.floor(Number(redemption.points || 0)));
+        const discount = Math.min(originalServicePrice, Math.round(Number(redemption.discount || 0) * 100) / 100);
+
+        if (points <= 0 || discount <= 0) {
+            callback(new Error('No loyalty discount could be applied for the selected points.'));
+            return;
+        }
+
+        callback(null, {
+            ...redemption,
+            requestedPoints,
+            points,
+            discount,
+            originalServicePrice,
+            finalAmountPayable: Math.max(0, Math.round((originalServicePrice - discount) * 100) / 100)
+        });
+    });
 }
 
 function normalizeBookingDate(value) {
@@ -2709,25 +2797,37 @@ function saveQrBooking(req, res) {
             });
         }
 
-        const bookingData = {
-            userId: req.session.user?.id || null,
-            merchantId: merchant.id,
-            merchantName: merchant.name,
-            serviceId: validation.service.id,
-            serviceName: validation.serviceName,
-            customerName: validation.customerName,
-            email: validation.email,
-            phone: validation.phone,
-            bookingDate: req.body.bookingDate,
-            bookingTime: validation.bookingTime,
-            qrCodeToken: req.params.qrToken
-        };
+        return prepareBookingLoyaltyRedemption(req, merchant, validation, (redemptionError, loyaltyRedemption) => {
+            if (redemptionError) {
+                return renderBookingPage(req, res, merchant, {
+                    status: 400,
+                    errors: [redemptionError.message || 'Reward redemption could not be applied.'],
+                    form: req.body
+                });
+            }
 
-        return Booking.autoConfirmBooking({
-            ...bookingData,
-            bookingTime: validation.bookingTime,
-            durationMins: validation.bookableItem.durationMins || validation.service.durationMins
-        }, (bookingError, confirmation) => {
+            const bookingData = {
+                userId: req.session.user?.id || null,
+                merchantId: merchant.id,
+                merchantName: merchant.name,
+                serviceId: validation.service.id,
+                serviceName: validation.serviceName,
+                customerName: validation.customerName,
+                email: validation.email,
+                phone: validation.phone,
+                bookingDate: req.body.bookingDate,
+                bookingTime: validation.bookingTime,
+                qrCodeToken: req.params.qrToken,
+                servicePrice: loyaltyRedemption.originalServicePrice,
+                originalServicePrice: loyaltyRedemption.originalServicePrice,
+                loyaltyRedemption
+            };
+
+            return Booking.autoConfirmBooking({
+                ...bookingData,
+                bookingTime: validation.bookingTime,
+                durationMins: validation.bookableItem.durationMins || validation.service.durationMins
+            }, (bookingError, confirmation) => {
             if (bookingError) {
                 console.error(bookingError);
                 return renderBookingPage(req, res, merchant, {
@@ -2755,7 +2855,8 @@ function saveQrBooking(req, res) {
                         validation,
                         bookingDate: req.body.bookingDate,
                         bookingTime: validation.bookingTime,
-                        checkInUrl
+                        checkInUrl,
+                        loyaltyRedemption
                     });
 
                     return res.render('booking-success', {
@@ -2822,6 +2923,7 @@ function saveQrBooking(req, res) {
                     console.error(successError);
                     return res.redirect('/services');
                 });
+            });
         });
     });
     });
@@ -2886,24 +2988,37 @@ function saveSecureScanBooking(req, res) {
                 });
             }
 
-            const bookingData = {
-                userId: req.session.user?.id || null,
-                merchantId: merchant.id,
-                merchantName: merchant.name,
-                serviceId: validation.service.id,
-                serviceName: validation.serviceName,
-                customerName: validation.customerName,
-                email: validation.email,
-                phone: validation.phone,
-                bookingDate: req.body.bookingDate,
-                bookingTime: validation.bookingTime,
-                qrCodeToken: req.query.token
-            };
+            return prepareBookingLoyaltyRedemption(req, merchant, validation, (redemptionError, loyaltyRedemption) => {
+                if (redemptionError) {
+                    return renderBookingPage(req, res, merchant, {
+                        status: 400,
+                        errors: [redemptionError.message || 'Reward redemption could not be applied.'],
+                        form: req.body,
+                        secureQr: true
+                    });
+                }
 
-            return Booking.autoConfirmBooking({
-                ...bookingData,
-                durationMins: validation.bookableItem.durationMins || validation.service.durationMins
-            }, (bookingError, confirmation) => {
+                const bookingData = {
+                    userId: req.session.user?.id || null,
+                    merchantId: merchant.id,
+                    merchantName: merchant.name,
+                    serviceId: validation.service.id,
+                    serviceName: validation.serviceName,
+                    customerName: validation.customerName,
+                    email: validation.email,
+                    phone: validation.phone,
+                    bookingDate: req.body.bookingDate,
+                    bookingTime: validation.bookingTime,
+                    qrCodeToken: req.query.token,
+                    servicePrice: loyaltyRedemption.originalServicePrice,
+                    originalServicePrice: loyaltyRedemption.originalServicePrice,
+                    loyaltyRedemption
+                };
+
+                return Booking.autoConfirmBooking({
+                    ...bookingData,
+                    durationMins: validation.bookableItem.durationMins || validation.service.durationMins
+                }, (bookingError, confirmation) => {
                 if (bookingError) {
                     console.error(bookingError);
                     return renderBookingPage(req, res, merchant, {
@@ -2933,7 +3048,8 @@ function saveSecureScanBooking(req, res) {
                             validation,
                             bookingDate: req.body.bookingDate,
                             bookingTime: validation.bookingTime,
-                            checkInUrl
+                            checkInUrl,
+                            loyaltyRedemption
                         });
 
                         return res.render('booking-success', {
@@ -3001,6 +3117,7 @@ function saveSecureScanBooking(req, res) {
                         console.error(successError);
                         return res.redirect(getSecureBookingPath(merchant));
                     });
+                });
             });
         });
     });

@@ -177,6 +177,11 @@
                             <div>
                                 <strong><%= booking.customerName %></strong>
                                 <small><%= booking.serviceName %> - <%= booking.bookingDate %> at <%= booking.bookingTime || 'Time TBC' %></small>
+                                <% if (Number(booking.pointsDiscount || 0) > 0) { %>
+                                    <small>Points discount: -$<%= Number(booking.pointsDiscount || 0).toFixed(2) %> (<%= Number(booking.pointsRedeemed || 0) %> pts). Amount payable at merchant: $<%= Number(booking.amountPayableAtMerchant || 0).toFixed(2) %>.</small>
+                                <% } else { %>
+                                    <small>Amount payable at merchant: $<%= Number(booking.amountPayableAtMerchant || booking.amount || 0).toFixed(2) %>.</small>
+                                <% } %>
                             </div>
                             <div class="merchant-booking-actions">
                                 <form action="/merchant/bookings/<%= booking.id %>/status" method="POST">

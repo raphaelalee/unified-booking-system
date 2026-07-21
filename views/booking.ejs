@@ -1,10 +1,10 @@
 <%- include('partials/header', { title }) %>
 
 <%
-    const allBookingServices = Array.isArray(merchant.services) && merchant.services.length > 0
-        ? merchant.services
-        : typeof scopedServices !== 'undefined' && Array.isArray(scopedServices) && scopedServices.length > 0
-            ? scopedServices
+    const allBookingServices = typeof scopedServices !== 'undefined' && Array.isArray(scopedServices) && scopedServices.length > 0
+        ? scopedServices
+        : Array.isArray(merchant.services) && merchant.services.length > 0
+            ? merchant.services
         : [{ id: 9001, name: 'QR Test Booking Service', duration: '30 mins', price: 20, slots: ['9:00 AM', '12:30 PM', '6:30 PM'] }];
     const requestedServiceId = String((form && form.serviceId) || (typeof selectedServiceId !== 'undefined' && selectedServiceId ? selectedServiceId : ''));
     const requestedOptionId = String((form && form.serviceOptionId) || '');
@@ -115,6 +115,21 @@
 
         return `$${price.toFixed(2)}`;
     };
+    const getRewardData = (service) => {
+        const redemption = service && service.rewardRedemption ? service.rewardRedemption : null;
+        const rules = redemption && redemption.rules ? redemption.rules : {};
+        const wallet = redemption && redemption.wallet ? redemption.wallet : {};
+
+        return {
+            enabled: Boolean(redemption && redemption.enabled),
+            reason: redemption && redemption.reason ? redemption.reason : '',
+            walletPoints: Number(wallet.pointsBalance || 0),
+            minPointsToRedeem: Number(rules.minPointsToRedeem || 0),
+            pointsToCashRate: Number(rules.pointsToCashRate || 0),
+            maxDiscountPercent: Number(rules.maxDiscountPercent || 0),
+            maxPoints: Number(redemption && redemption.maxPoints || 0)
+        };
+    };
 
     bookingServices.forEach((service) => {
         const matchedCategory = categorizedServices.find((category) =>
@@ -194,6 +209,7 @@
                             data-service-name="<%= service.name %>"
                             data-service-duration="<%= service.duration || '' %>"
                             data-service-price="<%= Number(service.price || 0).toFixed(2) %>"
+                            data-reward="<%= JSON.stringify(getRewardData(service)) %>"
                             <%= requestedServiceId === String(service.id) && requestedPurchaseType !== 'package' ? 'selected' : '' %>>
                             <%= service.name %> - single session $<%= Number(service.price).toFixed(2) %>
                         </option>
@@ -204,6 +220,7 @@
                                 data-service-name="<%= service.name %> package"
                                 data-service-duration="<%= service.duration || '' %>"
                                 data-service-price="<%= Number(service.packagePrice || service.price || 0).toFixed(2) %>"
+                                data-reward="<%= JSON.stringify(getRewardData(service)) %>"
                                 <%= requestedServiceId === String(service.id) && requestedPurchaseType === 'package' ? 'selected' : '' %>>
                                 <%= service.name %> package - <%= service.packageSessions %> sessions $<%= Number(service.packagePrice).toFixed(2) %>
                             </option>
@@ -280,7 +297,8 @@
                                     data-purchase-type="<%= packageIsSelected ? 'package' : 'single' %>"
                                     data-service-name="<%= labelName %>"
                                     data-service-duration="<%= durationText %>"
-                                    data-service-price="<%= Number(displayPrice || 0).toFixed(2) %>">
+                                    data-service-price="<%= Number(displayPrice || 0).toFixed(2) %>"
+                                    data-reward="<%= JSON.stringify(getRewardData(service)) %>">
                                     <span class="service-row-left">
                                         <span class="service-row-checkbox" aria-hidden="true"></span>
                                         <span class="service-row-main">
@@ -411,6 +429,40 @@
                     </div>
                 </dl>
             </div>
+
+            <% if (currentUser) { %>
+                <section class="booking-reward-card" data-booking-rewards>
+                    <div class="booking-reward-heading">
+                        <div>
+                            <p class="eyebrow">Loyalty redemption</p>
+                            <h3>Use points for this booking</h3>
+                        </div>
+                        <strong data-reward-available>0 pts</strong>
+                    </div>
+                    <p class="muted" data-reward-status>Select a service to check reward eligibility.</p>
+                    <label class="booking-reward-toggle">
+                        <input type="checkbox" name="redeemRewards" value="1" data-reward-toggle>
+                        <span>Redeem points on this booking</span>
+                    </label>
+                    <div class="booking-reward-inputs">
+                        <label>
+                            Points to redeem
+                            <input type="number" name="redeemPoints" min="0" step="1" value="<%= Number(form.redeemPoints || 0) %>" data-reward-points disabled>
+                        </label>
+                        <button class="button secondary" type="button" data-reward-max disabled>Use max</button>
+                    </div>
+                    <dl class="booking-reward-breakdown">
+                        <div><dt>Minimum redemption</dt><dd data-reward-min>0 pts</dd></div>
+                        <div><dt>Point-to-cash conversion rate</dt><dd data-reward-rate>0 pts = $1.00</dd></div>
+                        <div><dt>Maximum discount allowed</dt><dd data-reward-max-discount>$0.00</dd></div>
+                        <div><dt>Original service price</dt><dd data-reward-original>$0.00</dd></div>
+                        <div><dt>Selected points</dt><dd data-reward-selected>0 pts</dd></div>
+                        <div><dt>Points discount</dt><dd data-reward-discount>$0.00</dd></div>
+                        <div><dt>Amount payable at merchant</dt><dd data-reward-final>$0.00</dd></div>
+                    </dl>
+                    <p class="muted">You will pay the remaining amount during your appointment.</p>
+                </section>
+            <% } %>
 
             <button class="button primary full js-confirm-booking" type="submit" disabled><%= currentUser ? 'Confirm booking' : 'Continue as guest' %></button>
 

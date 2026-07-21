@@ -1,4 +1,6 @@
 const db = require('../db');
+const Loyalty = require('./Loyalty');
+const { buildBookingReference } = require('../utils/bookingReference');
 
 const BOOKING_REVIEW_STATUSES = ['pending'];
 const BOOKING_CONFIRMED_STATUSES = ['confirmed', 'paid', 'checked_in', 'completed'];
@@ -16,6 +18,10 @@ let rescheduleAutomationSchemaReady = false;
 let rescheduleAutomationSchemaPending = false;
 let rescheduleAutomationSchemaQueue = [];
 let serviceInventoryUsageSchemaReady = false;
+
+function roundMoney(value) {
+    return Math.round(Number(value || 0) * 100) / 100;
+}
 
 function ensureServiceInventoryUsageSchema(callback) {
     if (serviceInventoryUsageSchemaReady) {
@@ -119,6 +125,26 @@ function ensureBookingManagementSchema(callback) {
 
         if (!fields.has('checked_in_at')) {
             alters.push('ADD COLUMN checked_in_at DATETIME DEFAULT NULL');
+        }
+
+        if (!fields.has('original_service_price')) {
+            alters.push('ADD COLUMN original_service_price DECIMAL(10,2) NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('points_redeemed')) {
+            alters.push('ADD COLUMN points_redeemed INT NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('reward_discount_amount')) {
+            alters.push('ADD COLUMN reward_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('final_amount_payable')) {
+            alters.push('ADD COLUMN final_amount_payable DECIMAL(10,2) NOT NULL DEFAULT 0');
+        }
+
+        if (!fields.has('reward_points_refunded_at')) {
+            alters.push('ADD COLUMN reward_points_refunded_at DATETIME DEFAULT NULL');
         }
 
         if (alters.length === 0) {
@@ -589,7 +615,11 @@ function getAllInDatabase(callback) {
             salons.merchant_id AS merchant_user_id,
             services.service_name,
             services.duration_mins,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -629,7 +659,11 @@ function getByMerchantUserId(userId, callback) {
             salons.salon_name AS merchant_name,
             services.service_id,
             services.service_name,
-            services.price AS service_price,
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
@@ -654,7 +688,11 @@ function getUpcomingByUserId(userId, callback) {
             salons.salon_name AS merchant_name,
             salons.address AS merchant_address,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -690,7 +728,11 @@ function getNextManageableByUserId(userId, callback) {
                 salons.merchant_id AS merchant_user_id,
                 salons.salon_name AS merchant_name,
                 services.service_name,
-                services.price AS service_price
+                COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+                bookings.points_redeemed,
+                bookings.reward_discount_amount,
+                bookings.final_amount_payable,
+                bookings.reward_points_refunded_at
             FROM bookings
             INNER JOIN services ON services.service_id = bookings.service_id
             INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -736,7 +778,11 @@ function getCheckInDetails(bookingId, merchantUserId, callback) {
             users.preferred_contact_method AS customer_preferred_contact_method,
             salons.salon_name AS merchant_name,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -808,6 +854,55 @@ function createInDatabase(bookingData, callback) {
 
         db.query(sql, values, callback);
     });
+}
+
+function createInDatabaseWithConnection(connection, bookingData, callback) {
+    const sql = `
+        INSERT INTO bookings
+            (
+                user_id,
+                guest_customer_name,
+                guest_email,
+                guest_phone,
+                merchant_id,
+                service_id,
+                booking_date,
+                timeslot,
+                status,
+                qr_code_token,
+                original_service_price,
+                points_redeemed,
+                reward_discount_amount,
+                final_amount_payable
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const originalServicePrice = roundMoney(bookingData.originalServicePrice || bookingData.servicePrice || 0);
+    const rewardDiscountAmount = roundMoney(bookingData.rewardDiscountAmount || 0);
+    const finalAmountPayable = roundMoney(
+        bookingData.finalAmountPayable !== undefined
+            ? bookingData.finalAmountPayable
+            : Math.max(0, originalServicePrice - rewardDiscountAmount)
+    );
+
+    const values = [
+        bookingData.userId || null,
+        bookingData.guestCustomerName || bookingData.customerName || null,
+        bookingData.guestEmail || bookingData.email || null,
+        bookingData.guestPhone || bookingData.phone || null,
+        bookingData.merchantId,
+        bookingData.serviceId,
+        bookingData.bookingDate,
+        normalizeTimeForDatabase(bookingData.bookingTime),
+        bookingData.status || 'pending',
+        bookingData.qrCodeToken || null,
+        originalServicePrice,
+        Math.max(0, Math.floor(Number(bookingData.pointsRedeemed || 0))),
+        rewardDiscountAmount,
+        finalAmountPayable
+    ];
+
+    connection.query(sql, values, callback);
 }
 
 function createCustomerBooking(bookingData, callback) {
@@ -1116,28 +1211,98 @@ function autoConfirmBookingUnlocked(bookingData, callback) {
 
                     const nextStatus = pendingReasons.length ? 'pending' : 'confirmed';
 
-                    createInDatabase({
-                        ...bookingData,
-                        bookingTime,
-                        status: nextStatus
-                    }, (createError, result) => {
-                        if (createError) {
-                            callback(createError);
+                    const redemption = bookingData.loyaltyRedemption || {};
+                    const originalServicePrice = roundMoney(bookingData.originalServicePrice || bookingData.servicePrice || 0);
+                    const pointsRedeemed = Math.max(0, Math.floor(Number(redemption.points || 0)));
+                    const rewardDiscountAmount = roundMoney(redemption.discount || 0);
+                    const finalAmountPayable = roundMoney(Math.max(0, originalServicePrice - rewardDiscountAmount));
+
+                    db.getConnection((connectionError, connection) => {
+                        if (connectionError) {
+                            callback(connectionError);
                             return;
                         }
 
-                        callback(null, {
-                            created: true,
-                            confirmed: nextStatus === 'confirmed',
-                            pending: nextStatus === 'pending',
-                            status: nextStatus,
-                            reason: pendingReasons[0] || 'available',
-                            pendingReasons,
-                            message: nextStatus === 'confirmed'
-                                ? 'Booking confirmed.'
-                                : 'Booking sent to the merchant for review.',
-                            result,
-                            alternatives: []
+                        connection.beginTransaction((transactionError) => {
+                            if (transactionError) {
+                                connection.release();
+                                callback(transactionError);
+                                return;
+                            }
+
+                            const rollback = (error, result) => connection.rollback(() => {
+                                connection.release();
+                                callback(error, result);
+                            });
+
+                            createInDatabaseWithConnection(connection, {
+                                ...bookingData,
+                                bookingTime,
+                                status: nextStatus,
+                                originalServicePrice,
+                                pointsRedeemed,
+                                rewardDiscountAmount,
+                                finalAmountPayable
+                            }, (createError, result) => {
+                                if (createError) {
+                                    rollback(createError);
+                                    return;
+                                }
+
+                                const bookingId = result.insertId;
+
+                                if (!pointsRedeemed || rewardDiscountAmount <= 0) {
+                                    connection.commit((commitError) => {
+                                        connection.release();
+                                        callback(commitError, {
+                                            created: !commitError,
+                                            confirmed: nextStatus === 'confirmed',
+                                            pending: nextStatus === 'pending',
+                                            status: nextStatus,
+                                            reason: pendingReasons[0] || 'available',
+                                            pendingReasons,
+                                            message: nextStatus === 'confirmed'
+                                                ? 'Booking confirmed.'
+                                                : 'Booking sent to the merchant for review.',
+                                            result,
+                                            alternatives: []
+                                        });
+                                    });
+                                    return;
+                                }
+
+                                Loyalty.redeemPointsForBookingWithConnection(connection, {
+                                    userId: bookingData.userId,
+                                    bookingId,
+                                    points: pointsRedeemed,
+                                    discount: rewardDiscountAmount,
+                                    bookingReference: buildBookingReference(bookingId, bookingData.bookingDate),
+                                    merchantName: bookingData.merchantName || ''
+                                }, (redeemError, redeemResult = {}) => {
+                                    if (redeemError || redeemResult.duplicate) {
+                                        rollback(redeemError || new Error('Reward points were already redeemed for this booking.'));
+                                        return;
+                                    }
+
+                                    connection.commit((commitError) => {
+                                        connection.release();
+                                        callback(commitError, {
+                                            created: !commitError,
+                                            confirmed: nextStatus === 'confirmed',
+                                            pending: nextStatus === 'pending',
+                                            status: nextStatus,
+                                            reason: pendingReasons[0] || 'available',
+                                            pendingReasons,
+                                            message: nextStatus === 'confirmed'
+                                                ? 'Booking confirmed.'
+                                                : 'Booking sent to the merchant for review.',
+                                            result,
+                                            rewardRedemption: redeemResult,
+                                            alternatives: []
+                                        });
+                                    });
+                                });
+                            });
                         });
                     });
                 });
@@ -1169,7 +1334,11 @@ function getByUserId(userId, callback) {
             services.service_id,
             services.service_name,
             services.duration_mins,
-            services.price AS service_price,
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at,
             CASE
                 WHEN bookings.status = 'cancelled' THEN 'past'
                 WHEN bookings.status IN ('completed', 'checked_in') THEN 'past'
@@ -1713,7 +1882,11 @@ function getSupportBookingsByUserId(userId, callback) {
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -1737,7 +1910,11 @@ function findSupportBookingForCustomer(bookingId, userId, callback) {
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -1779,7 +1956,11 @@ function getManageableByIdForCustomer(bookingId, userId, callback) {
             salons.merchant_id AS merchant_user_id,
             salons.salon_name AS merchant_name,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
@@ -1834,7 +2015,11 @@ function getReceiptById(bookingId, callback) {
             services.service_id,
             services.service_name,
             services.duration_mins,
-            services.price AS service_price,
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
@@ -1872,7 +2057,11 @@ function getNotificationDetailsById(bookingId, callback) {
             salons.salon_name AS merchant_name,
             salons.merchant_id AS merchant_user_id,
             services.service_name,
-            services.price AS service_price
+            COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+            bookings.points_redeemed,
+            bookings.reward_discount_amount,
+            bookings.final_amount_payable,
+            bookings.reward_points_refunded_at
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
@@ -1939,7 +2128,11 @@ function getWhatsAppReminderCandidates(startAt, endAt, reminderType, callback) {
                     salons.salon_name AS merchant_name,
                     salons.merchant_id AS merchant_user_id,
                     services.service_name,
-                    services.price AS service_price
+                    COALESCE(NULLIF(bookings.original_service_price, 0), services.price) AS service_price,
+                    bookings.points_redeemed,
+                    bookings.reward_discount_amount,
+                    bookings.final_amount_payable,
+                    bookings.reward_points_refunded_at
                 FROM bookings
                 LEFT JOIN users ON users.user_id = bookings.user_id
                 INNER JOIN services ON services.service_id = bookings.service_id
@@ -2222,6 +2415,129 @@ function cancelForCustomer(bookingId, userId, reason, refundStatus, callback) {
     });
 }
 
+function refundRedeemedPointsForCancellation(bookingId, userId, callback) {
+    ensureBookingManagementSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
+
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const rollback = (error, result) => connection.rollback(() => {
+                    connection.release();
+                    callback(error, result);
+                });
+                const lookupSql = `
+                    SELECT
+                        bookings.booking_id AS id,
+                        bookings.user_id,
+                        bookings.booking_date,
+                        bookings.points_redeemed,
+                        bookings.reward_discount_amount,
+                        bookings.reward_points_refunded_at,
+                        salons.salon_name AS merchant_name
+                    FROM bookings
+                    INNER JOIN salons ON salons.salon_id = bookings.merchant_id
+                    WHERE bookings.booking_id = ?
+                        AND bookings.user_id = ?
+                    FOR UPDATE
+                `;
+
+                connection.query(lookupSql, [bookingId, userId], (lookupError, rows = []) => {
+                    if (lookupError) {
+                        rollback(lookupError);
+                        return;
+                    }
+
+                    const booking = rows[0];
+                    const points = Math.max(0, Math.floor(Number(booking?.points_redeemed || 0)));
+                    const discount = roundMoney(booking?.reward_discount_amount || 0);
+
+                    if (!booking || points <= 0 || booking.reward_points_refunded_at) {
+                        connection.commit((commitError) => {
+                            connection.release();
+                            callback(commitError, { refunded: false, points: 0, alreadyRefunded: Boolean(booking?.reward_points_refunded_at) });
+                        });
+                        return;
+                    }
+
+                    const sourceReceiptId = `booking-refund-${bookingId}`;
+                    const insertSql = `
+                        INSERT IGNORE INTO loyalty_transactions
+                            (user_id, source_receipt_id, transaction_type, points_delta, cashback_delta, description, booking_reference, merchant_name, reward_discount)
+                        VALUES (?, ?, 'REFUND_REVERSAL', ?, 0, ?, ?, ?, ?)
+                    `;
+
+                    connection.query(insertSql, [
+                        userId,
+                        sourceReceiptId,
+                        points,
+                        `Refunded ${points} points from cancelled booking #${bookingId}`,
+                        buildBookingReference(bookingId, booking.booking_date),
+                        booking.merchant_name || '',
+                        discount
+                    ], (insertError, insertResult) => {
+                        if (insertError) {
+                            rollback(insertError);
+                            return;
+                        }
+
+                        if (!insertResult.affectedRows) {
+                            rollback(new Error('Reward points were already refunded for this booking.'));
+                            return;
+                        }
+
+                        const walletSql = `
+                            INSERT INTO loyalty_wallets (user_id, points_balance, cashback_balance, lifetime_points)
+                            VALUES (?, ?, 0, 0)
+                            ON DUPLICATE KEY UPDATE points_balance = points_balance + VALUES(points_balance)
+                        `;
+
+                        connection.query(walletSql, [userId, points], (walletError) => {
+                            if (walletError) {
+                                rollback(walletError);
+                                return;
+                            }
+
+                            connection.query(
+                                `UPDATE bookings SET reward_points_refunded_at = CURRENT_TIMESTAMP WHERE booking_id = ? AND reward_points_refunded_at IS NULL`,
+                                [bookingId],
+                                (markError, markResult) => {
+                                    if (markError || markResult.affectedRows === 0) {
+                                        rollback(markError || new Error('Reward points were already refunded for this booking.'));
+                                        return;
+                                    }
+
+                                    connection.commit((commitError) => {
+                                        connection.release();
+                                        callback(commitError, {
+                                            refunded: !commitError,
+                                            points,
+                                            discount
+                                        });
+                                    });
+                                }
+                            );
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
 function markConfirmedForCustomer(bookingId, userId, callback) {
     return ensureBookingManagementSchema((schemaError) => {
         if (schemaError) {
@@ -2443,6 +2759,7 @@ module.exports = {
     createCustomerBooking,
     createInDatabase,
     cancelForCustomer,
+    refundRedeemedPointsForCancellation,
     getAvailabilityByBookingIds,
     getAvailableSlots,
     countReschedulesForBooking,

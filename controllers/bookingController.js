@@ -320,6 +320,83 @@ function getRefundStatusForCancellation(booking) {
     return hoursUntilBooking >= 24 ? 'eligible' : 'late_cancellation_review';
 }
 
+function getRequestedBookingRedeemPoints(body = {}) {
+    const wantsRedemption = body.redeemRewards === '1' || body.redeemRewards === 'on';
+
+    if (!wantsRedemption) {
+        return 0;
+    }
+
+    const raw = String(body.redeemPoints || '').trim();
+
+    if (!/^\d+$/.test(raw)) {
+        return NaN;
+    }
+
+    return Math.floor(Number(raw));
+}
+
+function prepareBookingLoyaltyRedemption(req, service, amount, callback) {
+    const requestedPoints = getRequestedBookingRedeemPoints(req.body);
+    const originalServicePrice = Number(amount || service.price || 0);
+
+    if (Number.isNaN(requestedPoints)) {
+        callback(new Error('Points to redeem must be a positive whole number.'));
+        return;
+    }
+
+    if (requestedPoints === 0) {
+        callback(null, {
+            requestedPoints: 0,
+            points: 0,
+            discount: 0,
+            originalServicePrice,
+            finalAmountPayable: originalServicePrice
+        });
+        return;
+    }
+
+    if (!req.session.user?.id) {
+        callback(new Error('Please log in before redeeming loyalty points.'));
+        return;
+    }
+
+    if (!Number.isInteger(requestedPoints) || requestedPoints <= 0) {
+        callback(new Error('Points to redeem must be a positive whole number.'));
+        return;
+    }
+
+    Loyalty.calculatePointRedemption({
+        userId: req.session.user.id,
+        merchantId: service.salonId,
+        serviceId: service.id,
+        amount: originalServicePrice,
+        requestedPoints
+    }, (error, redemption = {}) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const points = Math.max(0, Math.floor(Number(redemption.points || 0)));
+        const discount = Math.min(originalServicePrice, Math.round(Number(redemption.discount || 0) * 100) / 100);
+
+        if (points <= 0 || discount <= 0) {
+            callback(new Error('No loyalty discount could be applied for the selected points.'));
+            return;
+        }
+
+        callback(null, {
+            ...redemption,
+            requestedPoints,
+            points,
+            discount,
+            originalServicePrice,
+            finalAmountPayable: Math.max(0, Math.round((originalServicePrice - discount) * 100) / 100)
+        });
+    });
+}
+
 function removeUploadedReviewMedia(...mediaPaths) {
     mediaPaths.filter(Boolean).forEach((mediaPath) => {
         const normalized = String(mediaPath).replace(/^\/+/, '');
@@ -421,17 +498,26 @@ function createBooking(req, res) {
             ? Number(service.packagePrice || service.price)
             : Number(service.price || 0);
 
-        return Booking.autoConfirmBooking({
-            userId: req.session.user?.id || null,
-            serviceId: service.id,
-            merchantId: service.salonId,
-            customerName,
-            email,
-            phone,
-            bookingDate,
-            bookingTime,
-            durationMins: service.durationMins
-        }, async (bookingError, confirmation) => {
+        return prepareBookingLoyaltyRedemption(req, service, bookedServicePrice, (redemptionError, loyaltyRedemption) => {
+            if (redemptionError) {
+                return respondBookingCreateError(req, res, 400, redemptionError.message || 'Reward redemption could not be applied.', req.get('Referrer') || '/services');
+            }
+
+            return Booking.autoConfirmBooking({
+                userId: req.session.user?.id || null,
+                serviceId: service.id,
+                merchantId: service.salonId,
+                merchantName: service.salonName || 'Vaniday merchant',
+                customerName,
+                email,
+                phone,
+                bookingDate,
+                bookingTime,
+                durationMins: service.durationMins,
+                servicePrice: loyaltyRedemption.originalServicePrice,
+                originalServicePrice: loyaltyRedemption.originalServicePrice,
+                loyaltyRedemption
+            }, async (bookingError, confirmation) => {
             if (bookingError) {
                 console.error(bookingError);
                 if (wantsJson(req)) {
@@ -465,9 +551,12 @@ function createBooking(req, res) {
                                 id: bookingId,
                                 displayReference: bookingReference,
                                 merchantName: service.salonName || 'Vaniday merchant',
-                                serviceName: bookedServiceName,
-                                servicePrice: bookedServicePrice,
-                                bookingDate,
+                            serviceName: bookedServiceName,
+                            servicePrice: bookedServicePrice,
+                            pointsRedeemed: Number(loyaltyRedemption.points || 0),
+                            pointsDiscount: Number(loyaltyRedemption.discount || 0),
+                            amountPayableAtMerchant: Number(loyaltyRedemption.finalAmountPayable ?? bookedServicePrice),
+                            bookingDate,
                                 bookingTime,
                                 receiptPath: getGuestReceiptPath(bookingId),
                                 receiptUrl: getGuestReceiptUrl(req, bookingId),
@@ -571,6 +660,9 @@ function createBooking(req, res) {
                             serviceName: bookedServiceName,
                             servicePrice: bookedServicePrice,
                             purchaseType,
+                            pointsRedeemed: Number(loyaltyRedemption.points || 0),
+                            pointsDiscount: Number(loyaltyRedemption.discount || 0),
+                            amountPayableAtMerchant: Number(loyaltyRedemption.finalAmountPayable ?? bookedServicePrice),
                             bookingDate,
                             bookingTime,
                             appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
@@ -595,6 +687,9 @@ function createBooking(req, res) {
                         serviceName: bookedServiceName,
                         servicePrice: bookedServicePrice,
                         purchaseType,
+                        pointsRedeemed: Number(loyaltyRedemption.points || 0),
+                        pointsDiscount: Number(loyaltyRedemption.discount || 0),
+                        amountPayableAtMerchant: Number(loyaltyRedemption.finalAmountPayable ?? bookedServicePrice),
                         bookingDate,
                         bookingTime,
                         appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
@@ -617,6 +712,7 @@ function createBooking(req, res) {
                 }
                 return res.redirect('/profile');
             }
+            });
         });
     });
 }
@@ -751,6 +847,26 @@ function cancelBooking(req, res) {
                 Loyalty.reverseCampaignCashbackForReceipt(String(bookingId), (reverseError) => {
                     if (reverseError) {
                         console.error('Campaign cashback reversal failed:', reverseError);
+                    }
+                });
+            }
+
+            if (refundStatus === 'eligible' && Number(booking.points_redeemed || 0) > 0) {
+                Booking.refundRedeemedPointsForCancellation(bookingId, userId, (pointsRefundError, refundResult = {}) => {
+                    if (pointsRefundError) {
+                        console.error('Booking reward points refund failed:', pointsRefundError);
+                        return;
+                    }
+
+                    if (refundResult.refunded) {
+                        notifyUser(userId, 'customer', {
+                            actorUserId: userId,
+                            type: 'reward_update',
+                            title: 'Points refunded',
+                            message: `${refundResult.points} points were refunded from your cancelled booking.`,
+                            linkUrl: '/profile#wallet',
+                            dedupeKey: `booking-points-refunded-${bookingId}`
+                        });
                     }
                 });
             }

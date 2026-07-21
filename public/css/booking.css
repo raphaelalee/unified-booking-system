@@ -436,6 +436,119 @@
     font-weight: 850;
 }
 
+.booking-reward-card {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid rgba(64, 84, 63, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 252, 0.96);
+}
+
+.booking-reward-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.booking-reward-heading h3,
+.booking-reward-heading p {
+    margin: 0;
+}
+
+.booking-reward-heading strong {
+    color: var(--ink, #3f5140);
+    white-space: nowrap;
+}
+
+.booking-reward-toggle {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+    width: fit-content;
+    font-weight: 800;
+}
+
+.booking-form .booking-reward-toggle input[type="checkbox"][data-reward-toggle] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    display: grid !important;
+    place-items: center;
+    width: 14px !important;
+    height: 14px !important;
+    inline-size: 14px !important;
+    block-size: 14px !important;
+    min-width: 14px !important;
+    max-width: 14px !important;
+    min-height: 14px !important;
+    max-height: 14px !important;
+    flex: 0 0 14px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 1.5px solid rgba(48, 66, 50, 0.55) !important;
+    border-radius: 3px;
+    background: #fff !important;
+    accent-color: #2f6f3e;
+    transform: none !important;
+    cursor: pointer;
+}
+
+.booking-form .booking-reward-toggle input[type="checkbox"][data-reward-toggle]::after {
+    content: "";
+    width: 4px;
+    height: 7px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transform-origin: center;
+}
+
+.booking-form .booking-reward-toggle input[type="checkbox"][data-reward-toggle]:checked {
+    border-color: #2f6f3e !important;
+    background: #2f6f3e !important;
+    box-shadow: 0 0 0 2px rgba(47, 111, 62, 0.16);
+}
+
+.booking-form .booking-reward-toggle input[type="checkbox"][data-reward-toggle]:checked::after {
+    transform: rotate(45deg) scale(1);
+}
+
+.booking-reward-inputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.booking-reward-breakdown {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.booking-reward-breakdown > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(64, 84, 63, 0.1);
+}
+
+.booking-reward-breakdown dt {
+    color: var(--muted, #7f9188);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.booking-reward-breakdown dd {
+    margin: 0;
+    color: var(--ink, #3f5140);
+    font-weight: 850;
+    text-align: right;
+}
+
 @media (max-width: 980px) {
     .booking-layout.booking-form {
         grid-template-columns: 1fr !important;
@@ -471,6 +584,18 @@
     .booking-summary-card dl > div {
         grid-template-columns: 1fr;
         gap: 4px;
+    }
+
+    .booking-reward-heading,
+    .booking-reward-inputs,
+    .booking-reward-breakdown > div {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .booking-reward-breakdown dd {
+        text-align: left;
     }
 
     .time-slot-pill,

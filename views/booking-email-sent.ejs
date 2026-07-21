@@ -37,6 +37,12 @@
                 <% if (booking.purchaseType === 'package') { %>
                     <p><span>Package price</span><strong>$<%= Number(booking.servicePrice || 0).toFixed(2) %></strong></p>
                 <% } %>
+                <p><span>Original service price</span><strong>$<%= Number(booking.servicePrice || 0).toFixed(2) %></strong></p>
+                <% if (Number(booking.pointsDiscount || 0) > 0) { %>
+                    <p><span>Points discount</span><strong>-$<%= Number(booking.pointsDiscount || 0).toFixed(2) %></strong></p>
+                    <p><span>Points redeemed</span><strong><%= Number(booking.pointsRedeemed || 0) %> pts</strong></p>
+                <% } %>
+                <p><span>Amount payable at merchant</span><strong>$<%= Number((booking.amountPayableAtMerchant ?? booking.servicePrice) || 0).toFixed(2) %></strong></p>
                 <p><span>Merchant</span><strong><%= booking.merchantName %></strong></p>
                 <p>
                     <span>Date/time</span>
@@ -45,7 +51,7 @@
             </div>
             <p class="muted">
                 <% if (currentUser) { %>
-                    This receipt is also available from your profile.
+                    This receipt is also available from your profile. You will pay the remaining amount during your appointment.
                 <% } else { %>
                     Save this page or keep the confirmation email. Guest bookings are not attached to an account.
                 <% } %>
