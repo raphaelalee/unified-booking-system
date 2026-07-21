@@ -29,6 +29,7 @@ const {
     formatAppointmentDateTime
 } = require('../utils/dateTimeFormat');
 const { buildBookingReference } = require('../utils/bookingReference');
+const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
 
 function isValidBookingDate(value) {
     const state = Booking.getBookingDateState(value);
@@ -640,7 +641,18 @@ function createBooking(req, res) {
                 }).then((whatsappResult) => {
                     if (whatsappResult?.skipped) {
                         console.log('WhatsApp booking confirmation skipped: WhatsApp is not configured or booking phone is missing.');
+                        return null;
                     }
+                    return sendDemoImmediateReminder({
+                        id: bookingId,
+                        customerName: customerName || 'Customer',
+                        phone,
+                        merchantName: service.salonName || 'Vaniday merchant',
+                        serviceName: bookedServiceName,
+                        bookingDate,
+                        bookingTime,
+                        checkInUrl: checkinUrl
+                    });
                 }).catch((whatsappError) => {
                     console.error('WhatsApp booking confirmation failed:', whatsappError.message);
                 });

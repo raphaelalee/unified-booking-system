@@ -383,10 +383,9 @@ async function sendWhatsAppWebText(phone, message) {
 
     const normalizedPhone = normalizeRecipientPhone(phone);
     const phoneCandidates = getPhoneCandidates(phone);
-    const chatIdCandidates = getChatIdCandidates(phone);
     const body = String(message || '').trim();
 
-    if (!normalizedPhone || !chatIdCandidates.length) {
+    if (!normalizedPhone) {
         return { skipped: true, reason: 'invalid_phone' };
     }
 
@@ -420,45 +419,18 @@ async function sendWhatsAppWebText(phone, message) {
         }
     }
 
-    const sendTargets = [];
-
     const knownChatTargets = await getKnownChatTargets(phoneCandidates);
-    knownChatTargets.forEach((id) => {
-        if (!sendTargets.includes(id)) {
-            sendTargets.push(id);
+    const target = resolvedIds[0] || knownChatTargets[0] || toWhatsAppWebChatId(normalizedPhone);
+
+    const sent = await webClient.sendMessage(target, body.slice(0, 4000)).catch((error) => {
+        const message = String(error?.message || '');
+
+        if (/No LID/i.test(message)) {
+            return null;
         }
+
+        throw error;
     });
-
-    // First try direct number-based chat IDs so delivery targets the profile number directly.
-    chatIdCandidates.forEach((id) => {
-        if (!sendTargets.includes(id)) {
-            sendTargets.push(id);
-        }
-    });
-
-    // Then try provider-resolved identifiers.
-    resolvedIds.forEach((id) => {
-        if (!sendTargets.includes(id)) {
-            sendTargets.push(id);
-        }
-    });
-
-    let sent = null;
-    for (const target of sendTargets) {
-        sent = await webClient.sendMessage(target, body.slice(0, 4000)).catch((error) => {
-            const message = String(error?.message || '');
-
-            if (/No LID/i.test(message)) {
-                return null;
-            }
-
-            throw error;
-        });
-
-        if (sent) {
-            break;
-        }
-    }
 
     if (!sent) {
         return {

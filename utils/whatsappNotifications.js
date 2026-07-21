@@ -1,4 +1,11 @@
+const db = require('../db');
 const { sendWhatsAppWebText } = require('../services/whatsappWebClient');
+
+const recentOutboundMessages = new Map();
+const OUTBOUND_DEDUPE_TTL_MS = 2 * 60 * 1000;
+let notificationLogSchemaReady = false;
+let notificationLogSchemaPending = false;
+let notificationLogSchemaQueue = [];
 
 function isWhatsAppEnabled() {
     return String(process.env.WHATSAPP_NOTIFICATIONS_ENABLED || process.env.WHATSAPP_AUTOMATION_ENABLED || 'true').toLowerCase() !== 'false';
@@ -96,6 +103,125 @@ function buildCancellationMessage(booking) {
     ].filter(Boolean).join('\n');
 }
 
+function flushNotificationLogSchema(error) {
+    const queue = notificationLogSchemaQueue;
+    notificationLogSchemaQueue = [];
+    notificationLogSchemaPending = false;
+    queue.forEach((callback) => callback(error));
+}
+
+function ensureNotificationLogSchema(callback) {
+    if (notificationLogSchemaReady) {
+        callback(null);
+        return;
+    }
+
+    notificationLogSchemaQueue.push(callback);
+
+    if (notificationLogSchemaPending) {
+        return;
+    }
+
+    notificationLogSchemaPending = true;
+
+    const sql = `
+        CREATE TABLE IF NOT EXISTS whatsapp_notification_logs (
+            log_id INT NOT NULL AUTO_INCREMENT,
+            booking_id INT NOT NULL,
+            notification_type VARCHAR(40) NOT NULL,
+            sent_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (log_id),
+            UNIQUE KEY uq_whatsapp_notification_booking_type (booking_id, notification_type),
+            KEY idx_whatsapp_notification_sent_at (sent_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+    db.query(sql, (error) => {
+        if (!error) {
+            notificationLogSchemaReady = true;
+        }
+
+        flushNotificationLogSchema(error);
+    });
+}
+
+function claimBookingNotification(bookingId, notificationType) {
+    const normalizedBookingId = Number(bookingId);
+    const normalizedType = String(notificationType || '').trim().slice(0, 40);
+
+    if (!Number.isInteger(normalizedBookingId) || normalizedBookingId <= 0 || !normalizedType) {
+        return Promise.resolve({ claimed: true });
+    }
+
+    return new Promise((resolve, reject) => {
+        ensureNotificationLogSchema((schemaError) => {
+            if (schemaError) {
+                reject(schemaError);
+                return;
+            }
+
+            db.query(
+                'INSERT IGNORE INTO whatsapp_notification_logs (booking_id, notification_type) VALUES (?, ?)',
+                [normalizedBookingId, normalizedType],
+                (insertError, result = {}) => {
+                    if (insertError) {
+                        reject(insertError);
+                        return;
+                    }
+
+                    resolve({
+                        claimed: Number(result.affectedRows || 0) > 0
+                    });
+                }
+            );
+        });
+    });
+}
+
+function getBookingNotificationId(booking = {}) {
+    const directId = Number(booking.bookingId || booking.id);
+
+    if (Number.isInteger(directId) && directId > 0) {
+        return directId;
+    }
+
+    const tokenMatch = String(booking.checkInUrl || '').match(/\/check(?:ing|in)\/(\d+)\./i);
+    const tokenId = Number(tokenMatch?.[1]);
+
+    return Number.isInteger(tokenId) && tokenId > 0 ? tokenId : 0;
+}
+
+function cleanupRecentOutboundMessages(now = Date.now()) {
+    recentOutboundMessages.forEach((sentAt, key) => {
+        if (now - sentAt > OUTBOUND_DEDUPE_TTL_MS) {
+            recentOutboundMessages.delete(key);
+        }
+    });
+}
+
+function claimOutboundMessage(phone, body) {
+    const to = formatWhatsAppAddress(phone);
+    const normalizedBody = String(body || '').trim();
+
+    if (!to || !normalizedBody) {
+        return { claimed: true };
+    }
+
+    const now = Date.now();
+    cleanupRecentOutboundMessages(now);
+
+    const key = `${to}:${normalizedBody}`;
+    if (recentOutboundMessages.has(key)) {
+        return {
+            claimed: false,
+            reason: 'duplicate_outbound_message'
+        };
+    }
+
+    recentOutboundMessages.set(key, now);
+    return { claimed: true };
+}
+
 async function sendWhatsAppViaTwilio(phone, body) {
     const config = getConfig();
     const to = formatWhatsAppAddress(phone);
@@ -140,6 +266,14 @@ async function sendWhatsAppViaTwilio(phone, body) {
 async function sendWhatsAppText(phone, message) {
     const provider = getProvider();
     const body = String(message || '').trim();
+    const outboundClaim = claimOutboundMessage(phone, body);
+
+    if (!outboundClaim.claimed) {
+        return {
+            skipped: true,
+            reason: outboundClaim.reason
+        };
+    }
 
     if (provider === 'whatsapp_web' || provider === 'whatsapp-web' || provider === 'web') {
         const webResult = await sendWhatsAppWebText(phone, body);
@@ -168,7 +302,19 @@ async function sendWhatsAppText(phone, message) {
     return sendWhatsAppViaTwilio(phone, body);
 }
 
-function sendBookingNotification(booking) {
+async function sendBookingNotification(booking) {
+    const bookingId = getBookingNotificationId(booking);
+    const claim = await claimBookingNotification(bookingId, 'booking_confirmation');
+
+    if (!claim.claimed) {
+        console.log(`WhatsApp booking confirmation skipped as duplicate for booking ${bookingId || 'unknown'}.`);
+        return {
+            skipped: true,
+            reason: 'duplicate_booking_notification'
+        };
+    }
+
+    console.log(`WhatsApp booking confirmation claimed for booking ${bookingId || 'unknown'}.`);
     return sendWhatsAppText(booking.phone, buildBookingMessage(booking));
 }
 

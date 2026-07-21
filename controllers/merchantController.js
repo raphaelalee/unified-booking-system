@@ -24,6 +24,7 @@ const { sendBookingConfirmationEmail, sendGiftCardEmail } = require('../utils/em
 const { getPublicHolidayDateMap, getPublicHolidayName } = require('../utils/publicHolidays');
 const { sendBookingConfirmationSms } = require('../utils/smsNotifications');
 const { sendBookingNotification } = require('../utils/whatsappNotifications');
+const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
 const { formatAppointmentDateTime } = require('../utils/dateTimeFormat');
 const {
     formatPaymentBreakdown,
@@ -982,7 +983,13 @@ function getWhatsAppEnquiryUrl(merchant, service = null, bookingUrl = '') {
 }
 
 function notifyBookingByWhatsApp(booking) {
-    sendBookingNotification(booking).catch((error) => {
+    sendBookingNotification(booking).then((result) => {
+        if (result?.skipped) {
+            return null;
+        }
+
+        return sendDemoImmediateReminder(booking);
+    }).catch((error) => {
         console.error('WhatsApp booking notification failed:', error.message);
     });
 }

@@ -46,7 +46,7 @@ function normalizeBooking(row) {
     }
 
     return {
-        id: row.id,
+        id: row.id || row.bookingId || row.booking_id,
         userId: row.userId || row.user_id,
         customerName: row.customerName || row.customer_name,
         email: row.email,
@@ -62,6 +62,52 @@ function normalizeBooking(row) {
 
 function isEnabled() {
     return String(process.env.WHATSAPP_AUTOMATION_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+function isDemoImmediateReminderEnabled() {
+    const configured = process.env.WHATSAPP_DEMO_IMMEDIATE_REMINDER;
+
+    if (configured !== undefined) {
+        return String(configured).toLowerCase() === 'true';
+    }
+
+    return String(process.env.NODE_ENV || 'development').toLowerCase() !== 'production';
+}
+
+function isTomorrowBooking(bookingDate) {
+    const dateKey = toDateOnly(bookingDate);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return dateKey === toDateOnly(tomorrow);
+}
+
+async function sendDemoImmediateReminder(booking) {
+    const normalized = normalizeBooking(booking);
+
+    if (!isEnabled() || !isDemoImmediateReminderEnabled()) {
+        return { skipped: true, reason: 'demo_immediate_reminder_disabled' };
+    }
+
+    if (!normalized?.id || !normalized.phone) {
+        return { skipped: true, reason: 'missing_booking_or_phone' };
+    }
+
+    if (!isTomorrowBooking(normalized.bookingDate)) {
+        return { skipped: true, reason: 'not_tomorrow_booking' };
+    }
+
+    const reminderType = 'demo_immediate';
+    const result = await sendBookingReminder({
+        ...normalized,
+        checkInUrl: booking.checkInUrl || booking.checkinUrl || ''
+    });
+
+    if (!result?.skipped) {
+        await markReminderSent(normalized.id, reminderType);
+        console.log(`WhatsApp demo reminder sent immediately for booking ${normalized.id}.`);
+    }
+
+    return result;
 }
 
 async function sendDueReminders() {
@@ -146,6 +192,7 @@ async function sendCancellationForBooking(bookingId, reason = '') {
 
 module.exports = {
     sendCancellationForBooking,
+    sendDemoImmediateReminder,
     sendDueReminders,
     sendRescheduleForBooking,
     startWhatsAppReminderScheduler

@@ -571,6 +571,7 @@ async function handleTimeStep(phone, text, session) {
 
     const bookingId = confirmation.result.insertId;
     const booking = {
+        bookingId,
         customerName: session.user.name,
         email: session.user.email,
         phone: session.user.phone || phone,

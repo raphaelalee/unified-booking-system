@@ -705,6 +705,20 @@
             if (!serviceSelect.value || !dateInput?.value || !timeSelect?.value) {
                 event.preventDefault();
                 updateSummary(form);
+                return;
+            }
+
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = 'true';
+            const confirmButton = getConfirmButton(form);
+            if (confirmButton) {
+                confirmButton.disabled = true;
+                confirmButton.dataset.originalText = confirmButton.textContent;
+                confirmButton.textContent = 'Submitting...';
             }
         });
 
