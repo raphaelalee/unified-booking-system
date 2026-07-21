@@ -224,6 +224,8 @@ function ensureTables(callback) {
 }
 
 function mapRules(row = {}) {
+    row = row || {};
+
     return {
         pointsPerDollar: Number(row.points_per_dollar ?? DEFAULT_RULES.pointsPerDollar),
         cashbackPercent: Number(row.cashback_percent ?? DEFAULT_RULES.cashbackPercent),
@@ -236,6 +238,8 @@ function mapRules(row = {}) {
 }
 
 function mapMerchantRules(row = {}) {
+    row = row || {};
+
     return {
         merchantId: row.merchant_id ? Number(row.merchant_id) : null,
         isEnabled: row.is_enabled === undefined ? DEFAULT_MERCHANT_RULES.isEnabled : Boolean(Number(row.is_enabled)),
@@ -248,6 +252,8 @@ function mapMerchantRules(row = {}) {
 }
 
 function mapWallet(row = {}) {
+    row = row || {};
+
     return {
         userId: row.user_id,
         pointsBalance: Number(row.points_balance || 0),
