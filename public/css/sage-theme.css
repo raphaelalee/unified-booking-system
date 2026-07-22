@@ -20301,3 +20301,171 @@ body:not(.flappy-page) .home-month-spotlight {
         min-height: 74px;
     }
 }
+
+/* Merchant orders compact layout */
+.merchant-orders-page .merchant-dashboard-hero {
+    min-height: 0;
+    padding: 20px;
+    align-items: center;
+}
+
+.merchant-orders-page .merchant-dashboard-hero h1 {
+    font-size: clamp(2rem, 3.6vw, 3.15rem);
+}
+
+.merchant-orders-page .merchant-dashboard-hero span {
+    max-width: 520px;
+}
+
+.merchant-orders-page .merchant-payout-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.merchant-orders-page .merchant-payout-summary-card {
+    min-height: 92px;
+    padding: 16px;
+    gap: 4px;
+}
+
+.merchant-orders-page .merchant-payout-summary-card small {
+    font-size: 0.82rem;
+}
+
+.merchant-orders-page .merchant-orders-management-panel {
+    padding: 18px;
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.merchant-orders-page .merchant-card-heading {
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(44, 55, 42, 0.08);
+}
+
+.merchant-orders-page .merchant-card-heading h2 {
+    font-size: 1.45rem;
+}
+
+.merchant-orders-page .merchant-order-management-list {
+    gap: 10px;
+}
+
+.merchant-orders-page .merchant-order-management-card {
+    padding: 14px;
+    gap: 10px;
+    border-radius: 12px;
+    background: #fbfcf8;
+    box-shadow: none;
+}
+
+.merchant-orders-page .merchant-order-management-main {
+    grid-template-columns: minmax(230px, 1.15fr) minmax(92px, auto) auto;
+    align-items: center;
+}
+
+.merchant-orders-page .merchant-order-identity {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.merchant-orders-page .merchant-order-identity strong {
+    font-size: 1rem;
+}
+
+.merchant-orders-page .merchant-order-identity small {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merchant-orders-page .merchant-order-id {
+    justify-self: start;
+    padding: 4px 9px;
+    font-size: 0.8rem;
+}
+
+.merchant-order-quick-meta {
+    display: grid;
+    gap: 2px;
+    justify-items: end;
+    color: var(--sage-readable);
+    font-size: 0.82rem;
+    font-weight: 850;
+}
+
+.merchant-order-quick-meta strong {
+    color: var(--sage-ink);
+    font-size: 1.05rem;
+}
+
+.merchant-orders-page .merchant-status-badge {
+    justify-self: end;
+}
+
+.merchant-order-alert {
+    margin: 0;
+    justify-self: start;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(79, 104, 71, 0.08);
+    color: #3f6b3a;
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.merchant-orders-page .merchant-order-management-items {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 6px;
+}
+
+.merchant-orders-page .merchant-order-management-items p {
+    padding: 8px 10px;
+    background: #ffffff;
+}
+
+.merchant-orders-page .merchant-order-more-items {
+    border-style: dashed;
+}
+
+.merchant-orders-page .merchant-order-management-footer {
+    grid-template-columns: repeat(3, minmax(96px, 0.8fr)) minmax(300px, 1.25fr);
+    gap: 10px;
+    padding-top: 0;
+}
+
+.merchant-orders-page .merchant-order-management-footer > div {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(238, 244, 233, 0.38);
+}
+
+.merchant-orders-page .merchant-order-status-form {
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(238, 244, 233, 0.38);
+}
+
+.merchant-orders-page .merchant-order-status-form select {
+    min-height: 38px;
+    background: #ffffff;
+}
+
+.merchant-orders-page .merchant-order-status-form .button {
+    min-height: 38px;
+}
+
+@media (max-width: 860px) {
+    .merchant-orders-page .merchant-payout-summary-grid,
+    .merchant-orders-page .merchant-order-management-main,
+    .merchant-orders-page .merchant-order-management-footer,
+    .merchant-orders-page .merchant-order-status-form {
+        grid-template-columns: 1fr;
+    }
+
+    .merchant-order-quick-meta,
+    .merchant-orders-page .merchant-status-badge {
+        justify-self: start;
+    }
+}
