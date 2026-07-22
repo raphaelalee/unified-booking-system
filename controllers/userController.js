@@ -1279,16 +1279,19 @@ function showLogin(req, res) {
     }
 
     const error = req.session.loginError;
+    const success = req.session.loginSuccess;
     const form = {
         ...(req.session.loginForm || {}),
         returnTo: requestedReturnTo || getSafeReturnPath(req, req.session.loginReturnTo)
     };
     req.session.loginError = null;
+    req.session.loginSuccess = null;
     req.session.loginForm = null;
 
     return res.render('login', {
         title: 'Log In',
         error,
+        success,
         form
     });
 }
@@ -1632,33 +1635,13 @@ function signupUser(req, res) {
                     return res.redirect('/signup');
                 }
 
-                const newUser = {
-                    user_id: result.insertId,
-                    name,
-                    email,
-                    phone,
-                    ...buildCustomerDetailsPayload(customerDetailsForm),
-                    referral_code: '',
-                    role: 'customer',
-                    glints_balance: 0
-                };
                 const referralCode = generateReferralCode(result.insertId);
 
                 return User.updateReferralCode(result.insertId, referralCode, (referralError) => {
                     if (referralError) {
                         console.error(referralError);
-                        return setAuthenticatedSession(req, {
-                            ...newUser,
-                            referral_code: ''
-                        }, 'Account created successfully. Your referral code will be prepared from your profile page.', (sessionError) => {
-                            if (sessionError) {
-                                console.error(sessionError);
-                                req.session.signupError = 'Account was created, but login failed. Please log in.';
-                                return res.redirect('/login');
-                            }
-
-                            return res.redirect('/profile');
-                        });
+                        req.session.loginSuccess = 'Account created successfully. Please log in to continue. Your referral code will be prepared from your profile page.';
+                        return res.redirect('/login');
                     }
 
                     const finishSignup = () => RewardShop.initializeForUser(result.insertId, (rewardError) => {
@@ -1666,18 +1649,8 @@ function signupUser(req, res) {
                             console.error(rewardError);
                         }
 
-                        return setAuthenticatedSession(req, {
-                            ...newUser,
-                            referral_code: referralCode
-                        }, 'Account created successfully.', (sessionError) => {
-                            if (sessionError) {
-                                console.error(sessionError);
-                                req.session.signupError = 'Account was created, but login failed. Please log in.';
-                                return res.redirect('/login');
-                            }
-
-                            return res.redirect('/profile');
-                        });
+                        req.session.loginSuccess = 'Account created successfully. Please log in to continue.';
+                        return res.redirect('/login');
                     });
 
                     if (!enteredReferralCode || enteredReferralCode === referralCode) {

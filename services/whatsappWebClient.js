@@ -9,6 +9,26 @@ const identityPhoneMap = new Map();
 const processedInboundMessages = new Map();
 const INBOUND_DEDUPE_TTL_MS = 10 * 1000;
 
+function getErrorMessage(error) {
+    return String(error?.message || error || '');
+}
+
+function isStaleBrowserError(error) {
+    const message = getErrorMessage(error);
+    return /detached frame|target closed|session closed|execution context was destroyed|protocol error|navigation failed because browser has disconnected/i.test(message);
+}
+
+function markWebClientStale(error) {
+    const staleClient = webClient;
+    webClient = null;
+    webClientReady = false;
+    console.warn('WhatsApp Web client became stale:', getErrorMessage(error));
+
+    if (staleClient && typeof staleClient.destroy === 'function') {
+        staleClient.destroy().catch(() => {});
+    }
+}
+
 function getProvider() {
     return String(process.env.WHATSAPP_PROVIDER || 'twilio').toLowerCase();
 }
@@ -295,6 +315,7 @@ async function startWhatsAppWebClient(options = {}) {
 
         webClient.on('disconnected', (reason) => {
             webClientReady = false;
+            webClient = null;
             console.error('WhatsApp Web client disconnected:', reason || 'unknown reason');
         });
 
@@ -372,7 +393,7 @@ async function startWhatsAppWebClient(options = {}) {
     }
 }
 
-async function sendWhatsAppWebText(phone, message) {
+async function sendWhatsAppWebText(phone, message, attempt = 0) {
     if (!isWhatsAppWebProvider()) {
         return { skipped: true, reason: 'whatsapp_web_provider_disabled' };
     }
@@ -394,6 +415,12 @@ async function sendWhatsAppWebText(phone, message) {
     }
 
     if (!webClient || !webClientReady) {
+        await startWhatsAppWebClient().catch((error) => {
+            markWebClientStale(error);
+        });
+    }
+
+    if (!webClient || !webClientReady) {
         return {
             skipped: true,
             reason: 'whatsapp_web_client_not_ready'
@@ -402,9 +429,29 @@ async function sendWhatsAppWebText(phone, message) {
 
     const resolvedIds = [];
 
-    for (const candidatePhone of phoneCandidates) {
-        const numberId = await webClient.getNumberId(candidatePhone).catch((error) => {
-            const message = String(error?.message || '');
+    try {
+        for (const candidatePhone of phoneCandidates) {
+            const numberId = await webClient.getNumberId(candidatePhone).catch((error) => {
+                const message = getErrorMessage(error);
+
+                if (/No LID/i.test(message)) {
+                    return null;
+                }
+
+                throw error;
+            });
+
+            if (numberId?._serialized && !resolvedIds.includes(numberId._serialized)) {
+                resolvedIds.push(numberId._serialized);
+                rememberIdentityPhone(numberId._serialized, candidatePhone);
+            }
+        }
+
+        const knownChatTargets = await getKnownChatTargets(phoneCandidates);
+        const target = resolvedIds[0] || knownChatTargets[0] || toWhatsAppWebChatId(normalizedPhone);
+
+        const sent = await webClient.sendMessage(target, body.slice(0, 4000)).catch((error) => {
+            const message = getErrorMessage(error);
 
             if (/No LID/i.test(message)) {
                 return null;
@@ -413,36 +460,40 @@ async function sendWhatsAppWebText(phone, message) {
             throw error;
         });
 
-        if (numberId?._serialized && !resolvedIds.includes(numberId._serialized)) {
-            resolvedIds.push(numberId._serialized);
-            rememberIdentityPhone(numberId._serialized, candidatePhone);
+        if (!sent) {
+            return {
+                skipped: true,
+                reason: resolvedIds.length ? 'whatsapp_send_no_lid' : 'whatsapp_number_not_found'
+            };
         }
-    }
 
-    const knownChatTargets = await getKnownChatTargets(phoneCandidates);
-    const target = resolvedIds[0] || knownChatTargets[0] || toWhatsAppWebChatId(normalizedPhone);
+        return {
+            provider: 'whatsapp_web',
+            messageId: sent?.id?._serialized || null
+        };
+    } catch (error) {
+        if (isStaleBrowserError(error)) {
+            markWebClientStale(error);
 
-    const sent = await webClient.sendMessage(target, body.slice(0, 4000)).catch((error) => {
-        const message = String(error?.message || '');
+            if (attempt < 1) {
+                await startWhatsAppWebClient().catch((restartError) => {
+                    markWebClientStale(restartError);
+                });
 
-        if (/No LID/i.test(message)) {
-            return null;
+                if (webClient && webClientReady) {
+                    return sendWhatsAppWebText(phone, body, attempt + 1);
+                }
+            }
+
+            return {
+                skipped: true,
+                reason: 'whatsapp_web_client_stale',
+                errorMessage: getErrorMessage(error)
+            };
         }
 
         throw error;
-    });
-
-    if (!sent) {
-        return {
-            skipped: true,
-            reason: resolvedIds.length ? 'whatsapp_send_no_lid' : 'whatsapp_number_not_found'
-        };
     }
-
-    return {
-        provider: 'whatsapp_web',
-        messageId: sent?.id?._serialized || null
-    };
 }
 
 module.exports = {

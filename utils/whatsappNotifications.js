@@ -178,6 +178,41 @@ function claimBookingNotification(bookingId, notificationType) {
     });
 }
 
+function releaseBookingNotification(bookingId, notificationType) {
+    const normalizedBookingId = Number(bookingId);
+    const normalizedType = String(notificationType || '').trim().slice(0, 40);
+
+    if (!Number.isInteger(normalizedBookingId) || normalizedBookingId <= 0 || !normalizedType) {
+        return Promise.resolve({ released: false });
+    }
+
+    return new Promise((resolve) => {
+        ensureNotificationLogSchema((schemaError) => {
+            if (schemaError) {
+                console.error('WhatsApp notification claim release failed:', schemaError.message || schemaError);
+                resolve({ released: false });
+                return;
+            }
+
+            db.query(
+                'DELETE FROM whatsapp_notification_logs WHERE booking_id = ? AND notification_type = ?',
+                [normalizedBookingId, normalizedType],
+                (deleteError, result = {}) => {
+                    if (deleteError) {
+                        console.error('WhatsApp notification claim release failed:', deleteError.message || deleteError);
+                        resolve({ released: false });
+                        return;
+                    }
+
+                    resolve({
+                        released: Number(result.affectedRows || 0) > 0
+                    });
+                }
+            );
+        });
+    });
+}
+
 function getBookingNotificationId(booking = {}) {
     const directId = Number(booking.bookingId || booking.id);
 
@@ -219,7 +254,13 @@ function claimOutboundMessage(phone, body) {
     }
 
     recentOutboundMessages.set(key, now);
-    return { claimed: true };
+    return { claimed: true, key };
+}
+
+function releaseOutboundMessageClaim(claim = {}) {
+    if (claim.key) {
+        recentOutboundMessages.delete(claim.key);
+    }
 }
 
 async function sendWhatsAppViaTwilio(phone, body) {
@@ -282,12 +323,18 @@ async function sendWhatsAppText(phone, message) {
             return webResult;
         }
 
-        if (['whatsapp_send_no_lid', 'whatsapp_number_not_found'].includes(String(webResult.reason || ''))) {
+        if ([
+            'whatsapp_send_no_lid',
+            'whatsapp_number_not_found',
+            'whatsapp_web_client_not_ready',
+            'whatsapp_web_client_stale'
+        ].includes(String(webResult.reason || ''))) {
             const twilioResult = await sendWhatsAppViaTwilio(phone, body);
             if (!twilioResult?.skipped) {
                 return twilioResult;
             }
 
+            releaseOutboundMessageClaim(outboundClaim);
             return {
                 skipped: true,
                 reason: webResult.reason,
@@ -296,14 +343,24 @@ async function sendWhatsAppText(phone, message) {
             };
         }
 
+        if (webResult?.skipped) {
+            releaseOutboundMessageClaim(outboundClaim);
+        }
+
         return webResult;
     }
 
-    return sendWhatsAppViaTwilio(phone, body);
+    const twilioResult = await sendWhatsAppViaTwilio(phone, body);
+    if (twilioResult?.skipped) {
+        releaseOutboundMessageClaim(outboundClaim);
+    }
+
+    return twilioResult;
 }
 
 async function sendBookingNotification(booking) {
     const bookingId = getBookingNotificationId(booking);
+    const notificationType = 'booking_confirmation';
     const claim = await claimBookingNotification(bookingId, 'booking_confirmation');
 
     if (!claim.claimed) {
@@ -315,7 +372,24 @@ async function sendBookingNotification(booking) {
     }
 
     console.log(`WhatsApp booking confirmation claimed for booking ${bookingId || 'unknown'}.`);
-    return sendWhatsAppText(booking.phone, buildBookingMessage(booking));
+    try {
+        const result = await sendWhatsAppText(booking.phone, buildBookingMessage(booking));
+
+        if (result?.skipped && ![
+            'duplicate_outbound_message',
+            'invalid_phone',
+            'empty_message',
+            'whatsapp_disabled',
+            'whatsapp_web_provider_disabled'
+        ].includes(String(result.reason || ''))) {
+            await releaseBookingNotification(bookingId, notificationType);
+        }
+
+        return result;
+    } catch (error) {
+        await releaseBookingNotification(bookingId, notificationType);
+        throw error;
+    }
 }
 
 function sendBookingReminder(booking) {

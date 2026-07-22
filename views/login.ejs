@@ -16,6 +16,9 @@
             <% if (error) { %>
                 <div class="notice error"><p><%= error %></p></div>
             <% } %>
+            <% if (success) { %>
+                <div class="notice success"><p><%= success %></p></div>
+            <% } %>
 
             <div class="signin-validation-summary" data-login-summary hidden></div>
 
