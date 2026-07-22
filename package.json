@@ -23,7 +23,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.22.6",
     "nodemailer": "^8.0.11",
-    "openai": "^6.37.0",
+    "openai": "^6.48.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "paypal-rest-sdk": "^1.8.1",

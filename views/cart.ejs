@@ -315,6 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateSummary() {
         const selectedChecks = getSelectedChecks();
+        const selectedVoucher = voucherInputs.find((input) => input.checked);
         const lineCount = selectedChecks.length;
         const unitCount = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.quantity || 1), 0);
         const subtotal = selectedChecks.reduce((sum, check) => sum + Number(check.dataset.lineTotal || 0), 0);
