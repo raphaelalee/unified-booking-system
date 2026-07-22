@@ -293,18 +293,36 @@ function getPickupMerchantName(receipt) {
     return Array.from(new Set(merchantNames)).join(', ') || 'Vaniday merchant';
 }
 
+function isGiftCardItem(item) {
+    const type = String(item?.type || '').trim().toLowerCase();
+    const name = String(item?.name || item?.serviceName || '').trim().toLowerCase();
+
+    return type === 'gift card'
+        || type === 'gift_card'
+        || Boolean(item?.giftCard)
+        || name.includes('gift card');
+}
+
+function isGiftCardOnlyReceipt(receipt) {
+    const items = Array.isArray(receipt?.items) ? receipt.items : [];
+
+    return items.length > 0 && items.every(isGiftCardItem);
+}
+
 function getReceiptMode(receipt) {
     const isBooking = isBookingReceipt(receipt);
+    const isGiftCardOnly = !isBooking && isGiftCardOnlyReceipt(receipt);
     const fulfilment = String(receipt.fulfilment || receipt.fulfilmentType || 'pickup').toLowerCase();
-    const isProductPickup = !isBooking && fulfilment === 'pickup';
+    const isProductPickup = !isBooking && !isGiftCardOnly && fulfilment === 'pickup';
 
     return {
-        receiptType: isBooking ? 'booking' : 'product',
+        receiptType: isBooking ? 'booking' : (isGiftCardOnly ? 'gift-card' : 'product'),
         isBooking,
+        isGiftCardOnly,
         isProductPickup,
-        fulfilmentLabel: isBooking ? '' : getFulfilmentLabel(fulfilment),
-        pickupMerchantName: isBooking ? '' : getPickupMerchantName(receipt),
-        pickupStatusLabel: isBooking ? '' : getPickupStatusLabel(receipt.pickupStatus || receipt.deliveryStatus)
+        fulfilmentLabel: (isBooking || isGiftCardOnly) ? '' : getFulfilmentLabel(fulfilment),
+        pickupMerchantName: (isBooking || isGiftCardOnly) ? '' : getPickupMerchantName(receipt),
+        pickupStatusLabel: (isBooking || isGiftCardOnly) ? '' : getPickupStatusLabel(receipt.pickupStatus || receipt.deliveryStatus)
     };
 }
 
@@ -818,15 +836,19 @@ async function buildReceiptViewModel(req, id) {
         checkinToken: token,
         qrLabel: receiptMode.isBooking
             ? 'Appointment Check-In QR'
+            : receiptMode.isGiftCardOnly
+                ? 'Digital Gift Card Delivery'
             : receiptMode.isProductPickup
                 ? 'Pickup Verification QR'
                 : 'Delivery Fulfilment',
         qrDescription: receiptMode.isBooking
             ? 'Scan this QR code at the merchant counter to check in for your appointment.'
+            : receiptMode.isGiftCardOnly
+                ? 'Gift card details are delivered by email. No pickup QR or fulfilment verification is needed.'
             : receiptMode.isProductPickup
                 ? 'Show this QR code to the merchant when collecting your item.'
                 : 'Delivery orders are confirmed through the delivery fulfilment process.',
-        qrSystem: receiptMode.isBooking ? 'booking-check-in' : (receiptMode.isProductPickup ? 'pickup-verification' : 'delivery-fulfilment'),
+        qrSystem: receiptMode.isBooking ? 'booking-check-in' : (receiptMode.isProductPickup ? 'pickup-verification' : (receiptMode.isGiftCardOnly ? 'digital-gift-card' : 'delivery-fulfilment')),
         qrRouteTarget: receiptMode.isBooking
             ? `/checking/${token}`
             : receiptMode.isProductPickup

@@ -2,7 +2,8 @@
 
 <%
     const safeViewerRole = typeof viewerRole !== 'undefined' ? viewerRole : 'customer';
-    const returnPath = safeViewerRole === 'admin' ? '/admin/bookings' : (safeViewerRole === 'merchant' ? '/merchant/schedule' : '/services');
+    const safeIsGiftCardOnly = typeof isGiftCardOnly !== 'undefined' ? Boolean(isGiftCardOnly) : false;
+    const returnPath = safeViewerRole === 'admin' ? '/admin/bookings' : (safeViewerRole === 'merchant' ? '/merchant/schedule' : (safeIsGiftCardOnly ? '/giftcards' : '/services'));
     const returnLabel = safeViewerRole === 'admin' ? 'Back to admin' : (safeViewerRole === 'merchant' ? 'Back to schedule' : 'Continue browsing');
     const paymentLabel = receipt.paymentMethodLabel || receipt.paymentMethod || 'Payment';
     const paymentBreakdown = Array.isArray(receipt.paymentBreakdown) ? receipt.paymentBreakdown : [];
@@ -13,7 +14,7 @@
 %>
 
 <section class="page-title receipt-title">
-    <p class="eyebrow"><%= isBooking ? 'Booking receipt' : 'Product receipt' %></p>
+    <p class="eyebrow"><%= isBooking ? 'Booking receipt' : (safeIsGiftCardOnly ? 'Gift card receipt' : 'Product receipt') %></p>
     <h1>Receipt <%= receiptDisplayReference %></h1>
     <% if (isBooking) { %>
         <p><strong><%= receipt.userName %></strong> booked <strong><%= receipt.items[0]?.name || 'a service' %></strong></p>
@@ -40,6 +41,9 @@
             <% } %>
             <% if (isProductPickup) { %>
                 Fulfilment: <strong><%= fulfilmentLabel %></strong>.
+            <% } %>
+            <% if (safeIsGiftCardOnly) { %>
+                Gift card delivery: <strong>Email</strong>.
             <% } %>
         </p>
     <% } %>
@@ -112,6 +116,9 @@
                     <% if (receipt.pickupAt) { %>
                         <p><span>Pickup Date/Time</span><strong><%= pickupAtLabel || '-' %></strong></p>
                     <% } %>
+                <% } else if (safeIsGiftCardOnly) { %>
+                    <p><span>Delivery method</span><strong>Email delivery</strong></p>
+                    <p><span>Gift card status</span><strong>Sent by email</strong></p>
                 <% } %>
             </div>
 
@@ -273,9 +280,13 @@
             <% } %>
         </article>
 
-        <aside class="receipt-qr-panel">
+        <aside class="receipt-qr-panel <%= safeIsGiftCardOnly ? 'receipt-digital-panel' : '' %>">
             <p class="eyebrow"><%= qrLabel %></p>
-            <% if (qrCodeDataUrl) { %>
+            <% if (safeIsGiftCardOnly) { %>
+                <div class="receipt-digital-icon" aria-hidden="true">@</div>
+                <p class="muted"><%= qrDescription %></p>
+                <p class="muted">Check the purchaser or recipient inbox for the gift card code and redemption link.</p>
+            <% } else if (qrCodeDataUrl) { %>
                 <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
                 <p class="muted"><%= qrDescription %></p>
                 <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
