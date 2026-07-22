@@ -806,17 +806,8 @@ function getGiftCardExpiryDate(validityMonths = 12) {
     return expiry.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function isLocalRequest(req) {
-    const host = String(req.get('host') || '').toLowerCase();
-    return host.startsWith('localhost:') || host.startsWith('127.0.0.1:') || host === 'localhost' || host === '127.0.0.1';
-}
-
 function buildGiftCardRedeemLink(req, voucherCode) {
-    const requestBaseUrl = `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
-    const baseUrl = isLocalRequest(req)
-        ? requestBaseUrl
-        : getPublicBaseUrl(req);
-
+    const baseUrl = getPublicBaseUrl(req);
     return `${baseUrl}/giftcards/redeem?code=${encodeURIComponent(voucherCode || '')}`;
 }
 
@@ -3486,10 +3477,32 @@ function showGiftCards(req, res) {
             return res.redirect('/');
         }
 
-        return res.render('giftcards', {
-            title: 'Gift Cards',
-            success,
-            giftCardConfig
+        return UserVoucher.getByUserId(req.session.user.id, (voucherError, vouchers = []) => {
+            if (voucherError) {
+                console.error(voucherError);
+            }
+
+            const giftCardWallet = (Array.isArray(vouchers) ? vouchers : [])
+                .filter((voucher) => String(voucher.sourceType || '').toLowerCase() === 'gift_card')
+                .map((voucher) => ({
+                    code: voucher.code,
+                    title: voucher.title,
+                    status: String(voucher.status || '').toLowerCase(),
+                    remainingValue: Number(voucher.remainingValue || 0),
+                    expiresAt: voucher.expiresAt
+                }))
+                .sort((left, right) => {
+                    const leftDate = new Date(left.expiresAt || 0).getTime();
+                    const rightDate = new Date(right.expiresAt || 0).getTime();
+                    return rightDate - leftDate;
+                });
+
+            return res.render('giftcards', {
+                title: 'Gift Cards',
+                success,
+                giftCardConfig,
+                giftCardWallet
+            });
         });
     });
 }
@@ -3499,20 +3512,20 @@ function redeemGiftCard(req, res) {
 
     GiftCardVoucher.claimForUser(req.session.user, code, (error, result = {}) => {
         if (error) {
-            req.session.profileError = error.message || 'Gift card could not be redeemed.';
-            return res.redirect('/profile#wallet');
+            req.session.success = error.message || 'Gift card could not be redeemed.';
+            return res.redirect('/giftcards#my-giftcards');
         }
 
         if (result.alreadyClaimed) {
             const remainingValue = Number(result.remainingValue || 0);
-            req.session.profileSuccess = remainingValue > 0
+            req.session.success = remainingValue > 0
                 ? `This gift card is already in your wallet with $${remainingValue.toFixed(2)} remaining.`
                 : 'This gift card is already in your wallet and has no remaining balance.';
-            return res.redirect('/profile#wallet');
+            return res.redirect('/giftcards#my-giftcards');
         }
 
-        req.session.profileSuccess = `Gift card ${result.code} has been added to your wallet.`;
-        return res.redirect('/profile#wallet');
+        req.session.success = `Gift card ${result.code} has been added to your wallet.`;
+        return res.redirect('/giftcards#my-giftcards');
     });
 }
 

@@ -1,6 +1,5 @@
 const QRCode = require('qrcode');
 const jwt = require('jsonwebtoken');
-const puppeteer = require('puppeteer');
 const PDFDocument = require('pdfkit');
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
@@ -25,6 +24,17 @@ const {
 } = require('../utils/paymentDisplay');
 const { buildBookingReference } = require('../utils/bookingReference');
 const { getRefundSummariesForTransactions } = require('../services/refundSummary');
+
+let puppeteerPromise;
+
+async function getPuppeteer() {
+    if (!puppeteerPromise) {
+        puppeteerPromise = import('puppeteer')
+            .then((module) => module.default || module);
+    }
+
+    return puppeteerPromise;
+}
 
 function getTokenSecret() {
     return process.env.RECEIPT_TOKEN_SECRET
@@ -921,6 +931,7 @@ async function downloadReceiptPdf(req, res) {
         let pdf;
 
         try {
+            const puppeteer = await getPuppeteer();
             browser = await puppeteer.launch({ headless: true });
             const page = await browser.newPage();
             await page.setContent(htmlWithBase, { waitUntil: 'networkidle0' });

@@ -8,6 +8,11 @@
     const validityMonths = Number(config.validityMonths || 0);
     const giftTerms = Array.isArray(config.terms) ? config.terms : [];
     const defaultAmount = Number(giftAmounts[0] || minGiftAmount || 0);
+    const walletGiftCards = typeof giftCardWallet !== 'undefined' && Array.isArray(giftCardWallet) ? giftCardWallet : [];
+    const formatGiftDate = (value) => {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-SG', { dateStyle: 'medium' });
+    };
 %>
 
 <section class="page-title giftcard-title">
@@ -20,6 +25,39 @@
     <% if (typeof success !== 'undefined' && success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
+
+    <section id="my-giftcards" class="giftcard-wallet-panel">
+        <div class="wallet-section-heading">
+            <div>
+                <p class="eyebrow">My wallet</p>
+                <h3>Redeemed gift cards</h3>
+            </div>
+            <span><%= walletGiftCards.length %> total</span>
+        </div>
+
+        <% if (!walletGiftCards.length) { %>
+            <p class="muted">No redeemed gift cards yet. Use the redeem link from your email to add one here.</p>
+        <% } else { %>
+            <div class="profile-wallet-list">
+                <% walletGiftCards.forEach((giftCard) => { %>
+                    <article class="profile-wallet-row profile-giftcard-row <%= giftCard.status === 'active' && Number(giftCard.remainingValue || 0) > 0 ? '' : 'is-muted' %>">
+                        <div>
+                            <span><%= giftCard.status === 'active' ? 'Active' : giftCard.status.replace(/_/g, ' ') %></span>
+                            <strong><%= giftCard.title || 'Vaniday Gift Card' %></strong>
+                            <small><%= giftCard.code %></small>
+                            <% if (giftCard.expiresAt) { %>
+                                <small>Expires <%= formatGiftDate(giftCard.expiresAt) %></small>
+                            <% } %>
+                        </div>
+                        <div>
+                            <strong>$<%= Number(giftCard.remainingValue || 0).toFixed(2) %></strong>
+                            <small>Remaining</small>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+        <% } %>
+    </section>
 
     <form id="giftcard-purchase-form" class="giftcard-checkout" action="/giftcards/add" method="POST">
         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">

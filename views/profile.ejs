@@ -92,6 +92,8 @@
     const activePlatformVouchers = activeProfileVouchers.filter((voucher) =>
         voucher.bookingOnly !== false && voucher.sourceType !== 'reward_shop_merchant'
     );
+    const activeGiftCardVouchers = activePlatformVouchers.filter((voucher) => voucher.sourceType === 'gift_card');
+    const activeNonGiftPlatformVouchers = activePlatformVouchers.filter((voucher) => voucher.sourceType !== 'gift_card');
     const activeServiceVouchers = activeProfileVouchers.filter((voucher) =>
         voucher.bookingOnly !== false
         && voucher.sourceType === 'reward_shop_merchant'
@@ -1176,7 +1178,10 @@
 
                         <div class="profile-voucher-tabs" data-voucher-tabs>
                             <button class="profile-voucher-tab is-active" type="button" data-voucher-tab="platform">
-                                Platform (<%= activePlatformVouchers.length %>)
+                                Platform (<%= activeNonGiftPlatformVouchers.length %>)
+                            </button>
+                            <button class="profile-voucher-tab" type="button" data-voucher-tab="giftcard">
+                                Gift cards (<%= activeGiftCardVouchers.length %>)
                             </button>
                             <button class="profile-voucher-tab" type="button" data-voucher-tab="service">
                                 Services (<%= activeServiceVouchers.length %>)
@@ -1187,11 +1192,23 @@
                         </div>
 
                         <div class="profile-voucher-tab-panel is-active" data-voucher-panel="platform">
-                            <% if (!activePlatformVouchers.length) { %>
+                            <% if (!activeNonGiftPlatformVouchers.length) { %>
                                 <p class="muted">No active platform vouchers right now.</p>
                             <% } else { %>
                                 <div class="profile-voucher-list">
-                                    <% activePlatformVouchers.forEach((voucher) => { %>
+                                    <% activeNonGiftPlatformVouchers.forEach((voucher) => { %>
+                                        <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <div class="profile-voucher-tab-panel" data-voucher-panel="giftcard" hidden>
+                            <% if (!activeGiftCardVouchers.length) { %>
+                                <p class="muted">No active gift cards right now.</p>
+                            <% } else { %>
+                                <div class="profile-voucher-list">
+                                    <% activeGiftCardVouchers.forEach((voucher) => { %>
                                         <%- include('partials/profile-voucher-row', { voucher, voucherIsActive, voucherSourceLabel, voucherValueLabel, voucherStatusLabel, voucherUsageLabel, voucherTermsList }) %>
                                     <% }) %>
                                 </div>
@@ -2015,7 +2032,7 @@
             tab.addEventListener('click', () => activate(tab.dataset.voucherTab));
         });
 
-        activate('booking');
+        activate('platform');
     });
 })();
 </script>
