@@ -439,8 +439,6 @@ function completePendingTransaction(transactionId, userId, metadata = {}, callba
                     }
 
                     const amount = Number(transaction.amount || 0);
-                    const balanceBefore = Number(transaction.balance_before || 0);
-                    const balanceAfter = balanceBefore + amount;
                     const description = String(metadata.description || 'Wallet top-up completed').slice(0, 255);
                     const providerReference = String(metadata.providerReference || transaction.reference_id || '').slice(0, 255);
 
@@ -458,6 +456,9 @@ function completePendingTransaction(transactionId, userId, metadata = {}, callba
                             return;
                         }
 
+                        const liveBalance = Number(wallet.balance || 0);
+                        const balanceAfter = liveBalance + amount;
+
                         connection.query('UPDATE e_wallets SET balance = ? WHERE wallet_id = ? AND user_id = ?', [balanceAfter, transaction.wallet_id, userId], (walletUpdateError) => {
                             if (walletUpdateError) {
                                 connection.rollback(() => connection.release());
@@ -469,7 +470,7 @@ function completePendingTransaction(transactionId, userId, metadata = {}, callba
                                 UPDATE e_wallet_transactions
                                 SET status = 'COMPLETED', balance_before = ?, balance_after = ?, reference_id = ?, description = ?
                                 WHERE transaction_id = ? AND user_id = ?
-                            `, [balanceBefore, balanceAfter, providerReference || null, description, transactionId, userId], (updateError) => {
+                            `, [liveBalance, balanceAfter, providerReference || null, description, transactionId, userId], (updateError) => {
                                 if (updateError) {
                                     connection.rollback(() => connection.release());
                                     callback(updateError);

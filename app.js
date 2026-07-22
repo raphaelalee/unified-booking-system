@@ -756,7 +756,7 @@ app.get('/profile/wallet', requireCustomer, walletController.showWallet);
 app.post('/profile/wallet/topup', requireCustomer, walletController.topupWallet);
 app.get('/profile/wallet/topup/verify', requireCustomer, walletController.showTopup2faVerify);
 app.post('/profile/wallet/topup/verify', requireCustomer, walletController.verifyTopup2fa);
-app.get('/profile/wallet/success', requireCustomer, walletController.handleWalletSuccess);
+app.get('/profile/wallet/success', walletController.handleWalletSuccess);
 app.get('/profile/wallet/cancel', requireCustomer, walletController.handleWalletCancel);
 app.get('/profile/wallet/paypal/return', requireCustomer, walletController.handlePaypalReturn);
 app.get('/profile/wallet/paypal/cancel', requireCustomer, walletController.handlePaypalCancel);

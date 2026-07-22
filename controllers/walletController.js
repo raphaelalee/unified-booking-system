@@ -38,6 +38,10 @@ function formatAmount(value) {
     return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function cents(value) {
+    return Math.round(Number(value || 0) * 100);
+}
+
 function getProviderLabel(method) {
     switch (method) {
         case 'paypal': return 'PayPal';
@@ -322,10 +326,28 @@ async function startTopupPayment(req, res, amount, paymentMethod) {
         const baseUrl = getPublicBaseUrl(req);
         const session = await stripe.createWalletTopupSession({
             amount,
-            successUrl: `${baseUrl}/profile/wallet/success?transactionId=${topup.transactionId}`,
-            cancelUrl: `${baseUrl}/profile/wallet/cancel?transactionId=${topup.transactionId}`,
-            paymentMethodTypes: ['card']
+            successUrl: `${baseUrl}/profile/wallet/success?transactionId=${topup.transactionId}&session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${baseUrl}/profile/wallet/cancel?transactionId=${topup.transactionId}&session_id={CHECKOUT_SESSION_ID}`,
+            paymentMethodTypes: ['card'],
+            metadata: {
+                walletTransactionId: String(topup.transactionId),
+                userId: String(req.session.user.id)
+            }
         });
+
+        await new Promise((resolve, reject) => {
+            PaymentAttempt.save({
+                attemptId: session.id,
+                userId: req.session.user.id,
+                provider: 'stripe',
+                providerReference: session.id,
+                payment: { ...attemptPayload, providerReference: session.id, stripeSessionId: session.id }
+            }, (error) => error ? reject(error) : resolve());
+        });
+        await new Promise((resolve, reject) => {
+            EWallet.updateTransactionStatus(topup.transactionId, req.session.user.id, 'PENDING', 'Wallet top-up via Stripe', session.id, (error) => error ? reject(error) : resolve());
+        });
+
         return res.redirect(session.url);
     }
 
@@ -644,24 +666,66 @@ async function verifyTopup2fa(req, res) {
 
 async function handleWalletSuccess(req, res) {
     const transactionId = Number(req.query.transactionId || req.query.txnRetrievalRef || 0);
-    const referenceId = String(req.query.providerReference || req.query.referenceId || '').trim();
-    const userId = req.session.user?.id;
-
-    if (!userId) {
-        return res.redirect('/login');
-    }
+    const sessionId = String(req.query.session_id || '').trim();
+    let referenceId = String(req.query.providerReference || req.query.referenceId || '').trim();
+    let userId = req.session.user?.id ? Number(req.session.user.id) : 0;
 
     try {
+        let stripeSession = null;
+        if (sessionId) {
+            stripeSession = await stripe.retrieveCheckoutSession(sessionId);
+            const paymentIntent = stripeSession?.payment_intent;
+            const paymentStatus = String(stripeSession?.payment_status || '').toLowerCase();
+            const intentStatus = typeof paymentIntent === 'string' ? '' : String(paymentIntent?.status || '').toLowerCase();
+            const metadataTransactionId = Number(stripeSession?.metadata?.walletTransactionId || 0);
+            const metadataUserId = Number(stripeSession?.metadata?.userId || 0);
+
+            if (paymentStatus !== 'paid' || intentStatus !== 'succeeded') {
+                throw new Error('Stripe did not confirm a successful wallet top-up.');
+            }
+
+            if (metadataTransactionId && transactionId && metadataTransactionId !== transactionId) {
+                throw new Error('Stripe wallet top-up details do not match this transaction.');
+            }
+
+            if (metadataUserId && userId && metadataUserId !== userId) {
+                throw new Error('Stripe wallet top-up belongs to a different customer.');
+            }
+
+            userId = userId || metadataUserId;
+            referenceId = referenceId || sessionId;
+        }
+
+        if (!userId) {
+            return res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
+        }
+
         let pendingTransaction = null;
         if (transactionId) {
-            pendingTransaction = await new Promise((resolve, reject) => {
-                EWallet.getTransactionById(transactionId, userId, (error, result) => error ? reject(error) : resolve(result));
-            });
+            pendingTransaction = userId
+                ? await new Promise((resolve, reject) => {
+                    EWallet.getTransactionById(transactionId, userId, (error, result) => error ? reject(error) : resolve(result));
+                })
+                : null;
         }
 
         if (!pendingTransaction) {
             setWalletSuccess(req, 'Your wallet was updated successfully.');
-            return res.redirect('/profile/wallet');
+            return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
+        }
+
+        if (String(pendingTransaction.paymentMethod || '').toUpperCase() === 'STRIPE' && !stripeSession) {
+            throw new Error('Stripe wallet top-up confirmation is missing.');
+        }
+
+        if (stripeSession) {
+            const expectedAmount = cents(pendingTransaction.amount);
+            const paidAmount = Number(stripeSession.amount_total || 0);
+            const currency = String(stripeSession.currency || '').toLowerCase();
+
+            if (paidAmount !== expectedAmount || currency !== 'sgd') {
+                throw new Error('Stripe wallet top-up amount does not match this transaction.');
+            }
         }
 
         const completed = await new Promise((resolve, reject) => {
@@ -673,15 +737,15 @@ async function handleWalletSuccess(req, res) {
 
         if (completed && completed.status === 'COMPLETED') {
             setWalletSuccess(req, 'Your wallet was topped up successfully.');
-            return res.redirect('/profile/wallet');
+            return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
         }
 
         setWalletError(req, 'Your wallet top-up could not be completed.');
-        return res.redirect('/profile/wallet');
+        return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
     } catch (error) {
         console.error(error);
         setWalletError(req, 'Your wallet top-up could not be completed.');
-        return res.redirect('/profile/wallet');
+        return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
     }
 }
 

@@ -38,7 +38,7 @@ module.exports = {
     return session;
   },
 
-  createWalletTopupSession: async ({ amount, successUrl, cancelUrl, paymentMethodTypes }) => {
+  createWalletTopupSession: async ({ amount, successUrl, cancelUrl, paymentMethodTypes, metadata }) => {
     // Initialize Stripe fresh on each call with current secret key
     const stripeClient = Stripe(process.env.STRIPE_SECRET_KEY);
     
@@ -68,7 +68,8 @@ module.exports = {
       cancel_url: cancelUrl,
       metadata: {
         type: 'wallet_topup',
-        amount: topupAmount.toFixed(2)
+        amount: topupAmount.toFixed(2),
+        ...(metadata || {})
       }
     });
 
