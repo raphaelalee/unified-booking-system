@@ -21,6 +21,7 @@ const { getProfileImagePath, deleteProfileImageFile } = require('../utils/profil
 const { sendLoginOtpEmail } = require('../utils/emailNotifications');
 const { sendSms } = require('../utils/smsNotifications');
 const { getRefundSummariesForTransactions } = require('../services/refundSummary');
+const { buildProfileAiAdvisor } = require('../services/profileAiAdvisor');
 
 const membershipTiers = [
     { name: 'Bronze', points: '0+', detail: 'Entry level', className: 'bronze' },
@@ -730,6 +731,161 @@ function getEmptyCustomerExtras() {
         reviewedBookings: [],
         eWallet: { balance: 0, currency: 'SGD' },
         eWalletTransactions: []
+    };
+}
+
+function roundMoney(value) {
+    return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function parseTierPointValue(value) {
+    const parsed = Number(String(value || '').replace(/[^\d]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getNextMembershipTier(member = {}) {
+    const points = Number(member.points || 0);
+    const tiers = Array.isArray(member.tiers) ? member.tiers : [];
+
+    return tiers
+        .map((tier) => ({
+            name: tier.name,
+            points: parseTierPointValue(tier.points)
+        }))
+        .filter((tier) => tier.points > points)
+        .sort((left, right) => left.points - right.points)[0] || null;
+}
+
+function isInCurrentMonth(value) {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return false;
+    }
+
+    const now = new Date();
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function mostFrequentValue(values = []) {
+    const counts = values.reduce((map, value) => {
+        const key = String(value || '').trim();
+        if (key) {
+            map[key] = (map[key] || 0) + 1;
+        }
+        return map;
+    }, {});
+
+    return Object.entries(counts).sort((left, right) => right[1] - left[1])[0]?.[0] || 'none';
+}
+
+function getPurchaseCategory(entry = {}) {
+    return String(entry.type || '').toLowerCase() === 'booking' ? 'bookings' : 'products';
+}
+
+function buildDashboardWalletMetrics(customerExtras = {}) {
+    const loyaltyWallet = customerExtras.loyalty?.wallet || {};
+    const rules = customerExtras.loyalty?.rules || {};
+    const member = customerExtras.member || buildMember(0);
+    const pointsBalance = Number(customerExtras.rewardPoints ?? loyaltyWallet.pointsBalance ?? 0);
+    const cashbackBalance = Number(customerExtras.cashbackBalance ?? loyaltyWallet.cashbackBalance ?? 0);
+    const eWalletBalance = Number(customerExtras.eWallet?.balance || 0);
+    const activeGiftCardBalance = (customerExtras.userVouchers || [])
+        .filter((voucher) => String(voucher.sourceType || '') === 'gift_card'
+            && String(voucher.status || '').toLowerCase() === 'active'
+            && Number(voucher.remainingValue || 0) > 0)
+        .reduce((sum, voucher) => sum + Number(voucher.remainingValue || 0), 0);
+    const pointsToCashRate = Number(rules.pointsToCashRate || 0.01);
+    const minimumPointsToConvert = Number(rules.minPointsToRedeem || 0);
+    const nextTier = getNextMembershipTier(member);
+
+    return {
+        membershipTier: member.tier || 'Bronze',
+        pointsBalance,
+        cashbackBalance: roundMoney(cashbackBalance),
+        eWalletBalance: roundMoney(eWalletBalance),
+        eWalletCurrency: customerExtras.eWallet?.currency || 'SGD',
+        activeGiftCardBalance: roundMoney(activeGiftCardBalance),
+        redeemablePointsValue: roundMoney(pointsBalance * pointsToCashRate),
+        canConvertPoints: minimumPointsToConvert > 0 && pointsBalance >= minimumPointsToConvert,
+        minimumPointsToConvert,
+        pointsNeededToConvert: Math.max(minimumPointsToConvert - pointsBalance, 0),
+        nextTierName: nextTier?.name || '',
+        pointsToNextTier: nextTier ? Math.max(nextTier.points - pointsBalance, 0) : 0
+    };
+}
+
+function buildDashboardSpendingMetrics(customerExtras = {}) {
+    const paidStatuses = new Set(['paid', 'partially_refunded']);
+    const paidRows = (customerExtras.walletHistory || []).filter((entry) => {
+        const status = String(entry.paymentStatus || '').toLowerCase();
+        const amount = Number(entry.remainingPaidAmount ?? entry.totalAmount ?? 0);
+        return paidStatuses.has(status) && amount > 0;
+    });
+    const currentMonthRows = paidRows.filter((entry) => isInCurrentMonth(entry.createdAt));
+    const currentMonthSpending = roundMoney(currentMonthRows.reduce((sum, entry) => {
+        return sum + Number(entry.remainingPaidAmount ?? entry.totalAmount ?? 0);
+    }, 0));
+    const averageSource = currentMonthRows.length ? currentMonthRows : paidRows;
+    const averageTransactionValue = averageSource.length
+        ? roundMoney(averageSource.reduce((sum, entry) => sum + Number(entry.remainingPaidAmount ?? entry.totalAmount ?? 0), 0) / averageSource.length)
+        : 0;
+    const loyaltyTransactions = customerExtras.loyalty?.transactions || [];
+    const currentMonthRewards = loyaltyTransactions.filter((entry) => isInCurrentMonth(entry.createdAt));
+    const pointsEarnedThisMonth = currentMonthRewards
+        .filter((entry) => Number(entry.pointsDelta || 0) > 0)
+        .reduce((sum, entry) => sum + Number(entry.pointsDelta || 0), 0);
+    const cashbackEarnedThisMonth = roundMoney(currentMonthRewards
+        .filter((entry) => Number(entry.cashbackDelta || 0) > 0)
+        .reduce((sum, entry) => sum + Number(entry.cashbackDelta || 0), 0));
+
+    return {
+        currentMonthSpending,
+        currentMonthTransactionCount: currentMonthRows.length,
+        completedTransactionCount: paidRows.length,
+        averageTransactionValue,
+        mostFrequentCategory: mostFrequentValue((currentMonthRows.length ? currentMonthRows : paidRows).map(getPurchaseCategory)),
+        pointsEarnedThisMonth,
+        cashbackEarnedThisMonth
+    };
+}
+
+function buildProfileActivityPreview(customerExtras = {}) {
+    const nextBooking = (customerExtras.upcomingBookings || [])[0] || null;
+    const recentPurchase = (customerExtras.walletHistory || [])[0] || null;
+    const recentReward = (customerExtras.loyalty?.transactions || [])[0] || null;
+
+    return {
+        nextBooking,
+        recentPurchase,
+        recentReward
+    };
+}
+
+async function buildProfileDashboard(profile, customerExtras = {}) {
+    const walletMetrics = buildDashboardWalletMetrics(customerExtras);
+    const spendingMetrics = buildDashboardSpendingMetrics(customerExtras);
+    const aiMetrics = {
+        wallet: walletMetrics,
+        spending: spendingMetrics
+    };
+    const ai = await buildProfileAiAdvisor(aiMetrics);
+
+    return {
+        overview: {
+            customerName: profile.name || 'Customer',
+            membershipTier: walletMetrics.membershipTier,
+            eWalletBalance: walletMetrics.eWalletBalance,
+            eWalletCurrency: walletMetrics.eWalletCurrency,
+            loyaltyPoints: walletMetrics.pointsBalance,
+            cashbackBalance: walletMetrics.cashbackBalance,
+            activeGiftCardBalance: walletMetrics.activeGiftCardBalance,
+            welcomeMessage: 'Welcome back. Here is a quick view of your rewards, wallet, and account activity.'
+        },
+        walletMetrics,
+        spendingMetrics,
+        ai,
+        activityPreview: buildProfileActivityPreview(customerExtras)
     };
 }
 
@@ -1722,7 +1878,7 @@ function showProfile(req, res) {
 
         const isCustomer = req.session.user.role === 'customer';
         const walletPagination = getWalletPaginationOptions(req.query || {});
-        const renderProfile = (customerExtras, customerExtraError = null) => {
+        const renderProfile = async (customerExtras, customerExtraError = null) => {
             const success = req.session.profileSuccess;
             const error = req.session.profileError || req.session.loyaltyError
                 || (lookupError ? 'Account details could not be refreshed from the database.' : null)
@@ -1732,6 +1888,9 @@ function showProfile(req, res) {
             req.session.loyaltyError = null;
             const loyaltySuccess = req.session.loyaltySuccess;
             req.session.loyaltySuccess = null;
+            const profileDashboard = isCustomer
+                ? await buildProfileDashboard(profile, customerExtras)
+                : null;
 
             return res.render('profile', {
                 title: 'Profile',
@@ -1756,6 +1915,7 @@ function showProfile(req, res) {
                 bookingAvailability: customerExtras.bookingAvailability,
                 reviewableBookings: customerExtras.reviewableBookings,
                 reviewedBookings: customerExtras.reviewedBookings,
+                profileDashboard,
                 isCustomer,
                 genderOptions,
                 dashboardPath: getDashboardPath(req.session.user.role),

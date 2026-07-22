@@ -62,6 +62,12 @@
     const profileVouchers = typeof userVouchers !== 'undefined' && Array.isArray(userVouchers) ? userVouchers : [];
     const profileEWallet = typeof eWallet !== 'undefined' && eWallet ? eWallet : { balance: 0, currency: 'SGD' };
     const profileEWalletTransactions = typeof eWalletTransactions !== 'undefined' && Array.isArray(eWalletTransactions) ? eWalletTransactions : [];
+    const dashboard = typeof profileDashboard !== 'undefined' && profileDashboard ? profileDashboard : {};
+    const dashboardOverview = dashboard.overview || {};
+    const dashboardWalletMetrics = dashboard.walletMetrics || {};
+    const dashboardSpendingMetrics = dashboard.spendingMetrics || {};
+    const dashboardAi = dashboard.ai || {};
+    const dashboardActivityPreview = dashboard.activityPreview || {};
     const formatProfileDate = (value) => {
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-SG', { dateStyle: 'medium' });
@@ -314,112 +320,241 @@
 
     <div class="account-layout">
         <div class="account-main-stack">
-            <form id="profile-details" class="account-panel account-form profile-tab-panel" data-profile-panel="profile-details" action="/profile?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
+            <section id="profile-details" class="account-panel profile-tab-panel profile-dashboard-panel" data-profile-panel="profile-details">
                 <div class="account-panel-header">
                     <div>
-                        <p class="eyebrow">Details</p>
-                        <h2>Personal information</h2>
+                        <p class="eyebrow">Dashboard</p>
+                        <h2>Welcome, <%= dashboardOverview.customerName || profile.name %></h2>
                     </div>
+                    <a class="button secondary" href="#settings" data-profile-tab-link="settings">Edit details</a>
                 </div>
 
-                <div class="form-grid">
-                    <label class="profile-photo-field">
-                        Profile photo
-                        <input type="file" name="profileImage" accept="image/*">
-                        <small>JPG, PNG, WEBP, or GIF. Maximum 5 MB.</small>
-                    </label>
+                <% if (isCustomer) { %>
+                    <p class="profile-dashboard-welcome"><%= dashboardOverview.welcomeMessage %></p>
 
-                    <label>
-                        Full name
-                        <input type="text" name="name" value="<%= profile.name %>" placeholder="Enter your name" autocomplete="name" required>
-                    </label>
-
-                    <label>
-                        Email
-                        <input type="email" name="email" value="<%= profile.email %>" placeholder="name@example.com" autocomplete="email" required>
-                    </label>
-
-                    <label>
-                        Handphone number
-                        <input type="tel" name="phone" value="<%= profile.phone %>" placeholder="81234567" maxlength="8" pattern="[689][0-9]{7}" autocomplete="tel">
-                    </label>
-
-                    <label>
-                        Age
-                        <input type="number" name="age" value="<%= profile.age || '' %>" placeholder="21" min="1" max="120">
-                    </label>
-
-                    <label>
-                        Birthday
-                        <input type="date" name="birthday" value="<%= profile.birthday || '' %>" max="<%= new Date().toISOString().slice(0, 10) %>">
-                    </label>
-
-                    <label>
-                        Gender
-                        <select name="gender">
-                            <option value="">Select gender</option>
-                            <% profileGenderOptions.forEach((option) => { %>
-                                <option value="<%= option.value %>" <%= profile.gender === option.value ? 'selected' : '' %>><%= option.label %></option>
-                            <% }) %>
-                        </select>
-                    </label>
-
-                    <label>
-                        Postal code
-                        <input type="text" name="postalCode" value="<%= profile.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}">
-                    </label>
-
-                    <label>
-                        Preferred contact method
-                        <select name="preferredContactMethod">
-                            <option value="">Select contact method</option>
-                            <option value="email" <%= profile.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
-                            <option value="phone" <%= profile.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
-                            <option value="whatsapp" <%= profile.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
-                        </select>
-                    </label>
-                </div>
-
-                <div class="account-form-actions">
-                    <button class="button primary" type="submit">Save changes</button>
-                </div>
-            </form>
-
-            <form id="settings" class="account-panel account-form profile-tab-panel" data-profile-panel="settings" action="/profile/password" method="POST">
-                <div class="account-panel-header">
-                    <div>
-                        <p class="eyebrow">Security</p>
-                        <h2>Change password</h2>
+                    <div class="profile-dashboard-metrics">
+                        <article>
+                            <span>Membership</span>
+                            <strong><%= dashboardOverview.membershipTier || member.tier %></strong>
+                        </article>
+                        <article>
+                            <span>E-wallet</span>
+                            <strong>$<%= Number(dashboardOverview.eWalletBalance || 0).toFixed(2) %></strong>
+                            <small><%= dashboardOverview.eWalletCurrency || 'SGD' %> available</small>
+                        </article>
+                        <article>
+                            <span>Loyalty points</span>
+                            <strong><%= Number(dashboardOverview.loyaltyPoints || 0) %></strong>
+                        </article>
+                        <article>
+                            <span>Cashback</span>
+                            <strong>$<%= Number(dashboardOverview.cashbackBalance || 0).toFixed(2) %></strong>
+                        </article>
+                        <% if (Number(dashboardOverview.activeGiftCardBalance || 0) > 0) { %>
+                            <article>
+                                <span>Gift cards</span>
+                                <strong>$<%= Number(dashboardOverview.activeGiftCardBalance || 0).toFixed(2) %></strong>
+                                <small>Active balance</small>
+                            </article>
+                        <% } %>
                     </div>
-                </div>
 
-                <div class="form-grid">
-                    <label>
-                        Current password
-                        <input type="password" name="currentPassword" placeholder="Current password" autocomplete="current-password" required>
-                    </label>
+                    <div class="profile-ai-grid">
+                        <section class="profile-ai-panel">
+                            <div>
+                                <p class="eyebrow">AI Wallet Advisor</p>
+                                <h3>Reward use suggestion</h3>
+                            </div>
+                            <p><%= dashboardAi.walletAdvice %></p>
+                            <small><%= dashboardAi.generatedByAi ? 'AI-generated suggestion.' : 'Deterministic account summary.' %> Generated from your account activity.</small>
+                            <dl>
+                                <div><dt>Redeemable value</dt><dd>$<%= Number(dashboardWalletMetrics.redeemablePointsValue || 0).toFixed(2) %></dd></div>
+                                <div><dt>Convert points</dt><dd><%= dashboardWalletMetrics.canConvertPoints ? 'Available' : `${Number(dashboardWalletMetrics.pointsNeededToConvert || 0)} pts away` %></dd></div>
+                                <% if (dashboardWalletMetrics.nextTierName) { %>
+                                    <div><dt>Next tier</dt><dd><%= dashboardWalletMetrics.pointsToNextTier %> pts to <%= dashboardWalletMetrics.nextTierName %></dd></div>
+                                <% } %>
+                            </dl>
+                        </section>
 
-                    <label>
-                        New password
-                        <input type="password" name="newPassword" placeholder="New password" autocomplete="new-password" minlength="8" required>
-                    </label>
+                        <section class="profile-ai-panel">
+                            <div>
+                                <p class="eyebrow">AI Spending Insights</p>
+                                <h3>Monthly activity</h3>
+                            </div>
+                            <p><%= dashboardAi.spendingInsight %></p>
+                            <small><%= dashboardAi.generatedByAi ? 'AI-generated suggestion.' : 'Deterministic account summary.' %> Generated from your account activity.</small>
+                            <dl>
+                                <div><dt>This month</dt><dd>$<%= Number(dashboardSpendingMetrics.currentMonthSpending || 0).toFixed(2) %></dd></div>
+                                <div><dt>Paid transactions</dt><dd><%= Number(dashboardSpendingMetrics.completedTransactionCount || 0) %></dd></div>
+                                <div><dt>Average value</dt><dd>$<%= Number(dashboardSpendingMetrics.averageTransactionValue || 0).toFixed(2) %></dd></div>
+                            </dl>
+                        </section>
+                    </div>
 
-                    <label>
-                        Confirm new password
-                        <input type="password" name="confirmPassword" placeholder="Confirm password" autocomplete="new-password" minlength="8" required>
-                    </label>
-                </div>
+                    <nav class="profile-dashboard-links" aria-label="Dashboard quick links">
+                        <a href="#bookings" data-profile-tab-link="bookings">Bookings</a>
+                        <a href="#history" data-profile-tab-link="history">Purchase History</a>
+                        <a href="#wallet" data-profile-tab-link="wallet">Wallet</a>
+                        <a href="#vouchers" data-profile-tab-link="vouchers">Vouchers</a>
+                        <a href="#membership" data-profile-tab-link="membership">Rewards</a>
+                        <a href="#settings" data-profile-tab-link="settings">Settings</a>
+                    </nav>
 
-                <div class="password-requirements">
-                    <span>Current password required</span>
-                    <span>8+ characters</span>
-                    <span>Letters and numbers</span>
-                </div>
+                    <div class="profile-activity-preview">
+                        <section>
+                            <span>Next booking</span>
+                            <% if (dashboardActivityPreview.nextBooking) { %>
+                                <strong><%= dashboardActivityPreview.nextBooking.service_name %></strong>
+                                <small><%= dashboardActivityPreview.nextBooking.merchant_name %> &middot; <%= formatBookingDate(dashboardActivityPreview.nextBooking.booking_date) %><%= dashboardActivityPreview.nextBooking.booking_time ? ` at ${dashboardActivityPreview.nextBooking.booking_time}` : '' %></small>
+                            <% } else { %>
+                                <strong>No upcoming booking</strong>
+                                <small>Book a service when you are ready.</small>
+                            <% } %>
+                        </section>
+                        <section>
+                            <span>Recent purchase</span>
+                            <% if (dashboardActivityPreview.recentPurchase) { %>
+                                <strong><%= dashboardActivityPreview.recentPurchase.itemNames || 'Purchase' %></strong>
+                                <small><%= formatBookingDateTime(dashboardActivityPreview.recentPurchase.createdAt) %> &middot; $<%= Number(dashboardActivityPreview.recentPurchase.remainingPaidAmount || dashboardActivityPreview.recentPurchase.totalAmount || 0).toFixed(2) %></small>
+                            <% } else { %>
+                                <strong>No purchase history</strong>
+                                <small>Paid bookings and orders will appear here.</small>
+                            <% } %>
+                        </section>
+                        <section>
+                            <span>Recent reward</span>
+                            <% if (dashboardActivityPreview.recentReward) { %>
+                                <strong><%= dashboardActivityPreview.recentReward.displayTitle || 'Reward activity' %></strong>
+                                <small><%= dashboardActivityPreview.recentReward.displayPointsDelta || dashboardActivityPreview.recentReward.displayCashbackDelta || 'Recorded' %></small>
+                            <% } else { %>
+                                <strong>No reward activity</strong>
+                                <small>Rewards appear after eligible activity.</small>
+                            <% } %>
+                        </section>
+                    </div>
+                <% } else { %>
+                    <p class="profile-dashboard-welcome">Manage your account details and security settings.</p>
+                    <div class="profile-dashboard-metrics">
+                        <article>
+                            <span>Role</span>
+                            <strong><%= roleLabel %></strong>
+                        </article>
+                        <article>
+                            <span>Email</span>
+                            <strong><%= profile.email %></strong>
+                        </article>
+                    </div>
+                <% } %>
+            </section>
 
-                <div class="account-form-actions">
-                    <button class="button primary" type="submit">Update password</button>
-                </div>
-            </form>
+            <section id="settings" class="profile-tab-panel profile-settings-stack" data-profile-panel="settings">
+                <form class="account-panel account-form" action="/profile?_csrf=<%= encodeURIComponent(typeof csrfToken !== 'undefined' ? csrfToken : '') %>" method="POST" enctype="multipart/form-data">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Settings</p>
+                            <h2>Personal information</h2>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <label class="profile-photo-field">
+                            Profile photo
+                            <input type="file" name="profileImage" accept="image/*">
+                            <small>JPG, PNG, WEBP, or GIF. Maximum 5 MB.</small>
+                        </label>
+
+                        <label>
+                            Full name
+                            <input type="text" name="name" value="<%= profile.name %>" placeholder="Enter your name" autocomplete="name" required>
+                        </label>
+
+                        <label>
+                            Email
+                            <input type="email" name="email" value="<%= profile.email %>" placeholder="name@example.com" autocomplete="email" required>
+                        </label>
+
+                        <label>
+                            Handphone number
+                            <input type="tel" name="phone" value="<%= profile.phone %>" placeholder="81234567" maxlength="8" pattern="[689][0-9]{7}" autocomplete="tel">
+                        </label>
+
+                        <label>
+                            Age
+                            <input type="number" name="age" value="<%= profile.age || '' %>" placeholder="21" min="1" max="120">
+                        </label>
+
+                        <label>
+                            Birthday
+                            <input type="date" name="birthday" value="<%= profile.birthday || '' %>" max="<%= new Date().toISOString().slice(0, 10) %>">
+                        </label>
+
+                        <label>
+                            Gender
+                            <select name="gender">
+                                <option value="">Select gender</option>
+                                <% profileGenderOptions.forEach((option) => { %>
+                                    <option value="<%= option.value %>" <%= profile.gender === option.value ? 'selected' : '' %>><%= option.label %></option>
+                                <% }) %>
+                            </select>
+                        </label>
+
+                        <label>
+                            Postal code
+                            <input type="text" name="postalCode" value="<%= profile.postalCode || '' %>" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]{6}">
+                        </label>
+
+                        <label>
+                            Preferred contact method
+                            <select name="preferredContactMethod">
+                                <option value="">Select contact method</option>
+                                <option value="email" <%= profile.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
+                                <option value="phone" <%= profile.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
+                                <option value="whatsapp" <%= profile.preferredContactMethod === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="account-form-actions">
+                        <button class="button primary" type="submit">Save changes</button>
+                    </div>
+                </form>
+
+                <form class="account-panel account-form" action="/profile/password" method="POST">
+                    <div class="account-panel-header">
+                        <div>
+                            <p class="eyebrow">Security</p>
+                            <h2>Change password</h2>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <label>
+                            Current password
+                            <input type="password" name="currentPassword" placeholder="Current password" autocomplete="current-password" required>
+                        </label>
+
+                        <label>
+                            New password
+                            <input type="password" name="newPassword" placeholder="New password" autocomplete="new-password" minlength="8" required>
+                        </label>
+
+                        <label>
+                            Confirm new password
+                            <input type="password" name="confirmPassword" placeholder="Confirm password" autocomplete="new-password" minlength="8" required>
+                        </label>
+                    </div>
+
+                    <div class="password-requirements">
+                        <span>Current password required</span>
+                        <span>8+ characters</span>
+                        <span>Letters and numbers</span>
+                    </div>
+
+                    <div class="account-form-actions">
+                        <button class="button primary" type="submit">Update password</button>
+                    </div>
+                </form>
+            </section>
 
             <% if (isCustomer) { %>
                 <section id="bookings" class="account-panel profile-tab-panel profile-bookings-panel" data-profile-panel="bookings">
