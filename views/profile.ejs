@@ -1331,28 +1331,44 @@
                                 <h3>Top up, convert, or spend</h3>
                             </div>
                             <div class="profile-wallet-action-grid">
-                                <a class="button primary" href="/profile/wallet">Top up e-wallet</a>
-                                <form class="profile-wallet-inline-form profile-giftcard-redeem-form" action="/giftcards/redeem" method="POST">
-                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                    <label>
-                                        Gift card code
-                                        <input type="text" name="code" placeholder="VANI-XXXXXXXX" autocomplete="off" inputmode="text" required>
-                                    </label>
-                                    <button class="button secondary" type="submit">Redeem gift card</button>
-                                </form>
-                                <% if (loyalty) { %>
-                                    <form class="profile-wallet-inline-form" action="/customer/wallet/redeem" method="POST">
+                                <article class="profile-wallet-action-card is-topup">
+                                    <span>1</span>
+                                    <h4>E-wallet</h4>
+                                    <a class="button primary" href="/profile/wallet">Top up e-wallet</a>
+                                </article>
+                                <article class="profile-wallet-action-card">
+                                    <span>2</span>
+                                    <h4>Gift cards</h4>
+                                    <form class="profile-wallet-inline-form profile-giftcard-redeem-form" action="/giftcards/redeem" method="POST">
                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                         <label>
-                                            Points
-                                            <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                            Gift card code
+                                            <input type="text" name="code" placeholder="VANI-XXXXXXXX" autocomplete="off" inputmode="text" required>
                                         </label>
-                                        <button class="button secondary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Convert points</button>
+                                        <button class="button secondary" type="submit">Redeem gift card</button>
                                     </form>
-                                    <form action="/customer/checkout/apply-cashback" method="POST">
-                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                        <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use cashback in cart</button>
-                                    </form>
+                                </article>
+                                <% if (loyalty) { %>
+                                    <article class="profile-wallet-action-card">
+                                        <span>3</span>
+                                        <h4>Points</h4>
+                                        <form class="profile-wallet-inline-form" action="/customer/wallet/redeem" method="POST">
+                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                            <label>
+                                                Points
+                                                <input type="number" name="points" min="<%= loyalty.rules.minPointsToRedeem %>" step="1" max="<%= loyalty.wallet.pointsBalance %>" value="<%= loyalty.wallet.pointsBalance >= loyalty.rules.minPointsToRedeem ? loyalty.rules.minPointsToRedeem : 0 %>" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>
+                                            </label>
+                                            <button class="button secondary" type="submit" <%= loyalty.wallet.pointsBalance < loyalty.rules.minPointsToRedeem ? 'disabled' : '' %>>Convert points</button>
+                                        </form>
+                                    </article>
+                                    <article class="profile-wallet-action-card is-cashback">
+                                        <span>4</span>
+                                        <h4>Cashback</h4>
+                                        <form action="/customer/checkout/apply-cashback" method="POST">
+                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                            <button class="button secondary" type="submit" <%= Number(loyalty.wallet.cashbackBalance || 0) <= 0 ? 'disabled' : '' %>>Use cashback in cart</button>
+                                        </form>
+                                    </article>
                                 <% } %>
                             </div>
                             <% if (loyalty) { %>

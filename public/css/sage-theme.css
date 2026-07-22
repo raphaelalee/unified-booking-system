@@ -3983,13 +3983,13 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-wallet-clean {
-    gap: 18px;
+    gap: 22px;
 }
 
 .profile-wallet-overview-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: minmax(220px, 1.15fr) repeat(3, minmax(180px, 1fr));
+    gap: 14px;
 }
 
 .profile-wallet-stat-card,
@@ -4002,16 +4002,18 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-wallet-stat-card {
-    padding: 18px;
+    padding: 20px;
     display: grid;
     align-content: space-between;
-    gap: 8px;
-    min-height: 142px;
+    gap: 10px;
+    min-height: 138px;
+    box-shadow: 0 10px 24px rgba(35, 42, 32, 0.04);
 }
 
 .profile-wallet-stat-card.is-primary {
     background: #2f4a32;
     color: #fff;
+    box-shadow: 0 18px 38px rgba(47, 74, 50, 0.18);
 }
 
 .profile-wallet-stat-card .eyebrow {
@@ -4024,7 +4026,7 @@ body:has(.admin-nav-toggle) .nav {
 
 .profile-wallet-stat-card strong {
     color: inherit;
-    font-size: clamp(1.65rem, 3vw, 2.55rem);
+    font-size: clamp(1.55rem, 2.8vw, 2.35rem);
     line-height: 1;
     overflow-wrap: anywhere;
 }
@@ -4040,28 +4042,84 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-wallet-actions-panel {
-    padding: 16px;
+    padding: 18px;
     display: grid;
-    gap: 14px;
+    gap: 16px;
 }
 
 .profile-wallet-actions-panel h3 {
     margin: 0;
     color: #253225;
+    font-size: clamp(1.25rem, 2vw, 1.55rem);
 }
 
 .profile-wallet-action-grid {
     display: grid;
-    grid-template-columns: auto minmax(260px, 1fr) minmax(260px, 1fr) auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
-    align-items: end;
+    align-items: stretch;
+}
+
+.profile-wallet-action-card {
+    min-width: 0;
+    padding: 14px;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    align-content: start;
+    gap: 10px;
+    border: 1px solid rgba(44, 55, 42, 0.10);
+    border-radius: 10px;
+    background: #f8faf5;
+}
+
+.profile-wallet-action-card > span {
+    width: 26px;
+    height: 26px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #e8efe2;
+    color: #40533a;
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.profile-wallet-action-card h4 {
+    margin: 0;
+    color: #253225;
+    font-size: 0.95rem;
+    font-weight: 900;
+}
+
+.profile-wallet-action-card .button,
+.profile-wallet-action-card form {
+    align-self: end;
+}
+
+.profile-wallet-action-card .button {
+    width: 100%;
+    justify-content: center;
+}
+
+.profile-wallet-action-card form {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-wallet-action-card.is-topup {
+    background: #eef4e9;
+    border-color: rgba(47, 74, 50, 0.16);
+}
+
+.profile-wallet-action-card.is-cashback {
+    background: #fffdf8;
 }
 
 .profile-wallet-inline-form {
     display: grid;
-    grid-template-columns: minmax(120px, 1fr) auto;
+    grid-template-columns: 1fr;
     gap: 10px;
-    align-items: end;
+    align-items: stretch;
 }
 
 .profile-wallet-inline-form label {
@@ -4086,17 +4144,17 @@ body:has(.admin-nav-toggle) .nav {
 }
 
 .profile-giftcard-redeem-form {
-    min-width: min(100%, 330px);
+    min-width: 0;
 }
 
 .profile-wallet-history-hub {
-    padding: 16px;
+    padding: 18px;
 }
 
 .profile-wallet-history-grid {
-    margin-top: 14px;
+    margin-top: 16px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
     gap: 14px;
     align-items: start;
 }
@@ -4109,16 +4167,36 @@ body:has(.admin-nav-toggle) .nav {
 
 .wallet-section-heading.compact {
     align-items: start;
+    gap: 10px;
 }
 
 .wallet-section-heading.compact h3 {
-    font-size: 1.02rem;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1.2;
 }
 
 .profile-wallet-history-grid .profile-wallet-list {
-    max-height: 420px;
+    max-height: 360px;
     overflow: auto;
     padding-right: 4px;
+}
+
+.profile-wallet-history-grid .profile-wallet-block,
+.profile-wallet-history-grid .profile-wallet-history-block {
+    padding: 16px;
+    background: #fffdf8;
+}
+
+.profile-wallet-history-controls {
+    margin: 2px 0 12px;
+}
+
+.profile-wallet-history-grid .profile-wallet-row {
+    padding: 12px;
+    gap: 10px;
+    background: #fff;
 }
 
 @media (max-width: 980px) {
