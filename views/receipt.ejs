@@ -1,4 +1,375 @@
+<%
+    const safePdfMode = typeof pdfMode !== 'undefined' ? Boolean(pdfMode) : false;
+%>
+
+<% if (safePdfMode) { %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><%= title %> | Vaniday</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 14mm 12mm;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body.receipt-pdf-body {
+            margin: 0;
+            background: #ffffff;
+            color: #253125;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .receipt-pdf-document {
+            width: 100%;
+        }
+
+        .receipt-pdf-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            padding: 0 0 18px;
+            border-bottom: 2px solid #dce6d7;
+        }
+
+        .receipt-pdf-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .receipt-pdf-mark {
+            display: inline-grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #3f513a;
+            color: #ffffff;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 26px;
+            font-weight: 700;
+        }
+
+        .receipt-pdf-brand strong {
+            display: block;
+            color: #2f3b2d;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .receipt-pdf-brand span,
+        .receipt-pdf-reference span,
+        .receipt-meta-grid span,
+        .receipt-total span,
+        .receipt-qr-panel .muted,
+        .receipt-table td span {
+            color: #64705f;
+        }
+
+        .receipt-pdf-brand span,
+        .receipt-pdf-reference span {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .receipt-pdf-reference {
+            text-align: right;
+        }
+
+        .receipt-pdf-reference strong {
+            display: block;
+            margin-top: 3px;
+            color: #253125;
+            font-size: 13px;
+        }
+
+        .receipt-title {
+            min-height: 0 !important;
+            padding: 24px 0 18px !important;
+            background: transparent !important;
+            color: #253125 !important;
+        }
+
+        .receipt-title .eyebrow,
+        .receipt-qr-panel .eyebrow {
+            margin: 0 0 8px;
+            color: #50634a;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .receipt-title h1 {
+            max-width: none !important;
+            margin: 0 0 8px;
+            color: #1f281f;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 30px;
+            line-height: 1.12;
+        }
+
+        .receipt-title p {
+            max-width: 100%;
+            margin: 3px 0;
+            color: #43503f;
+        }
+
+        .receipt-section {
+            padding: 0 !important;
+        }
+
+        .receipt-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 190px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .receipt-card,
+        .receipt-qr-panel {
+            overflow: hidden;
+            border: 1px solid #dce6d7;
+            border-radius: 8px;
+            background: #fbfcfa;
+            color: #253125;
+            page-break-inside: avoid;
+        }
+
+        .receipt-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            padding: 14px;
+            border-bottom: 1px solid #e2eadf;
+        }
+
+        .receipt-meta-grid p {
+            min-width: 0;
+            margin: 0;
+            padding: 10px;
+            border-radius: 6px;
+            background: #ffffff;
+        }
+
+        .receipt-meta-grid span {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .receipt-meta-grid strong {
+            display: block;
+            color: #1f281f;
+            font-size: 11px;
+            overflow-wrap: anywhere;
+        }
+
+        .notice {
+            margin: 14px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: #edf5e9;
+            color: #253125;
+        }
+
+        .notice p {
+            margin: 0;
+        }
+
+        .receipt-table-wrap {
+            overflow: visible;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .receipt-table {
+            width: 100%;
+            min-width: 0;
+            border-collapse: collapse;
+            background: #ffffff;
+        }
+
+        .receipt-table th {
+            padding: 10px 12px;
+            background: #3f513a;
+            color: #ffffff;
+            font-size: 9px;
+            font-weight: 800;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        .receipt-table td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #e2eadf;
+            color: #253125;
+            vertical-align: top;
+        }
+
+        .receipt-table td:nth-child(3),
+        .receipt-table td:nth-child(4),
+        .receipt-table td:nth-child(5),
+        .receipt-table th:nth-child(3),
+        .receipt-table th:nth-child(4),
+        .receipt-table th:nth-child(5) {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .receipt-table td:first-child {
+            width: 44%;
+        }
+
+        .receipt-table td:first-child strong,
+        .receipt-table td:first-child span {
+            display: block;
+        }
+
+        .receipt-table td:first-child span {
+            margin-top: 2px;
+            font-size: 10px;
+        }
+
+        .receipt-total {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 14px;
+            border-top: 1px solid #e2eadf;
+            background: #ffffff;
+        }
+
+        .receipt-total strong {
+            color: #1f281f;
+            text-align: right;
+        }
+
+        .receipt-total:last-of-type {
+            background: #eef5eb;
+        }
+
+        .receipt-card > .muted {
+            margin: 0;
+            padding: 0 14px 14px;
+            color: #64705f;
+        }
+
+        .receipt-refund-breakdown {
+            padding: 14px;
+            border-top: 1px solid #e2eadf;
+            background: #ffffff;
+        }
+
+        .receipt-refund-breakdown h2 {
+            margin: 0 0 10px;
+            font-size: 15px;
+        }
+
+        .receipt-refund-breakdown article {
+            padding: 10px;
+            border: 1px solid #e2eadf;
+            border-radius: 6px;
+        }
+
+        .receipt-refund-breakdown dl {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px 12px;
+            margin: 8px 0 0;
+        }
+
+        .receipt-refund-breakdown dt,
+        .receipt-refund-breakdown dd {
+            margin: 0;
+        }
+
+        .receipt-refund-breakdown dt {
+            color: #64705f;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .receipt-qr-panel {
+            padding: 14px;
+        }
+
+        .receipt-qr-panel .qr-code {
+            display: block;
+            width: 150px;
+            height: 150px;
+            margin: 2px auto 12px;
+            padding: 8px;
+            border: 1px solid #dce6d7;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .receipt-qr-panel p {
+            margin: 0 0 8px;
+        }
+
+        .receipt-qr-panel .qr-link {
+            display: block;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2eadf;
+            color: #253125;
+            font-size: 8px;
+            overflow-wrap: anywhere;
+            text-decoration: none;
+        }
+
+        .receipt-digital-icon {
+            display: grid;
+            place-items: center;
+            width: 54px;
+            height: 54px;
+            margin-bottom: 10px;
+            border: 1px solid #dce6d7;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #3f513a;
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .qr-debug-panel {
+            display: none;
+        }
+
+        .receipt-pdf-footer {
+            margin-top: 18px;
+            padding-top: 12px;
+            border-top: 1px solid #dce6d7;
+            color: #64705f;
+            font-size: 9px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="receipt-pdf-body">
+    <div class="receipt-pdf-document">
+<% } else { %>
 <%- include('partials/header', { title }) %>
+<% } %>
 
 <%
     const safeViewerRole = typeof viewerRole !== 'undefined' ? viewerRole : 'customer';
@@ -12,6 +383,22 @@
     const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
     const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 %>
+
+<% if (safePdfMode) { %>
+    <header class="receipt-pdf-header">
+        <div class="receipt-pdf-brand">
+            <span class="receipt-pdf-mark">V</span>
+            <div>
+                <strong>Vaniday</strong>
+                <span>Beauty and wellness receipt</span>
+            </div>
+        </div>
+        <div class="receipt-pdf-reference">
+            <span>Receipt reference</span>
+            <strong><%= receiptDisplayReference %></strong>
+        </div>
+    </header>
+<% } %>
 
 <section class="page-title receipt-title">
     <p class="eyebrow"><%= isBooking ? 'Booking receipt' : (safeIsGiftCardOnly ? 'Gift card receipt' : 'Product receipt') %></p>
@@ -310,4 +697,13 @@
     </div>
 </section>
 
+<% if (safePdfMode) { %>
+        <footer class="receipt-pdf-footer">
+            Generated by Vaniday Booking System
+        </footer>
+    </div>
+</body>
+</html>
+<% } else { %>
 <%- include('partials/footer') %>
+<% } %>
