@@ -197,7 +197,7 @@
                     const merchantQrToken = service.merchantQrToken || merchantTokenById[service.merchantId];
                     const serviceBookingPath = merchantQrToken
                         ? service.serviceBookingPath || `/booking/${service.merchantId}/${merchantQrToken}?serviceId=${service.id}`
-                        : `/merchants/${service.merchantId}`;
+                        : service.serviceBookingPath || `/booking/${service.merchantId}?serviceId=${service.id}`;
                     const servicePackageBookingPath = `${serviceBookingPath}${serviceBookingPath.includes('?') ? '&' : '?'}package=1`;
                     const serviceVisual = getServiceVisual(service, index);
                     const serviceOptions = Array.isArray(service.options) ? service.options : [];
