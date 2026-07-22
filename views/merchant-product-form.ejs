@@ -8,6 +8,13 @@
         const selectedRoutineGoals = Array.isArray(form.routineGoalTags) ? form.routineGoalTags : [];
         const selectedRoutineConcerns = Array.isArray(form.routineConcernTags) ? form.routineConcernTags : [];
         const checkedTag = (collection, value) => collection.includes(value) ? 'checked' : '';
+        const hasRoutineSettings = Boolean(
+            String(form.routineRecommendationNote || '').trim()
+            || String(form.routineBudgetMin || '').trim()
+            || String(form.routineBudgetMax || '').trim()
+            || selectedRoutineGoals.length
+            || selectedRoutineConcerns.length
+        );
     %>
     <header class="merchant-products-hero">
         <div class="merchant-products-hero-copy">
@@ -32,6 +39,11 @@
 
         <div class="merchant-product-editor-grid">
             <div class="merchant-product-editor-main">
+                <div class="merchant-product-section-heading">
+                    <p class="eyebrow">Product details</p>
+                    <h2>Customer-facing copy</h2>
+                </div>
+
                 <label>
                     Product name
                     <input type="text" name="name" value="<%= form.name %>" placeholder="Hydrating Glow Serum" required data-product-name-input>
@@ -64,79 +76,92 @@
             </div>
 
             <aside class="merchant-product-editor-side">
-                <label>
-                    Price
-                    <input type="number" name="price" value="<%= form.price %>" placeholder="38.00" min="0" step="0.01" required>
-                </label>
-
-                <label>
-                    Category
-                    <select name="categoryId">
-                        <option value="" <%= String(form.categoryId) === '' ? 'selected' : '' %>>Uncategorised</option>
-                        <% categories.forEach((category) => { %>
-                            <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>><%= category.category_name %></option>
-                        <% }) %>
-                    </select>
-                </label>
-
-                <label>
-                    Stock quantity
-                    <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
-                </label>
-
-                <section class="merchant-product-routine-panel" aria-label="Routine Finder settings">
-                    <div>
-                        <p class="eyebrow">Routine Finder</p>
-                        <h2>Recommendation tags</h2>
-                        <p class="muted">Help customers discover this product as aftercare for their goals and concerns.</p>
+                <section class="merchant-product-side-panel" aria-label="Pricing and inventory">
+                    <div class="merchant-product-section-heading">
+                        <p class="eyebrow">Inventory</p>
+                        <h2>Pricing and stock</h2>
                     </div>
                     <label>
-                        Recommendation note
-                        <input type="text" name="routineRecommendationNote" maxlength="255" value="<%= form.routineRecommendationNote || '' %>" placeholder="Best after hydrating facial">
+                        Price
+                        <input type="number" name="price" value="<%= form.price %>" placeholder="38.00" min="0" step="0.01" required>
                     </label>
-                    <div class="merchant-service-editor-pair">
-                        <label>
-                            Budget minimum
-                            <input type="number" name="routineBudgetMin" value="<%= form.routineBudgetMin || '' %>" min="0" step="0.01" placeholder="20">
-                        </label>
-                        <label>
-                            Budget maximum
-                            <input type="number" name="routineBudgetMax" value="<%= form.routineBudgetMax || '' %>" min="0" step="0.01" placeholder="80">
-                        </label>
-                    </div>
-                    <div class="routine-merchant-tag-panel">
-                        <span>Goal tags</span>
-                        <div>
-                            <% (routineTagOptions || []).slice(0, 8).forEach((tag) => { %>
-                                <label>
-                                    <input type="checkbox" name="routineGoalTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineGoals, tag.value) %>>
-                                    <span><%= tag.label %></span>
-                                </label>
+
+                    <label>
+                        Category
+                        <select name="categoryId">
+                            <option value="" <%= String(form.categoryId) === '' ? 'selected' : '' %>>Uncategorised</option>
+                            <% categories.forEach((category) => { %>
+                                <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>><%= category.category_name %></option>
                             <% }) %>
-                        </div>
-                    </div>
-                    <div class="routine-merchant-tag-panel">
-                        <span>Concern tags</span>
-                        <div>
-                            <% (routineTagOptions || []).slice(6).forEach((tag) => { %>
-                                <label>
-                                    <input type="checkbox" name="routineConcernTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineConcerns, tag.value) %>>
-                                    <span><%= tag.label %></span>
-                                </label>
-                            <% }) %>
-                        </div>
-                    </div>
+                        </select>
+                    </label>
+
+                    <label>
+                        Stock quantity
+                        <input type="number" name="stockQuantity" value="<%= form.stockQuantity %>" placeholder="25" min="0" step="1" required>
+                    </label>
                 </section>
 
-                <label>
-                    Product photo
-                    <% if (form.imageUrl) { %>
-                        <span class="merchant-product-image-preview" style="background-image: url('<%= form.imageUrl %>')" aria-label="Current product photo"></span>
-                    <% } %>
-                    <input type="hidden" name="currentImageUrl" value="<%= form.imageUrl %>">
-                    <input type="file" name="productImage" accept="image/*">
-                    <span class="form-hint"><%= product ? 'Choose a new photo to replace the current one.' : 'Upload a JPG, PNG, or phone photo up to 8 MB.' %></span>
-                </label>
+                <details class="merchant-product-routine-panel merchant-product-collapsible" <%= hasRoutineSettings ? 'open' : '' %>>
+                    <summary>
+                        <span>
+                            <p class="eyebrow">Routine Finder</p>
+                            <h2>Recommendation tags</h2>
+                        </span>
+                        <small>Optional</small>
+                    </summary>
+                    <div class="merchant-product-collapsible-body">
+                        <p class="muted">Help customers discover this product as aftercare for their goals and concerns.</p>
+                        <label>
+                            Recommendation note
+                            <input type="text" name="routineRecommendationNote" maxlength="255" value="<%= form.routineRecommendationNote || '' %>" placeholder="Best after hydrating facial">
+                        </label>
+                        <div class="merchant-service-editor-pair">
+                            <label>
+                                Budget minimum
+                                <input type="number" name="routineBudgetMin" value="<%= form.routineBudgetMin || '' %>" min="0" step="0.01" placeholder="20">
+                            </label>
+                            <label>
+                                Budget maximum
+                                <input type="number" name="routineBudgetMax" value="<%= form.routineBudgetMax || '' %>" min="0" step="0.01" placeholder="80">
+                            </label>
+                        </div>
+                        <div class="routine-merchant-tag-panel">
+                            <span>Goal tags</span>
+                            <div>
+                                <% (routineTagOptions || []).slice(0, 8).forEach((tag) => { %>
+                                    <label>
+                                        <input type="checkbox" name="routineGoalTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineGoals, tag.value) %>>
+                                        <span><%= tag.label %></span>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </div>
+                        <div class="routine-merchant-tag-panel">
+                            <span>Concern tags</span>
+                            <div>
+                                <% (routineTagOptions || []).slice(6).forEach((tag) => { %>
+                                    <label>
+                                        <input type="checkbox" name="routineConcernTags" value="<%= tag.value %>" <%= checkedTag(selectedRoutineConcerns, tag.value) %>>
+                                        <span><%= tag.label %></span>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <section class="merchant-product-side-panel" aria-label="Product photo">
+                    <label>
+                        Product photo
+                        <% if (form.imageUrl) { %>
+                            <span class="merchant-product-image-preview" style="background-image: url('<%= form.imageUrl %>')" aria-label="Current product photo"></span>
+                        <% } %>
+                        <input type="hidden" name="currentImageUrl" value="<%= form.imageUrl %>">
+                        <input type="file" name="productImage" accept="image/*">
+                        <span class="form-hint"><%= product ? 'Choose a new photo to replace the current one.' : 'Upload a JPG, PNG, or phone photo up to 8 MB.' %></span>
+                    </label>
+                </section>
             </aside>
         </div>
 

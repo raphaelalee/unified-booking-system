@@ -1245,6 +1245,98 @@ body:not(.flappy-page) {
     white-space: nowrap;
 }
 
+.ai-service-assistant {
+    border: 1px solid rgba(38, 59, 43, 0.14);
+    border-radius: 8px;
+    background: rgba(229, 237, 223, 0.72);
+}
+
+.ai-service-assistant summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.ai-service-assistant summary::-webkit-details-marker {
+    display: none;
+}
+
+.ai-service-assistant summary span:first-child {
+    display: grid;
+    gap: 2px;
+}
+
+.ai-service-assistant summary strong,
+.ai-service-preview-header h2,
+.ai-service-suggestion-list h3 {
+    margin: 0;
+    color: var(--readable-ink);
+}
+
+.ai-service-assistant summary small,
+.ai-service-suggestion-list small {
+    color: var(--readable-muted);
+    font-weight: 700;
+}
+
+.ai-service-assistant-body {
+    display: grid;
+    gap: 14px;
+    padding: 0 18px 18px;
+}
+
+.ai-service-assistant-actions,
+.ai-service-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.ai-service-assistant-actions p {
+    margin: 0;
+}
+
+.ai-service-preview {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid rgba(38, 59, 43, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.ai-service-suggestion-list {
+    display: grid;
+    gap: 10px;
+}
+
+.ai-service-suggestion-list article {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid rgba(38, 59, 43, 0.12);
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.ai-service-suggestion-list p {
+    margin: 0;
+    color: var(--readable-text);
+}
+
+.ai-service-suggestion-list .button {
+    justify-self: start;
+}
+
+.error-text {
+    color: #8a2b20 !important;
+}
+
 textarea[data-product-description],
 textarea[data-product-ingredients],
 textarea[data-product-how-to-use] {
@@ -1264,6 +1356,19 @@ textarea[data-product-how-to-use] {
     .ai-product-helper {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .ai-service-assistant summary,
+    .ai-service-assistant-actions,
+    .ai-service-preview-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .ai-service-assistant summary .button,
+    .ai-service-assistant-actions .button,
+    .ai-service-preview-header .button {
+        width: 100%;
     }
 }
 

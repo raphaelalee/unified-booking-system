@@ -2,7 +2,12 @@ const { OpenAI } = require('openai');
 require('dotenv').config();
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
+const Product = require('../models/Product');
 const bookingController = require('./bookingController');
+const {
+    cleanText,
+    generateServiceSetupSuggestions
+} = require('../services/serviceSetupAiAssistant');
 
 // Initialize Groq using the OpenAI SDK
 const groq = new OpenAI({
@@ -595,6 +600,115 @@ exports.generateProductCopy = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "AI could not generate product details right now."
+        });
+    }
+};
+
+function getMerchantProfile(userId) {
+    return new Promise((resolve, reject) => {
+        MerchantService.getMerchantByUserId(userId, (error, merchant) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(merchant || null);
+        });
+    });
+}
+
+function getServiceCategories() {
+    return new Promise((resolve, reject) => {
+        MerchantService.getCategories((error, categories = []) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(categories || []);
+        });
+    });
+}
+
+function getMerchantProducts(userId) {
+    return new Promise((resolve, reject) => {
+        Product.getByMerchantUserId(userId, (error, products = []) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(products || []);
+        });
+    });
+}
+
+exports.generateServiceSetup = async (req, res) => {
+    try {
+        const userId = req.session.user?.id;
+        const serviceName = cleanText(req.body.serviceName || req.body.name, 120);
+        const instructions = cleanText(req.body.instructions, 280);
+        const categoryId = Number(req.body.categoryId || 0);
+
+        if (!userId || req.session.user?.role !== 'merchant') {
+            return res.status(403).json({
+                success: false,
+                message: 'Please log in as a merchant before using the AI service assistant.'
+            });
+        }
+
+        if (!process.env.GROQ_API_KEY) {
+            return res.status(503).json({
+                success: false,
+                message: 'AI suggestions are currently unavailable. You can continue completing the service manually.'
+            });
+        }
+
+        if (serviceName.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: 'Enter a service name first.'
+            });
+        }
+
+        const [merchant, categories, products] = await Promise.all([
+            getMerchantProfile(userId),
+            getServiceCategories(),
+            getMerchantProducts(userId)
+        ]);
+
+        if (!merchant) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your merchant profile could not be confirmed.'
+            });
+        }
+
+        const selectedCategory = categories.find((category) => Number(category.category_id) === categoryId);
+        const ownProducts = (products || [])
+            .filter((product) => Number(product.salonId || 0) === Number(merchant.id || merchant.salonId || 0))
+            .map((product) => ({
+                name: cleanText(product.name, 120),
+                category: cleanText(product.category, 80)
+            }))
+            .filter((product) => product.name);
+
+        const suggestions = await generateServiceSetupSuggestions({
+            serviceName,
+            categoryName: selectedCategory ? selectedCategory.category_name : '',
+            instructions,
+            products: ownProducts
+        });
+
+        return res.json({
+            success: true,
+            suggestions
+        });
+    } catch (error) {
+        console.warn('Service setup AI unavailable.');
+        return res.status(error.code === 'AI_NOT_CONFIGURED' ? 503 : 500).json({
+            success: false,
+            message: 'AI suggestions are currently unavailable. You can continue completing the service manually.'
         });
     }
 };

@@ -58,32 +58,39 @@
     </div>
 
     <% if (recommendedServices.length > 0) { %>
-        <section class="merchant-sales-recommendations" aria-labelledby="service-recommendations-title">
-            <p class="eyebrow">Recommendation</p>
-            <h2 id="service-recommendations-title">Recommended Services To Be Featured In <%= currentMonthLabel %></h2>
-            <p>Top service candidates based primarily on paid bookings, with availability and listing readiness used as tie-breakers.</p>
-            <div class="merchant-sales-recommendation-list">
-                <% recommendedServices.forEach((service) => { const recommendation = service.featuredRecommendation; %>
-                    <article class="merchant-sales-recommendation-card">
-                        <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
-                        <h3><%= service.name %></h3>
-                        <p><%= recommendation.reason %></p>
-                        <div class="merchant-sales-metrics">
-                            <span><strong><%= Number(service.salesCount || 0) %></strong> paid bookings</span>
-                            <span><strong><%= Array.isArray(service.slots) ? service.slots.length : 0 %></strong> slots</span>
-                            <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
-                        </div>
-                        <form action="/merchant/services/<%= service.id %>/feature" method="POST">
-                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                            <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
-                            <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
-                            <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
-                            <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured services already selected' %></button>
-                        </form>
-                    </article>
-                <% }) %>
+        <details class="merchant-sales-recommendations merchant-service-recommendations-drawer" aria-labelledby="service-recommendations-title">
+            <summary>
+                <span>
+                    <p class="eyebrow">Recommendation</p>
+                    <h2 id="service-recommendations-title">Recommended Services To Be Featured In <%= currentMonthLabel %></h2>
+                </span>
+                <small><%= recommendedServices.length %> suggestions</small>
+            </summary>
+            <div class="merchant-service-recommendations-body">
+                <p>Top service candidates based primarily on paid bookings, with availability and listing readiness used as tie-breakers.</p>
+                <div class="merchant-sales-recommendation-list">
+                    <% recommendedServices.forEach((service) => { const recommendation = service.featuredRecommendation; %>
+                        <article class="merchant-sales-recommendation-card">
+                            <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
+                            <h3><%= service.name %></h3>
+                            <p><%= recommendation.reason %></p>
+                            <div class="merchant-sales-metrics">
+                                <span><strong><%= Number(service.salesCount || 0) %></strong> paid bookings</span>
+                                <span><strong><%= Array.isArray(service.slots) ? service.slots.length : 0 %></strong> slots</span>
+                                <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
+                            </div>
+                            <form action="/merchant/services/<%= service.id %>/feature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
+                                <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
+                                <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
+                                <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured services already selected' %></button>
+                            </form>
+                        </article>
+                    <% }) %>
+                </div>
             </div>
-        </section>
+        </details>
     <% } %>
 
     <div class="merchant-service-toolbar">
@@ -154,21 +161,23 @@
                                 Linked inventory: <strong><%= service.inventoryProductName || 'Tracked product' %></strong>
                                 (<%= Number(service.inventoryStockQuantity || 0) %> in stock, requires <%= Number(service.inventoryQuantityRequired || 1) %>)
                                 <% if (service.inventoryBlocked) { %>
-                                    <span>• Booking hidden until restocked</span>
+                                    <span>&middot; Booking hidden until restocked</span>
                                 <% } %>
                             </p>
                         <% } %>
                     </div>
-                    <span class="merchant-service-category"><%= service.category || merchant.category %></span>
-                    <span class="merchant-service-duration"><%= service.duration %></span>
-                    <strong class="merchant-service-price">$<%= Number(service.price).toFixed(2) %></strong>
-                    <div class="merchant-service-package">
-                        <% if (service.packageEnabled) { %>
-                            <strong>$<%= Number(service.packagePrice).toFixed(2) %></strong>
-                            <span><%= service.packageSessions %> sessions</span>
-                        <% } else { %>
-                            <span>No package</span>
-                        <% } %>
+                    <div class="merchant-service-card-meta">
+                        <span class="merchant-service-category"><%= service.category || merchant.category %></span>
+                        <span class="merchant-service-duration"><%= service.duration %></span>
+                        <strong class="merchant-service-price">$<%= Number(service.price).toFixed(2) %></strong>
+                        <div class="merchant-service-package">
+                            <% if (service.packageEnabled) { %>
+                                <strong>$<%= Number(service.packagePrice).toFixed(2) %></strong>
+                                <span><%= service.packageSessions %> sessions</span>
+                            <% } else { %>
+                                <span>No package</span>
+                            <% } %>
+                        </div>
                     </div>
                     <div class="merchant-featured-cell <%= service.isFeatured ? 'is-featured' : 'is-idle' %>">
                         <span class="merchant-featured-pill <%= service.isFeatured ? 'is-featured' : 'is-idle' %>">

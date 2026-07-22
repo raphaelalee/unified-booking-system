@@ -435,6 +435,7 @@ app.get('/api/ai/booking-slots', aiRateLimit, allowGuestOrCustomer, aiController
 app.get('/api/ai/customer-bookings', aiRateLimit, requireCustomer, aiController.getGuidedCustomerBookings);
 app.post('/api/ai/chat', aiRateLimit, allowGuestOrCustomer, aiController.getBeautyAdvice);
 app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.generateProductCopy);
+app.post('/api/ai/service-setup', aiRateLimit, requireApprovedMerchant, aiController.generateServiceSetup);
 app.get('/merchant', requireRole('merchant'), (req, res) => res.redirect('/merchant/dashboard'));
 app.get('/merchant/onboarding', requireRole('merchant'), merchantDashboardController.showOnboarding);
 app.post('/merchant/onboarding', requireRole('merchant'), merchantDashboardController.updateOnboarding);

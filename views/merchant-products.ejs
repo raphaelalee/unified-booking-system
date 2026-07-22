@@ -49,32 +49,39 @@
     </div>
 
     <% if (recommendedProducts.length > 0) { %>
-        <section class="merchant-sales-recommendations" aria-labelledby="product-recommendations-title">
-            <p class="eyebrow">Recommendation</p>
-            <h2 id="product-recommendations-title">Recommended Products To Be Featured In <%= currentMonthLabel %></h2>
-            <p>Top product candidates based primarily on paid sales, with stock and listing readiness used as tie-breakers.</p>
-            <div class="merchant-sales-recommendation-list">
-                <% recommendedProducts.forEach((product) => { const recommendation = product.featuredRecommendation; %>
-                    <article class="merchant-sales-recommendation-card">
-                        <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
-                        <h3><%= product.name %></h3>
-                        <p><%= recommendation.reason %></p>
-                        <div class="merchant-sales-metrics">
-                            <span><strong><%= Number(product.salesCount || 0) %></strong> paid units sold</span>
-                            <span><strong><%= Number(product.stockQuantity || 0) %></strong> in stock</span>
-                            <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
-                        </div>
-                        <form action="/merchant/products/<%= product.id %>/feature" method="POST">
-                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                            <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
-                            <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
-                            <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
-                            <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured products already selected' %></button>
-                        </form>
-                    </article>
-                <% }) %>
+        <details class="merchant-sales-recommendations merchant-product-recommendations-drawer" aria-labelledby="product-recommendations-title">
+            <summary>
+                <span>
+                    <p class="eyebrow">Recommendation</p>
+                    <h2 id="product-recommendations-title">Recommended Products To Be Featured In <%= currentMonthLabel %></h2>
+                </span>
+                <small><%= recommendedProducts.length %> suggestions</small>
+            </summary>
+            <div class="merchant-product-recommendations-body">
+                <p>Top product candidates based primarily on paid sales, with stock and listing readiness used as tie-breakers.</p>
+                <div class="merchant-sales-recommendation-list">
+                    <% recommendedProducts.forEach((product) => { const recommendation = product.featuredRecommendation; %>
+                        <article class="merchant-sales-recommendation-card">
+                            <span class="merchant-sales-rank">#<%= recommendation.rank %></span>
+                            <h3><%= product.name %></h3>
+                            <p><%= recommendation.reason %></p>
+                            <div class="merchant-sales-metrics">
+                                <span><strong><%= Number(product.salesCount || 0) %></strong> paid units sold</span>
+                                <span><strong><%= Number(product.stockQuantity || 0) %></strong> in stock</span>
+                                <span><strong><%= Number(recommendation.score || 0).toFixed(0) %></strong> score</span>
+                            </div>
+                            <form action="/merchant/products/<%= product.id %>/feature" method="POST">
+                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                <input type="hidden" name="featuredOrder" value="<%= recommendation.featuredOrder %>">
+                                <input type="hidden" name="featuredStartDate" value="<%= recommendation.featuredStartDate %>">
+                                <input type="hidden" name="featuredEndDate" value="<%= recommendation.featuredEndDate %>">
+                                <button class="button secondary" type="submit" <%= recommendation.canFeatureNow ? '' : 'disabled' %>><%= recommendation.canFeatureNow ? 'Feature for this month' : '3 featured products already selected' %></button>
+                            </form>
+                        </article>
+                    <% }) %>
+                </div>
             </div>
-        </section>
+        </details>
     <% } %>
 
     <% if (products.length === 0) { %>
@@ -119,12 +126,23 @@
                             <p class="muted">Routine Finder tags not set yet.</p>
                         <% } %>
                     </div>
-                    <div class="merchant-product-meta">
-                        <strong>$<%= product.price.toFixed(2) %></strong>
-                    </div>
-                    <div class="merchant-product-stock <%= Number(product.stockQuantity || 0) <= 5 ? 'is-low' : '' %>">
-                        <strong><%= product.stockQuantity %></strong>
-                        <span>in stock</span>
+                    <div class="merchant-product-inventory">
+                        <div class="merchant-product-meta">
+                            <span>Price</span>
+                            <strong>$<%= product.price.toFixed(2) %></strong>
+                        </div>
+                        <div class="merchant-product-stock <%= Number(product.stockQuantity || 0) <= 5 ? 'is-low' : '' %>">
+                            <span>Stock</span>
+                            <strong><%= product.stockQuantity %></strong>
+                        </div>
+                        <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
+                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                            <label>
+                                <span>Restock</span>
+                                <input type="number" name="quantity" min="1" max="999" step="1" value="1" aria-label="Restock quantity">
+                            </label>
+                            <button class="restock-icon-button" type="submit" title="Restock <%= product.name %>" aria-label="Restock <%= product.name %>">+</button>
+                        </form>
                     </div>
                     <div class="merchant-featured-cell <%= product.isFeatured ? 'is-featured' : 'is-idle' %>">
                         <span class="merchant-featured-pill <%= product.isFeatured ? 'is-featured' : 'is-idle' %>">
@@ -142,11 +160,6 @@
                             <span>Use this to push the product into featured storefront slots.</span>
                         <% } %>
                     </div>
-                    <form class="merchant-restock-form" action="/merchant/products/<%= product.id %>/restock" method="POST" aria-label="Restock <%= product.name %>">
-                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                        <input type="number" name="quantity" min="1" max="999" step="1" value="1" aria-label="Restock quantity">
-                        <button class="restock-icon-button" type="submit" title="Restock <%= product.name %>" aria-label="Restock <%= product.name %>">+</button>
-                    </form>
                     <div class="merchant-product-actions">
                         <a class="button secondary" href="/merchant/products/<%= product.id %>/edit">Edit</a>
                         <details class="merchant-featured-editor">
