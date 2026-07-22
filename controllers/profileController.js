@@ -1,13 +1,134 @@
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const PurchaseHistory = require('../models/PurchaseHistory');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
+const { moderateReviewImage, moderateReviewText } = require('../services/groqService');
 const {
     formatPaymentMethod,
     normalizePaymentMethod,
     normalizePaymentProvider
 } = require('../utils/paymentDisplay');
 const { buildBookingReference } = require('../utils/bookingReference');
+
+function removeUploadedReviewMedia(...mediaPaths) {
+    mediaPaths.filter(Boolean).forEach((mediaPath) => {
+        const absolutePath = path.join(__dirname, '..', 'public', mediaPath.replace(/^\/+/, ''));
+        fs.unlink(absolutePath, () => {});
+    });
+}
+
+function getReviewImageDataUrl(upload) {
+    if (!upload?.path) {
+        return '';
+    }
+
+    const mimeType = String(upload.mimetype || 'image/jpeg').toLowerCase();
+    const buffer = fs.readFileSync(upload.path);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+}
+
+function getHardProfanityModeration(comment = '') {
+    const text = String(comment || '').toLowerCase();
+    const compactText = text.replace(/[^a-z0-9]/g, '');
+    const hasHardProfanity = [
+        /f+u+c+k+/i,
+        /f+u+k+/i,
+        /s+h+i+t+/i,
+        /b+i+t+c+h+/i,
+        /c+u+n+t+/i,
+        /a+s+s+h+o+l+e+/i,
+        /d+i+c+k+/i
+    ].some((pattern) => pattern.test(compactText));
+
+    if (!hasHardProfanity) {
+        return null;
+    }
+
+    return {
+        recommendedAction: 'reject',
+        reason: 'Review contains profanity or vulgar language.'
+    };
+}
+
+function getReviewModerationFailureMessage(error, imageUpload) {
+    const code = String(error?.code || '');
+
+    if (code === 'GROQ_NOT_CONFIGURED') {
+        return 'Review moderation is not configured. Please contact support.';
+    }
+
+    if (imageUpload) {
+        return 'Review image could not be verified. Images showing weapons, blood, graphic injury, or violence are not allowed.';
+    }
+
+    return 'Review could not be verified right now. Please edit the review content or try again after checking your connection.';
+}
+
+async function moderateReviewBeforeSave({
+    comment,
+    rating,
+    merchantName,
+    serviceName,
+    productName,
+    verifiedBooking,
+    completedBooking,
+    imageUpload
+}) {
+    let textResult = null;
+    const hardProfanity = getHardProfanityModeration(comment);
+
+    if (hardProfanity) {
+        return {
+            allowed: false,
+            result: hardProfanity
+        };
+    }
+
+    if (String(comment || '').trim()) {
+        textResult = await moderateReviewText({
+            reviewText: comment,
+            rating,
+            merchantName,
+            serviceName,
+            productName,
+            verifiedBooking,
+            completedBooking,
+            previousReviewCount: 0,
+            duplicateTextCount: 0
+        });
+
+        if (textResult.recommendedAction !== 'approve') {
+            return {
+                allowed: false,
+                result: textResult
+            };
+        }
+    }
+
+    if (imageUpload) {
+        const imageResult = await moderateReviewImage({
+            imageBase64: getReviewImageDataUrl(imageUpload),
+            merchantCategory: '',
+            serviceName,
+            productName,
+            reviewText: comment
+        });
+
+        if (imageResult.recommendedAction !== 'approve') {
+            return {
+                allowed: false,
+                result: imageResult
+            };
+        }
+    }
+
+    return {
+        allowed: true,
+        result: textResult
+    };
+}
 
 function queryRows(sql, values = []) {
     return new Promise((resolve, reject) => {
@@ -106,6 +227,10 @@ function setProfileError(req, message) {
 
 function setProfileSuccess(req, message) {
     req.session.profileSuccess = message;
+}
+
+function setReviewModerationPopup(req, message) {
+    req.session.reviewModerationPopup = message;
 }
 
 function parseProductHistoryItems(value) {
@@ -452,8 +577,10 @@ async function showHistory(req, res) {
 
         const success = req.session.profileSuccess || null;
         const error = req.session.profileError || null;
+        const reviewModerationPopup = req.session.reviewModerationPopup || null;
         req.session.profileSuccess = null;
         req.session.profileError = null;
+        req.session.reviewModerationPopup = null;
 
         return res.render('history', {
             title: 'Purchase History',
@@ -461,6 +588,7 @@ async function showHistory(req, res) {
             activeFilter: filter,
             success,
             error,
+            reviewModerationPopup,
             counts: {
                 all: allHistory.length,
                 bookings: mergedBookings.length,
@@ -532,28 +660,55 @@ function submitProductReview(req, res) {
             }
 
             if (existingReview) {
+                removeUploadedReviewMedia(imagePath, videoPath);
                 setProfileError(req, 'You have already submitted a review for this product in this order.');
                 return res.redirect('/profile#history');
             }
 
-            return Review.create({
-                reviewType: 'product',
-                receiptId,
-                userId,
-                merchantId: Number(item.merchantId || receipt.pickupMerchantId || 0),
-                productId,
-                rating,
+            return moderateReviewBeforeSave({
                 comment,
-                imagePath,
-                videoPath
-            }, (createError) => {
+                rating,
+                merchantName: item.merchantName || receipt.pickupMerchantName || '',
+                productName: item.name,
+                verifiedBooking: true,
+                completedBooking: true,
+                imageUpload
+            }).then((moderation) => {
+                if (!moderation.allowed) {
+                    removeUploadedReviewMedia(imagePath, videoPath);
+                    const reason = moderation.result?.reason || 'Your review needs admin review before it can be posted.';
+                    setProfileError(req, reason);
+                    setReviewModerationPopup(req, reason);
+                    return res.redirect('/profile#history');
+                }
+
+                return Review.create({
+                    reviewType: 'product',
+                    receiptId,
+                    userId,
+                    merchantId: Number(item.merchantId || receipt.pickupMerchantId || 0),
+                    productId,
+                    rating,
+                    comment,
+                    imagePath,
+                    videoPath
+                }, (createError) => {
                 if (createError) {
                     console.error(createError);
+                    removeUploadedReviewMedia(imagePath, videoPath);
                     setProfileError(req, 'Your product review could not be saved.');
                     return res.redirect('/profile#history');
                 }
 
                 setProfileSuccess(req, `Review submitted successfully for ${item.name || 'this product'}.`);
+                return res.redirect('/profile#history');
+                });
+            }).catch((moderationError) => {
+                console.error('Product review moderation failed:', moderationError.code || moderationError.message);
+                removeUploadedReviewMedia(imagePath, videoPath);
+                const message = getReviewModerationFailureMessage(moderationError, imageUpload);
+                setProfileError(req, message);
+                setReviewModerationPopup(req, message);
                 return res.redirect('/profile#history');
             });
         });

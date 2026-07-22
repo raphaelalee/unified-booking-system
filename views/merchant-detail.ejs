@@ -286,6 +286,12 @@
                                 </div>
                                 <small><%= review.serviceName %></small>
                                 <p><%= review.comment || 'Customer left a rating without additional comments.' %></p>
+                                <% if (review.merchantReply) { %>
+                                    <div class="merchant-review-reply-display">
+                                        <strong>Merchant reply</strong>
+                                        <p><%= review.merchantReply %></p>
+                                    </div>
+                                <% } %>
                             </article>
                         <% }) %>
                     </div>

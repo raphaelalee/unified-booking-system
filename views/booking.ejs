@@ -185,7 +185,17 @@
         </div>
     <% } %>
 
-    <form action="<%= bookingPath %>" method="POST" class="booking-layout booking-form js-immediate-booking-form" data-booking-action="<%= bookingPath %>" data-availability-url="/booking/<%= merchant.id %>/available-slots">
+    <form
+        action="<%= bookingPath %>"
+        method="POST"
+        class="booking-layout booking-form js-immediate-booking-form"
+        data-booking-action="<%= bookingPath %>"
+        data-availability-url="/booking/<%= merchant.id %>/available-slots"
+        <% if (selectedPromotion) { %>
+            data-promotion-service-id="<%= selectedPromotion.serviceId || requestedServiceId %>"
+            data-promotion-price="<%= promoDisplayPrice !== null ? Number(promoDisplayPrice).toFixed(2) : '' %>"
+            data-promotion-original-price="<%= promoOriginalPrice !== null ? Number(promoOriginalPrice).toFixed(2) : '' %>"
+        <% } %>>
         <input type="hidden" name="merchantId" value="<%= merchant.id %>">
         <% if (typeof qrDebug !== 'undefined' && qrDebug && qrDebug.token) { %>
             <input type="hidden" name="bookingSource" value="<%= qrDebug.system || 'qr' %>">

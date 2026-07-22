@@ -239,16 +239,18 @@ function save(receipt, callback) {
                     amount: paidAmount,
                     refundedAmount
                 });
+            const deliveryStatus = receipt.deliveryStatus || (receipt.fulfilment === 'pickup' ? 'processing' : 'processing');
             const sql = `
                 INSERT INTO purchase_history
-                    (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount, order_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (receipt_id, user_id, purchase_type, item_names, items_json, total_amount, payment_method, payment_status, created_at, delivery_status, fulfilment, pickup_merchant_id, pickup_merchant_name, pickup_status, pickup_at, original_amount, cashback_used, points_redeemed, points_discount, item_subtotal, shipping_fee, payment_provider, payment_method_label, payment_breakdown_json, payment_transaction_id, provider_payment_reference, refunded_amount, remaining_paid_amount, order_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     item_names = VALUES(item_names),
                     items_json = VALUES(items_json),
                     total_amount = VALUES(total_amount),
                     payment_method = VALUES(payment_method),
                     payment_status = VALUES(payment_status),
+                    delivery_status = VALUES(delivery_status),
                     payment_provider = VALUES(payment_provider),
                     payment_method_label = VALUES(payment_method_label),
                     payment_breakdown_json = VALUES(payment_breakdown_json),
@@ -284,6 +286,7 @@ function save(receipt, callback) {
                 paymentMethod,
                 receipt.paymentStatus || 'paid',
                 receipt.paidAt ? new Date(receipt.paidAt) : new Date(),
+                deliveryStatus,
                 receipt.fulfilment || null,
                 receipt.pickupMerchantId || null,
                 receipt.pickupMerchantName || null,
@@ -316,10 +319,18 @@ function getByUserId(userId, callback) {
         }
 
         const sql = `
-            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            SELECT
+                ph.*,
+                o.order_id,
+                COALESCE(ph.order_number, o.order_number) AS order_number,
+                COALESCE(t.delivery_status, ph.delivery_status) AS effective_delivery_status,
+                COALESCE(t.pickup_status, ph.pickup_status) AS effective_pickup_status,
+                COALESCE(t.fulfilment_type, ph.fulfilment) AS effective_fulfilment
             FROM purchase_history ph
             LEFT JOIN orders o
                 ON ph.receipt_id = o.order_number
+            LEFT JOIN transactions t
+                ON t.transaction_id = COALESCE(ph.payment_transaction_id, o.transaction_id)
             WHERE ph.user_id = ?
             ORDER BY ph.created_at DESC, ph.history_id DESC
         `;
@@ -336,10 +347,18 @@ function getByReceiptId(receiptId, userId, callback) {
         }
 
         const sql = `
-            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            SELECT
+                ph.*,
+                o.order_id,
+                COALESCE(ph.order_number, o.order_number) AS order_number,
+                COALESCE(t.delivery_status, ph.delivery_status) AS effective_delivery_status,
+                COALESCE(t.pickup_status, ph.pickup_status) AS effective_pickup_status,
+                COALESCE(t.fulfilment_type, ph.fulfilment) AS effective_fulfilment
             FROM purchase_history ph
             LEFT JOIN orders o
                 ON ph.receipt_id = o.order_number
+            LEFT JOIN transactions t
+                ON t.transaction_id = COALESCE(ph.payment_transaction_id, o.transaction_id)
             WHERE (
                     ph.receipt_id = ?
                     OR (
@@ -370,10 +389,18 @@ function getByReceiptIdAny(receiptId, callback) {
         }
 
         const sql = `
-            SELECT ph.*, o.order_id, COALESCE(ph.order_number, o.order_number) AS order_number
+            SELECT
+                ph.*,
+                o.order_id,
+                COALESCE(ph.order_number, o.order_number) AS order_number,
+                COALESCE(t.delivery_status, ph.delivery_status) AS effective_delivery_status,
+                COALESCE(t.pickup_status, ph.pickup_status) AS effective_pickup_status,
+                COALESCE(t.fulfilment_type, ph.fulfilment) AS effective_fulfilment
             FROM purchase_history ph
             LEFT JOIN orders o
                 ON ph.receipt_id = o.order_number
+            LEFT JOIN transactions t
+                ON t.transaction_id = COALESCE(ph.payment_transaction_id, o.transaction_id)
             WHERE ph.receipt_id = ?
                 OR (
                     ph.purchase_type = 'product'
@@ -580,14 +607,14 @@ function mapReceipt(row) {
         transactionId: row.payment_transaction_id || null,
         paymentTransactionReference: row.provider_payment_reference || '',
         paymentStatus: row.payment_status || 'paid',
-        deliveryStatus: row.delivery_status || 'processing',
+        deliveryStatus: row.effective_delivery_status || row.delivery_status || 'processing',
         refundStatus: row.refund_status || 'none',
         refundedAmount: Number(row.refunded_amount || 0),
         remainingPaidAmount: Number(row.remaining_paid_amount || Math.max(Number(row.total_amount || 0) - Number(row.refunded_amount || 0), 0)),
-        fulfilment: row.fulfilment || '',
+        fulfilment: row.effective_fulfilment || row.fulfilment || '',
         pickupMerchantId: row.pickup_merchant_id || '',
         pickupMerchantName: row.pickup_merchant_name || '',
-        pickupStatus: row.pickup_status || (row.fulfilment === 'pickup' ? 'pending_pickup' : ''),
+        pickupStatus: row.effective_pickup_status || row.pickup_status || ((row.effective_fulfilment || row.fulfilment) === 'pickup' ? 'pending_pickup' : ''),
         pickupAt: row.pickup_at || null,
         paidAt: row.created_at
     };

@@ -119,10 +119,31 @@
         return getSelectedOption(serviceSelect)?.dataset.purchaseType || 'single';
     }
 
+    function getPromotionPriceForService(form, serviceId, purchaseType) {
+        const promotionServiceId = String(form?.dataset.promotionServiceId || '');
+        const promotionPrice = Number(form?.dataset.promotionPrice || 0);
+
+        if (
+            purchaseType === 'single'
+            && promotionServiceId
+            && String(serviceId || '') === promotionServiceId
+            && Number.isFinite(promotionPrice)
+            && promotionPrice > 0
+        ) {
+            return promotionPrice.toFixed(2);
+        }
+
+        return null;
+    }
+
     function getSelectedServiceData(form) {
         const serviceSelect = form.querySelector('.js-service-select');
         const selectedOption = getSelectedOption(serviceSelect);
         const selectedCard = form.querySelector('[data-service-card].is-selected');
+        const serviceId = serviceSelect?.value || '';
+        const purchaseType = getSelectedPurchaseType(serviceSelect);
+        const basePrice = selectedCard?.dataset.servicePrice || selectedOption?.dataset.servicePrice || '';
+        const promotionPrice = getPromotionPriceForService(form, serviceId, purchaseType);
         let reward = {};
 
         try {
@@ -132,11 +153,11 @@
         }
 
         return {
-            id: serviceSelect?.value || '',
-            purchaseType: getSelectedPurchaseType(serviceSelect),
+            id: serviceId,
+            purchaseType,
             name: selectedCard?.dataset.serviceName || selectedOption?.dataset.serviceName || selectedOption?.textContent.trim() || '',
             duration: selectedCard?.dataset.serviceDuration || selectedOption?.dataset.serviceDuration || '',
-            price: selectedCard?.dataset.servicePrice || selectedOption?.dataset.servicePrice || '',
+            price: promotionPrice || basePrice,
             reward
         };
     }

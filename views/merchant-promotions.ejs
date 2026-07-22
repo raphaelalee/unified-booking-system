@@ -2,6 +2,7 @@
 
 <%
     const categoryOptions = [...new Set(promotions.map((promotion) => promotion.type).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const aiPromotionPayload = JSON.stringify(typeof aiPromotionData !== 'undefined' && aiPromotionData ? aiPromotionData : {}).replace(/</g, '\\u003c');
     const formatPromotionDate = (value) => {
         const date = value instanceof Date ? value : new Date(value);
 
@@ -55,6 +56,21 @@
             </label>
         </div>
     </div>
+
+    <section class="service-catalog-card unified-service-card" data-ai-promotion-panel>
+        <div class="portal-card-header">
+            <div>
+                <span class="tag">AI assistant</span>
+                <h3>Promotion recommendations</h3>
+            </div>
+            <button class="button primary" type="button" data-generate-ai-promotions>Generate recommendations</button>
+        </div>
+        <p class="muted">
+            Uses your merchant services, products, booking activity, and current promotions to suggest up to three campaign ideas.
+        </p>
+        <div class="notice" data-ai-promotion-status hidden></div>
+        <div class="service-catalog-grid unified-service-grid" data-ai-promotion-results hidden></div>
+    </section>
 
     <% if (promotions.length === 0) { %>
         <div class="notice">
@@ -127,8 +143,119 @@
 
 <script>
     (() => {
+        const aiPromotionData = <%- aiPromotionPayload %>;
+        const aiButton = document.querySelector('[data-generate-ai-promotions]');
+        const aiStatus = document.querySelector('[data-ai-promotion-status]');
+        const aiResults = document.querySelector('[data-ai-promotion-results]');
         const categoryFilter = document.querySelector('.js-merchant-promotion-category-filter');
         const promotionCards = Array.from(document.querySelectorAll('.js-merchant-promotion-card'));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+
+        const setAiStatus = (message, isError = false) => {
+            if (!aiStatus) return;
+            aiStatus.hidden = !message;
+            aiStatus.classList.toggle('error', Boolean(isError));
+            aiStatus.textContent = message || '';
+        };
+
+        const buildCreatePromotionUrl = (recommendation = {}) => {
+            const params = new URLSearchParams({
+                fromAi: '1',
+                aiTitle: recommendation.promotionTitle || '',
+                aiType: recommendation.promotionType || '',
+                aiItem: recommendation.serviceOrProduct || '',
+                aiDiscount: recommendation.discountOrReward || '',
+                aiMinimumSpend: recommendation.minimumSpend || '',
+                aiPeriod: recommendation.recommendedPeriod || '',
+                aiTarget: recommendation.targetCustomers || '',
+                aiReason: recommendation.reason || ''
+            });
+
+            return `/merchant/promotions/new?${params.toString()}`;
+        };
+
+        const renderRecommendations = (payload = {}) => {
+            const recommendations = Array.isArray(payload.recommendations) ? payload.recommendations : [];
+
+            if (!aiResults) return;
+
+            if (!recommendations.length) {
+                aiResults.hidden = true;
+                setAiStatus(payload.summary || 'No recommendation could be generated from the available merchant data.', false);
+                return;
+            }
+
+            aiResults.hidden = false;
+            aiResults.innerHTML = recommendations.map((recommendation) => `
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag">${escapeHtml(recommendation.promotionType || 'Promotion')}</span>
+                        <span class="service-price slim">${escapeHtml(recommendation.discountOrReward || 'Reward')}</span>
+                    </div>
+                    <div>
+                        <h3>${escapeHtml(recommendation.promotionTitle || 'Recommended promotion')}</h3>
+                        <p class="muted">${escapeHtml(recommendation.serviceOrProduct || 'Service or product TBC')}</p>
+                        <p>${escapeHtml(recommendation.reason || '')}</p>
+                    </div>
+                    <dl class="profile-booking-meta">
+                        <div><dt>Minimum spend</dt><dd>${escapeHtml(recommendation.minimumSpend || 'None')}</dd></div>
+                        <div><dt>Period</dt><dd>${escapeHtml(recommendation.recommendedPeriod || 'Next campaign period')}</dd></div>
+                        <div><dt>Target customers</dt><dd>${escapeHtml(recommendation.targetCustomers || 'Relevant customers')}</dd></div>
+                        <div><dt>Expected benefit</dt><dd>${escapeHtml(recommendation.expectedBenefit || '')}</dd></div>
+                    </dl>
+                    <div class="service-card-actions ai-recommendation-actions">
+                        <a class="button primary" href="${escapeHtml(buildCreatePromotionUrl(recommendation))}">Create promotion</a>
+                    </div>
+                </article>
+            `).join('');
+
+            setAiStatus(payload.summary || 'Recommendations generated.', false);
+        };
+
+        aiButton?.addEventListener('click', async () => {
+            aiButton.disabled = true;
+            aiButton.textContent = 'Generating...';
+            if (aiResults) {
+                aiResults.hidden = true;
+                aiResults.innerHTML = '';
+            }
+            setAiStatus('Generating AI promotion recommendations...', false);
+
+            try {
+                const requestVariant = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                const response = await fetch('/api/ai/promotions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        ...aiPromotionData,
+                        requestVariant
+                    })
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Promotion recommendations could not be generated.');
+                }
+
+                renderRecommendations(payload);
+            } catch (error) {
+                setAiStatus(error.message || 'Promotion recommendations could not be generated.', true);
+            } finally {
+                aiButton.disabled = false;
+                aiButton.textContent = 'Generate recommendations';
+            }
+        });
 
         if (!categoryFilter || promotionCards.length === 0) {
             return;

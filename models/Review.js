@@ -87,6 +87,14 @@ function ensureReviewSchema(callback) {
                 alters.push('ADD COLUMN product_id INT NULL AFTER service_id');
             }
 
+            if (!fields.has('merchant_reply')) {
+                alters.push('ADD COLUMN merchant_reply TEXT NULL AFTER video_path');
+            }
+
+            if (!fields.has('merchant_reply_at')) {
+                alters.push('ADD COLUMN merchant_reply_at DATETIME NULL AFTER merchant_reply');
+            }
+
             if (bookingColumn && String(bookingColumn.Null).toUpperCase() !== 'YES') {
                 alters.push('MODIFY COLUMN booking_id INT NULL');
             }
@@ -165,6 +173,8 @@ function mapRow(row = {}) {
         comment: row.comment || '',
         imagePath: row.image_path || '',
         videoPath: row.video_path || '',
+        merchantReply: row.merchant_reply || '',
+        merchantReplyAt: row.merchant_reply_at || null,
         createdAt: row.created_at
     };
 }
@@ -206,7 +216,7 @@ function findByBookingId(bookingId, callback) {
         }
 
         db.query(
-            `SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, created_at FROM reviews WHERE review_type = 'service' AND booking_id = ? LIMIT 1`,
+            `SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, merchant_reply, merchant_reply_at, created_at FROM reviews WHERE review_type = 'service' AND booking_id = ? LIMIT 1`,
             [bookingId],
             (error, rows = []) => {
                 if (error) {
@@ -228,7 +238,7 @@ function findByReceiptAndProduct(receiptId, productId, callback) {
         }
 
         db.query(
-            `SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, created_at
+            `SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, merchant_reply, merchant_reply_at, created_at
              FROM reviews
              WHERE review_type = 'product' AND receipt_id = ? AND product_id = ?
              LIMIT 1`,
@@ -263,7 +273,7 @@ function getByBookingIds(bookingIds, callback) {
 
         const placeholders = ids.map(() => '?').join(', ');
         const sql = `
-            SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, created_at
+            SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, merchant_reply, merchant_reply_at, created_at
             FROM reviews
             WHERE review_type = 'service' AND booking_id IN (${placeholders})
         `;
@@ -297,7 +307,7 @@ function getByReceiptIds(receiptIds, callback) {
 
         const placeholders = ids.map(() => '?').join(', ');
         const sql = `
-            SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, created_at
+            SELECT review_id AS id, review_type, booking_id, receipt_id, user_id, merchant_id, service_id, product_id, rating, comment, image_path, video_path, merchant_reply, merchant_reply_at, created_at
             FROM reviews
             WHERE review_type = 'product' AND receipt_id IN (${placeholders})
         `;
@@ -313,6 +323,73 @@ function getByReceiptIds(receiptIds, callback) {
     });
 }
 
+function findByIdForMerchant(reviewId, merchantId, callback) {
+    ensureReviewSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        const sql = `
+            SELECT
+                reviews.review_id AS id,
+                reviews.review_type,
+                reviews.booking_id,
+                reviews.receipt_id,
+                reviews.user_id,
+                reviews.merchant_id,
+                reviews.service_id,
+                reviews.product_id,
+                reviews.rating,
+                reviews.comment,
+                reviews.image_path,
+                reviews.video_path,
+                reviews.merchant_reply,
+                reviews.merchant_reply_at,
+                reviews.created_at,
+                users.name AS customer_name,
+                services.service_name,
+                products.name AS product_name,
+                salons.salon_name AS merchant_name,
+                salons.business_category AS merchant_category
+            FROM reviews
+            INNER JOIN users ON users.user_id = reviews.user_id
+            LEFT JOIN services ON services.service_id = reviews.service_id
+            LEFT JOIN products ON products.product_id = reviews.product_id
+            LEFT JOIN salons ON salons.salon_id = reviews.merchant_id
+            WHERE reviews.review_id = ?
+                AND reviews.merchant_id = ?
+            LIMIT 1
+        `;
+
+        db.query(sql, [Number(reviewId), Number(merchantId)], (error, rows = []) => {
+            if (error) {
+                callback(error);
+                return;
+            }
+
+            callback(null, rows[0] ? mapRow(rows[0]) : null);
+        });
+    });
+}
+
+function updateMerchantReply(reviewId, merchantId, reply, callback) {
+    ensureReviewSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
+        db.query(
+            `UPDATE reviews
+             SET merchant_reply = ?, merchant_reply_at = CURRENT_TIMESTAMP
+             WHERE review_id = ? AND merchant_id = ?`,
+            [String(reply || '').trim(), Number(reviewId), Number(merchantId)],
+            callback
+        );
+    });
+}
+
 function getSummaryByMerchantId(merchantId, callback) {
     ensureReviewSchema((schemaError) => {
         if (schemaError) {
@@ -324,7 +401,7 @@ function getSummaryByMerchantId(merchantId, callback) {
             `
                 SELECT COUNT(*) AS review_count, ROUND(AVG(rating), 1) AS average_rating
                 FROM reviews
-                WHERE review_type = 'service' AND merchant_id = ?
+                WHERE merchant_id = ?
             `,
             [merchantId],
             (error, rows = []) => {
@@ -365,13 +442,17 @@ function listByMerchantId(merchantId, limit, callback) {
                 reviews.comment,
                 reviews.image_path,
                 reviews.video_path,
+                reviews.merchant_reply,
+                reviews.merchant_reply_at,
                 reviews.created_at,
                 users.name AS customer_name,
-                services.service_name
+                services.service_name,
+                products.name AS product_name
             FROM reviews
             INNER JOIN users ON users.user_id = reviews.user_id
-            INNER JOIN services ON services.service_id = reviews.service_id
-            WHERE reviews.review_type = 'service' AND reviews.merchant_id = ?
+            LEFT JOIN services ON services.service_id = reviews.service_id
+            LEFT JOIN products ON products.product_id = reviews.product_id
+            WHERE reviews.merchant_id = ?
             ORDER BY reviews.created_at DESC
             LIMIT ${rowLimit}
         `;
@@ -439,6 +520,8 @@ function listByProductId(productId, limit, callback) {
                 reviews.comment,
                 reviews.image_path,
                 reviews.video_path,
+                reviews.merchant_reply,
+                reviews.merchant_reply_at,
                 reviews.created_at,
                 users.name AS customer_name,
                 products.name AS product_name
@@ -556,6 +639,8 @@ function listAll(limit, callback) {
                 reviews.comment,
                 reviews.image_path,
                 reviews.video_path,
+                reviews.merchant_reply,
+                reviews.merchant_reply_at,
                 reviews.created_at,
                 users.name AS customer_name,
                 services.service_name,
@@ -583,6 +668,7 @@ function listAll(limit, callback) {
 
 module.exports = {
     create,
+    findByIdForMerchant,
     findByBookingId,
     findByReceiptAndProduct,
     getByBookingIds,
@@ -594,5 +680,6 @@ module.exports = {
     getPlatformSummary,
     getMerchantLeaderboard,
     listAll,
+    updateMerchantReply,
     ensureReviewSchema
 };

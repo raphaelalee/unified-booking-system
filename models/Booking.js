@@ -677,12 +677,19 @@ function getByMerchantUserId(userId, callback) {
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
             ${bookingPointsAwardedSelect()},
+            promotion_redemptions.promotion_id,
+            promotions.title AS promotion_title,
+            promotions.type AS promotion_type,
+            promotions.discount_type AS promotion_discount_type,
+            promotions.discount_value AS promotion_discount_value,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
+        LEFT JOIN promotion_redemptions ON promotion_redemptions.booking_id = bookings.booking_id
+        LEFT JOIN promotions ON promotions.promotion_id = promotion_redemptions.promotion_id
         WHERE salons.merchant_id = ?
         ORDER BY bookings.booking_id DESC
     `;
@@ -1351,6 +1358,11 @@ function getByUserId(userId, callback) {
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
             ${bookingPointsAwardedSelect()},
+            promotion_redemptions.promotion_id,
+            promotions.title AS promotion_title,
+            promotions.type AS promotion_type,
+            promotions.discount_type AS promotion_discount_type,
+            promotions.discount_value AS promotion_discount_value,
             CASE
                 WHEN bookings.status = 'cancelled' THEN 'past'
                 WHEN bookings.status IN ('completed', 'checked_in') THEN 'past'
@@ -1360,6 +1372,8 @@ function getByUserId(userId, callback) {
         FROM bookings
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
+        LEFT JOIN promotion_redemptions ON promotion_redemptions.booking_id = bookings.booking_id
+        LEFT JOIN promotions ON promotions.promotion_id = promotion_redemptions.promotion_id
         WHERE bookings.user_id = ?
         ORDER BY bookings.booking_date DESC, bookings.timeslot DESC
     `;
@@ -2036,12 +2050,19 @@ function getReceiptById(bookingId, callback) {
             bookings.final_amount_payable,
             bookings.reward_points_refunded_at,
             ${bookingPointsAwardedSelect()},
+            promotion_redemptions.promotion_id,
+            promotions.title AS promotion_title,
+            promotions.type AS promotion_type,
+            promotions.discount_type AS promotion_discount_type,
+            promotions.discount_value AS promotion_discount_value,
             COALESCE(transactions.payment_status, CASE WHEN bookings.transaction_id IS NOT NULL OR bookings.status = 'paid' THEN 'paid' ELSE 'pending' END) AS payment_status
         FROM bookings
         LEFT JOIN users ON users.user_id = bookings.user_id
         INNER JOIN services ON services.service_id = bookings.service_id
         INNER JOIN salons ON salons.salon_id = services.salon_id
         LEFT JOIN transactions ON transactions.transaction_id = bookings.transaction_id
+        LEFT JOIN promotion_redemptions ON promotion_redemptions.booking_id = bookings.booking_id
+        LEFT JOIN promotions ON promotions.promotion_id = promotion_redemptions.promotion_id
         WHERE bookings.booking_id = ?
         LIMIT 1
     `;

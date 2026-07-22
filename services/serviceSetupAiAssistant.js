@@ -1,4 +1,4 @@
-const { OpenAI } = require('openai');
+const Groq = require('groq-sdk');
 const { routineTagOptions } = require('../utils/routineTags');
 
 const DEFAULT_MODEL = process.env.SERVICE_SETUP_AI_MODEL || 'llama-3.1-8b-instant';
@@ -182,9 +182,8 @@ async function generateServiceSetupSuggestions(context = {}) {
     }
 
     const prompt = buildPrompt(context);
-    const client = new OpenAI({
-        apiKey: process.env.GROQ_API_KEY,
-        baseURL: 'https://api.groq.com/openai/v1'
+    const client = new Groq({
+        apiKey: process.env.GROQ_API_KEY
     });
 
     const response = await client.chat.completions.create({

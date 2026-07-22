@@ -19,6 +19,7 @@ const bookingController = require('./controllers/bookingController');
 const notificationController = require('./controllers/notificationController');
 const helpCenterController = require('./controllers/helpCenterController');
 const whatsappController = require('./controllers/whatsappController');
+const aiRoutes = require('./routes/aiRoutes');
 const Booking = require('./models/Booking');
 const Review = require('./models/Review');
 const CashbackCampaign = require('./models/CashbackCampaign');
@@ -77,7 +78,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
     maxAge: isProduction ? '7d' : 0
 })); // For CSS, Images, JS
 app.use(bodyParser.urlencoded({ extended: true, limit: '100kb', verify: captureRawBody }));
-app.use(bodyParser.json({ limit: '100kb', verify: captureRawBody }));
+app.use(bodyParser.json({ limit: '7mb', verify: captureRawBody }));
 app.use(session({
     name: 'vaniday.sid',
     secret: sessionSecret,
@@ -434,6 +435,7 @@ app.get('/api/ai/booking-options', aiRateLimit, allowGuestOrCustomer, aiControll
 app.get('/api/ai/booking-slots', aiRateLimit, allowGuestOrCustomer, aiController.getGuidedBookingSlots);
 app.get('/api/ai/customer-bookings', aiRateLimit, requireCustomer, aiController.getGuidedCustomerBookings);
 app.post('/api/ai/chat', aiRateLimit, allowGuestOrCustomer, aiController.getBeautyAdvice);
+app.use('/api/ai', aiRateLimit, aiRoutes);
 app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.generateProductCopy);
 app.post('/api/ai/service-setup', aiRateLimit, requireApprovedMerchant, aiController.generateServiceSetup);
 app.get('/merchant', requireRole('merchant'), (req, res) => res.redirect('/merchant/dashboard'));
@@ -467,6 +469,7 @@ app.get('/merchant/bookings/:bookingId/status', requireApprovedMerchant, (req, r
 app.get('/merchant/reschedule-settings', requireApprovedMerchant, (req, res) => res.redirect('/merchant/bookings'));
 app.post('/merchant/reschedule-settings', requireApprovedMerchant, merchantDashboardController.updateRescheduleSettings);
 app.post('/merchant/reschedule-requests/:requestId/review', requireApprovedMerchant, merchantDashboardController.reviewRescheduleRequest);
+app.post('/merchant/reviews/:reviewId/reply', requireApprovedMerchant, merchantDashboardController.saveReviewReply);
 app.get('/merchant/services/new', requireApprovedMerchant, merchantDashboardController.showNewService);
 app.post('/merchant/services', requireApprovedMerchant, merchantDashboardController.createService);
 app.get('/merchant/services/:serviceId/edit', requireApprovedMerchant, merchantDashboardController.showEditService);

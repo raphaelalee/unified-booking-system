@@ -36,6 +36,42 @@
     };
     const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
     const formatDuration = (value) => Number(value || 0) > 0 ? `${Number(value)} mins` : 'Duration TBC';
+    const formatTitleCase = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const formatPromotionDiscount = (booking) => {
+        const discountValue = Number(booking.promotion_discount_value || 0);
+        const discountType = String(booking.promotion_discount_type || '').toLowerCase();
+
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            return '';
+        }
+
+        if (discountType === 'percentage') {
+            return `${discountValue.toFixed(discountValue % 1 === 0 ? 0 : 2)}% off`;
+        }
+
+        if (discountType === 'fixed_amount') {
+            return `${formatMoney(discountValue)} off`;
+        }
+
+        if (discountType === 'fixed_price') {
+            return `${formatMoney(discountValue)} deal`;
+        }
+
+        return '';
+    };
+    const formatPromotionLabel = (booking) => {
+        if (!booking.promotion_id && !booking.promotion_title && !booking.promotion_type) {
+            return '';
+        }
+
+        const parts = [
+            formatTitleCase(booking.promotion_type || 'Promotion'),
+            booking.promotion_title || ''
+        ].filter(Boolean);
+        const discount = formatPromotionDiscount(booking);
+
+        return `${parts.join(' - ')}${discount ? ` (${discount})` : ''}`;
+    };
     const formatRefundStatus = (value) => String(value || 'not_requested').replace(/_/g, ' ');
     const formatRefundBadge = (value) => {
         const normalized = String(value || '').toLowerCase();
@@ -589,6 +625,12 @@
                                                 <dt>Duration</dt>
                                                 <dd><%= formatDuration(booking.duration_mins) %></dd>
                                             </div>
+                                            <% if (formatPromotionLabel(booking)) { %>
+                                                <div>
+                                                    <dt>Promotion type</dt>
+                                                    <dd><%= formatPromotionLabel(booking) %></dd>
+                                                </div>
+                                            <% } %>
                                             <div>
                                                 <dt>Original service price</dt>
                                                 <dd><%= formatMoney(booking.service_price) %></dd>
@@ -644,8 +686,14 @@
                                             <% } %>
                                             <a class="button secondary" href="/receipt/<%= booking.id %>">View Receipt</a>
                                         </div>
-                                        <% if (Number(booking.reward_discount_amount || 0) > 0 || (String(booking.status || '').toLowerCase() === 'completed' && Number(booking.booking_points_awarded || 0) > 0)) { %>
+                                        <% if (formatPromotionLabel(booking) || Number(booking.reward_discount_amount || 0) > 0 || (String(booking.status || '').toLowerCase() === 'completed' && Number(booking.booking_points_awarded || 0) > 0)) { %>
                                             <dl class="profile-booking-meta">
+                                                <% if (formatPromotionLabel(booking)) { %>
+                                                    <div>
+                                                        <dt>Promotion type</dt>
+                                                        <dd><%= formatPromotionLabel(booking) %></dd>
+                                                    </div>
+                                                <% } %>
                                                 <% if (String(booking.status || '').toLowerCase() === 'completed' && Number(booking.booking_points_awarded || 0) > 0) { %>
                                                     <div>
                                                         <dt>Appointment completed</dt>
@@ -806,7 +854,7 @@
                             </article>
                             <article>
                                 <strong><%= profileReviewEarnedPoints %></strong>
-                                <span>Points earned</span>
+                                <span>Approved review points</span>
                             </article>
                         </div>
 
@@ -1011,6 +1059,15 @@
                                                 <span><%- renderStars(entry.review.rating) %></span>
                                                 <% if (entry.review.comment) { %>
                                                     <p><%= entry.review.comment %></p>
+                                                <% } %>
+                                                <% if (entry.review.merchantReply) { %>
+                                                    <div class="profile-booking-review-block merchant-review-reply-display">
+                                                        <strong>Merchant reply</strong>
+                                                        <p><%= entry.review.merchantReply %></p>
+                                                        <% if (entry.review.merchantReplyAt) { %>
+                                                            <small><%= formatBookingDate(entry.review.merchantReplyAt) %></small>
+                                                        <% } %>
+                                                    </div>
                                                 <% } %>
                                                 <% if (entry.review.imagePath || entry.review.videoPath) { %>
                                                     <div class="profile-review-media">
@@ -2154,6 +2211,14 @@
 </script>
 
 <%- include('partials/footer') %>
+
+<% if (typeof reviewModerationPopup !== 'undefined' && reviewModerationPopup) { %>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            alert(<%- JSON.stringify(`Review blocked: ${reviewModerationPopup}`) %>);
+        });
+    </script>
+<% } %>
 
 <script>
 (() => {

@@ -1,6 +1,18 @@
 <%- include('partials/header', { title }) %>
 
 <%
+    const aiVoucherPayload = JSON.stringify({
+        customerBookingFrequency: '',
+        customerTotalSpend: '',
+        favouriteMerchant: merchant.name || merchant.salonName || '',
+        favouriteService: (merchant.services || [])[0]?.name || '',
+        merchantSales: '',
+        lowBookingDays: [],
+        existingVouchers: vouchers.map((voucher) => voucher.title).filter(Boolean),
+        voucherRedemptionPerformance: vouchers.map((voucher) => `${voucher.title}: ${Number(voucher.redemptionCount || 0)} redemptions`),
+        availableServices: (merchant.services || []).map((service) => service.name).filter(Boolean),
+        availableProducts: vouchers.filter((voucher) => voucher.linkedItemType === 'product').map((voucher) => voucher.linkedItemName).filter(Boolean)
+    }).replace(/</g, '\\u003c');
     const formatVoucherDate = (value) => {
         const date = value instanceof Date ? value : new Date(value);
 
@@ -43,6 +55,21 @@
                 <p class="muted"><%= vouchers.length %> vouchers currently linked to this merchant.</p>
             </div>
         </div>
+
+        <section class="service-catalog-card unified-service-card" data-ai-voucher-panel>
+            <div class="portal-card-header">
+                <div>
+                    <span class="tag">AI assistant</span>
+                    <h3>Voucher recommendations</h3>
+                </div>
+                <button class="button primary" type="button" data-generate-ai-vouchers>Generate voucher recommendations</button>
+            </div>
+            <p class="muted">
+                Suggests reward-shop voucher ideas from your listed services, existing vouchers, and customer-retention patterns.
+            </p>
+            <div class="notice" data-ai-voucher-status hidden></div>
+            <div class="service-catalog-grid unified-service-grid" data-ai-voucher-results hidden></div>
+        </section>
 
         <% if (vouchers.length === 0) { %>
             <div class="notice">
@@ -93,5 +120,130 @@
         <% } %>
     </div>
 </section>
+
+<script>
+    (() => {
+        const aiVoucherData = <%- aiVoucherPayload %>;
+        const button = document.querySelector('[data-generate-ai-vouchers]');
+        const status = document.querySelector('[data-ai-voucher-status]');
+        const results = document.querySelector('[data-ai-voucher-results]');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+
+        const setStatus = (message, isError = false) => {
+            if (!status) return;
+            status.hidden = !message;
+            status.classList.toggle('error', Boolean(isError));
+            status.textContent = message || '';
+        };
+
+        const buildCreateUrl = (recommendation = {}) => {
+            const params = new URLSearchParams({
+                fromAi: '1',
+                aiTitle: recommendation.voucherTitle || '',
+                aiItem: recommendation.serviceOrProduct || recommendation.targetCustomerGroup || '',
+                aiDiscountType: recommendation.discountType || '',
+                aiDiscountValue: recommendation.discountValue || '',
+                aiMinimumSpend: formatMinimumSpend(recommendation.minimumSpend),
+                aiPointsRequired: formatPoints(recommendation.pointsRequired),
+                aiReason: recommendation.reason || '',
+                aiBenefit: recommendation.expectedBenefit || ''
+            });
+
+            return `/merchant/vouchers/new?${params.toString()}`;
+        };
+
+        const formatPoints = (value) => {
+            const points = Number(value || 0);
+            return points > 0 ? String(Math.round(points)) : '500';
+        };
+
+        const formatMinimumSpend = (value) => {
+            const text = String(value ?? '').trim();
+            if (!text) return '$0.00';
+            if (text.startsWith('$')) return text;
+            const amount = Number(text.replace(/[^\d.]/g, ''));
+            return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : text;
+        };
+
+        const render = (payload = {}) => {
+            const recommendations = Array.isArray(payload.recommendations) ? payload.recommendations : [];
+
+            if (!results) return;
+
+            if (!recommendations.length) {
+                results.hidden = true;
+                setStatus(payload.summary || 'No voucher recommendations could be generated.');
+                return;
+            }
+
+            results.hidden = false;
+            results.innerHTML = recommendations.map((recommendation) => `
+                <article class="service-catalog-card unified-service-card">
+                    <div class="portal-card-header">
+                        <span class="tag">${escapeHtml(recommendation.voucherType || 'Voucher')}</span>
+                        <span class="service-price slim">${escapeHtml(recommendation.discountValue || recommendation.discountType || '')}</span>
+                    </div>
+                    <div>
+                        <h3>${escapeHtml(recommendation.voucherTitle || 'Recommended voucher')}</h3>
+                        <p class="muted">${escapeHtml(recommendation.targetCustomerGroup || 'Relevant customers')}</p>
+                        <p>${escapeHtml(recommendation.reason || '')}</p>
+                    </div>
+                    <dl class="profile-booking-meta">
+                        <div><dt>Minimum spend</dt><dd>${escapeHtml(formatMinimumSpend(recommendation.minimumSpend))}</dd></div>
+                        <div><dt>Points</dt><dd>${escapeHtml(formatPoints(recommendation.pointsRequired))}</dd></div>
+                        <div><dt>Validity</dt><dd>${escapeHtml(recommendation.validityPeriod || 'Next campaign period')}</dd></div>
+                        <div><dt>Expected benefit</dt><dd>${escapeHtml(recommendation.expectedBenefit || '')}</dd></div>
+                    </dl>
+                    <div class="service-card-actions ai-recommendation-actions">
+                        <a class="button primary" href="${escapeHtml(buildCreateUrl(recommendation))}">Create voucher</a>
+                    </div>
+                </article>
+            `).join('');
+
+            setStatus(payload.summary || 'Voucher recommendations generated.');
+        };
+
+        button?.addEventListener('click', async () => {
+            button.disabled = true;
+            button.textContent = 'Generating...';
+            if (results) {
+                results.hidden = true;
+                results.innerHTML = '';
+            }
+            setStatus('Generating voucher recommendations...');
+
+            try {
+                const response = await fetch('/api/ai/vouchers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': csrfToken
+                    },
+                    body: JSON.stringify(aiVoucherData)
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Voucher recommendations could not be generated.');
+                }
+
+                render(payload);
+            } catch (error) {
+                setStatus(error.message || 'Voucher recommendations could not be generated.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Generate voucher recommendations';
+            }
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>

@@ -2383,20 +2383,76 @@ function markPickupCollected(transactionId, callback) {
             return;
         }
 
-        const sql = `
-            UPDATE transactions
-            SET
-                pickup_status = 'picked_up',
-                delivery_status = 'delivered',
-                collected_at = COALESCE(collected_at, CURRENT_TIMESTAMP),
-                delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
-            WHERE transaction_id = ?
-                AND payment_status = 'paid'
-                AND COALESCE(pickup_status, 'pending_pickup') NOT IN ('picked_up', 'collected')
-                AND COALESCE(delivery_status, 'processing') <> 'delivered'
-        `;
+        db.getConnection((connectionError, connection) => {
+            if (connectionError) {
+                callback(connectionError);
+                return;
+            }
 
-        db.query(sql, [transactionId], callback);
+            connection.beginTransaction((transactionError) => {
+                if (transactionError) {
+                    connection.release();
+                    callback(transactionError);
+                    return;
+                }
+
+                const rollback = (error, result) => {
+                    connection.rollback(() => {
+                        connection.release();
+                        callback(error, result);
+                    });
+                };
+
+                const sql = `
+                    UPDATE transactions
+                    SET
+                        pickup_status = 'picked_up',
+                        delivery_status = 'completed',
+                        collected_at = COALESCE(collected_at, CURRENT_TIMESTAMP),
+                        delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+                    WHERE transaction_id = ?
+                        AND payment_status = 'paid'
+                        AND COALESCE(pickup_status, 'pending_pickup') NOT IN ('picked_up', 'collected')
+                        AND COALESCE(delivery_status, 'processing') NOT IN ('delivered', 'completed')
+                `;
+
+                connection.query(sql, [transactionId], (updateError, updateResult) => {
+                    if (updateError || !updateResult?.affectedRows) {
+                        rollback(updateError, updateResult);
+                        return;
+                    }
+
+                    const historySql = `
+                        UPDATE purchase_history ph
+                        INNER JOIN orders o
+                            ON ph.receipt_id = o.order_number
+                        SET
+                            ph.pickup_status = 'picked_up',
+                            ph.pickup_at = COALESCE(ph.pickup_at, CURRENT_TIMESTAMP),
+                            ph.delivery_status = 'completed'
+                        WHERE o.transaction_id = ?
+                            AND ph.purchase_type = 'product'
+                    `;
+
+                    connection.query(historySql, [transactionId], (historyError) => {
+                        if (historyError) {
+                            rollback(historyError);
+                            return;
+                        }
+
+                        connection.commit((commitError) => {
+                            if (commitError) {
+                                rollback(commitError);
+                                return;
+                            }
+
+                            connection.release();
+                            callback(null, updateResult);
+                        });
+                    });
+                });
+            });
+        });
     });
 }
 

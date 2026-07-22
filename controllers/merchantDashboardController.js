@@ -457,6 +457,102 @@ function getPromotionForm(body = {}) {
     };
 }
 
+function addDaysToDateKey(dateKey, daysToAdd) {
+    const date = new Date(`${dateKey}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    date.setDate(date.getDate() + Number(daysToAdd || 0));
+    return date.toISOString().slice(0, 10);
+}
+
+function mapAiPromotionType(value = '') {
+    const normalized = String(value || '').toLowerCase();
+
+    if (normalized.includes('buy-one') || normalized.includes('bogo') || normalized.includes('one-for-one')) {
+        return 'one_for_one';
+    }
+
+    if (normalized.includes('weekday') || normalized.includes('off-peak') || normalized.includes('happy hour')) {
+        return 'happy_hour';
+    }
+
+    if (normalized.includes('new customer') || normalized.includes('first')) {
+        return 'first_trial';
+    }
+
+    return 'featured';
+}
+
+function mapAiDiscountType(value = '') {
+    const normalized = String(value || '').toLowerCase();
+
+    if (normalized.includes('%') || normalized.includes('percent') || normalized.includes('percentage')) {
+        return 'percentage';
+    }
+
+    if (normalized.includes('$') || normalized.includes('fixed-amount') || normalized.includes('fixed amount')) {
+        return 'fixed_amount';
+    }
+
+    return 'tag_only';
+}
+
+function extractAiNumber(value = '') {
+    const match = String(value || '').match(/\d+(?:\.\d+)?/);
+    return match ? match[0] : '';
+}
+
+function findMerchantServiceIdByName(merchant, name = '') {
+    const normalized = String(name || '').trim().toLowerCase();
+    const service = (merchant.services || []).find((item) => {
+        return String(item.name || item.service_name || '').trim().toLowerCase() === normalized;
+    });
+
+    return service ? String(service.id || service.service_id || '') : '';
+}
+
+function findMerchantProductIdByName(products = [], name = '') {
+    const normalized = String(name || '').trim().toLowerCase();
+    const product = (products || []).find((item) => {
+        return String(item.name || '').trim().toLowerCase() === normalized;
+    });
+
+    return product ? String(product.id || product.product_id || '') : '';
+}
+
+function getAiPromotionPrefill(query = {}, merchant, products = []) {
+    const title = String(query.aiTitle || '').trim();
+    const promotionType = String(query.aiType || '').trim();
+    const serviceOrProduct = String(query.aiItem || '').trim();
+    const discountOrReward = String(query.aiDiscount || '').trim();
+    const minimumSpend = extractAiNumber(query.aiMinimumSpend);
+    const today = Booking.getSingaporeTodayKey();
+    const discountType = mapAiDiscountType(`${promotionType} ${discountOrReward}`);
+    const serviceId = findMerchantServiceIdByName(merchant, serviceOrProduct);
+    const productId = serviceId ? '' : findMerchantProductIdByName(products, serviceOrProduct);
+
+    return getPromotionForm({
+        title,
+        serviceId,
+        productId,
+        type: mapAiPromotionType(promotionType),
+        discountType,
+        discountValue: discountType === 'tag_only' ? '' : extractAiNumber(discountOrReward),
+        minimumSpend,
+        status: 'draft',
+        startDate: today,
+        endDate: addDaysToDateKey(today, 30),
+        description: String(query.aiReason || '').trim(),
+        terms: [
+            String(query.aiTarget || '').trim(),
+            String(query.aiPeriod || '').trim()
+        ].filter(Boolean).join(' · ')
+    });
+}
+
 function normalizePromotionSlots(value = '') {
     return String(value)
         .split(',')
@@ -932,7 +1028,12 @@ function buildAppointmentReport(bookings = []) {
                 ? Number(booking.final_amount_payable || booking.amountPayableAtMerchant || 0)
                 : Number(booking.final_amount_payable || booking.amountPayableAtMerchant || booking.service_price || booking.price || 0),
             rewardPointsRefundedAt: booking.reward_points_refunded_at || booking.rewardPointsRefundedAt || '',
-            pointsAwarded: Number(booking.booking_points_awarded || booking.pointsAwarded || 0)
+            pointsAwarded: Number(booking.booking_points_awarded || booking.pointsAwarded || 0),
+            promotionId: booking.promotion_id || booking.promotionId || '',
+            promotionTitle: booking.promotion_title || booking.promotionTitle || '',
+            promotionType: booking.promotion_type || booking.promotionType || '',
+            promotionDiscountType: booking.promotion_discount_type || booking.promotionDiscountType || '',
+            promotionDiscountValue: booking.promotion_discount_value || booking.promotionDiscountValue || ''
         };
     });
 
@@ -1419,7 +1520,7 @@ function renderMerchantDashboard(req, res, merchant, options = {}) {
                                 merchant: qrPayload.merchant || { ...merchant, slug: getMerchantStorefrontSlug(merchant) },
                                 success,
                                 error,
-                                databaseError: Boolean(bookingError || promotionError || productError || orderError || reviewSummaryError || reviewListError),
+                                databaseError: Boolean(bookingError || orderError),
                                 stats: reports.stats,
                                 customerReport: reports.customerReport,
                                 appointmentReport: reports.appointmentReport,
@@ -2070,6 +2171,43 @@ function reviewRescheduleRequest(req, res) {
     });
 }
 
+function saveReviewReply(req, res) {
+    const reviewId = Number(req.params.reviewId);
+    const reply = String(req.body.reply || '').trim().slice(0, 2000);
+
+    if (!reviewId || !reply) {
+        req.session.merchantError = 'Enter a reply before saving.';
+        return res.redirect('/merchant/dashboard');
+    }
+
+    return MerchantService.getMerchantByUserId(req.session.user.id, (merchantError, merchant) => {
+        if (merchantError || !merchant) {
+            if (merchantError) {
+                console.error(merchantError);
+            }
+
+            req.session.merchantError = 'Your merchant profile could not be confirmed.';
+            return res.redirect('/merchant/dashboard');
+        }
+
+        return Review.updateMerchantReply(reviewId, merchant.id || merchant.salonId, reply, (replyError, result) => {
+            if (replyError) {
+                console.error(replyError);
+                req.session.merchantError = 'Review reply could not be saved.';
+                return res.redirect('/merchant/dashboard');
+            }
+
+            if (!result?.affectedRows) {
+                req.session.merchantError = 'That review was not found for your merchant account.';
+                return res.redirect('/merchant/dashboard');
+            }
+
+            req.session.merchantSuccess = 'Review reply saved.';
+            return res.redirect('/merchant/dashboard');
+        });
+    });
+}
+
 function showSchedule(req, res) {
     return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
         const handled = renderMerchantLookupError(res, lookupError, merchant);
@@ -2434,6 +2572,57 @@ function getVoucherForm(body = {}) {
         usageLimitTotal: String(body.usageLimitTotal || '').trim(),
         status: String(body.status || '').trim()
     };
+}
+
+function toDateTimeLocalValue(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const offsetDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    return offsetDate.toISOString().slice(0, 16);
+}
+
+function addDaysToDateTime(daysToAdd) {
+    const date = new Date();
+    date.setDate(date.getDate() + Number(daysToAdd || 0));
+    return toDateTimeLocalValue(date);
+}
+
+function mapAiVoucherDiscountType(value = '') {
+    const normalized = String(value || '').toLowerCase();
+
+    if (normalized.includes('percent') || normalized.includes('%') || normalized.includes('percentage')) {
+        return 'percentage';
+    }
+
+    return 'fixed';
+}
+
+function getAiVoucherPrefill(query = {}, merchant, products = []) {
+    const itemName = String(query.aiItem || '').trim();
+    const service = (merchant.services || []).find((item) => String(item.name || '').trim().toLowerCase() === itemName.toLowerCase());
+    const product = !service
+        ? (products || []).find((item) => String(item.name || '').trim().toLowerCase() === itemName.toLowerCase())
+        : null;
+    const discountText = `${query.aiDiscountType || ''} ${query.aiDiscountValue || ''}`;
+    const discountType = mapAiVoucherDiscountType(discountText);
+
+    return getVoucherForm({
+        title: query.aiTitle || '',
+        detail: query.aiReason || query.aiBenefit || '',
+        linkedItemType: product ? 'product' : 'service',
+        linkedItemId: product ? product.id : service?.id,
+        discountType,
+        discountValue: extractAiNumber(query.aiDiscountValue) || (discountType === 'percentage' ? '10' : '5'),
+        minimumSpend: extractAiNumber(query.aiMinimumSpend) || '0',
+        pointsRequired: extractAiNumber(query.aiPointsRequired) || '500',
+        startDate: toDateTimeLocalValue(new Date()),
+        expiryDate: addDaysToDateTime(30),
+        usageLimitPerUser: '1',
+        usageLimitTotal: '100',
+        status: 'active'
+    });
 }
 
 function validateVoucherForm(form, merchant, products = []) {
@@ -3066,12 +3255,96 @@ function listPromotions(req, res) {
             req.session.merchantSuccess = null;
             req.session.merchantError = null;
 
-            return res.render('merchant-promotions', {
-                title: 'Merchant Promotions',
-                merchant,
-                promotions,
-                success,
-                error
+            return Promise.all([
+                new Promise((resolve) => {
+                    Booking.getByMerchantUserId(req.session.user.id, (bookingError, bookings = []) => {
+                        if (bookingError) {
+                            console.error('Promotion AI booking context could not be loaded:', bookingError);
+                        }
+                        resolve(bookingError ? [] : bookings);
+                    });
+                }),
+                new Promise((resolve) => {
+                    Product.getByMerchantUserId(req.session.user.id, (productError, products = []) => {
+                        if (productError) {
+                            console.error('Promotion AI product context could not be loaded:', productError);
+                        }
+                        resolve(productError ? [] : products);
+                    });
+                }),
+                new Promise((resolve) => {
+                    MerchantService.getAllServices((serviceError, services = []) => {
+                        if (serviceError) {
+                            console.error('Promotion AI service context could not be loaded:', serviceError);
+                        }
+                        resolve(serviceError ? [] : services);
+                    });
+                })
+            ]).then(([bookings, products, services]) => {
+                const merchantId = String(merchant.id || merchant.salonId || merchant.salon_id || '');
+                const ownServices = (services || []).filter((service) => {
+                    return String(service.salonId || service.salon_id || service.merchantId || '') === merchantId;
+                });
+                const thisMonthKey = new Date().toISOString().slice(0, 7);
+                const monthlyBookings = (bookings || []).filter((booking) => {
+                    const bookingDate = String(booking.bookingDate || booking.booking_date || '').slice(0, 7);
+                    return bookingDate === thisMonthKey;
+                });
+                const serviceCounts = (bookings || []).reduce((counts, booking) => {
+                    const name = booking.serviceName || booking.service_name || '';
+                    if (name) counts.set(name, (counts.get(name) || 0) + 1);
+                    return counts;
+                }, new Map());
+                const rankedServices = Array.from(serviceCounts.entries()).sort((left, right) => right[1] - left[1]);
+                const bookedServiceNames = new Set(rankedServices.map(([name]) => name));
+                const unbookedService = ownServices.find((service) => !bookedServiceNames.has(service.name || service.service_name));
+                const activePromotions = (promotions || []).filter((promotion) => {
+                    return String(promotion.status || '').toLowerCase() === 'active';
+                });
+
+                return res.render('merchant-promotions', {
+                    title: 'Merchant Promotions',
+                    merchant,
+                    promotions,
+                    success,
+                    error,
+                    aiPromotionData: {
+                        merchantName: merchant.name || merchant.salonName || '',
+                        merchantCategory: merchant.category || merchant.businessCategory || merchant.business_category || 'Beauty and wellness',
+                        monthlySales: monthlyBookings.reduce((total, booking) => {
+                            return total + Number(booking.amountPayableAtMerchant || booking.final_amount_payable || booking.service_price || booking.amount || 0);
+                        }, 0),
+                        monthlyBookings: monthlyBookings.length,
+                        averageRating: merchant.rating || merchant.averageRating || '',
+                        repeatCustomerRate: '',
+                        bestSellingService: rankedServices[0]?.[0] || '',
+                        lowestPerformingService: unbookedService?.name || unbookedService?.service_name || rankedServices[rankedServices.length - 1]?.[0] || '',
+                        bestSellingProduct: '',
+                        lowestPerformingProduct: (products || []).find((product) => Number(product.stockQuantity || product.stock_quantity || 0) > 0)?.name || '',
+                        peakBookingDays: '',
+                        lowBookingDays: '',
+                        currentPromotions: activePromotions.map((promotion) => promotion.title).filter(Boolean),
+                        previousPromotionPerformance: (promotions || []).map((promotion) => {
+                            return `${promotion.title}: ${Number(promotion.redemptionCount || 0)} redemption${Number(promotion.redemptionCount || 0) === 1 ? '' : 's'}`;
+                        }),
+                        availableServices: ownServices.map((service) => service.name || service.service_name).filter(Boolean),
+                        availableProducts: (products || []).map((product) => product.name).filter(Boolean)
+                    }
+                });
+            }).catch((contextError) => {
+                console.error('Promotion AI context failed:', contextError);
+                return res.render('merchant-promotions', {
+                    title: 'Merchant Promotions',
+                    merchant,
+                    promotions,
+                    success,
+                    error,
+                    aiPromotionData: {
+                        merchantName: merchant.name || merchant.salonName || '',
+                        merchantCategory: merchant.category || merchant.businessCategory || 'Beauty and wellness',
+                        currentPromotions: (promotions || []).map((promotion) => promotion.title).filter(Boolean)
+                    }
+                });
             });
         });
     });
@@ -3095,11 +3368,13 @@ function showNewPromotion(req, res) {
                 merchant,
                 products: productError ? [] : products,
                 promotion: null,
-                form: getPromotionForm({
-                    status: 'draft',
-                    discountType: 'percentage',
-                    type: 'first_trial'
-                }),
+                form: req.query?.fromAi
+                    ? getAiPromotionPrefill(req.query, merchant, productError ? [] : products)
+                    : getPromotionForm({
+                        status: 'draft',
+                        discountType: 'percentage',
+                        type: 'first_trial'
+                    }),
                 promotionTypes: Promotion.PROMOTION_TYPES,
                 spinRewardTypes: Promotion.SPIN_REWARD_TYPES,
                 discountTypes: Promotion.DISCOUNT_TYPES,
@@ -3460,11 +3735,13 @@ function showNewVoucher(req, res) {
                 title: 'Add Voucher',
                 merchant,
                 voucher: null,
-                form: getVoucherForm({
-                    status: 'active',
-                    discountType: 'percentage',
-                    linkedItemType: 'service'
-                }),
+                form: req.query?.fromAi
+                    ? getAiVoucherPrefill(req.query, merchant, products)
+                    : getVoucherForm({
+                        status: 'active',
+                        discountType: 'percentage',
+                        linkedItemType: 'service'
+                    }),
                 services: merchant.services || [],
                 products,
                 statuses: RewardVoucher.STATUSES,
@@ -3961,6 +4238,7 @@ module.exports = {
     updateOrderStatus,
     updateRescheduleSettings,
     reviewRescheduleRequest,
+    saveReviewReply,
     showSchedule,
     showNewService,
     createService,

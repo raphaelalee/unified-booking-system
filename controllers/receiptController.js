@@ -140,6 +140,43 @@ function formatStatusLabel(value) {
         .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function formatPromotionReceiptDiscount(receipt) {
+    const discountValue = Number(receipt?.promotionDiscountValue || 0);
+    const discountType = String(receipt?.promotionDiscountType || '').toLowerCase();
+
+    if (!Number.isFinite(discountValue) || discountValue <= 0) {
+        return '';
+    }
+
+    if (discountType === 'percentage') {
+        return `${discountValue.toFixed(discountValue % 1 === 0 ? 0 : 2)}% off`;
+    }
+
+    if (discountType === 'fixed_amount') {
+        return `$${discountValue.toFixed(2)} off`;
+    }
+
+    if (discountType === 'fixed_price') {
+        return `$${discountValue.toFixed(2)} deal`;
+    }
+
+    return '';
+}
+
+function formatPromotionReceiptLabel(receipt) {
+    if (!receipt?.promotionId && !receipt?.promotionTitle && !receipt?.promotionType) {
+        return '';
+    }
+
+    const parts = [
+        formatStatusLabel(receipt.promotionType || 'Promotion'),
+        receipt.promotionTitle || ''
+    ].filter(Boolean);
+    const discount = formatPromotionReceiptDiscount(receipt);
+
+    return `${parts.join(' - ')}${discount ? ` (${discount})` : ''}`;
+}
+
 function escapeIcsText(value) {
     return String(value || '')
         .replace(/\\/g, '\\\\')
@@ -405,6 +442,11 @@ function mapBookingReceipt(row, req) {
         pointsDiscount,
         pointsAwarded,
         amountPayableAtMerchant,
+        promotionId: row.promotion_id || '',
+        promotionTitle: row.promotion_title || '',
+        promotionType: row.promotion_type || '',
+        promotionDiscountType: row.promotion_discount_type || '',
+        promotionDiscountValue: row.promotion_discount_value || '',
         paymentMethod: row.payment_method || 'pay_at_merchant',
         paymentProvider: row.payment_provider || '',
         paymentStatus: row.payment_status || row.status,
@@ -1119,9 +1161,10 @@ function buildFallbackPdf(data) {
 
             const summaryLines = data.isBooking
                 ? [
-                    ['Original service price', Number(receipt.totalAmount || receipt.originalAmount || 0)],
-                    ['Points discount', -Number(receipt.pointsDiscount || 0)],
-                    ['Amount payable at merchant', Number(receipt.amountPayableAtMerchant ?? receipt.totalAmount ?? 0)]
+                    ['Original service price', Number(receipt.totalAmount || receipt.originalAmount || 0), 'money'],
+                    ...(formatPromotionReceiptLabel(receipt) ? [['Promotion', formatPromotionReceiptLabel(receipt), 'text']] : []),
+                    ['Points discount', -Number(receipt.pointsDiscount || 0), 'money'],
+                    ['Amount payable at merchant', Number(receipt.amountPayableAtMerchant ?? receipt.totalAmount ?? 0), 'money']
                 ]
                 : [
                     ['Original total', Number(receipt.totalAmount || receipt.originalAmount || 0)],
@@ -1130,8 +1173,14 @@ function buildFallbackPdf(data) {
                     ['Net retained', Number(receipt.remainingPaidAmount ?? receipt.paidAmount ?? receipt.totalAmount ?? 0)]
                 ];
             let summaryY = totalY;
-            summaryLines.forEach(([label, value]) => {
+            summaryLines.forEach(([label, value, valueType = 'money']) => {
                 doc.fillColor(muted).font('Helvetica-Bold').fontSize(9).text(label.toUpperCase(), left + contentWidth - 210, summaryY);
+                if (valueType === 'text') {
+                    doc.fillColor(ink).font('Helvetica-Bold').fontSize(9).text(String(value || ''), left + contentWidth - 90, summaryY, { width: 90, align: 'right' });
+                    summaryY += 24;
+                    return;
+                }
+
                 doc.fillColor(ink).font('Helvetica-Bold').fontSize(12).text(
                     `${value < 0 ? '-' : ''}$${Math.abs(Number(value || 0)).toFixed(2)}`,
                     left + contentWidth - 90,

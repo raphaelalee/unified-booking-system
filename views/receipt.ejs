@@ -382,6 +382,43 @@
     const receiptDisplayReference = receipt.displayReference || receipt.order_number || receipt.orderNumber || ('#' + (receipt.displayId || receipt.id));
     const formatStatus = (value) => String(value || 'none').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
     const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+    const formatTitleCase = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const formatPromotionDiscount = (item) => {
+        const discountValue = Number(item.promotionDiscountValue || 0);
+        const discountType = String(item.promotionDiscountType || '').toLowerCase();
+
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            return '';
+        }
+
+        if (discountType === 'percentage') {
+            return `${discountValue.toFixed(discountValue % 1 === 0 ? 0 : 2)}% off`;
+        }
+
+        if (discountType === 'fixed_amount') {
+            return `${formatMoney(discountValue)} off`;
+        }
+
+        if (discountType === 'fixed_price') {
+            return `${formatMoney(discountValue)} deal`;
+        }
+
+        return '';
+    };
+    const formatPromotionLabel = (item) => {
+        if (!item.promotionId && !item.promotionTitle && !item.promotionType) {
+            return '';
+        }
+
+        const parts = [
+            formatTitleCase(item.promotionType || 'Promotion'),
+            item.promotionTitle || ''
+        ].filter(Boolean);
+        const discount = formatPromotionDiscount(item);
+
+        return `${parts.join(' - ')}${discount ? ` (${discount})` : ''}`;
+    };
+    const receiptPromotionLabel = formatPromotionLabel(receipt);
 %>
 
 <% if (safePdfMode) { %>
@@ -556,6 +593,12 @@
                 <div class="receipt-total">
                     <span><%= isBooking ? 'Original service price' : 'Total amount' %></span>
                     <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+                </div>
+            <% } %>
+            <% if (isBooking && receiptPromotionLabel) { %>
+                <div class="receipt-total">
+                    <span>Promotion</span>
+                    <strong><%= receiptPromotionLabel %></strong>
                 </div>
             <% } %>
             <% if (isBooking && Number(receipt.pointsDiscount || 0) > 0) { %>

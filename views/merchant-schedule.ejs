@@ -307,6 +307,42 @@
         };
         const statusClass = (status) => `status-${String(status || 'pending').replace(/[^a-z0-9_]/gi, '_')}`;
         const formatMoney = (value) => Number(value || 0).toLocaleString('en-SG', { style: 'currency', currency: 'SGD' });
+        const formatTitleCase = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+        const formatPromotionDiscount = (booking) => {
+            const discountValue = Number(booking.promotionDiscountValue || 0);
+            const discountType = String(booking.promotionDiscountType || '').toLowerCase();
+
+            if (!Number.isFinite(discountValue) || discountValue <= 0) {
+                return '';
+            }
+
+            if (discountType === 'percentage') {
+                return `${discountValue.toFixed(discountValue % 1 === 0 ? 0 : 2)}% off`;
+            }
+
+            if (discountType === 'fixed_amount') {
+                return `${formatMoney(discountValue)} off`;
+            }
+
+            if (discountType === 'fixed_price') {
+                return `${formatMoney(discountValue)} deal`;
+            }
+
+            return '';
+        };
+        const formatPromotionLabel = (booking) => {
+            if (!booking.promotionId && !booking.promotionTitle && !booking.promotionType) {
+                return '';
+            }
+
+            const parts = [
+                formatTitleCase(booking.promotionType || 'Promotion'),
+                booking.promotionTitle || ''
+            ].filter(Boolean);
+            const discount = formatPromotionDiscount(booking);
+
+            return `${parts.join(' - ')}${discount ? ` (${discount})` : ''}`;
+        };
         const monthKey = (booking) => String(booking.bookingDate || '').slice(5, 7);
         const yearKey = (booking) => String(booking.bookingDate || '').slice(0, 4);
         const getBookingsForDate = (dateKey) => bookings.filter((booking) => booking.bookingDate === dateKey);
@@ -533,6 +569,7 @@
                 <p><span>Customer email</span><strong>${escapeHtml(booking.customerEmail || booking.email || 'No email')}</strong></p>
                 <p><span>Customer phone</span><strong>${escapeHtml(booking.customerPhone || 'No phone')}</strong></p>
                 <p><span>Service</span><strong>${escapeHtml(booking.serviceName || 'Service')}</strong></p>
+                ${formatPromotionLabel(booking) ? `<p><span>Promotion</span><strong>${escapeHtml(formatPromotionLabel(booking))}</strong></p>` : ''}
                 <p><span>Service amount</span><strong>${formatMoney(booking.amount)}</strong></p>
                 <p><span>Date</span><strong>${escapeHtml(booking.bookingDate || 'Date TBC')}</strong></p>
                 <p><span>Time</span><strong>${escapeHtml(booking.bookingTime || 'Time TBC')}</strong></p>

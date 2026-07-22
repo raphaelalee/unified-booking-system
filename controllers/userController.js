@@ -1856,8 +1856,10 @@ function showProfile(req, res) {
             const error = req.session.profileError || req.session.loyaltyError
                 || (lookupError ? 'Account details could not be refreshed from the database.' : null)
                 || (customerExtraError ? 'Referral details could not be saved yet. Please refresh and try again.' : null);
+            const reviewModerationPopup = req.session.reviewModerationPopup || null;
             req.session.profileSuccess = null;
             req.session.profileError = null;
+            req.session.reviewModerationPopup = null;
             req.session.loyaltyError = null;
             const loyaltySuccess = req.session.loyaltySuccess;
             req.session.loyaltySuccess = null;
@@ -1868,6 +1870,7 @@ function showProfile(req, res) {
             return res.render('profile', {
                 title: 'Profile',
                 profile,
+                reviewModerationPopup,
                 favourites: customerExtras.favourites,
                 cartCount: customerExtras.cartItemCount,
                 rewardPoints: customerExtras.rewardPoints,

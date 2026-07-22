@@ -6,6 +6,34 @@
     const lowStockCount = productList.filter((product) => Number(product.stockQuantity || 0) > 0 && Number(product.stockQuantity || 0) <= 5).length;
     const outOfStockCount = productList.filter((product) => Number(product.stockQuantity || 0) <= 0).length;
     const merchantOptions = [...new Set(productList.map((product) => product.salonName).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const hasProductPerformanceData = productList.some((product) => {
+        return Number(product.unitsSold || product.salesCount || 0) > 0
+            || Number(product.revenue || 0) > 0
+            || Number(product.rating || 0) > 0
+            || Number(product.reviewCount || 0) > 0;
+    });
+    const aiFeaturedProductPayload = JSON.stringify({
+        productStatistics: productList.map((product) => ({
+            productId: product.id,
+            productName: product.name,
+            merchantId: product.salonId,
+            merchantName: product.salonName,
+            unitsSold: product.unitsSold || product.salesCount || 0,
+            revenue: product.revenue || 0,
+            rating: product.rating || 0,
+            reviewCount: product.reviewCount || 0,
+            repeatPurchaseRate: product.repeatPurchaseRate || 0,
+            inventoryLevel: product.stockQuantity || 0,
+            stockStatus: Number(product.stockQuantity || 0) <= 0 ? 'out_of_stock' : 'in_stock',
+            currentPromotionStatus: product.currentPromotionStatus || '',
+            price: product.price || 0,
+            hasPerformanceData: Boolean(Number(product.unitsSold || product.salesCount || 0) > 0
+                || Number(product.revenue || 0) > 0
+                || Number(product.rating || 0) > 0
+                || Number(product.reviewCount || 0) > 0)
+        })),
+        hasPerformanceData: hasProductPerformanceData
+    }).replace(/</g, '\\u003c');
 %>
 
 <section class="admin-dashboard-v2">
@@ -35,6 +63,19 @@
                 <article><span>Low Stock</span><strong><%= lowStockCount %></strong></article>
                 <article><span>Out Of Stock</span><strong><%= outOfStockCount %></strong></article>
             </div>
+
+            <section class="admin-panel" data-ai-featured-panel="products">
+                <div class="admin-panel-heading">
+                    <div>
+                        <p class="eyebrow">AI assistant</p>
+                        <h2>Featured product recommendations</h2>
+                        <p class="muted">Ranks products for admin review using stock and catalogue data. No product is featured automatically.</p>
+                    </div>
+                    <button class="button primary" type="button" data-ai-featured-button="products">Generate recommendations</button>
+                </div>
+                <div class="notice" data-ai-featured-status="products" hidden></div>
+                <div class="service-catalog-grid unified-service-grid" data-ai-featured-results="products" hidden></div>
+            </section>
 
             <div class="marketplace-admin-toolbar">
                 <div>
@@ -117,9 +158,70 @@
 
 <script>
     (() => {
+        const aiPayload = <%- aiFeaturedProductPayload %>;
+        const aiButton = document.querySelector('[data-ai-featured-button="products"]');
+        const aiStatus = document.querySelector('[data-ai-featured-status="products"]');
+        const aiResults = document.querySelector('[data-ai-featured-results="products"]');
         const search = document.querySelector('.js-marketplace-search');
         const merchant = document.querySelector('.js-marketplace-merchant-filter');
         const rows = Array.from(document.querySelectorAll('.js-marketplace-row'));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+        const setAiStatus = (message, isError = false) => {
+            if (!aiStatus) return;
+            aiStatus.hidden = !message;
+            aiStatus.classList.toggle('error', Boolean(isError));
+            aiStatus.textContent = message || '';
+        };
+
+        aiButton?.addEventListener('click', async () => {
+            aiButton.disabled = true;
+            aiButton.textContent = 'Generating...';
+            setAiStatus('Generating featured product recommendations...');
+            if (aiResults) {
+                aiResults.hidden = true;
+                aiResults.innerHTML = '';
+            }
+
+            try {
+                const response = await fetch('/api/ai/featured-products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+                    body: JSON.stringify(aiPayload)
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.message || 'Featured product recommendations could not be generated.');
+                const products = Array.isArray(payload.featuredProducts) ? payload.featuredProducts : [];
+                if (!products.length) {
+                    setAiStatus(payload.summary || 'No featured product recommendations were returned.');
+                    return;
+                }
+                aiResults.hidden = false;
+                const hasPerformanceData = Boolean(payload.hasPerformanceData || aiPayload.hasPerformanceData);
+                aiResults.innerHTML = products.map((product, index) => `
+                    <article class="service-catalog-card unified-service-card">
+                        <div class="portal-card-header">
+                            <span class="tag">${hasPerformanceData ? `${escapeHtml(Math.round(Number(product.score || 0)))} score` : `Rank #${index + 1}`}</span>
+                            <span class="service-price slim">${escapeHtml(product.recommendedFeaturePeriod || '')}</span>
+                        </div>
+                        <h3>${escapeHtml(product.productName)}</h3>
+                        <p class="muted">${escapeHtml(product.merchantName)}</p>
+                        <p>${escapeHtml(product.reason)}</p>
+                        <div class="service-card-actions ai-featured-actions">
+                            <a class="button primary" href="/admin/products/${encodeURIComponent(product.productId)}/edit">Open to feature</a>
+                        </div>
+                    </article>
+                `).join('');
+                setAiStatus(hasPerformanceData
+                    ? (payload.summary || 'Featured product recommendations generated.')
+                    : 'Performance stats are not available yet, so AI ranked products using listing and stock data instead of showing score.');
+            } catch (error) {
+                setAiStatus(error.message || 'Featured product recommendations could not be generated.', true);
+            } finally {
+                aiButton.disabled = false;
+                aiButton.textContent = 'Generate recommendations';
+            }
+        });
 
         const applyFilters = () => {
             const query = (search?.value || '').trim().toLowerCase();

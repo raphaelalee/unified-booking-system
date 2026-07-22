@@ -8672,6 +8672,26 @@ body:not(.flappy-page) .page-container > .about-hero::after {
     flex-wrap: wrap !important;
 }
 
+.ai-recommendation-actions {
+    justify-content: flex-start !important;
+    margin-top: auto !important;
+}
+
+.ai-recommendation-actions .button {
+    width: auto !important;
+    min-height: 40px !important;
+}
+
+.ai-featured-actions {
+    justify-content: flex-end !important;
+    margin-top: auto !important;
+}
+
+.ai-featured-actions .button {
+    width: auto !important;
+    min-height: 40px !important;
+}
+
 .product-card-actions .button,
 .product-card-actions form {
     flex: 1 1 150px !important;
@@ -20722,4 +20742,17 @@ body:not(.flappy-page) .home-month-spotlight {
     .merchant-orders-page .merchant-status-badge {
         justify-self: start;
     }
+}
+.merchant-review-reply-display {
+    margin-top: 0.85rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--sage-border, #d9e2d4);
+    border-radius: 14px;
+    background: rgba(241, 247, 237, 0.85);
+}
+
+.merchant-review-reply-display small {
+    display: block;
+    margin-top: 0.45rem;
+    color: var(--sage-muted, #6f7d6b);
 }

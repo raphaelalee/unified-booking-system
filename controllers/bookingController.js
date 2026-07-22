@@ -30,6 +30,7 @@ const {
 } = require('../utils/dateTimeFormat');
 const { buildBookingReference } = require('../utils/bookingReference');
 const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
+const { moderateReviewImage, moderateReviewText } = require('../services/groqService');
 
 function isValidBookingDate(value) {
     const state = Booking.getBookingDateState(value);
@@ -114,6 +115,10 @@ function setProfileError(req, message) {
 
 function setProfileSuccess(req, message) {
     req.session.profileSuccess = message;
+}
+
+function setReviewModerationPopup(req, message) {
+    req.session.reviewModerationPopup = message;
 }
 
 function isCheckInExpired(booking) {
@@ -404,6 +409,53 @@ function removeUploadedReviewMedia(...mediaPaths) {
         const absolutePath = path.join(__dirname, '..', 'public', normalized.replace(/\//g, path.sep));
         fs.unlink(absolutePath, () => {});
     });
+}
+
+function getReviewImageDataUrl(upload) {
+    if (!upload?.path) {
+        return '';
+    }
+
+    const mimeType = String(upload.mimetype || 'image/jpeg').toLowerCase();
+    const buffer = fs.readFileSync(upload.path);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+}
+
+function getHardProfanityModeration(comment = '') {
+    const text = String(comment || '').toLowerCase();
+    const compactText = text.replace(/[^a-z0-9]/g, '');
+    const hasHardProfanity = [
+        /f+u+c+k+/i,
+        /f+u+k+/i,
+        /s+h+i+t+/i,
+        /b+i+t+c+h+/i,
+        /c+u+n+t+/i,
+        /a+s+s+h+o+l+e+/i,
+        /d+i+c+k+/i
+    ].some((pattern) => pattern.test(compactText));
+
+    if (!hasHardProfanity) {
+        return null;
+    }
+
+    return {
+        recommendedAction: 'reject',
+        reason: 'Review contains profanity or vulgar language.'
+    };
+}
+
+function getReviewModerationFailureMessage(error, imageUpload) {
+    const code = String(error?.code || '');
+
+    if (code === 'GROQ_NOT_CONFIGURED') {
+        return 'Review moderation is not configured. Please contact support.';
+    }
+
+    if (imageUpload) {
+        return 'Review image could not be verified. Images showing weapons, blood, graphic injury, or violence are not allowed.';
+    }
+
+    return 'Review could not be verified right now. Please edit the review content or try again after checking your connection.';
 }
 
 function normalizeReviewRating(value) {
@@ -1536,6 +1588,70 @@ function getRescheduleSuggestions(req, res) {
     });
 }
 
+async function moderateReviewBeforeSave({
+    comment,
+    rating,
+    merchantName,
+    serviceName,
+    productName,
+    verifiedBooking,
+    completedBooking,
+    imageUpload
+}) {
+    let textResult = null;
+    const hardProfanity = getHardProfanityModeration(comment);
+
+    if (hardProfanity) {
+        return {
+            allowed: false,
+            result: hardProfanity
+        };
+    }
+
+    if (String(comment || '').trim()) {
+        textResult = await moderateReviewText({
+            reviewText: comment,
+            rating,
+            merchantName,
+            serviceName,
+            productName,
+            verifiedBooking,
+            completedBooking,
+            previousReviewCount: 0,
+            duplicateTextCount: 0
+        });
+
+        if (textResult.recommendedAction !== 'approve') {
+            return {
+                allowed: false,
+                result: textResult
+            };
+        }
+    }
+
+    if (imageUpload) {
+        const imageResult = await moderateReviewImage({
+            imageBase64: getReviewImageDataUrl(imageUpload),
+            merchantCategory: '',
+            serviceName,
+            productName,
+            reviewText: comment
+        });
+
+        if (imageResult.recommendedAction !== 'approve') {
+            return {
+                allowed: false,
+                result: imageResult
+            };
+        }
+    }
+
+    return {
+        allowed: true,
+        result: textResult
+    };
+}
+
 function submitReview(req, res) {
     const bookingId = Number(req.params.bookingId);
     const userId = req.session.user?.id;
@@ -1588,16 +1704,33 @@ function submitReview(req, res) {
                 return res.redirect('/profile#bookings');
             }
 
-            return Review.create({
-                bookingId,
-                userId,
-                merchantId: booking.merchant_id,
-                serviceId: booking.service_id,
-                rating,
+            return moderateReviewBeforeSave({
                 comment,
-                imagePath,
-                videoPath
-            }, (createError) => {
+                rating,
+                merchantName: booking.merchant_name,
+                serviceName: booking.service_name,
+                verifiedBooking: true,
+                completedBooking: true,
+                imageUpload
+            }).then((moderation) => {
+                if (!moderation.allowed) {
+                    removeUploadedReviewMedia(imagePath, videoPath);
+                    const reason = moderation.result?.reason || 'Your review needs admin review before it can be posted.';
+                    setProfileError(req, reason);
+                    setReviewModerationPopup(req, reason);
+                    return res.redirect('/profile#to-rate');
+                }
+
+                return Review.create({
+                    bookingId,
+                    userId,
+                    merchantId: booking.merchant_id,
+                    serviceId: booking.service_id,
+                    rating,
+                    comment,
+                    imagePath,
+                    videoPath
+                }, (createError) => {
                 if (createError) {
                     console.error(createError);
                     removeUploadedReviewMedia(imagePath, videoPath);
@@ -1646,6 +1779,14 @@ function submitReview(req, res) {
                     setProfileSuccess(req, `Review submitted successfully.${rewardMessage}`);
                     return res.redirect('/profile#my-reviews');
                 });
+                });
+            }).catch((moderationError) => {
+                console.error('Review moderation failed:', moderationError.code || moderationError.message);
+                removeUploadedReviewMedia(imagePath, videoPath);
+                const message = getReviewModerationFailureMessage(moderationError, imageUpload);
+                setProfileError(req, message);
+                setReviewModerationPopup(req, message);
+                return res.redirect('/profile#to-rate');
             });
         });
     });

@@ -1,18 +1,29 @@
-const { OpenAI } = require('openai');
+const Groq = require('groq-sdk');
 require('dotenv').config();
 const Booking = require('../models/Booking');
 const MerchantService = require('../models/MerchantService');
 const Product = require('../models/Product');
+const Review = require('../models/Review');
 const bookingController = require('./bookingController');
 const {
     cleanText,
     generateServiceSetupSuggestions
 } = require('../services/serviceSetupAiAssistant');
+const {
+    classifyGroqError,
+    generatePromotionRecommendations: generatePromotionRecommendationsFromGroq,
+    generateReviewReply: generateReviewReplyFromGroq,
+    generateVoucherRecommendations: generateVoucherRecommendationsFromGroq,
+    moderateReviewImage: moderateReviewImageWithGroq,
+    moderateReviewText: moderateReviewTextWithGroq,
+    recommendFeaturedMerchants: recommendFeaturedMerchantsWithGroq,
+    recommendFeaturedProducts: recommendFeaturedProductsWithGroq,
+    recommendFeaturedServices: recommendFeaturedServicesWithGroq
+} = require('../services/groqService');
 
-// Initialize Groq using the OpenAI SDK
-const groq = new OpenAI({
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: "https://api.groq.com/openai/v1" // This redirects requests to Groq
+// Shared Groq client for chatbot and product helper endpoints.
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
 });
 
 function normalizeTime(value) {
@@ -710,5 +721,287 @@ exports.generateServiceSetup = async (req, res) => {
             success: false,
             message: 'AI suggestions are currently unavailable. You can continue completing the service manually.'
         });
+    }
+};
+
+function sendAiError(res, error, logLabel = 'AI request error') {
+    if (error?.status === 400 || error?.status === 413) {
+        return res.status(error.status).json({
+            error: error.code || 'VALIDATION_ERROR',
+            message: error.message || 'Invalid request.'
+        });
+    }
+
+    console.error(logLabel, {
+        code: error?.code,
+        status: error?.status || error?.statusCode,
+        message: error?.message
+    });
+    const groqError = classifyGroqError(error);
+
+    return res.status(groqError.status).json({
+        error: groqError.code,
+        message: groqError.message
+    });
+}
+
+function requireBodyFields(body, fields) {
+    return fields.filter((field) => !String(body?.[field] || '').trim());
+}
+
+exports.moderateReviewText = async (req, res) => {
+    try {
+        const missingFields = requireBodyFields(req.body, ['reviewText']);
+
+        if (missingFields.length) {
+            return res.status(400).json({
+                error: 'VALIDATION_ERROR',
+                message: 'Required review moderation data is missing.',
+                missingFields
+            });
+        }
+
+        if (String(req.body.reviewText || '').length > 2500) {
+            return res.status(400).json({
+                error: 'REVIEW_TEXT_TOO_LONG',
+                message: 'Review text is too long.'
+            });
+        }
+
+        const result = await moderateReviewTextWithGroq({
+            reviewText: req.body.reviewText,
+            rating: req.body.rating,
+            merchantName: req.body.merchantName,
+            serviceName: req.body.serviceName,
+            productName: req.body.productName,
+            verifiedBooking: req.body.verifiedBooking,
+            completedBooking: req.body.completedBooking,
+            previousReviewCount: req.body.previousReviewCount,
+            duplicateTextCount: req.body.duplicateTextCount
+        });
+
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Review text moderation error');
+    }
+};
+
+exports.moderateReviewImage = async (req, res) => {
+    try {
+        if (!req.body?.imageUrl && !req.body?.imageBase64) {
+            return res.status(400).json({
+                error: 'VALIDATION_ERROR',
+                message: 'imageUrl or imageBase64 is required.'
+            });
+        }
+
+        const result = await moderateReviewImageWithGroq({
+            imageUrl: req.body.imageUrl,
+            imageBase64: req.body.imageBase64,
+            merchantCategory: req.body.merchantCategory,
+            serviceName: req.body.serviceName,
+            productName: req.body.productName,
+            reviewText: req.body.reviewText
+        });
+
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Review image moderation error');
+    }
+};
+
+function findReviewForMerchant(reviewId, merchantId) {
+    return new Promise((resolve, reject) => {
+        Review.findByIdForMerchant(reviewId, merchantId, (error, review) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(review || null);
+        });
+    });
+}
+
+exports.generateReviewReply = async (req, res) => {
+    try {
+        const user = req.session.user;
+
+        if (!user) {
+            return res.status(401).json({
+                error: 'UNAUTHENTICATED',
+                message: 'Please log in as a merchant before generating a review reply.'
+            });
+        }
+
+        if (user.role !== 'merchant') {
+            return res.status(403).json({
+                error: 'FORBIDDEN',
+                message: 'Only merchants can generate review replies.'
+            });
+        }
+
+        const reviewId = Number(req.body.reviewId);
+        const merchant = await getMerchantProfile(user.id);
+
+        if (!merchant) {
+            return res.status(403).json({
+                error: 'FORBIDDEN',
+                message: 'Your merchant profile could not be confirmed.'
+            });
+        }
+
+        if (!Number.isInteger(reviewId) || reviewId <= 0) {
+            return res.status(400).json({
+                error: 'VALIDATION_ERROR',
+                message: 'reviewId is required.'
+            });
+        }
+
+        const review = await findReviewForMerchant(reviewId, merchant.id || merchant.salonId);
+
+        if (!review) {
+            return res.status(403).json({
+                error: 'FORBIDDEN',
+                message: 'You do not own this review.'
+            });
+        }
+
+        const reviewText = String(review.comment || req.body.reviewText || '').trim();
+
+        if (!reviewText) {
+            return res.status(400).json({
+                error: 'VALIDATION_ERROR',
+                message: 'Review text is required.'
+            });
+        }
+
+        const result = await generateReviewReplyFromGroq({
+            reviewId: review.id,
+            merchantName: review.merchantName || merchant.name,
+            merchantCategory: review.merchantCategory || merchant.businessCategory || merchant.category || '',
+            customerName: review.customerName || req.body.customerName || '',
+            rating: review.rating,
+            reviewText,
+            serviceName: review.serviceName || '',
+            productName: review.productName || '',
+            merchantTone: req.body.merchantTone || 'Professional',
+            businessPolicy: req.body.businessPolicy || ''
+        });
+
+        return res.json({
+            ...result,
+            reviewId: review.id
+        });
+    } catch (error) {
+        const groqError = classifyGroqError(error);
+
+        if (groqError.code && groqError.code.startsWith('GROQ_')) {
+            return res.status(groqError.status === 429 ? 503 : groqError.status).json({
+                error: groqError.code,
+                message: groqError.message
+            });
+        }
+
+        return sendAiError(res, error, 'Review reply generation error');
+    }
+};
+
+exports.generateVoucherRecommendations = async (req, res) => {
+    try {
+        const result = await generateVoucherRecommendationsFromGroq({
+            customerBookingFrequency: req.body.customerBookingFrequency,
+            customerTotalSpend: req.body.customerTotalSpend,
+            lastBookingDate: req.body.lastBookingDate,
+            favouriteMerchant: req.body.favouriteMerchant,
+            favouriteService: req.body.favouriteService,
+            birthdayMonth: req.body.birthdayMonth,
+            availableRewardPoints: req.body.availableRewardPoints,
+            merchantSales: req.body.merchantSales,
+            lowBookingDays: req.body.lowBookingDays,
+            existingVouchers: req.body.existingVouchers,
+            voucherRedemptionPerformance: req.body.voucherRedemptionPerformance
+        });
+
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Voucher recommendation error');
+    }
+};
+
+function getStatisticsArray(req, fieldName) {
+    const rows = Array.isArray(req.body?.[fieldName])
+        ? req.body[fieldName]
+        : Array.isArray(req.body)
+            ? req.body
+            : [];
+
+    if (!rows.length) {
+        const error = new Error(`${fieldName} must contain at least one row.`);
+        error.code = 'VALIDATION_ERROR';
+        error.status = 400;
+        throw error;
+    }
+
+    return rows;
+}
+
+exports.recommendFeaturedMerchants = async (req, res) => {
+    try {
+        const result = await recommendFeaturedMerchantsWithGroq(getStatisticsArray(req, 'merchantStatistics'));
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Featured merchant recommendation error');
+    }
+};
+
+exports.recommendFeaturedServices = async (req, res) => {
+    try {
+        const result = await recommendFeaturedServicesWithGroq(getStatisticsArray(req, 'serviceStatistics'));
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Featured service recommendation error');
+    }
+};
+
+exports.recommendFeaturedProducts = async (req, res) => {
+    try {
+        const result = await recommendFeaturedProductsWithGroq(getStatisticsArray(req, 'productStatistics'));
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Featured product recommendation error');
+    }
+};
+
+exports.generatePromotionRecommendations = async (req, res) => {
+    try {
+        const user = req.session.user;
+
+        // Keep this endpoint merchant-only because recommendations use merchant business data.
+        if (!user || user.role !== 'merchant') {
+            return res.status(user ? 403 : 401).json({
+                error: user ? 'FORBIDDEN' : 'UNAUTHENTICATED',
+                message: 'Please log in as a merchant to generate promotion recommendations.'
+            });
+        }
+
+        const merchantData = req.body || {};
+        const missingFields = ['merchantName', 'merchantCategory'].filter((field) => {
+            return !String(merchantData[field] || '').trim();
+        });
+
+        if (missingFields.length > 0) {
+            return res.status(400).json({
+                error: 'VALIDATION_ERROR',
+                message: 'Required merchant promotion data is missing.',
+                missingFields
+            });
+        }
+
+        const recommendations = await generatePromotionRecommendationsFromGroq(merchantData);
+
+        return res.status(200).json(recommendations);
+    } catch (error) {
+        return sendAiError(res, error, 'Groq promotion recommendation error');
     }
 };

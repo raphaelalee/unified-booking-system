@@ -1226,6 +1226,7 @@ function getPromotionSelection(query = {}) {
     }
 
     const promotionId = Number(query.promotionId);
+    const serviceId = Number(query.serviceId);
     const campaignLabel = (query.promoCampaign || '').trim();
     const title = (query.promoTitle || '').trim();
     const price = Number(query.promoPrice);
@@ -1238,6 +1239,7 @@ function getPromotionSelection(query = {}) {
 
     return {
         promotionId: Number.isFinite(promotionId) ? promotionId : null,
+        serviceId: Number.isFinite(serviceId) ? serviceId : null,
         campaignLabel,
         title,
         price: Number.isFinite(price) ? price : null,
@@ -2029,6 +2031,15 @@ function showServices(req, res) {
         Promotion.getActivePublic((promoError, promoRows = []) => {
             const promoServiceIds = new Set((promoRows || []).map((p) => Number(p.serviceId || 0)).filter(Boolean));
             const promoSalonIds = new Set((promoRows || []).map((p) => String(p.salonId || '')).filter(Boolean));
+            const promotionCards = (promoRows || [])
+                .filter((promotion) => promotion.type !== 'featured')
+                .map((promotion) => {
+                    const service = promotion.serviceId
+                        ? serviceCatalogWithCashback.find((entry) => Number(entry.id) === Number(promotion.serviceId))
+                        : serviceCatalogWithCashback.find((entry) => String(entry.salonId || entry.merchantId) === String(promotion.salonId));
+                    return service ? buildPublicPromotionOffer(promotion, service) : null;
+                })
+                .filter(Boolean);
 
             let filteredCatalog = serviceCatalogWithCashback;
 
@@ -2070,6 +2081,7 @@ function showServices(req, res) {
                 merchants,
                 favouriteIds,
                 serviceCatalog: filteredCatalog,
+                promotionCards,
                 portalStats: {
                     merchantCount: merchantIds.size,
                     serviceCount: filteredCatalog.length,
@@ -2117,6 +2129,24 @@ function calculatePromotionPrice(basePrice, promotion) {
         originalPrice: Math.round(price * 100) / 100,
         price: roundedPrice,
         discountPercent
+    };
+}
+
+function applyPromotionPriceToBooking(validation, promotion = null) {
+    if (!promotion || promotion.discountType === 'tag_only') {
+        return validation;
+    }
+
+    const pricing = calculatePromotionPrice(validation.bookableItem?.price, promotion);
+
+    return {
+        ...validation,
+        bookableItem: {
+            ...validation.bookableItem,
+            price: pricing.price,
+            originalPrice: pricing.originalPrice,
+            promotionId: promotion.id
+        }
     };
 }
 
@@ -2177,7 +2207,7 @@ function buildPublicPromotionOffer(promotion, service) {
         priceTier: pricing.price < 30 ? '$' : pricing.price < 55 ? '$$' : pricing.price < 80 ? '$$$' : '$$$$',
         regions: [promotion.address || 'No address set', service.category || service.name],
         serviceBookingPath: appendQueryParams(
-            getMerchantStorefrontPath({ id: promotion.salonId, name: promotion.salonName }),
+            `/booking/${encodeURIComponent(promotion.salonId)}`,
             {
                 source: 'promotions',
                 promotionId: promotion.id,
@@ -2212,7 +2242,7 @@ function getPromotionServiceForSalon(promotion, servicesBySalon) {
 }
 
 function loadPublicPromotionOffers(callback) {
-    return Promotion.getActivePublic({ includeExpired: true }, (promotionError, promotions) => {
+    return Promotion.getActivePublic((promotionError, promotions) => {
         if (promotionError) {
             console.error(promotionError);
             callback(null, buildPromotionOffers());
@@ -2804,7 +2834,7 @@ function saveQrBooking(req, res) {
             });
         }
 
-        const validation = validateBooking(merchant, req.body);
+        let validation = validateBooking(merchant, req.body);
 
         if (validation.errors.length > 0) {
             return renderBookingPage(req, res, merchant, {
@@ -2833,6 +2863,8 @@ function saveQrBooking(req, res) {
                 form: req.body
             });
         }
+
+        validation = applyPromotionPriceToBooking(validation, promotionRecord);
 
         return prepareBookingLoyaltyRedemption(req, merchant, validation, (redemptionError, loyaltyRedemption) => {
             if (redemptionError) {
@@ -2992,7 +3024,7 @@ function saveSecureScanBooking(req, res) {
             });
         }
 
-        const validation = validateBooking(merchant, req.body);
+        let validation = validateBooking(merchant, req.body);
 
         if (validation.errors.length > 0) {
             return renderBookingPage(req, res, merchant, {
@@ -3024,6 +3056,8 @@ function saveSecureScanBooking(req, res) {
                     secureQr: true
                 });
             }
+
+            validation = applyPromotionPriceToBooking(validation, promotionRecord);
 
             return prepareBookingLoyaltyRedemption(req, merchant, validation, (redemptionError, loyaltyRedemption) => {
                 if (redemptionError) {

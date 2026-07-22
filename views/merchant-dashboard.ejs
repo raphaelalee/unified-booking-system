@@ -310,6 +310,64 @@
                 </article>
             </section>
 
+            <section class="merchant-product-orders-panel">
+                <div class="merchant-card-heading">
+                    <div>
+                        <p class="eyebrow">Reviews</p>
+                        <h2>Customer reviews</h2>
+                    </div>
+                    <span><%= merchantReviews.length %> recent</span>
+                </div>
+
+                <% if (!merchantReviews.length) { %>
+                    <div class="merchant-empty-state">
+                        <span>RV</span>
+                        <strong>No customer reviews yet</strong>
+                        <p class="muted">Reviews will appear here after customers rate completed services or products.</p>
+                    </div>
+                <% } else { %>
+                    <div class="merchant-product-order-list">
+                        <% merchantReviews.forEach((review) => { %>
+                            <article class="merchant-product-order-card merchant-review-reply-card" data-review-reply-card data-review-id="<%= review.id %>">
+                                <div class="merchant-product-order-main">
+                                    <div>
+                                        <span class="merchant-order-id"><%= review.reviewType === 'product' ? 'Product review' : 'Service review' %></span>
+                                        <strong><%= review.itemName || review.serviceName || review.productName || 'Reviewed item' %></strong>
+                                        <small><%= review.customerName || 'Customer' %> Â· <%- renderReviewStars(review.rating) %></small>
+                                    </div>
+                                    <span class="merchant-status-badge status-confirmed"><%= review.rating %>/5</span>
+                                </div>
+
+                                <p class="muted" data-review-text><%= review.comment || 'No written comment.' %></p>
+
+                                <% if (review.merchantReply) { %>
+                                    <div class="notice success">
+                                        <p><strong>Your reply:</strong> <%= review.merchantReply %></p>
+                                    </div>
+                                <% } %>
+
+                                <div class="merchant-order-management-footer">
+                                    <button class="button secondary" type="button" data-generate-review-reply>Generate AI Reply</button>
+                                    <span class="muted" data-ai-review-reply-status></span>
+                                </div>
+
+                                <form action="/merchant/reviews/<%= review.id %>/reply" method="POST" data-review-reply-form hidden>
+                                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                    <label>
+                                        <span>Suggested reply</span>
+                                        <textarea name="reply" rows="5" maxlength="2000" data-review-reply-textarea><%= review.merchantReply || '' %></textarea>
+                                    </label>
+                                    <div class="merchant-inline-actions">
+                                        <button class="button primary" type="submit">Save reply</button>
+                                        <button class="button secondary" type="button" data-cancel-review-reply>Cancel</button>
+                                    </div>
+                                </form>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+
             <div class="merchant-dashboard-lower-grid merchant-appointment-lower-grid">
                 <section class="merchant-orders-card">
                     <div class="merchant-card-heading">
@@ -385,5 +443,60 @@
         </section>
     </div>
 </section>
+
+<script>
+document.querySelectorAll('[data-review-reply-card]').forEach((card) => {
+    const generateButton = card.querySelector('[data-generate-review-reply]');
+    const status = card.querySelector('[data-ai-review-reply-status]');
+    const form = card.querySelector('[data-review-reply-form]');
+    const textarea = card.querySelector('[data-review-reply-textarea]');
+    const cancelButton = card.querySelector('[data-cancel-review-reply]');
+
+    if (!generateButton || !form || !textarea) {
+        return;
+    }
+
+    generateButton.addEventListener('click', async () => {
+        const reviewId = Number(card.dataset.reviewId || 0);
+        generateButton.disabled = true;
+        status.textContent = 'Generating reply...';
+
+        try {
+            const response = await fetch('/api/ai/review-reply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-csrf-token': '<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>'
+                },
+                body: JSON.stringify({
+                    reviewId,
+                    merchantTone: 'Professional'
+                })
+            });
+            const data = await response.json();
+
+            if (!response.ok || data.success === false) {
+                status.textContent = data.message || data.reason || 'AI reply could not be generated.';
+                return;
+            }
+
+            textarea.value = data.reply || '';
+            form.hidden = false;
+            status.textContent = 'Suggested reply ready. Edit it before saving.';
+        } catch (error) {
+            status.textContent = 'AI reply could not be generated right now.';
+        } finally {
+            generateButton.disabled = false;
+        }
+    });
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', () => {
+            form.hidden = true;
+            status.textContent = 'Suggested reply cancelled.';
+        });
+    }
+});
+</script>
 
 <%- include('partials/footer') %>

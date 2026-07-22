@@ -1,6 +1,6 @@
-const OpenAI = require('openai');
+const Groq = require('groq-sdk');
 
-const DEFAULT_MODEL = process.env.PROFILE_AI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const DEFAULT_MODEL = process.env.PROFILE_AI_MODEL || process.env.GROQ_PROFILE_MODEL || 'llama-3.1-8b-instant';
 const MAX_SUMMARY_LENGTH = 420;
 
 function cleanAiText(value) {
@@ -48,31 +48,27 @@ function buildFallbackAdvisor(metrics = {}) {
 }
 
 function getOutputText(response) {
-    if (response?.output_text) {
-        return response.output_text;
+    if (response?.choices?.[0]?.message?.content) {
+        return response.choices[0].message.content;
     }
 
-    const output = Array.isArray(response?.output) ? response.output : [];
-    return output
-        .flatMap((item) => Array.isArray(item.content) ? item.content : [])
-        .map((content) => content.text || '')
-        .filter(Boolean)
-        .join(' ');
+    return '{}';
 }
 
 async function requestAiSummary(metrics) {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
         return null;
     }
 
-    const client = new OpenAI({ apiKey });
-    const response = await client.responses.create({
+    const client = new Groq({ apiKey });
+    const response = await client.chat.completions.create({
         model: DEFAULT_MODEL,
         temperature: 0.3,
-        max_output_tokens: 180,
-        input: [
+        max_completion_tokens: 180,
+        response_format: { type: 'json_object' },
+        messages: [
             {
                 role: 'system',
                 content: 'You write concise customer account suggestions. Use only the supplied aggregate metrics. Do not invent balances, do not suggest actions that spend or mutate balances, and return plain JSON only.'
