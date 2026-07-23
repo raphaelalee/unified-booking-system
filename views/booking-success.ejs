@@ -7,6 +7,9 @@
     const displayBookingReference = typeof bookingReference !== 'undefined'
         ? bookingReference
         : (typeof bookingReceipt !== 'undefined' && bookingReceipt && bookingReceipt.displayReference ? bookingReceipt.displayReference : '');
+    const bookingDirections = (typeof bookingReceipt !== 'undefined' && bookingReceipt && bookingReceipt.directions)
+        ? bookingReceipt.directions
+        : (typeof directions !== 'undefined' ? directions : null);
 %>
 
 <section class="page-title receipt-title">
@@ -61,11 +64,33 @@
                 </div>
             </article>
 
-            <aside class="receipt-qr-panel">
+            <aside class="receipt-qr-panel receipt-action-panel">
+                <% if (bookingDirections && bookingDirections.directionsUrl) { %>
+                    <div class="receipt-directions-card">
+                        <div class="receipt-directions-header">
+                            <span class="receipt-map-mark" aria-hidden="true">G</span>
+                            <div>
+                                <p class="eyebrow">How to get there</p>
+                                <h2><%= bookingDirections.destinationLabel || bookingReceipt.merchantName %></h2>
+                            </div>
+                        </div>
+                        <p class="receipt-address-line"><%= bookingDirections.destinationAddress %></p>
+                        <div class="receipt-transit-note">
+                            <strong>Transit route</strong>
+                            <span>Google Maps will show nearby bus stops, MRT options, walking time, and live route choices.</span>
+                        </div>
+                        <a class="button primary" href="<%= bookingDirections.directionsUrl %>" target="_blank" rel="noopener">Open transit directions</a>
+                        <div class="receipt-map-mode-row">
+                            <a href="<%= bookingDirections.walkingDirectionsUrl %>" target="_blank" rel="noopener">Walk</a>
+                            <a href="<%= bookingDirections.drivingDirectionsUrl %>" target="_blank" rel="noopener">Drive</a>
+                        </div>
+                    </div>
+                <% } %>
+                <div class="receipt-verification-card">
                 <p class="eyebrow">Check-in QR code</p>
                 <img class="qr-code" src="<%= bookingReceipt.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= bookingReceipt.id %>">
                 <p class="muted">Show this QR code when you arrive at the merchant.</p>
-                <a class="qr-link" href="<%= bookingReceipt.checkinUrl %>"><%= bookingReceipt.checkinUrl %></a>
+                </div>
             </aside>
         </div>
     </section>

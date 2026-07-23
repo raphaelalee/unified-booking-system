@@ -20,6 +20,12 @@
         <p class="eyebrow">Attendance QR</p>
         <h2>Booking #<%= booking.id %></h2>
         <p class="muted">Current status: <strong><%= booking.status %></strong></p>
+        <% if (typeof checkInOpensAtLabel !== 'undefined' && checkInOpensAtLabel && !(typeof canConfirmCheckIn !== 'undefined' && canConfirmCheckIn)) { %>
+            <p class="muted">Check-in opens at <strong><%= checkInOpensAtLabel %></strong>.</p>
+            <% if (typeof minutesUntilCheckInOpen !== 'undefined' && Number(minutesUntilCheckInOpen || 0) > 0) { %>
+                <p class="muted">About <strong><%= Number(minutesUntilCheckInOpen || 0) %> minutes</strong> remaining.</p>
+            <% } %>
+        <% } %>
         <% if (String(booking.status || '').toLowerCase() === 'checked_in') { %>
             <p class="muted">This appointment is already checked in.</p>
         <% } else if (canConfirmCheckIn) { %>

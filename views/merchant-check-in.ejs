@@ -13,6 +13,9 @@
     <% if (typeof error !== 'undefined' && error) { %>
         <div class="notice error"><p><%= error %></p></div>
     <% } %>
+    <% if (typeof windowMessage !== 'undefined' && windowMessage) { %>
+        <div class="notice"><p><%= windowMessage %></p></div>
+    <% } %>
 
     <article class="dashboard-report-card">
         <p class="eyebrow">Booking #<%= booking.id %></p>
@@ -44,7 +47,11 @@
                 <button class="button primary" type="submit">Check in booking</button>
             </form>
         <% } else { %>
-            <p class="muted">Check-in is not available for this booking.</p>
+            <% if (typeof checkInOpensAtLabel !== 'undefined' && checkInOpensAtLabel && Number(minutesUntilCheckInOpen || 0) > 0) { %>
+                <p class="muted">Check-in opens at <strong><%= checkInOpensAtLabel %></strong>.</p>
+            <% } else { %>
+                <p class="muted">Check-in is not available for this booking.</p>
+            <% } %>
             <a class="button secondary" href="/merchant/bookings">Back to bookings</a>
         <% } %>
     </article>

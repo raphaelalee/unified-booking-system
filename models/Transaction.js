@@ -1363,6 +1363,7 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 users.name AS customer_name,
                 products.name AS product_name,
                 salons.salon_name AS merchant_name,
+                salons.address AS merchant_address,
                 order_items.quantity,
                 order_items.price_at_purchase
             FROM transactions
@@ -1413,13 +1414,15 @@ function getOrderReceiptById(transactionId, userId, callback) {
                 deliveredAt: first.delivered_at,
                 createdAt: first.created_at,
                 merchantName: Array.from(new Set(rows.map((row) => row.merchant_name).filter(Boolean))).join(', ') || 'Vaniday merchant',
+                merchantAddress: Array.from(new Set(rows.map((row) => row.merchant_address).filter(Boolean))).join(', '),
                 items: rows.map((row) => ({
                     name: row.product_name,
                     type: 'Product',
                     quantity: Number(row.quantity || 1),
                     unitPrice: Number(row.price_at_purchase || 0),
                     lineTotal: Number(row.quantity || 1) * Number(row.price_at_purchase || 0),
-                    merchantName: row.merchant_name || ''
+                    merchantName: row.merchant_name || '',
+                    merchantAddress: row.merchant_address || ''
                 }))
             });
         });
@@ -1465,6 +1468,7 @@ function getPickupVerificationById(transactionId, callback) {
                 users.name AS customer_name,
                 products.name AS product_name,
                 salons.salon_name AS merchant_name,
+                salons.address AS merchant_address,
                 salons.merchant_id AS merchant_user_id,
                 order_items.quantity,
                 order_items.price_at_purchase
@@ -1491,6 +1495,7 @@ function getPickupVerificationById(transactionId, callback) {
 
             const first = rows[0];
             const merchantNames = Array.from(new Set(rows.map((row) => row.merchant_name).filter(Boolean)));
+            const merchantAddresses = Array.from(new Set(rows.map((row) => row.merchant_address).filter(Boolean)));
             const merchantUserIds = Array.from(new Set(rows.map((row) => Number(row.merchant_user_id)).filter(Boolean)));
 
             callback(null, {
@@ -1502,6 +1507,7 @@ function getPickupVerificationById(transactionId, callback) {
                 userId: first.user_id,
                 customerName: first.customer_name || 'Customer',
                 merchantName: merchantNames.join(', ') || 'Vaniday merchant',
+                merchantAddress: merchantAddresses.join(', '),
                 merchantUserIds,
                 totalAmount: Number(first.total_amount || 0),
                 paymentStatus: first.payment_status || 'paid',
@@ -1523,6 +1529,7 @@ function getPickupVerificationById(transactionId, callback) {
                     name: row.product_name,
                     type: 'Product',
                     merchantName: row.merchant_name || '',
+                    merchantAddress: row.merchant_address || '',
                     merchantUserId: row.merchant_user_id || null,
                     quantity: Number(row.quantity || 1),
                     unitPrice: Number(row.price_at_purchase || 0),

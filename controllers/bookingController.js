@@ -28,6 +28,10 @@ const {
 const {
     formatAppointmentDateTime
 } = require('../utils/dateTimeFormat');
+const {
+    CHECK_IN_OPEN_MINUTES,
+    getBookingCheckInAvailability
+} = require('../utils/checkInWindow');
 const { buildBookingReference } = require('../utils/bookingReference');
 const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
 const { moderateReviewImage, moderateReviewText } = require('../services/groqService');
@@ -134,6 +138,34 @@ function isCheckInExpired(booking) {
     const expiry = new Date(bookingDate);
     expiry.setDate(expiry.getDate() + 1);
     return new Date() > expiry;
+}
+
+function buildGoogleMapsDirectionsUrl(destination, travelmode = 'transit') {
+    const cleanDestination = String(destination || '').trim();
+
+    if (!cleanDestination) {
+        return '';
+    }
+
+    const params = new URLSearchParams({
+        api: '1',
+        destination: cleanDestination,
+        travelmode
+    });
+
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+function buildBookingDirectionsViewModel(merchantName, address) {
+    const destination = String(address || '').trim() || `${merchantName || 'Vaniday merchant'}, Singapore`;
+
+    return {
+        destinationLabel: merchantName || 'Vaniday merchant',
+        destinationAddress: destination,
+        directionsUrl: buildGoogleMapsDirectionsUrl(destination, 'transit'),
+        walkingDirectionsUrl: buildGoogleMapsDirectionsUrl(destination, 'walking'),
+        drivingDirectionsUrl: buildGoogleMapsDirectionsUrl(destination, 'driving')
+    };
 }
 
 function wantsJson(req) {
@@ -550,6 +582,7 @@ function createBooking(req, res) {
         const bookedServicePrice = purchaseType === 'package'
             ? Number(service.packagePrice || service.price)
             : Number(service.price || 0);
+        const bookingDirections = buildBookingDirectionsViewModel(service.salonName, service.salonAddress);
 
         return prepareBookingLoyaltyRedemption(req, service, bookedServicePrice, (redemptionError, loyaltyRedemption) => {
             if (redemptionError) {
@@ -611,6 +644,7 @@ function createBooking(req, res) {
                             amountPayableAtMerchant: Number(loyaltyRedemption.finalAmountPayable ?? bookedServicePrice),
                             bookingDate,
                                 bookingTime,
+                                directions: bookingDirections,
                                 receiptPath: getGuestReceiptPath(bookingId),
                                 receiptUrl: getGuestReceiptUrl(req, bookingId),
                                 status: 'pending'
@@ -630,6 +664,7 @@ function createBooking(req, res) {
                         bookingId,
                         bookingReference,
                         bookingStatus: 'pending',
+                        directions: bookingDirections,
                         anotherBookingPath: '/services'
                     });
                 }
@@ -730,6 +765,7 @@ function createBooking(req, res) {
                             bookingDate,
                             bookingTime,
                             appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
+                            directions: bookingDirections,
                             checkinUrl,
                             checkinToken,
                             receiptPath: getGuestReceiptPath(bookingId),
@@ -757,6 +793,7 @@ function createBooking(req, res) {
                         bookingDate,
                         bookingTime,
                         appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
+                        directions: bookingDirections,
                         checkinUrl,
                         checkinToken,
                         qrCodeDataUrl,
@@ -1014,6 +1051,10 @@ function showCheckIn(req, res) {
 
         const routeTarget = `/checking/${req.params.signedToken}`;
         const bookingStatus = String(booking.status || '').toLowerCase();
+        const checkInAvailability = getBookingCheckInAvailability(booking);
+        const isCheckInTooEarly = checkInAvailability.isTooEarly
+            && ['confirmed', 'paid'].includes(bookingStatus)
+            && !booking.checked_in_at;
 
         const pointsAwarded = Number(booking.booking_points_awarded || 0);
         const completedMessage = pointsAwarded > 0
@@ -1025,12 +1066,16 @@ function showCheckIn(req, res) {
             booking,
             appointmentLabel: formatAppointmentDateTime(booking.booking_date, booking.booking_time),
             checkinAction: routeTarget,
-            canConfirmCheckIn: ['confirmed', 'paid'].includes(bookingStatus) && !booking.checked_in_at,
+            canConfirmCheckIn: ['confirmed', 'paid'].includes(bookingStatus) && !booking.checked_in_at && !isCheckInTooEarly,
             message: bookingStatus === 'completed'
                 ? completedMessage
                 : bookingStatus === 'checked_in'
                     ? 'This appointment has already been checked in. Loyalty points will be added after the merchant completes the service.'
+                    : isCheckInTooEarly
+                        ? `Check-in opens ${CHECK_IN_OPEN_MINUTES / 60} hours before your appointment, at ${checkInAvailability.opensAtLabel}.`
                     : '',
+            checkInOpensAtLabel: checkInAvailability.opensAtLabel,
+            minutesUntilCheckInOpen: checkInAvailability.minutesUntilOpen,
             showQrDebug: process.env.NODE_ENV === 'development',
             checkinUrl: getBookingCheckInUrl(req, bookingId),
             qrDebug: {
@@ -1086,6 +1131,8 @@ function confirmCheckIn(req, res) {
             checkinAction: routeTarget,
             checkinUrl: getBookingCheckInUrl(req, bookingId),
             canConfirmCheckIn: false,
+            checkInOpensAtLabel: '',
+            minutesUntilCheckInOpen: 0,
             showQrDebug: process.env.NODE_ENV === 'development',
             qrDebug: {
                 system: 'booking-check-in',
@@ -1118,6 +1165,17 @@ function confirmCheckIn(req, res) {
             return renderCheckIn(409, {
                 title: 'Check-In Not Available',
                 message: 'Only confirmed bookings can be checked in.'
+            });
+        }
+
+        const checkInAvailability = getBookingCheckInAvailability(booking);
+
+        if (checkInAvailability.isTooEarly) {
+            return renderCheckIn(403, {
+                title: 'Check-In Not Open Yet',
+                message: `For security, this QR can only check in ${CHECK_IN_OPEN_MINUTES / 60} hours before the appointment. It opens at ${checkInAvailability.opensAtLabel}.`,
+                checkInOpensAtLabel: checkInAvailability.opensAtLabel,
+                minutesUntilCheckInOpen: checkInAvailability.minutesUntilOpen
             });
         }
 

@@ -1,0 +1,12 @@
+WhatsApp Web client startup failed: spawn EPERM
+(node:30900) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+SMS booking confirmation failed: The number +658908XXXX is unverified. Trial accounts cannot send messages to unverified numbers; verify +658908XXXX at twilio.com/user/account/phone-numbers/verified, or purchase a Twilio number to send messages to unverified numbers
+Error: Could not find Chrome (ver. 148.0.7778.97). This can occur if either
+ 1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or
+ 2. your cache path is incorrectly configured (which is: C:\Users\24009059\.cache\puppeteer).
+For (2), check out our guide on configuring puppeteer at https://pptr.dev/guides/configuration.
+    at ChromeLauncher.resolveExecutablePath (file:///C:/Users/24009059/OneDrive%20-%20Republic%20Polytechnic/Attachments/school%20-RP/C300%20Final%20Year%20Project/fyp%20codes/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:304:27)
+    at ChromeLauncher.computeLaunchArguments (file:///C:/Users/24009059/OneDrive%20-%20Republic%20Polytechnic/Attachments/school%20-RP/C300%20Final%20Year%20Project/fyp%20codes/node_modules/puppeteer-core/lib/esm/puppeteer/node/ChromeLauncher.js:86:24)
+    at async ChromeLauncher.launch (file:///C:/Users/24009059/OneDrive%20-%20Republic%20Polytechnic/Attachments/school%20-RP/C300%20Final%20Year%20Project/fyp%20codes/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:52:28)
+    at async downloadReceiptPdf (C:\Users\24009059\OneDrive - Republic Polytechnic\Attachments\school -RP\C300 Final Year Project\fyp codes\controllers\receiptController.js:1105:23)

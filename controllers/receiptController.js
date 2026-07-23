@@ -325,6 +325,49 @@ function buildGoogleCalendarUrl(receipt) {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+function buildGoogleMapsDirectionsUrl(destination, travelmode = 'transit') {
+    const cleanDestination = String(destination || '').trim();
+
+    if (!cleanDestination) {
+        return '';
+    }
+
+    const params = new URLSearchParams({
+        api: '1',
+        destination: cleanDestination,
+        travelmode
+    });
+
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+function getReceiptDestination(receipt, mode) {
+    const itemAddresses = Array.from(new Set(
+        (receipt.items || [])
+            .map((item) => item.merchantAddress || '')
+            .filter(Boolean)
+    ));
+    const fallbackName = [
+        mode.isProductPickup ? receipt.pickupMerchantName : '',
+        receipt.merchantName
+    ].find((value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        return normalized && normalized !== 'delivery' && normalized !== 'any merchant';
+    });
+    const destination = [
+        receipt.pickupAddress,
+        receipt.merchantAddress,
+        itemAddresses.join(', '),
+        fallbackName ? `${fallbackName}, Singapore` : ''
+    ].find((value) => String(value || '').trim());
+
+    return {
+        label: mode.isBooking ? (receipt.merchantName || 'Merchant location') : (receipt.pickupMerchantName || receipt.merchantName || 'Pickup location'),
+        address: destination || '',
+        hasExactAddress: Boolean(receipt.pickupAddress || receipt.merchantAddress || itemAddresses.length)
+    };
+}
+
 function getPickupMerchantName(receipt) {
     if (receipt.pickupMerchantName) {
         return receipt.pickupMerchantName;
@@ -482,6 +525,7 @@ function mapOrderReceipt(order) {
         userId: order.userId,
         userName: order.userName || order.customerName || 'Customer',
         merchantName: order.merchantName || 'Vaniday merchant',
+        merchantAddress: order.merchantAddress || '',
         items: order.items,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
@@ -496,6 +540,7 @@ function mapOrderReceipt(order) {
         merchantUserIds: order.merchantUserIds || [],
         fulfilment: order.fulfilmentType || 'pickup',
         pickupMerchantName: order.merchantName || 'Vaniday merchant',
+        pickupAddress: order.merchantAddress || '',
         pickupStatus: order.pickupStatus || '',
         pickupReadyAt: order.pickupReadyAt || null,
         pickupVerifiedAt: order.pickupVerifiedAt || null,
@@ -586,6 +631,64 @@ function getMerchantForUser(userId) {
             resolve(merchant || null);
         });
     });
+}
+
+function getMerchantBySalonId(salonId) {
+    const normalizedId = Number(salonId);
+
+    if (!Number.isInteger(normalizedId) || normalizedId < 1) {
+        return Promise.resolve(null);
+    }
+
+    return new Promise((resolve, reject) => {
+        MerchantService.getMerchantBySalonId(normalizedId, (error, merchant) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(merchant || null);
+        });
+    });
+}
+
+async function enrichReceiptDestinationAddress(receipt) {
+    if (!receipt || receipt.merchantAddress || receipt.pickupAddress) {
+        return receipt;
+    }
+
+    const candidateIds = [
+        receipt.pickupMerchantId,
+        ...(receipt.items || []).map((item) => item.merchantId || item.salonId)
+    ];
+    const salonIds = Array.from(new Set(
+        candidateIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0)
+    ));
+
+    if (salonIds.length !== 1) {
+        return receipt;
+    }
+
+    try {
+        const merchant = await getMerchantBySalonId(salonIds[0]);
+        const address = merchant?.location || merchant?.address || '';
+
+        if (!address) {
+            return receipt;
+        }
+
+        return {
+            ...receipt,
+            merchantAddress: address,
+            pickupAddress: address,
+            pickupMerchantName: receipt.pickupMerchantName || merchant.name || merchant.salonName || receipt.merchantName
+        };
+    } catch (error) {
+        console.error('Receipt destination address lookup failed:', error.message || error);
+        return receipt;
+    }
 }
 
 function receiptItemsBelongToMerchant(receipt, merchant, merchantUserId) {
@@ -832,7 +935,7 @@ async function buildReceiptViewModel(req, id) {
         return null;
     }
 
-    const enrichedReceipt = await enrichReceiptPayment(loadedReceipt);
+    const enrichedReceipt = await enrichReceiptDestinationAddress(await enrichReceiptPayment(loadedReceipt));
     const campaignCashback = await new Promise((resolve) => {
         Loyalty.getCampaignCashbackForReceipt(enrichedReceipt.id, (error, result) => {
             if (error) {
@@ -867,6 +970,10 @@ async function buildReceiptViewModel(req, id) {
             campaignCashbackEarned: campaignCashback.earned,
             campaignCashbackReversed: campaignCashback.reversed
         };
+    const destination = getReceiptDestination(receipt, receiptMode);
+    const directionsUrl = buildGoogleMapsDirectionsUrl(destination.address, 'transit');
+    const walkingDirectionsUrl = buildGoogleMapsDirectionsUrl(destination.address, 'walking');
+    const drivingDirectionsUrl = buildGoogleMapsDirectionsUrl(destination.address, 'driving');
     const shouldGenerateQr = receiptMode.isBooking || receiptMode.isProductPickup;
     const token = receiptMode.isBooking
         ? signBookingCheckInToken(receipt.id)
@@ -895,6 +1002,17 @@ async function buildReceiptViewModel(req, id) {
         viewerRole: req.session.user?.role || '',
         checkinUrl: verificationUrl,
         verificationUrl,
+        directionsUrl,
+        walkingDirectionsUrl,
+        drivingDirectionsUrl,
+        destinationLabel: destination.label,
+        destinationAddress: destination.address,
+        hasExactDestinationAddress: destination.hasExactAddress,
+        directionsDescription: receiptMode.isBooking
+            ? 'Open Google Maps for public transport, walking, and nearest bus or train options to the salon.'
+            : receiptMode.isProductPickup
+                ? 'Open Google Maps for public transport, walking, and nearest bus or train options to the pickup point.'
+                : '',
         checkinToken: token,
         qrLabel: receiptMode.isBooking
             ? 'Appointment Check-In QR'
@@ -1102,18 +1220,23 @@ function buildFallbackPdf(data) {
 
             const metaTop = 156;
             const metaBoxWidth = (contentWidth - 18) / 2;
-            const metaRows = [
-                ['Customer', receipt.userName],
-                ['Payment', receipt.paymentMethodLabel || receipt.paymentMethod],
-                ['Date/time', data.paidAtLabel],
-                ['Payment status', formatStatusLabel(receipt.paymentStatus || 'paid')],
-                ['Refund status', formatStatusLabel(receipt.refundStatus || 'none')],
-                ['Reference', receipt.paymentTransactionReference || receipt.providerPaymentId || '-']
-            ];
+            const metaRows = data.isBooking
+                ? [
+                    ['Customer', receipt.userName],
+                    ['Appointment', data.appointmentLabel || data.paidAtLabel],
+                    ['Merchant', receipt.merchantName || 'Vaniday merchant'],
+                    ['Status', formatStatusLabel(receipt.status || receipt.paymentStatus || 'confirmed')]
+                ]
+                : [
+                    ['Customer', receipt.userName],
+                    ['Payment', receipt.paymentMethodLabel || receipt.paymentMethod],
+                    ['Date/time', data.paidAtLabel],
+                    ['Payment status', formatStatusLabel(receipt.paymentStatus || 'paid')]
+                ];
 
             metaRows.forEach(([label, value], index) => {
                 const x = left + (index % 2) * (metaBoxWidth + 18);
-                const y = metaTop + Math.floor(index / 2) * 66;
+                const y = metaTop + Math.floor(index / 2) * 60;
                 doc.roundedRect(x, y, metaBoxWidth, 52, 8).fill(paleSage);
                 doc.fillColor(muted).font('Helvetica-Bold').fontSize(8).text(label.toUpperCase(), x + 14, y + 11);
                 doc.fillColor(ink).font('Helvetica-Bold').fontSize(12).text(String(value || '-'), x + 14, y + 27, {
@@ -1122,7 +1245,7 @@ function buildFallbackPdf(data) {
                 });
             });
 
-            const itemsTop = 304;
+            const itemsTop = metaTop + (Math.ceil(metaRows.length / 2) * 60) + 30;
             doc.fillColor(ink).font('Times-Bold').fontSize(20).text('Items and services', left, itemsTop);
             doc.roundedRect(left, itemsTop + 34, contentWidth, 34, 8).fill(brandGreen);
             doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9);
@@ -1223,18 +1346,30 @@ function buildFallbackPdf(data) {
 
             const qrTop = Math.max(totalY + 92, summaryY + 90);
             doc.roundedRect(left, qrTop, contentWidth, 188, 10).fill(paleSage);
-            doc.fillColor(ink).font('Times-Bold').fontSize(20).text(data.qrLabel, left + 24, qrTop + 24);
-            doc.fillColor(muted).font('Helvetica').fontSize(10).text(
-                data.qrDescription,
+            doc.fillColor(ink).font('Times-Bold').fontSize(19).text(
+                data.destinationAddress ? (data.isBooking ? 'How to get there' : 'Pickup directions') : data.qrLabel,
                 left + 24,
-                qrTop + 52,
-                { width: 270 }
+                qrTop + 22
             );
-            doc.fillColor(muted).font('Helvetica').fontSize(8).text(
-                `Verification link: ${data.verificationUrl || data.checkinUrl}`,
+            doc.fillColor(ink).font('Helvetica-Bold').fontSize(11).text(
+                data.destinationLabel || receipt.merchantName || data.pickupMerchantName || 'Vaniday merchant',
                 left + 24,
-                qrTop + 92,
-                { width: 270, lineGap: 2 }
+                qrTop + 50,
+                { width: 265 }
+            );
+            doc.fillColor(muted).font('Helvetica').fontSize(9).text(
+                data.destinationAddress
+                    ? `Open Google Maps and search: ${data.destinationAddress}. Maps will show nearby bus, MRT, walking, and route options.`
+                    : data.qrDescription,
+                left + 24,
+                qrTop + 68,
+                { width: 270, lineGap: 3 }
+            );
+            doc.fillColor(ink).font('Helvetica-Bold').fontSize(10).text(
+                data.qrLabel,
+                left + 24,
+                qrTop + 132,
+                { width: 270 }
             );
             doc.roundedRect(left + contentWidth - 174, qrTop + 18, 150, 150, 8).fill('#ffffff');
             doc.image(qrBuffer, left + contentWidth - 162, qrTop + 30, { width: 126 });

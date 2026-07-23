@@ -163,3 +163,260 @@
         height: 156px;
     }
 }
+
+/* Compact receipt experience overrides. */
+.receipt-title {
+    min-height: 232px !important;
+    padding-top: clamp(44px, 6vw, 76px) !important;
+    padding-bottom: clamp(34px, 5vw, 58px) !important;
+}
+
+.receipt-title h1 {
+    max-width: 680px !important;
+}
+
+.receipt-title p {
+    max-width: 760px !important;
+}
+
+.receipt-section {
+    padding: 32px 42px 48px !important;
+}
+
+.receipt-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px) !important;
+    gap: 18px !important;
+}
+
+.receipt-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 18px !important;
+}
+
+.receipt-meta-grid p {
+    padding: 12px !important;
+    border: 1px solid rgba(64, 78, 59, 0.10) !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.72) !important;
+}
+
+.receipt-table {
+    min-width: 0 !important;
+}
+
+.receipt-table th,
+.receipt-table td {
+    padding: 13px 18px !important;
+}
+
+.receipt-table th:nth-child(2),
+.receipt-table th:nth-child(3),
+.receipt-table td:nth-child(2),
+.receipt-table td:nth-child(3) {
+    text-align: right !important;
+    white-space: nowrap !important;
+}
+
+.receipt-total {
+    padding: 13px 18px !important;
+}
+
+.receipt-card > .muted {
+    margin: 0 !important;
+    padding: 0 18px 18px !important;
+}
+
+.receipt-action-panel {
+    display: grid !important;
+    gap: 14px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.receipt-directions-card,
+.receipt-verification-card,
+.receipt-detail-drawer {
+    border: 1px solid rgba(64, 78, 59, 0.16) !important;
+    border-radius: 8px !important;
+    background: rgba(251, 245, 234, 0.78) !important;
+    color: var(--sand-bark) !important;
+}
+
+.receipt-directions-card,
+.receipt-verification-card {
+    padding: 20px !important;
+}
+
+.receipt-directions-card h2 {
+    margin: 0 0 8px !important;
+    color: var(--sand-ink) !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 1.08rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
+}
+
+.receipt-directions-header {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    align-items: center !important;
+}
+
+.receipt-map-mark {
+    width: 42px !important;
+    height: 42px !important;
+    display: grid !important;
+    place-items: center !important;
+    border-radius: 8px !important;
+    background: #2f4a32 !important;
+    color: #fff !important;
+    font-size: 1rem !important;
+    font-weight: 900 !important;
+}
+
+.receipt-address-line {
+    margin: 14px 0 0 !important;
+    padding: 11px 12px !important;
+    border: 1px solid rgba(64, 78, 59, 0.12) !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.72) !important;
+    color: var(--sand-ink) !important;
+    font-weight: 800 !important;
+    line-height: 1.45 !important;
+}
+
+.receipt-transit-note {
+    margin-top: 12px !important;
+    padding: 12px !important;
+    display: grid !important;
+    gap: 4px !important;
+    border-radius: 8px !important;
+    background: #eef5eb !important;
+}
+
+.receipt-transit-note strong {
+    color: #2f4a32 !important;
+    font-size: 0.88rem !important;
+    font-weight: 900 !important;
+}
+
+.receipt-transit-note span {
+    color: var(--sand-muted) !important;
+    font-size: 0.9rem !important;
+    line-height: 1.45 !important;
+}
+
+.receipt-directions-card .button {
+    width: 100% !important;
+    margin-top: 12px !important;
+    border-radius: 8px !important;
+}
+
+.receipt-map-mode-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 8px !important;
+}
+
+.receipt-map-mode-row a {
+    min-height: 38px !important;
+    display: grid !important;
+    place-items: center !important;
+    border: 1px solid rgba(64, 78, 59, 0.16) !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.74) !important;
+    color: var(--sand-ink) !important;
+    font-weight: 900 !important;
+    text-decoration: none !important;
+}
+
+.receipt-map-mode-row a:hover,
+.receipt-map-mode-row a:focus-visible {
+    background: #eef5eb !important;
+}
+
+.receipt-verification-card .qr-code {
+    width: 148px !important;
+    height: 148px !important;
+    margin: 0 auto 14px !important;
+}
+
+.receipt-qr-panel .qr-link {
+    display: none !important;
+}
+
+.receipt-detail-drawer {
+    margin: 0 !important;
+    border-width: 1px 0 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-left: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+}
+
+.receipt-detail-drawer summary {
+    min-height: 46px !important;
+    padding: 14px 18px !important;
+    color: var(--sand-ink) !important;
+    font-weight: 900 !important;
+    cursor: pointer;
+}
+
+.receipt-detail-list {
+    display: grid !important;
+    gap: 8px !important;
+    padding: 0 18px 18px !important;
+}
+
+.receipt-detail-list p {
+    min-width: 0;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 14px !important;
+    border-radius: 8px !important;
+    background: rgba(64, 78, 59, 0.06) !important;
+}
+
+.receipt-detail-list span {
+    color: var(--sand-muted) !important;
+    font-weight: 800 !important;
+}
+
+.receipt-detail-list strong {
+    color: var(--sand-ink) !important;
+    text-align: right !important;
+    overflow-wrap: anywhere !important;
+}
+
+.receipt-detail-drawer .receipt-refund-breakdown {
+    padding: 0 18px 18px !important;
+}
+
+@media (max-width: 820px) {
+    .receipt-section {
+        padding: 24px 16px 38px !important;
+    }
+
+    .receipt-layout,
+    .receipt-meta-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .receipt-title .hero-actions .button,
+    .receipt-directions-card .button {
+        width: 100% !important;
+    }
+
+    .receipt-table th,
+    .receipt-table td {
+        padding: 12px !important;
+    }
+}

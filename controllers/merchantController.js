@@ -27,6 +27,10 @@ const { sendBookingNotification } = require('../utils/whatsappNotifications');
 const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
 const { formatAppointmentDateTime } = require('../utils/dateTimeFormat');
 const {
+    CHECK_IN_OPEN_MINUTES,
+    getBookingCheckInAvailability
+} = require('../utils/checkInWindow');
+const {
     formatPaymentBreakdown,
     formatPaymentMethod,
     normalizePaymentMethod,
@@ -60,6 +64,35 @@ const NETS_STATUS_TIMEOUT_MS = 5 * 60 * 1000;
 const CART_DELIVERY_FEE = 4.90;
 const FLASH_DEALS_BATCH_SIZE = 6;
 const FLASH_DEALS_ROTATION_MS = 6 * 60 * 60 * 1000;
+
+function buildGoogleMapsDirectionsUrl(destination, travelmode = 'transit') {
+    const cleanDestination = String(destination || '').trim();
+
+    if (!cleanDestination) {
+        return '';
+    }
+
+    const params = new URLSearchParams({
+        api: '1',
+        destination: cleanDestination,
+        travelmode
+    });
+
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+function buildBookingDirectionsViewModel(merchant) {
+    const merchantName = merchant?.name || 'Vaniday merchant';
+    const destination = String(merchant?.location || merchant?.address || '').trim() || `${merchantName}, Singapore`;
+
+    return {
+        destinationLabel: merchantName,
+        destinationAddress: destination,
+        directionsUrl: buildGoogleMapsDirectionsUrl(destination, 'transit'),
+        walkingDirectionsUrl: buildGoogleMapsDirectionsUrl(destination, 'walking'),
+        drivingDirectionsUrl: buildGoogleMapsDirectionsUrl(destination, 'driving')
+    };
+}
 
 function normalizeText(value) {
     return String(value || '').trim();
@@ -1047,6 +1080,7 @@ async function buildBookingReceiptForSuccess(req, { bookingId, merchant, validat
         bookingDate,
         bookingTime,
         appointmentLabel: formatAppointmentDateTime(bookingDate, bookingTime),
+        directions: buildBookingDirectionsViewModel(merchant),
         checkinUrl: checkInUrl,
         qrCodeDataUrl,
         receiptPath: getGuestReceiptPath(bookingId),
@@ -3228,6 +3262,10 @@ function loadCheckInBooking(req, res, callback) {
 function showBookingCheckIn(req, res) {
     return loadCheckInBooking(req, res, (bookingId, booking) => {
         const status = String(booking.status || '').toLowerCase();
+        const checkInAvailability = getBookingCheckInAvailability(booking);
+        const isCheckInTooEarly = checkInAvailability.isTooEarly
+            && ['confirmed', 'paid'].includes(status)
+            && !booking.checked_in_at;
 
         res.render('merchant-check-in', {
             title: 'Booking Check-In',
@@ -3235,7 +3273,12 @@ function showBookingCheckIn(req, res) {
             booking,
             alreadyCheckedIn: status === 'checked_in',
             alreadyCompleted: status === 'completed',
-            canCheckIn: ['confirmed', 'paid'].includes(status) && !booking.checked_in_at
+            canCheckIn: ['confirmed', 'paid'].includes(status) && !booking.checked_in_at && !isCheckInTooEarly,
+            checkInOpensAtLabel: checkInAvailability.opensAtLabel,
+            minutesUntilCheckInOpen: checkInAvailability.minutesUntilOpen,
+            windowMessage: isCheckInTooEarly
+                ? `Check-in opens ${CHECK_IN_OPEN_MINUTES / 60} hours before the appointment, at ${checkInAvailability.opensAtLabel}.`
+                : ''
         });
     });
 }
@@ -3252,6 +3295,8 @@ function confirmBookingCheckIn(req, res) {
                 alreadyCheckedIn: true,
                 alreadyCompleted: false,
                 canCheckIn: false,
+                checkInOpensAtLabel: '',
+                minutesUntilCheckInOpen: 0,
                 success: 'This booking was already checked in.'
             });
         }
@@ -3264,7 +3309,25 @@ function confirmBookingCheckIn(req, res) {
                 alreadyCheckedIn: false,
                 alreadyCompleted: status === 'completed',
                 canCheckIn: false,
+                checkInOpensAtLabel: '',
+                minutesUntilCheckInOpen: 0,
                 error: 'Only confirmed bookings can be checked in.'
+            });
+        }
+
+        const checkInAvailability = getBookingCheckInAvailability(booking);
+
+        if (checkInAvailability.isTooEarly) {
+            return res.status(403).render('merchant-check-in', {
+                title: 'Booking Check-In',
+                token: req.params.token,
+                booking,
+                alreadyCheckedIn: false,
+                alreadyCompleted: false,
+                canCheckIn: false,
+                checkInOpensAtLabel: checkInAvailability.opensAtLabel,
+                minutesUntilCheckInOpen: checkInAvailability.minutesUntilOpen,
+                error: `For security, this QR can only check in ${CHECK_IN_OPEN_MINUTES / 60} hours before the appointment. It opens at ${checkInAvailability.opensAtLabel}.`
             });
         }
 
@@ -3285,6 +3348,8 @@ function confirmBookingCheckIn(req, res) {
                     alreadyCheckedIn: false,
                     alreadyCompleted: false,
                     canCheckIn: false,
+                    checkInOpensAtLabel: '',
+                    minutesUntilCheckInOpen: 0,
                     error: 'This booking could not be checked in. It may already be completed, cancelled, or checked in.'
                 });
             }
@@ -3301,6 +3366,8 @@ function confirmBookingCheckIn(req, res) {
                     alreadyCheckedIn: true,
                     alreadyCompleted: false,
                     canCheckIn: false,
+                    checkInOpensAtLabel: '',
+                    minutesUntilCheckInOpen: 0,
                     success: 'Booking checked in successfully.'
                 });
             });

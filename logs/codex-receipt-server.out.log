@@ -1,0 +1,10 @@
+
+> start
+> node app.js
+
+◇ injected env (63) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+Server is running on http://localhost:3000
+WhatsApp booking confirmation claimed for booking 24.
+Email booking confirmation sent to raphaelalee24@gmail.com.

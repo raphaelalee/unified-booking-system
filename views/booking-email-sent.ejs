@@ -1,5 +1,9 @@
 <%- include('partials/header', { title }) %>
 
+<%
+    const bookingDirections = booking && booking.directions ? booking.directions : null;
+%>
+
 <section class="page-title">
     <p class="eyebrow">Booking confirmed</p>
     <h1><%= emailSkipped ? 'Booking created.' : 'Confirmation sent.' %></h1>
@@ -63,11 +67,32 @@
             </div>
         </article>
 
-        <aside class="receipt-qr-panel">
+        <aside class="receipt-qr-panel receipt-action-panel">
+            <% if (bookingDirections && bookingDirections.directionsUrl) { %>
+                <div class="receipt-directions-card">
+                    <div class="receipt-directions-header">
+                        <span class="receipt-map-mark" aria-hidden="true">G</span>
+                        <div>
+                            <p class="eyebrow">How to get there</p>
+                            <h2><%= bookingDirections.destinationLabel || booking.merchantName %></h2>
+                        </div>
+                    </div>
+                    <p class="receipt-address-line"><%= bookingDirections.destinationAddress %></p>
+                    <div class="receipt-transit-note">
+                        <strong>Transit route</strong>
+                        <span>Google Maps will show nearby bus stops, MRT options, walking time, and live route choices.</span>
+                    </div>
+                    <a class="button primary" href="<%= bookingDirections.directionsUrl %>" target="_blank" rel="noopener">Open transit directions</a>
+                    <div class="receipt-map-mode-row">
+                        <a href="<%= bookingDirections.walkingDirectionsUrl %>" target="_blank" rel="noopener">Walk</a>
+                        <a href="<%= bookingDirections.drivingDirectionsUrl %>" target="_blank" rel="noopener">Drive</a>
+                    </div>
+                </div>
+            <% } %>
+            <div class="receipt-verification-card">
             <p class="eyebrow">Scan to Check In</p>
             <img class="qr-code" src="<%= booking.qrCodeDataUrl %>" alt="Check-in QR code for booking <%= booking.id %>">
             <p class="muted"><%= emailSkipped ? 'Use this dynamic QR when checking in.' : 'This is the same attendance QR included in your booking email.' %></p>
-            <a class="qr-link" href="<%= booking.checkinUrl %>"><%= booking.checkinUrl %></a>
             <% if (showQrDebug) { %>
                 <div class="qr-debug-panel">
                     <p class="eyebrow">QR Debug</p>
@@ -76,6 +101,7 @@
                     <p class="muted"><strong>Route target:</strong> /checking/<%= booking.checkinToken %></p>
                 </div>
             <% } %>
+            </div>
         </aside>
     </div>
 </section>

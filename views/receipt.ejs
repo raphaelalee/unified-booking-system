@@ -223,18 +223,16 @@
             vertical-align: top;
         }
 
+        .receipt-table td:nth-child(2),
         .receipt-table td:nth-child(3),
-        .receipt-table td:nth-child(4),
-        .receipt-table td:nth-child(5),
-        .receipt-table th:nth-child(3),
-        .receipt-table th:nth-child(4),
-        .receipt-table th:nth-child(5) {
+        .receipt-table th:nth-child(2),
+        .receipt-table th:nth-child(3) {
             text-align: right;
             white-space: nowrap;
         }
 
         .receipt-table td:first-child {
-            width: 44%;
+            width: 68%;
         }
 
         .receipt-table td:first-child strong,
@@ -308,7 +306,32 @@
         }
 
         .receipt-qr-panel {
+            padding: 0;
+            border: 0;
+            background: transparent;
+        }
+
+        .receipt-directions-card,
+        .receipt-verification-card {
+            margin-bottom: 12px;
             padding: 14px;
+            border: 1px solid #dce6d7;
+            border-radius: 8px;
+            background: #fbfcfa;
+        }
+
+        .receipt-directions-card h2 {
+            margin: 0 0 8px;
+            color: #1f281f;
+            font-size: 14px;
+        }
+
+        .receipt-directions-card .button {
+            display: none;
+        }
+
+        .receipt-map-mode-row {
+            display: none;
         }
 
         .receipt-qr-panel .qr-code {
@@ -326,15 +349,8 @@
             margin: 0 0 8px;
         }
 
-        .receipt-qr-panel .qr-link {
-            display: block;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #e2eadf;
-            color: #253125;
-            font-size: 8px;
-            overflow-wrap: anywhere;
-            text-decoration: none;
+        .receipt-detail-drawer {
+            display: none;
         }
 
         .receipt-digital-icon {
@@ -419,6 +435,22 @@
         return `${parts.join(' - ')}${discount ? ` (${discount})` : ''}`;
     };
     const receiptPromotionLabel = formatPromotionLabel(receipt);
+    const safeDirectionsUrl = typeof directionsUrl !== 'undefined' ? directionsUrl : '';
+    const safeWalkingDirectionsUrl = typeof walkingDirectionsUrl !== 'undefined' ? walkingDirectionsUrl : '';
+    const safeDrivingDirectionsUrl = typeof drivingDirectionsUrl !== 'undefined' ? drivingDirectionsUrl : '';
+    const safeDestinationLabel = typeof destinationLabel !== 'undefined' ? destinationLabel : '';
+    const safeDestinationAddress = typeof destinationAddress !== 'undefined' ? destinationAddress : '';
+    const safeDirectionsDescription = typeof directionsDescription !== 'undefined' ? directionsDescription : '';
+    const showReceiptDetails = !safePdfMode && (
+        paymentBreakdown.length > 0
+        || refundRows.length > 0
+        || receipt.paymentTransactionReference
+        || receipt.providerRefundReference
+        || Number(receipt.cashbackRedeemed || 0) > 0
+        || Number(receipt.campaignCashbackEarned || 0) > 0
+        || Number(receipt.campaignCashbackReversed || 0) > 0
+        || (!isBooking && Number(receipt.pointsDiscount || 0) > 0)
+    );
 %>
 
 <% if (safePdfMode) { %>
@@ -441,39 +473,19 @@
     <p class="eyebrow"><%= isBooking ? 'Booking receipt' : (safeIsGiftCardOnly ? 'Gift card receipt' : 'Product receipt') %></p>
     <h1>Receipt <%= receiptDisplayReference %></h1>
     <% if (isBooking) { %>
-        <p><strong><%= receipt.userName %></strong> booked <strong><%= receipt.items[0]?.name || 'a service' %></strong></p>
-        <p>Status: <strong><%= receipt.statusLabel || receipt.status %></strong></p>
-        <% if (appointmentLabel) { %>
-            <p>Appointment: <strong><%= appointmentLabel %></strong></p>
-        <% } %>
-        <% if (String(receipt.status || '').toLowerCase() === 'completed' && Number(receipt.pointsAwarded || 0) > 0) { %>
-            <p><strong><%= Number(receipt.pointsAwarded || 0) %> loyalty points have been added to your wallet.</strong></p>
-        <% } %>
+        <p><strong><%= receipt.items[0]?.name || 'Service booking' %></strong><%= appointmentLabel ? ` on ${appointmentLabel}` : '' %> at <strong><%= receipt.merchantName %></strong>.</p>
     <% } else { %>
         <p>
-            <strong><%= receipt.userName %></strong> paid
-            <strong>$<%= Number(receipt.paidAmount || receipt.totalAmount || 0).toFixed(2) %></strong>
-            by <strong><%= paymentLabel %></strong>.
-            <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
-                Wallet cashback used: <strong>$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>.
-            <% } %>
-            <% if (Number(receipt.campaignCashbackEarned || 0) > 0) { %>
-                Campaign cashback earned: <strong>$<%= Number(receipt.campaignCashbackEarned || 0).toFixed(2) %></strong>.
-            <% } %>
-            <% if (Number(receipt.pointsDiscount || 0) > 0) { %>
-                Points redeemed: <strong><%= Number(receipt.pointsRedeemed || 0) %> pts</strong>.
-            <% } %>
-            <% if (isProductPickup) { %>
-                Fulfilment: <strong><%= fulfilmentLabel %></strong>.
-            <% } %>
-            <% if (safeIsGiftCardOnly) { %>
-                Gift card delivery: <strong>Email</strong>.
-            <% } %>
+            <strong><%= receipt.userName %></strong> paid <strong>$<%= Number(receipt.paidAmount || receipt.totalAmount || 0).toFixed(2) %></strong>
+            for <strong><%= receipt.items.length %> item<%= receipt.items.length === 1 ? '' : 's' %></strong><%= isProductPickup ? ` for ${fulfilmentLabel.toLowerCase()}` : '' %>.
         </p>
     <% } %>
     <% if (!pdfMode) { %>
         <div class="hero-actions">
             <a class="button primary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/pdf">Download Receipt</a>
+            <% if (safeDirectionsUrl) { %>
+                <a class="button secondary" href="<%= safeDirectionsUrl %>" target="_blank" rel="noopener">Google Maps directions</a>
+            <% } %>
             <% if (isBooking) { %>
                 <a class="button secondary" href="/receipt/<%= encodeURIComponent(receipt.id) %>/google-calendar" target="_blank" rel="noopener">Add to Google Calendar</a>
             <% } %>
@@ -509,40 +521,21 @@
 
             <div class="receipt-meta-grid">
                 <% if (isBooking) { %>
-                    <p><span>User</span><strong><%= receipt.userName %></strong></p>
-                    <p><span>Status</span><strong><%= receipt.statusLabel || receipt.status %></strong></p>
-                    <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
-                    <p><span>Receipt ID</span><strong><%= receiptDisplayReference %></strong></p>
-                    <p><span>Payment method</span><strong>Pay at merchant</strong></p>
-                    <p><span>Booking payment</span><strong>You will pay the remaining amount during your appointment</strong></p>
-                    <p><span>Refund status</span><strong><%= formatStatus(receipt.refundStatus) %></strong></p>
-                    <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
+                    <p><span>Customer</span><strong><%= receipt.userName %></strong></p>
                     <p><span>Appointment</span><strong><%= appointmentLabel || '-' %></strong></p>
-                    <% if (receipt.checkedInAt) { %>
-                        <p><span>Checked-in At</span><strong><%= checkedInAtLabel || '-' %></strong></p>
-                    <% } %>
-                    <% if (String(receipt.status || '').toLowerCase() === 'completed' && Number(receipt.pointsAwarded || 0) > 0) { %>
-                        <p><span>Loyalty points awarded</span><strong><%= Number(receipt.pointsAwarded || 0) %> pts</strong></p>
-                    <% } %>
+                    <p><span>Merchant</span><strong><%= receipt.merchantName %></strong></p>
+                    <p><span>Status</span><strong><%= receipt.statusLabel || receipt.status %></strong></p>
                 <% } else { %>
-                    <p><span>User</span><strong><%= receipt.userName %></strong></p>
+                    <p><span>Customer</span><strong><%= receipt.userName %></strong></p>
                     <p><span>Receipt ID</span><strong><%= receiptDisplayReference %></strong></p>
                     <p><span>Payment method</span><strong><%= paymentLabel %></strong></p>
-                    <p><span>Payment provider</span><strong><%= receipt.paymentProvider || '-' %></strong></p>
                     <p><span>Payment status</span><strong><%= formatStatus(receipt.paymentStatus) %></strong></p>
-                    <p><span>Refund status</span><strong><%= formatStatus(receipt.refundStatus) %></strong></p>
-                    <p><span>Date/Time</span><strong><%= paidAtLabel %></strong></p>
                 <% } %>
                 <% if (isProductPickup) { %>
-                    <p><span>Fulfilment Method</span><strong><%= fulfilmentLabel %></strong></p>
                     <p><span>Pickup Merchant</span><strong><%= pickupMerchantName %></strong></p>
                     <p><span>Pickup Status</span><strong><%= pickupStatusLabel %></strong></p>
-                    <% if (receipt.pickupAt) { %>
-                        <p><span>Pickup Date/Time</span><strong><%= pickupAtLabel || '-' %></strong></p>
-                    <% } %>
                 <% } else if (safeIsGiftCardOnly) { %>
                     <p><span>Delivery method</span><strong>Email delivery</strong></p>
-                    <p><span>Gift card status</span><strong>Sent by email</strong></p>
                 <% } %>
             </div>
 
@@ -551,10 +544,8 @@
                     <thead>
                         <tr>
                             <th>Item / service</th>
-                            <th>Type</th>
                             <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
+                            <th>Amount</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -565,10 +556,11 @@
                                     <% if (item.detail) { %>
                                         <span><%= item.detail %></span>
                                     <% } %>
+                                    <% if (!item.detail && item.type) { %>
+                                        <span><%= item.type %></span>
+                                    <% } %>
                                 </td>
-                                <td><%= item.type || 'Item' %></td>
                                 <td><%= item.quantity || 1 %></td>
-                                <td>$<%= Number(item.unitPrice || 0).toFixed(2) %></td>
                                 <td>$<%= Number(item.lineTotal || 0).toFixed(2) %></td>
                             </tr>
                         <% }) %>
@@ -620,18 +612,6 @@
                 <% } %>
                 <p class="muted">You will pay the remaining amount during your appointment.</p>
             <% } %>
-            <% if (paymentBreakdown.length > 0) { %>
-                <div class="receipt-total">
-                    <span>Payment breakdown</span>
-                    <strong><%= paymentBreakdown.length %> source<%= paymentBreakdown.length === 1 ? '' : 's' %></strong>
-                </div>
-                <% paymentBreakdown.forEach((paymentSource) => { %>
-                    <div class="receipt-total">
-                        <span><%= paymentSource.label %></span>
-                        <strong>$<%= Number(paymentSource.amount || 0).toFixed(2) %></strong>
-                    </div>
-                <% }) %>
-            <% } %>
             <% if (!isBooking) { %>
                 <div class="receipt-total">
                     <span>Total paid</span>
@@ -648,69 +628,86 @@
                     <strong>$<%= Number(receipt.remainingPaidAmount || 0).toFixed(2) %></strong>
                 </div>
             <% } %>
-            <% if (refundRows.length > 0) { %>
-                <div class="receipt-refund-breakdown">
-                    <h2>Refund history</h2>
-                    <% refundRows.forEach((refund) => { %>
-                        <article>
-                            <div>
-                                <strong><%= refund.refundReference || 'Refund' %></strong>
-                                <span><%= formatStatus(refund.refundStatus) %><%= refund.providerRefundStatus ? ` / ${formatStatus(refund.providerRefundStatus)}` : '' %></span>
-                            </div>
-                            <dl>
-                                <div><dt>Requested</dt><dd><%= formatMoney(refund.customerRequestedAmount) %></dd></div>
-                                <div><dt>Approved</dt><dd><%= Number(refund.approvedPercentage || 0).toFixed(2) %>%</dd></div>
-                                <div><dt>Gross refund</dt><dd><%= formatMoney(refund.approvedGrossRefund) %></dd></div>
-                                <div><dt>Refund Administration Fee</dt><dd><%= formatMoney(refund.processingFeeDeduction) %></dd></div>
-                                <div><dt>Amount returned</dt><dd><%= formatMoney(refund.netExternalRefund) %></dd></div>
-                                <% if (Number(refund.walletRestored || 0) > 0) { %><div><dt>Wallet restored</dt><dd><%= formatMoney(refund.walletRestored) %></dd></div><% } %>
-                                <% if (Number(refund.pointsRestored || 0) > 0 || Number(refund.pointsReversed || 0) > 0) { %><div><dt>Points</dt><dd>+<%= Number(refund.pointsRestored || 0) %> / -<%= Number(refund.pointsReversed || 0) %></dd></div><% } %>
-                                <% if (Number(refund.cashbackRestored || 0) > 0 || Number(refund.cashbackReversed || 0) > 0) { %><div><dt>Cashback</dt><dd>+<%= formatMoney(refund.cashbackRestored) %> / -<%= formatMoney(refund.cashbackReversed) %></dd></div><% } %>
-                                <div><dt>Completed</dt><dd><%= refund.completedAt ? new Date(refund.completedAt).toLocaleString('en-SG') : 'Not completed' %></dd></div>
-                            </dl>
-                        </article>
-                    <% }) %>
-                </div>
-            <% } %>
-            <% if (receipt.paymentTransactionReference) { %>
-                <div class="receipt-total">
-                    <span>Payment reference</span>
-                    <strong><%= receipt.paymentTransactionReference %></strong>
-                </div>
-            <% } %>
-            <% if (receipt.providerRefundReference) { %>
-                <div class="receipt-total">
-                    <span>Refund reference</span>
-                    <strong><%= receipt.providerRefundReference %></strong>
-                </div>
-            <% } %>
-            <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
-                <div class="receipt-total">
-                    <span>Wallet cashback used</span>
-                    <strong>-$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong>
-                </div>
-            <% } %>
-            <% if (Number(receipt.campaignCashbackEarned || 0) > 0) { %>
-                <div class="receipt-total">
-                    <span>Campaign cashback earned</span>
-                    <strong>+$<%= Number(receipt.campaignCashbackEarned || 0).toFixed(2) %></strong>
-                </div>
-            <% } %>
-            <% if (Number(receipt.campaignCashbackReversed || 0) > 0) { %>
-                <div class="receipt-total">
-                    <span>Campaign cashback reversed</span>
-                    <strong>-$<%= Number(receipt.campaignCashbackReversed || 0).toFixed(2) %></strong>
-                </div>
-            <% } %>
-            <% if (!isBooking && Number(receipt.pointsDiscount || 0) > 0) { %>
-                <div class="receipt-total">
-                    <span>Points redeemed</span>
-                    <strong>-<%= Number(receipt.pointsRedeemed || 0) %> pts / $<%= Number(receipt.pointsDiscount || 0).toFixed(2) %></strong>
-                </div>
+            <% if (showReceiptDetails) { %>
+                <details class="receipt-detail-drawer">
+                    <summary>Receipt details</summary>
+                    <div class="receipt-detail-list">
+                        <% if (paymentBreakdown.length > 0) { %>
+                            <% paymentBreakdown.forEach((paymentSource) => { %>
+                                <p><span><%= paymentSource.label %></span><strong>$<%= Number(paymentSource.amount || 0).toFixed(2) %></strong></p>
+                            <% }) %>
+                        <% } %>
+                        <% if (receipt.paymentTransactionReference) { %>
+                            <p><span>Payment reference</span><strong><%= receipt.paymentTransactionReference %></strong></p>
+                        <% } %>
+                        <% if (receipt.providerRefundReference) { %>
+                            <p><span>Refund reference</span><strong><%= receipt.providerRefundReference %></strong></p>
+                        <% } %>
+                        <% if (Number(receipt.cashbackRedeemed || 0) > 0) { %>
+                            <p><span>Wallet cashback used</span><strong>-$<%= Number(receipt.cashbackRedeemed || 0).toFixed(2) %></strong></p>
+                        <% } %>
+                        <% if (Number(receipt.campaignCashbackEarned || 0) > 0) { %>
+                            <p><span>Campaign cashback earned</span><strong>+$<%= Number(receipt.campaignCashbackEarned || 0).toFixed(2) %></strong></p>
+                        <% } %>
+                        <% if (Number(receipt.campaignCashbackReversed || 0) > 0) { %>
+                            <p><span>Campaign cashback reversed</span><strong>-$<%= Number(receipt.campaignCashbackReversed || 0).toFixed(2) %></strong></p>
+                        <% } %>
+                        <% if (!isBooking && Number(receipt.pointsDiscount || 0) > 0) { %>
+                            <p><span>Points redeemed</span><strong>-<%= Number(receipt.pointsRedeemed || 0) %> pts / $<%= Number(receipt.pointsDiscount || 0).toFixed(2) %></strong></p>
+                        <% } %>
+                    </div>
+                    <% if (refundRows.length > 0) { %>
+                        <div class="receipt-refund-breakdown">
+                            <h2>Refund history</h2>
+                            <% refundRows.forEach((refund) => { %>
+                                <article>
+                                    <div>
+                                        <strong><%= refund.refundReference || 'Refund' %></strong>
+                                        <span><%= formatStatus(refund.refundStatus) %><%= refund.providerRefundStatus ? ` / ${formatStatus(refund.providerRefundStatus)}` : '' %></span>
+                                    </div>
+                                    <dl>
+                                        <div><dt>Requested</dt><dd><%= formatMoney(refund.customerRequestedAmount) %></dd></div>
+                                        <div><dt>Amount returned</dt><dd><%= formatMoney(refund.netExternalRefund) %></dd></div>
+                                        <div><dt>Completed</dt><dd><%= refund.completedAt ? new Date(refund.completedAt).toLocaleString('en-SG') : 'Not completed' %></dd></div>
+                                    </dl>
+                                </article>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </details>
             <% } %>
         </article>
 
-        <aside class="receipt-qr-panel <%= safeIsGiftCardOnly ? 'receipt-digital-panel' : '' %>">
+        <aside class="receipt-qr-panel receipt-action-panel <%= safeIsGiftCardOnly ? 'receipt-digital-panel' : '' %>">
+            <% if (safeDirectionsUrl) { %>
+                <div class="receipt-directions-card">
+                    <div class="receipt-directions-header">
+                        <span class="receipt-map-mark" aria-hidden="true">G</span>
+                        <div>
+                            <p class="eyebrow"><%= isBooking ? 'How to get there' : 'Pickup directions' %></p>
+                            <h2><%= safeDestinationLabel || (isBooking ? receipt.merchantName : pickupMerchantName) %></h2>
+                        </div>
+                    </div>
+                    <% if (safeDestinationAddress) { %>
+                        <p class="receipt-address-line"><%= safeDestinationAddress %></p>
+                    <% } %>
+                    <div class="receipt-transit-note">
+                        <strong>Transit route</strong>
+                        <span>Google Maps will show nearby bus stops, MRT options, walking time, and live route choices.</span>
+                    </div>
+                    <a class="button primary" href="<%= safeDirectionsUrl %>" target="_blank" rel="noopener">Open transit directions</a>
+                    <div class="receipt-map-mode-row">
+                        <% if (safeWalkingDirectionsUrl) { %>
+                            <a href="<%= safeWalkingDirectionsUrl %>" target="_blank" rel="noopener">Walk</a>
+                        <% } %>
+                        <% if (safeDrivingDirectionsUrl) { %>
+                            <a href="<%= safeDrivingDirectionsUrl %>" target="_blank" rel="noopener">Drive</a>
+                        <% } %>
+                    </div>
+                </div>
+            <% } %>
+
+            <div class="receipt-verification-card">
             <p class="eyebrow"><%= qrLabel %></p>
             <% if (safeIsGiftCardOnly) { %>
                 <div class="receipt-digital-icon" aria-hidden="true">@</div>
@@ -719,7 +716,6 @@
             <% } else if (qrCodeDataUrl) { %>
                 <img class="qr-code" src="<%= qrCodeDataUrl %>" alt="<%= qrLabel %> for receipt <%= receipt.id %>">
                 <p class="muted"><%= qrDescription %></p>
-                <a class="qr-link" href="<%= verificationUrl %>"><%= verificationUrl %></a>
             <% } else { %>
                 <p class="muted"><%= qrDescription %></p>
                 <% if (isProductPickup) { %>
@@ -728,14 +724,7 @@
                     <p class="muted">This is a delivery order. Pickup QR verification is not used.</p>
                 <% } %>
             <% } %>
-            <% if (showQrDebug && qrCodeDataUrl) { %>
-                <div class="qr-debug-panel">
-                    <p class="eyebrow">QR Debug</p>
-                    <p class="muted"><strong>System:</strong> <%= qrSystem %></p>
-                    <p class="muted"><strong>Token:</strong> <%= checkinToken %></p>
-                    <p class="muted"><strong>Route target:</strong> <%= qrRouteTarget %></p>
-                </div>
-            <% } %>
+            </div>
         </aside>
     </div>
 </section>
