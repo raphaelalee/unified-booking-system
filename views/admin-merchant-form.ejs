@@ -1,92 +1,164 @@
 <%- include('partials/header', { title }) %>
-<section class="admin-dashboard-v2">
+
+<section class="admin-dashboard-v2 admin-merchant-create-page">
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
-
-<section class="page-title">
-    <p class="eyebrow">Admin Portal</p>
-    <h1>Add merchant.</h1>
-    <p>Create a merchant login account and its salon profile in one step.</p>
-</section>
-
-<section class="section compact">
-    <form class="login-form service-admin-form" action="/admin/merchants" method="POST">
-        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-        <% if (errors.length > 0) { %>
-            <div class="notice error">
-                <% errors.forEach((error) => { %>
-                    <p><%= error %></p>
-                <% }) %>
+        <header class="admin-dashboard-header admin-merchant-create-hero">
+            <div>
+                <p class="eyebrow">Admin Users</p>
+                <h1>Add merchant</h1>
+                <p>Create the merchant owner login and publish the salon profile from one reviewed admin workflow.</p>
             </div>
-        <% } %>
+            <a class="button secondary" href="/admin/merchants">Back to merchants</a>
+        </header>
 
-        <label>
-            Merchant owner name
-            <input type="text" name="ownerName" value="<%= form.ownerName %>" placeholder="FreshGlow Spa Merchant" required>
-        </label>
+        <section class="admin-merchant-create-shell">
+            <aside class="admin-merchant-create-guide" aria-label="Merchant setup summary">
+                <div>
+                    <p class="eyebrow">Setup Flow</p>
+                    <h2>Account and salon profile</h2>
+                    <p>New merchants are approved immediately and can manage their services, products, promotions, and rewards after login.</p>
+                </div>
 
-        <label>
-            Merchant email
-            <input type="email" name="email" value="<%= form.email %>" placeholder="merchant@example.com" required>
-        </label>
+                <ol class="admin-merchant-create-steps">
+                    <li>
+                        <span>1</span>
+                        <div>
+                            <strong>Owner access</strong>
+                            <small>Email, phone, and temporary password.</small>
+                        </div>
+                    </li>
+                    <li>
+                        <span>2</span>
+                        <div>
+                            <strong>Business identity</strong>
+                            <small>Salon name, category, UEN, and location.</small>
+                        </div>
+                    </li>
+                    <li>
+                        <span>3</span>
+                        <div>
+                            <strong>Storefront details</strong>
+                            <small>Description and optional customer-facing image.</small>
+                        </div>
+                    </li>
+                </ol>
+            </aside>
 
-        <label>
-            Owner handphone number
-            <input type="tel" name="ownerPhone" value="<%= form.ownerPhone %>" placeholder="81234567" maxlength="8" required>
-        </label>
+            <form class="admin-merchant-create-form" action="/admin/merchants" method="POST">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
-        <label>
-            Temporary password
-            <input type="password" name="password" value="<%= form.password %>" placeholder="At least 8 characters with a number" required>
-        </label>
+                <% if (errors.length > 0) { %>
+                    <div class="notice error">
+                        <% errors.forEach((error) => { %>
+                            <p><%= error %></p>
+                        <% }) %>
+                    </div>
+                <% } %>
 
-        <label>
-            Salon name
-            <input type="text" name="salonName" value="<%= form.salonName %>" placeholder="FreshGlow Spa" required>
-        </label>
+                <section class="admin-merchant-form-section">
+                    <div class="admin-merchant-section-heading">
+                        <span>01</span>
+                        <div>
+                            <h2>Owner access</h2>
+                            <p>The owner uses these credentials to enter the merchant portal.</p>
+                        </div>
+                    </div>
 
-        <label>
-            Business category
-            <input type="text" name="businessCategory" value="<%= form.businessCategory %>" placeholder="Spa, salon, barber, nails" required>
-        </label>
+                    <div class="admin-merchant-form-grid">
+                        <label>
+                            <span>Merchant owner name</span>
+                            <input type="text" name="ownerName" value="<%= form.ownerName %>" placeholder="FreshGlow Spa Merchant" required>
+                        </label>
 
-        <label>
-            UEN / registration number
-            <input type="text" name="uen" value="<%= form.uen %>" placeholder="202612345A" required>
-        </label>
+                        <label>
+                            <span>Merchant email</span>
+                            <input type="email" name="email" value="<%= form.email %>" placeholder="merchant@example.com" required>
+                        </label>
 
-        <label>
-            Years in business
-            <input type="number" name="yearsInBusiness" value="<%= form.yearsInBusiness %>" min="0" max="100" required>
-        </label>
+                        <label>
+                            <span>Owner handphone number</span>
+                            <input type="tel" name="ownerPhone" value="<%= form.ownerPhone %>" placeholder="81234567" maxlength="8" required>
+                        </label>
 
-        <label>
-            Staff count
-            <input type="number" name="staffCount" value="<%= form.staffCount %>" min="1" max="5000" required>
-        </label>
+                        <label>
+                            <span>Temporary password</span>
+                            <input type="password" name="password" value="<%= form.password %>" placeholder="At least 8 characters with a number" required>
+                        </label>
+                    </div>
+                </section>
 
-        <label>
-            Address or location
-            <input type="text" name="address" value="<%= form.address %>" placeholder="Tampines" required>
-        </label>
+                <section class="admin-merchant-form-section">
+                    <div class="admin-merchant-section-heading">
+                        <span>02</span>
+                        <div>
+                            <h2>Business profile</h2>
+                            <p>These details identify the salon across the admin directory and customer marketplace.</p>
+                        </div>
+                    </div>
 
-        <label>
-            Description
-            <textarea name="description" placeholder="Short merchant description"><%= form.description %></textarea>
-        </label>
+                    <div class="admin-merchant-form-grid">
+                        <label>
+                            <span>Salon name</span>
+                            <input type="text" name="salonName" value="<%= form.salonName %>" placeholder="FreshGlow Spa" required>
+                        </label>
 
-        <label>
-            Image URL
-            <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/image.jpg">
-        </label>
+                        <label>
+                            <span>Business category</span>
+                            <input type="text" name="businessCategory" value="<%= form.businessCategory %>" placeholder="Spa, salon, barber, nails" required>
+                        </label>
 
-        <div class="form-actions">
-            <button class="button primary" type="submit">Create merchant</button>
-            <a class="button secondary" href="/admin/merchants">Cancel</a>
-        </div>
-    </form>
-</section>
+                        <label>
+                            <span>UEN / registration number</span>
+                            <input type="text" name="uen" value="<%= form.uen %>" placeholder="202612345A" required>
+                        </label>
 
+                        <label>
+                            <span>Address or location</span>
+                            <input type="text" name="address" value="<%= form.address %>" placeholder="Tampines" required>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="admin-merchant-form-section">
+                    <div class="admin-merchant-section-heading">
+                        <span>03</span>
+                        <div>
+                            <h2>Operations and storefront</h2>
+                            <p>Add capacity signals and a short description for internal review and public display.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-merchant-form-grid">
+                        <label>
+                            <span>Years in business</span>
+                            <input type="number" name="yearsInBusiness" value="<%= form.yearsInBusiness %>" min="0" max="100" required>
+                        </label>
+
+                        <label>
+                            <span>Staff count</span>
+                            <input type="number" name="staffCount" value="<%= form.staffCount %>" min="1" max="5000" required>
+                        </label>
+
+                        <label class="admin-merchant-field-wide">
+                            <span>Image URL</span>
+                            <input type="url" name="imageUrl" value="<%= form.imageUrl %>" placeholder="https://example.com/image.jpg">
+                        </label>
+
+                        <label class="admin-merchant-field-wide">
+                            <span>Description</span>
+                            <textarea name="description" rows="5" placeholder="Short merchant description"><%= form.description %></textarea>
+                        </label>
+                    </div>
+                </section>
+
+                <div class="form-actions admin-merchant-create-actions">
+                    <button class="button primary" type="submit">Create merchant</button>
+                    <a class="button secondary" href="/admin/merchants">Cancel</a>
+                </div>
+            </form>
+        </section>
     </div>
 </section>
+
 <%- include('partials/footer') %>
