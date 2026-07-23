@@ -476,15 +476,11 @@ function getHardProfanityModeration(comment = '') {
     };
 }
 
-function getReviewModerationFailureMessage(error, imageUpload) {
+function getReviewModerationFailureMessage(error) {
     const code = String(error?.code || '');
 
     if (code === 'GROQ_NOT_CONFIGURED') {
         return 'Review moderation is not configured. Please contact support.';
-    }
-
-    if (imageUpload) {
-        return 'Review image could not be verified. Images showing weapons, blood, graphic injury, or violence are not allowed.';
     }
 
     return 'Review could not be verified right now. Please edit the review content or try again after checking your connection.';
@@ -1688,19 +1684,23 @@ async function moderateReviewBeforeSave({
     }
 
     if (imageUpload) {
-        const imageResult = await moderateReviewImage({
-            imageBase64: getReviewImageDataUrl(imageUpload),
-            merchantCategory: '',
-            serviceName,
-            productName,
-            reviewText: comment
-        });
+        try {
+            const imageResult = await moderateReviewImage({
+                imageBase64: getReviewImageDataUrl(imageUpload),
+                merchantCategory: '',
+                serviceName,
+                productName,
+                reviewText: comment
+            });
 
-        if (imageResult.recommendedAction !== 'approve') {
-            return {
-                allowed: false,
-                result: imageResult
-            };
+            if (imageResult.recommendedAction !== 'approve') {
+                return {
+                    allowed: false,
+                    result: imageResult
+                };
+            }
+        } catch (imageError) {
+            console.warn('Review image moderation skipped:', imageError.code || imageError.message);
         }
     }
 
@@ -1841,7 +1841,7 @@ function submitReview(req, res) {
             }).catch((moderationError) => {
                 console.error('Review moderation failed:', moderationError.code || moderationError.message);
                 removeUploadedReviewMedia(imagePath, videoPath);
-                const message = getReviewModerationFailureMessage(moderationError, imageUpload);
+                const message = getReviewModerationFailureMessage(moderationError);
                 setProfileError(req, message);
                 setReviewModerationPopup(req, message);
                 return res.redirect('/profile#to-rate');
