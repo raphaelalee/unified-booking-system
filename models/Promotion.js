@@ -3,7 +3,7 @@ const db = require('../db');
 const PROMOTION_TYPES = ['first_trial', 'happy_hour', 'one_for_one', 'featured'];
 const DISCOUNT_TYPES = ['percentage', 'fixed_amount', 'fixed_price', 'tag_only'];
 const PROMOTION_STATUSES = ['draft', 'active', 'inactive', 'expired'];
-const SPIN_REWARD_TYPES = ['service_discount', 'product_discount', 'free_add_on', 'cashback', 'loyalty_points_bonus', 'limited_time_deal'];
+const SPIN_REWARD_TYPES = ['service_discount', 'product_discount', 'promotion', 'cashback'];
 const REDEMPTION_JOIN = `
     LEFT JOIN (
         SELECT
@@ -51,7 +51,9 @@ function ensurePromotionSchema(callback) {
         }
 
         if (!fields.has('spin_reward_type')) {
-            alters.push("ADD COLUMN spin_reward_type ENUM('service_discount','product_discount','free_add_on','cashback','loyalty_points_bonus','limited_time_deal') DEFAULT NULL AFTER spin_eligible");
+            alters.push("ADD COLUMN spin_reward_type ENUM('service_discount','product_discount','promotion','cashback') DEFAULT NULL AFTER spin_eligible");
+        } else {
+            alters.push("MODIFY COLUMN spin_reward_type ENUM('service_discount','product_discount','promotion','cashback') DEFAULT NULL");
         }
 
         if (!fields.has('minimum_spend')) {

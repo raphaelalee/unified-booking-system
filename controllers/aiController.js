@@ -11,6 +11,10 @@ const {
 } = require('../services/serviceSetupAiAssistant');
 const {
     classifyGroqError,
+    answerAdminAnalyticsQuestion: answerAdminAnalyticsQuestionWithGroq,
+    answerMerchantAnalyticsQuestion: answerMerchantAnalyticsQuestionWithGroq,
+    generateAdminPlatformInsights: generateAdminPlatformInsightsWithGroq,
+    generateMerchantBusinessInsights: generateMerchantBusinessInsightsWithGroq,
     generatePromotionRecommendations: generatePromotionRecommendationsFromGroq,
     generateReviewReply: generateReviewReplyFromGroq,
     generateVoucherRecommendations: generateVoucherRecommendationsFromGroq,
@@ -20,6 +24,31 @@ const {
     recommendFeaturedProducts: recommendFeaturedProductsWithGroq,
     recommendFeaturedServices: recommendFeaturedServicesWithGroq
 } = require('../services/groqService');
+const {
+    SUPPORTED_PERIODS,
+    buildAdminAnalyticsSummary,
+    buildAdminComparisonSummary,
+    buildAnalyticsDataAnswer,
+    buildAdminFallbackInsights,
+    buildComparisonFallbackAnswer,
+    buildMerchantAnalyticsSummary,
+    buildMerchantComparisonSummary,
+    buildMerchantFallbackInsights,
+    normalizeAnalyticsQuestionIntent,
+    parseAnalyticsComparisonQuestion,
+    sanitizeAnalyticsQuestion
+} = require('../services/analyticsAiDataService');
+const {
+    buildSmartReminders,
+    confirmInventory,
+    confirmPriceChange,
+    confirmPromotion,
+    confirmReminder,
+    createMerchantActionProposal,
+    createMerchantScheduleRecommendations,
+    createReminderProposal,
+    normalizeActionProposal
+} = require('../services/aiActionProposalService');
 
 // Shared Groq client for chatbot and product helper endpoints.
 const groq = new Groq({
@@ -748,6 +777,619 @@ function sendAiError(res, error, logLabel = 'AI request error') {
 function requireBodyFields(body, fields) {
     return fields.filter((field) => !String(body?.[field] || '').trim());
 }
+
+function getAnalyticsPeriod(body = {}) {
+    const period = String(body.period || body.periodKey || 'last30').trim();
+    return SUPPORTED_PERIODS.has(period) ? period : 'last30';
+}
+
+function sendAnalyticsAiProviderError(res, error, fallback, summary) {
+    const groqError = classifyGroqError(error);
+
+    console.error('Analytics AI provider unavailable', {
+        code: error?.code,
+        status: error?.status || error?.statusCode,
+        message: error?.message
+    });
+
+    return res.status(groqError.status === 429 ? 429 : 503).json({
+        success: false,
+        error: groqError.code,
+        message: 'AI insights are temporarily unavailable. Your analytics data is still available. Please try again.',
+        fallback,
+        summary
+    });
+}
+
+function buildEmergencyMerchantAiSummary(req) {
+    const user = req.session.user || {};
+    return {
+        scope: 'merchant',
+        merchant: {
+            merchantId: user.id || null,
+            merchantName: user.name || user.email || 'Merchant',
+            approvalStatus: user.merchantApprovalStatus || 'approved'
+        },
+        period: { key: 'last30', label: 'Last 30 days' },
+        currency: 'SGD',
+        metrics: {
+            totalRevenue: 0,
+            totalBookings: 0,
+            totalOrders: 0,
+            refundCount: 0
+        },
+        insufficientData: true
+    };
+}
+
+function buildEmergencyAdminAiSummary() {
+    return {
+        scope: 'admin',
+        period: { key: 'last30', label: 'Last 30 days' },
+        currency: 'SGD',
+        metrics: {
+            totalPlatformRevenue: 0,
+            totalBookings: 0,
+            totalRefunds: 0,
+            activeMerchants: 0,
+            activeCustomers: 0
+        },
+        insufficientData: true
+    };
+}
+
+function validateAnalyticsQuestion(rawQuestion) {
+    const raw = String(rawQuestion || '');
+    const question = sanitizeAnalyticsQuestion(raw);
+
+    if (!question) {
+        const error = new Error('Enter a question about the analytics summary.');
+        error.status = 400;
+        throw error;
+    }
+
+    if (raw.length > 500) {
+        const error = new Error('Question must be 500 characters or less.');
+        error.status = 400;
+        throw error;
+    }
+
+    return question;
+}
+
+function answerAdminDirectMetricQuestion(summary = {}, question = '') {
+    const normalized = normalizeAnalyticsQuestionIntent(question);
+    const asksForTopMerchantSales = (
+        /\bmerchant\b/.test(normalized)
+        && /\b(revenue|sales|earning|earnings)\b/.test(normalized)
+        && /\b(which|what|who|highest|top|most|largest|best)\b/.test(normalized)
+    );
+
+    if (asksForTopMerchantSales
+        || /\b(which|what|who)\b.*\bmerchant\b.*\b(highest|top|most|largest|best)\b.*\b(revenue|sales|earning|earnings)\b/.test(normalized)
+        || /\b(highest|top|most|largest|best)\b.*\b(revenue|sales|earning|earnings)\b.*\bmerchant\b/.test(normalized)) {
+        const topMerchant = Array.isArray(summary.topMerchantsByRevenue)
+            ? summary.topMerchantsByRevenue.find((merchant) => Number(merchant.revenue || 0) > 0)
+            : null;
+
+        if (!topMerchant) {
+            return {
+                answer: `For ${summary.period?.label || 'the selected period'}, there is no paid merchant transaction sales recorded yet.`,
+                supportingEvidence: ['No merchant in topMerchantsByRevenue has positive paid transaction sales for this period.'],
+                recommendedAdminActions: [],
+                limitations: ['This answer uses only the current admin analytics summary.']
+            };
+        }
+
+        return {
+            answer: `${topMerchant.merchantName} has the highest paid transaction sales for ${summary.period?.label || 'the selected period'} at S$${Number(topMerchant.revenue || 0).toFixed(2)} across ${Number(topMerchant.bookings || 0).toLocaleString('en-SG')} booking/order record${Number(topMerchant.bookings || 0) === 1 ? '' : 's'}.`,
+            supportingEvidence: [
+                `Merchant: ${topMerchant.merchantName}`,
+                `Paid transaction sales: S$${Number(topMerchant.revenue || 0).toFixed(2)}`,
+                `Records: ${Number(topMerchant.bookings || 0).toLocaleString('en-SG')}`
+            ],
+            recommendedAdminActions: [],
+            limitations: ['This uses the current admin analytics period and stored paid transaction rows. It is platform sales volume, not admin earnings.']
+        };
+    }
+
+    return null;
+}
+
+function shouldReplaceUnavailableTopMerchantAnswer(question = '', answer = {}) {
+    const normalized = normalizeAnalyticsQuestionIntent(question);
+    const answerText = String(answer?.answer || answer?.summary || '').toLowerCase();
+
+    return /\bmerchant\b/.test(normalized)
+        && /\b(revenue|sales|earning|earnings)\b/.test(normalized)
+        && /\b(which|what|who|highest|top|most|largest|best)\b/.test(normalized)
+        && /\b(unfortunately|not available|does not provide|no information|insufficient data)\b/.test(answerText);
+}
+
+exports.generateMerchantBusinessInsights = async (req, res) => {
+    try {
+        const userId = req.session.user?.id;
+        const period = getAnalyticsPeriod(req.body);
+        const summary = await buildMerchantAnalyticsSummary(userId, period);
+
+        try {
+            const insights = await generateMerchantBusinessInsightsWithGroq(summary);
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                insights
+            });
+        } catch (error) {
+            return sendAnalyticsAiProviderError(res, error, buildMerchantFallbackInsights(summary), summary);
+        }
+    } catch (error) {
+        console.error('Merchant analytics AI calculation error:', {
+            code: error?.code,
+            message: error?.message,
+            sqlMessage: error?.sqlMessage,
+            sqlState: error?.sqlState
+        });
+        if (error.status === 403) {
+            return res.status(403).json({
+                success: false,
+                error: error.code || 'MERCHANT_NOT_FOUND',
+                message: 'Your merchant profile could not be confirmed.'
+            });
+        }
+        const summary = buildEmergencyMerchantAiSummary(req);
+        return res.status(200).json({
+            success: false,
+            error: error.code || 'ANALYTICS_SUMMARY_FAILED',
+            message: 'Merchant analytics summary could not be generated, so a limited fallback was shown.',
+            fallback: buildMerchantFallbackInsights(summary),
+            summary
+        });
+    }
+};
+
+exports.answerMerchantAnalyticsQuestion = async (req, res) => {
+    try {
+        const userId = req.session.user?.id;
+        const question = validateAnalyticsQuestion(req.body?.question);
+        const comparisonRequest = parseAnalyticsComparisonQuestion(question);
+        if (comparisonRequest) {
+            const comparison = await buildMerchantComparisonSummary(userId, comparisonRequest);
+            const comparisonQuestion = [
+                question,
+                'Return a concise business comparison with Summary, Key Improvements, Key Declines, Reasons, Recommendations and Confidence.',
+                'Charts remain unchanged. Do not suggest applying changes without existing proposal confirmation.'
+            ].join(' ');
+
+            try {
+                const answer = await answerMerchantAnalyticsQuestionWithGroq({ summary: { comparison }, question: comparisonQuestion });
+                return res.json({
+                    success: true,
+                    period: comparison.periods.current,
+                    comparison,
+                    summary: comparison.current,
+                    answer
+                });
+            } catch (error) {
+                const fallback = buildComparisonFallbackAnswer(comparison);
+                return sendAnalyticsAiProviderError(res, error, fallback, comparison.current);
+            }
+        }
+        const period = getAnalyticsPeriod(req.body);
+        const summary = await buildMerchantAnalyticsSummary(userId, period);
+        const directDataAnswer = buildAnalyticsDataAnswer(summary, question, 'merchant');
+
+        if (directDataAnswer) {
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                answer: directDataAnswer
+            });
+        }
+
+        try {
+            const answer = await answerMerchantAnalyticsQuestionWithGroq({ summary, question });
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                answer
+            });
+        } catch (error) {
+            return sendAnalyticsAiProviderError(res, error, {
+                fallback: true,
+                answer: buildMerchantFallbackInsights(summary).summary,
+                supportingEvidence: [
+                    `Total tracked sales: S$${Number(summary.metrics.totalRevenue || 0).toFixed(2)}`,
+                    `Service bookings: ${Number(summary.metrics.totalBookings || 0)}`
+                ],
+                suggestedNextSteps: ['Review the dashboard charts while AI answers are unavailable.'],
+                limitations: ['Groq could not answer this question right now.']
+            }, summary);
+        }
+    } catch (error) {
+        console.error('Merchant analytics question calculation error:', {
+            code: error?.code,
+            message: error?.message,
+            sqlMessage: error?.sqlMessage,
+            sqlState: error?.sqlState
+        });
+        if (error.status === 400 || error.status === 403) {
+            return res.status(error.status).json({
+                success: false,
+                error: error.status === 400 ? 'VALIDATION_ERROR' : (error.code || 'MERCHANT_NOT_FOUND'),
+                message: error.message || 'Analytics question could not be answered.'
+            });
+        }
+        const summary = buildEmergencyMerchantAiSummary(req);
+        return res.status(200).json({
+            success: false,
+            error: error.code || 'ANALYTICS_QUESTION_FAILED',
+            message: 'Merchant analytics could not be fully loaded, so a limited fallback answer was shown.',
+            fallback: {
+                fallback: true,
+                answer: buildMerchantFallbackInsights(summary).summary,
+                supportingEvidence: [
+                    'Live analytics summary could not be generated for this request.'
+                ],
+                suggestedNextSteps: ['Refresh the dashboard, then try the question again.'],
+                limitations: ['This fallback does not include live chart-level details.']
+            },
+            summary
+        });
+    }
+};
+
+exports.generateAdminPlatformInsights = async (req, res) => {
+    try {
+        const period = getAnalyticsPeriod(req.body);
+        const summary = await buildAdminAnalyticsSummary(period);
+
+        try {
+            const insights = await generateAdminPlatformInsightsWithGroq(summary);
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                insights
+            });
+        } catch (error) {
+            return sendAnalyticsAiProviderError(res, error, buildAdminFallbackInsights(summary), summary);
+        }
+    } catch (error) {
+        console.error('Admin analytics AI calculation error:', {
+            code: error?.code,
+            message: error?.message,
+            sqlMessage: error?.sqlMessage,
+            sqlState: error?.sqlState
+        });
+        const summary = buildEmergencyAdminAiSummary();
+        return res.status(200).json({
+            success: false,
+            error: 'PLATFORM_ANALYTICS_SUMMARY_FAILED',
+            message: 'Platform analytics summary could not be generated, so a limited fallback was shown.',
+            fallback: buildAdminFallbackInsights(summary),
+            summary
+        });
+    }
+};
+
+exports.answerAdminAnalyticsQuestion = async (req, res) => {
+    try {
+        const question = validateAnalyticsQuestion(req.body?.question);
+        const comparisonRequest = parseAnalyticsComparisonQuestion(question);
+        if (comparisonRequest) {
+            const comparison = await buildAdminComparisonSummary(comparisonRequest);
+            const comparisonQuestion = [
+                question,
+                'Return a concise platform comparison with Summary, Key Improvements, Key Declines, Reasons, Recommendations and Confidence.',
+                'Charts remain unchanged. Do not suggest applying admin changes without existing approval or proposal confirmation.'
+            ].join(' ');
+
+            try {
+                const answer = await answerAdminAnalyticsQuestionWithGroq({ summary: { comparison }, question: comparisonQuestion });
+                return res.json({
+                    success: true,
+                    period: comparison.periods.current,
+                    comparison,
+                    summary: comparison.current,
+                    answer
+                });
+            } catch (error) {
+                const fallback = buildComparisonFallbackAnswer(comparison);
+                return sendAnalyticsAiProviderError(res, error, {
+                    ...fallback,
+                    recommendedAdminActions: fallback.recommendedAdminActions || fallback.suggestedNextSteps || []
+                }, comparison.current);
+            }
+        }
+        const period = getAnalyticsPeriod(req.body);
+        const summary = await buildAdminAnalyticsSummary(period);
+        const directAnswer = answerAdminDirectMetricQuestion(summary, question);
+
+        if (directAnswer) {
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                answer: directAnswer
+            });
+        }
+
+        const directDataAnswer = buildAnalyticsDataAnswer(summary, question, 'admin');
+
+        if (directDataAnswer) {
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                answer: directDataAnswer
+            });
+        }
+
+        try {
+            const answer = await answerAdminAnalyticsQuestionWithGroq({ summary, question });
+            const replacement = shouldReplaceUnavailableTopMerchantAnswer(question, answer)
+                ? answerAdminDirectMetricQuestion(summary, question)
+                : null;
+
+            return res.json({
+                success: true,
+                period: summary.period,
+                summary,
+                answer: replacement || answer
+            });
+        } catch (error) {
+            return sendAnalyticsAiProviderError(res, error, {
+                fallback: true,
+                answer: buildAdminFallbackInsights(summary).executiveSummary,
+                supportingEvidence: [
+                    `Paid transaction sales: S$${Number(summary.metrics.totalPlatformRevenue || 0).toFixed(2)}`,
+                    `Platform bookings: ${Number(summary.metrics.totalBookings || 0)}`
+                ],
+                recommendedAdminActions: ['Review platform analytics manually while AI answers are unavailable.'],
+                limitations: ['Groq could not answer this question right now.']
+            }, summary);
+        }
+    } catch (error) {
+        console.error('Admin analytics question calculation error:', {
+            code: error?.code,
+            message: error?.message,
+            sqlMessage: error?.sqlMessage,
+            sqlState: error?.sqlState
+        });
+        if (error.status === 400) {
+            return res.status(400).json({
+                success: false,
+                error: 'VALIDATION_ERROR',
+                message: error.message || 'Platform analytics question could not be answered.'
+            });
+        }
+        const summary = buildEmergencyAdminAiSummary();
+        return res.status(200).json({
+            success: false,
+            error: error.code || 'PLATFORM_ANALYTICS_QUESTION_FAILED',
+            message: 'Platform analytics could not be fully loaded, so a limited fallback answer was shown.',
+            fallback: {
+                fallback: true,
+                answer: buildAdminFallbackInsights(summary).executiveSummary,
+                supportingEvidence: [
+                    'Live platform analytics summary could not be generated for this request.'
+                ],
+                recommendedAdminActions: ['Refresh the dashboard, then try the question again.'],
+                limitations: ['This fallback does not include live chart-level details.']
+            },
+            summary
+        });
+    }
+};
+
+function sendAiActionError(res, error, fallbackMessage = 'AI action request could not be completed.') {
+    const status = Number(error?.status || 500);
+    return res.status(status).json({
+        success: false,
+        error: error?.code || (status === 409 ? 'STALE_AI_PROPOSAL' : 'AI_ACTION_FAILED'),
+        message: error?.message || fallbackMessage
+    });
+}
+
+exports.createMerchantActionProposal = async (req, res) => {
+    try {
+        const prompt = sanitizeAnalyticsQuestion(req.body?.prompt || req.body?.question || '', 500);
+
+        if (!prompt) {
+            return res.status(400).json({
+                success: false,
+                error: 'VALIDATION_ERROR',
+                message: 'Enter what you want AI to prepare.'
+            });
+        }
+
+        const proposal = await createMerchantActionProposal(req, prompt, getAnalyticsPeriod(req.body));
+        return res.json({
+            success: true,
+            proposal
+        });
+    } catch (error) {
+        return sendAiActionError(res, error);
+    }
+};
+
+exports.getMerchantScheduleRecommendations = async (req, res) => {
+    try {
+        const result = await createMerchantScheduleRecommendations(req, getAnalyticsPeriod(req.body));
+        return res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Schedule recommendations could not be prepared.');
+    }
+};
+
+exports.getMerchantSmartReminders = async (req, res) => {
+    try {
+        const dismissed = req.session.dismissedSmartReminders || {};
+        const smartReminders = await buildSmartReminders(req.session.user.id, getAnalyticsPeriod(req.body), dismissed);
+        const merchantReminders = Array.isArray(req.session.merchantReminders)
+            ? req.session.merchantReminders.filter((reminder) => reminder.status !== 'done' && !reminder.dismissedAt)
+            : [];
+
+        return res.json({
+            success: true,
+            reminders: [...smartReminders, ...merchantReminders]
+        });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Smart reminders could not be loaded.');
+    }
+};
+
+exports.createMerchantReminderProposal = async (req, res) => {
+    try {
+        const prompt = sanitizeAnalyticsQuestion(req.body?.prompt || req.body?.question || '', 500);
+
+        if (!prompt) {
+            return res.status(400).json({
+                success: false,
+                error: 'VALIDATION_ERROR',
+                message: 'Enter the reminder you want AI to prepare.'
+            });
+        }
+
+        const proposal = await createReminderProposal(req, prompt);
+        return res.json({
+            success: true,
+            proposal
+        });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Reminder proposal could not be prepared.');
+    }
+};
+
+exports.createAdminActionProposal = async (req, res) => {
+    try {
+        const prompt = sanitizeAnalyticsQuestion(req.body?.prompt || req.body?.question || '', 500);
+        const summary = await buildAdminAnalyticsSummary(getAnalyticsPeriod(req.body));
+        const highRefundMerchant = summary.merchantsWithHighestRefundRates?.[0];
+        const proposal = normalizeActionProposal({
+            actionType: /suspend/i.test(prompt) ? 'recommend_merchant_suspension_review' : 'recommend_merchant_review',
+            riskLevel: 'restricted_admin_confirmation',
+            title: highRefundMerchant ? `Review ${highRefundMerchant.merchantName}` : 'Review platform action',
+            reason: 'Admin AI action support is recommendation-only for sensitive platform actions.',
+            evidence: highRefundMerchant
+                ? [`Refund count: ${highRefundMerchant.refundCount}`, `Gross refund amount: S$${Number(highRefundMerchant.grossRefundAmount || 0).toFixed(2)}`]
+                : ['No specific merchant risk was selected from the current summary.'],
+            warnings: ['AI cannot suspend, approve, reject, delete, or alter payment settings automatically.'],
+            requiresConfirmation: true
+        }, { recordAllowlist: { services: [], products: [] } });
+
+        return res.json({
+            success: true,
+            proposal
+        });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Admin action proposal could not be prepared.');
+    }
+};
+
+exports.confirmAiPromotion = async (req, res) => {
+    try {
+        const result = await confirmPromotion(req, String(req.body?.proposalId || ''));
+        return res.json({ success: true, result });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Promotion could not be confirmed.');
+    }
+};
+
+exports.confirmAiPriceChange = async (req, res) => {
+    try {
+        const result = await confirmPriceChange(req, String(req.body?.proposalId || ''));
+        return res.json({ success: true, result });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Price change could not be confirmed.');
+    }
+};
+
+exports.confirmAiInventoryChange = async (req, res) => {
+    try {
+        const result = await confirmInventory(req, String(req.body?.proposalId || ''));
+        return res.json({ success: true, result });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Inventory adjustment could not be confirmed.');
+    }
+};
+
+exports.confirmAiReminder = async (req, res) => {
+    try {
+        const result = await confirmReminder(req, String(req.body?.proposalId || ''));
+        return res.json({ success: true, result });
+    } catch (error) {
+        return sendAiActionError(res, error, 'Reminder could not be created.');
+    }
+};
+
+exports.confirmAiScheduleChange = async (req, res) => {
+    return res.status(409).json({
+        success: false,
+        error: 'SCHEDULE_CONFIRMATION_REQUIRES_EXISTING_SCHEDULE_FLOW',
+        message: 'Schedule AI suggestions are recommendation-only here. Apply changes through the existing merchant schedule tools after reviewing confirmed bookings.'
+    });
+};
+
+exports.dismissMerchantAiReminder = async (req, res) => {
+    const reminderId = sanitizeAnalyticsQuestion(req.body?.reminderId || '', 120);
+
+    if (!reminderId) {
+        return res.status(400).json({
+            success: false,
+            error: 'VALIDATION_ERROR',
+            message: 'Reminder ID is required.'
+        });
+    }
+
+    if (!req.session.dismissedSmartReminders) {
+        req.session.dismissedSmartReminders = {};
+    }
+
+    req.session.dismissedSmartReminders[reminderId] = new Date().toISOString();
+    if (Array.isArray(req.session.merchantReminders)) {
+        req.session.merchantReminders = req.session.merchantReminders.map((reminder) => (
+            reminder.id === reminderId
+                ? { ...reminder, dismissedAt: new Date().toISOString(), status: 'dismissed' }
+                : reminder
+        ));
+    }
+
+    return res.json({ success: true });
+};
+
+exports.markMerchantAiReminderDone = async (req, res) => {
+    const reminderId = sanitizeAnalyticsQuestion(req.body?.reminderId || '', 120);
+
+    if (!reminderId) {
+        return res.status(400).json({
+            success: false,
+            error: 'VALIDATION_ERROR',
+            message: 'Reminder ID is required.'
+        });
+    }
+
+    if (!req.session.dismissedSmartReminders) {
+        req.session.dismissedSmartReminders = {};
+    }
+
+    req.session.dismissedSmartReminders[reminderId] = new Date().toISOString();
+    if (Array.isArray(req.session.merchantReminders)) {
+        req.session.merchantReminders = req.session.merchantReminders.map((reminder) => (
+            reminder.id === reminderId
+                ? { ...reminder, doneAt: new Date().toISOString(), status: 'done' }
+                : reminder
+        ));
+    }
+
+    return res.json({ success: true });
+};
 
 exports.moderateReviewText = async (req, res) => {
     try {

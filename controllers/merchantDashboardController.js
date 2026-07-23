@@ -13,6 +13,7 @@ const Loyalty = require('../models/Loyalty');
 const AuditLog = require('../models/AuditLog');
 const SupportRequest = require('../models/SupportRequest');
 const MerchantAnalyticsExport = require('../services/merchantAnalyticsExport');
+const SpinDiscoverEligibility = require('../services/spinDiscoverEligibilityService');
 const {
     getProductImagePath,
     deleteProductImageFile
@@ -634,8 +635,16 @@ function validatePromotionForm(form, merchant, products = []) {
         errors.push('Product discount Spin rewards must be linked to one of your products.');
     }
 
-    if (form.spinEligible && ['service_discount', 'free_add_on'].includes(form.spinRewardType) && !serviceId) {
+    if (form.spinEligible && form.spinRewardType === 'service_discount' && !serviceId) {
         errors.push('Service Spin rewards must be linked to one of your services.');
+    }
+
+    if (form.spinEligible && form.spinRewardType === 'promotion' && productId && !serviceId) {
+        errors.push('Promotion Spin rewards linked only to a product should use product discount.');
+    }
+
+    if (spinClaimLimit !== null && spinInventoryRemaining !== null && spinInventoryRemaining > spinClaimLimit) {
+        errors.push('Remaining wheel reward quantity cannot exceed the maximum wheel wins.');
     }
 
     if (!(startDate instanceof Date) || Number.isNaN(startDate?.getTime())) {
@@ -732,7 +741,10 @@ function getCashbackCampaignForm(body = {}) {
         startAt: body.startAt,
         endAt: body.endAt,
         status: body.status || 'draft',
-        applicableType: body.applicableType || 'both'
+        applicableType: body.applicableType || 'both',
+        spinEnabled: body.spinEnabled,
+        spinClaimLimit: body.spinClaimLimit,
+        spinInventoryRemaining: body.spinInventoryRemaining
     });
 }
 
@@ -800,6 +812,7 @@ function normalizeOrderDeliveryStatus(value) {
         'shipped',
         'out_for_delivery',
         'delivered',
+        'completed',
         'cancelled'
     ]);
     return allowed.has(status) ? status : '';
@@ -838,7 +851,7 @@ function getLastSevenSalesDays(orders = []) {
     for (let index = 6; index >= 0; index -= 1) {
         const date = new Date(today);
         date.setDate(today.getDate() - index);
-        const key = date.toISOString().slice(0, 10);
+        const key = getLocalDateKey(date);
         days.push({
             key,
             label: date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric' }),
@@ -855,7 +868,7 @@ function getLastSevenSalesDays(orders = []) {
     orders.forEach((order) => {
         const date = new Date(order.createdAt);
         if (Number.isNaN(date.getTime())) return;
-        const key = date.toISOString().slice(0, 10);
+        const key = getLocalDateKey(date);
         if (!dayMap[key]) return;
         dayMap[key].revenue += Number(order.totalAmount || 0);
         dayMap[key].orders += 1;
@@ -1627,6 +1640,16 @@ const showDashboard = renderPortalView('merchant-dashboard', 'Merchant Dashboard
 const showBookings = renderPortalView('merchant-bookings', 'Merchant Bookings');
 const showCustomers = renderPortalView('merchant-customers', 'Merchant Customers');
 const showAnalytics = renderPortalView('merchant-analytics', 'Merchant Analytics');
+const showAiExecutiveSummary = (req, res) => {
+    res.render('merchant-ai-executive-summary', {
+        title: 'AI Executive Summary',
+        merchant: req.session.user || {},
+        success: req.session.success,
+        error: req.session.error
+    });
+    req.session.success = null;
+    req.session.error = null;
+};
 const showSupport = renderPortalView('merchant-support', 'Merchant Support');
 const showProfile = renderPortalView('merchant-profile', 'Merchant Profile');
 const showOrders = renderPortalView('merchant-orders', 'Product Orders');
@@ -2570,6 +2593,9 @@ function getVoucherForm(body = {}) {
         expiryDate: String(body.expiryDate || '').trim(),
         usageLimitPerUser: String(body.usageLimitPerUser || '').trim(),
         usageLimitTotal: String(body.usageLimitTotal || '').trim(),
+        spinEnabled: isTruthyFormValue(body.spinEnabled),
+        spinClaimLimit: String(body.spinClaimLimit || '').trim(),
+        spinInventoryRemaining: String(body.spinInventoryRemaining || '').trim(),
         status: String(body.status || '').trim()
     };
 }
@@ -2633,6 +2659,8 @@ function validateVoucherForm(form, merchant, products = []) {
     const pointsRequired = Number(form.pointsRequired);
     const usageLimitPerUser = form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser);
     const usageLimitTotal = form.usageLimitTotal === '' ? null : Number(form.usageLimitTotal);
+    const spinClaimLimit = form.spinClaimLimit === '' ? null : Number(form.spinClaimLimit);
+    const spinInventoryRemaining = form.spinInventoryRemaining === '' ? null : Number(form.spinInventoryRemaining);
     const startDate = form.startDate ? new Date(form.startDate) : null;
     const expiryDate = form.expiryDate ? new Date(form.expiryDate) : null;
     const merchantServiceIds = new Set((merchant.services || []).map((service) => Number(service.id)));
@@ -2696,6 +2724,18 @@ function validateVoucherForm(form, merchant, products = []) {
         errors.push('Total usage limit must be at least 1.');
     }
 
+    if (spinClaimLimit !== null && (!Number.isInteger(spinClaimLimit) || spinClaimLimit < 0)) {
+        errors.push('Wheel claim limit must be a non-negative whole number.');
+    }
+
+    if (spinInventoryRemaining !== null && (!Number.isInteger(spinInventoryRemaining) || spinInventoryRemaining < 0)) {
+        errors.push('Remaining wheel quantity must be a non-negative whole number.');
+    }
+
+    if (spinClaimLimit !== null && spinInventoryRemaining !== null && spinInventoryRemaining > spinClaimLimit) {
+        errors.push('Remaining wheel quantity cannot exceed the wheel claim limit.');
+    }
+
     if (!RewardVoucher.STATUSES.includes(form.status)) {
         errors.push('Please choose a valid voucher status.');
     }
@@ -2722,6 +2762,9 @@ function buildVoucherPayload(form, merchant) {
         expiryDate: form.expiryDate ? form.expiryDate.replace('T', ' ') : null,
         usageLimitPerUser: form.usageLimitPerUser === '' ? null : Number(form.usageLimitPerUser),
         usageLimitTotal: form.usageLimitTotal === '' ? null : Number(form.usageLimitTotal),
+        spinEnabled: Boolean(form.spinEnabled),
+        spinClaimLimit: form.spinClaimLimit === '' ? null : Number(form.spinClaimLimit),
+        spinInventoryRemaining: form.spinInventoryRemaining === '' ? null : Number(form.spinInventoryRemaining),
         status: form.status,
         sortOrder: 0,
         linkedItemType: form.linkedItemType,
@@ -3867,6 +3910,9 @@ function showEditVoucher(req, res) {
                         expiryDate: formatDateTimeInputValue(voucher.expiryDate),
                         usageLimitPerUser: voucher.usageLimitPerUser === null ? '' : String(voucher.usageLimitPerUser),
                         usageLimitTotal: voucher.usageLimitTotal === null ? '' : String(voucher.usageLimitTotal),
+                        spinEnabled: voucher.spinEnabled,
+                        spinClaimLimit: voucher.spinClaimLimit === null ? '' : String(voucher.spinClaimLimit),
+                        spinInventoryRemaining: voucher.spinInventoryRemaining === null ? '' : String(voucher.spinInventoryRemaining),
                         status: voucher.status
                     },
                     services: merchant.services || [],
@@ -4025,7 +4071,10 @@ function showNewCashbackCampaign(req, res) {
                 startAt: '',
                 endAt: '',
                 status: 'draft',
-                applicableType: 'both'
+                applicableType: 'both',
+                spinEnabled: false,
+                spinClaimLimit: '',
+                spinInventoryRemaining: ''
             },
             statuses: CashbackCampaign.CAMPAIGN_STATUSES,
             applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
@@ -4128,7 +4177,10 @@ function showEditCashbackCampaign(req, res) {
                     startAt: formatDateTimeInputValue(campaign.startAt),
                     endAt: formatDateTimeInputValue(campaign.endAt),
                     status: campaign.status,
-                    applicableType: campaign.applicableType
+                    applicableType: campaign.applicableType,
+                    spinEnabled: campaign.spinEnabled,
+                    spinClaimLimit: campaign.spinClaimLimit === null ? '' : String(campaign.spinClaimLimit),
+                    spinInventoryRemaining: campaign.spinInventoryRemaining === null ? '' : String(campaign.spinInventoryRemaining)
                 },
                 statuses: CashbackCampaign.CAMPAIGN_STATUSES,
                 applicableTypes: CashbackCampaign.APPLICABLE_TYPES,
@@ -4218,11 +4270,121 @@ function deleteCashbackCampaign(req, res) {
     });
 }
 
+function showSpinDiscover(req, res) {
+    return MerchantService.getMerchantByUserId(req.session.user.id, (lookupError, merchant) => {
+        const handled = renderMerchantLookupError(res, lookupError, merchant);
+
+        if (handled) {
+            return handled;
+        }
+
+        return SpinDiscoverEligibility.buildMerchantSpinDashboard(req.session.user.id, (dashboardError, dashboard) => {
+            if (dashboardError) {
+                console.error(dashboardError);
+                return res.status(500).render('error', {
+                    title: 'Spin & Discover Error',
+                    message: 'Spin & Discover rewards could not be loaded.'
+                });
+            }
+
+            const success = req.session.merchantSuccess;
+            const error = req.session.merchantError;
+            req.session.merchantSuccess = null;
+            req.session.merchantError = null;
+
+            return res.render('merchant-spin-discover', {
+                title: 'Spin & Discover Rewards',
+                merchant,
+                dashboard,
+                rewards: dashboard.rewards || [],
+                success,
+                error
+            });
+        });
+    });
+}
+
+function updateSpinReward(req, res) {
+    const sourceType = String(req.params.sourceType || '').trim();
+    const rewardId = Number(req.params.rewardId);
+    const spinEnabled = isTruthyFormValue(req.body.spinEnabled);
+    const spinClaimLimit = normalizeNullableInteger(req.body.spinClaimLimit);
+    const spinInventoryRemaining = normalizeNullableInteger(req.body.spinInventoryRemaining);
+
+    if (!['promotion', 'voucher', 'cashback'].includes(sourceType) || !Number.isInteger(rewardId) || rewardId <= 0) {
+        req.session.merchantError = 'Spin reward selection is invalid.';
+        return res.redirect('/merchant/spin-discover');
+    }
+
+    if (Number.isNaN(spinClaimLimit) || Number.isNaN(spinInventoryRemaining)) {
+        req.session.merchantError = 'Wheel limits must be valid whole numbers.';
+        return res.redirect('/merchant/spin-discover');
+    }
+
+    if (spinClaimLimit !== null && spinInventoryRemaining !== null && spinInventoryRemaining > spinClaimLimit) {
+        req.session.merchantError = 'Remaining wheel quantity cannot exceed the wheel claim limit.';
+        return res.redirect('/merchant/spin-discover');
+    }
+
+    const done = (error, result) => {
+        if (error) {
+            console.error(error);
+            req.session.merchantError = 'Spin & Discover reward could not be updated.';
+        } else if (!result || result.affectedRows === 0) {
+            req.session.merchantError = 'This reward does not belong to your merchant account.';
+        } else {
+            req.session.merchantSuccess = spinEnabled ? 'Reward added to Spin & Discover.' : 'Reward removed from Spin & Discover.';
+        }
+        return res.redirect('/merchant/spin-discover');
+    };
+
+    if (sourceType === 'promotion') {
+        return Promotion.findForMerchant(req.session.user.id, rewardId, (lookupError, promotion) => {
+            if (lookupError || !promotion) return done(lookupError, null);
+
+            return Promotion.updateForMerchant(req.session.user.id, rewardId, {
+                ...promotion,
+                spinEligible: spinEnabled,
+                spinRewardType: spinEnabled
+                    ? (req.body.spinRewardType || promotion.spinRewardType || (promotion.productId ? 'product_discount' : (promotion.serviceId ? 'service_discount' : 'promotion')))
+                    : null,
+                spinClaimLimit,
+                spinInventoryRemaining
+            }, done);
+        });
+    }
+
+    if (sourceType === 'voucher') {
+        return RewardVoucher.findForMerchant(req.session.user.id, rewardId, (lookupError, voucher) => {
+            if (lookupError || !voucher) return done(lookupError, null);
+
+            return RewardVoucher.updateForMerchant(req.session.user.id, rewardId, {
+                ...voucher,
+                spinEnabled,
+                spinClaimLimit,
+                spinInventoryRemaining
+            }, done);
+        });
+    }
+
+    return CashbackCampaign.findForMerchant(req.session.user.id, rewardId, (lookupError, campaign) => {
+        if (lookupError || !campaign) return done(lookupError, null);
+
+        return CashbackCampaign.updateForMerchant(req.session.user.id, rewardId, {
+            ...campaign,
+            spinEnabled,
+            spinClaimLimit,
+            spinInventoryRemaining
+        }, done);
+    });
+}
+
 module.exports = {
     showDashboard,
     showBookings,
     showCustomers,
     showAnalytics,
+    showAiExecutiveSummary,
     exportAnalytics,
     showSupport,
     showProfile,
@@ -4268,6 +4430,8 @@ module.exports = {
     showEditVoucher,
     updateVoucher,
     deleteVoucher,
+    showSpinDiscover,
+    updateSpinReward,
     listCashbackCampaigns,
     showNewCashbackCampaign,
     createCashbackCampaign,

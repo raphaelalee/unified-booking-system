@@ -39,19 +39,21 @@
             <% } %>
             <% if (request.refundAmount > 0) { %>
                 <p><strong>Original amount paid:</strong> $<%= Number(request.originalPaidAmount || request.refundAmount || 0).toFixed(2) %></p>
-                <p><strong>Original provider fee:</strong> $<%= Number(request.originalProcessingFeeAmount || 0).toFixed(2) %> (<%= request.processingFeeSource || 'unknown' %>)</p>
+                <% if (role !== 'customer') { %>
+                    <p><strong>Original provider fee:</strong> $<%= Number(request.originalProcessingFeeAmount || 0).toFixed(2) %> (<%= request.processingFeeSource || 'unknown' %>)</p>
+                <% } %>
                 <p><strong>Gross requested refund:</strong> $<%= Number(request.grossRefundAmount || request.refundAmount || 0).toFixed(2) %></p>
                 <% if (Number(request.approvedRefundPercentage || 0) > 0 && !['pending_merchant_review', 'under_review', 'more_information_required'].includes(request.status)) { %>
                     <p><strong>Approved percentage:</strong> <%= Number(request.approvedRefundPercentage || 100).toFixed(2) %>%</p>
                     <p><strong>Refund base:</strong> $<%= Number(request.refundBaseAmount || request.grossRefundAmount || request.refundAmount || 0).toFixed(2) %></p>
                     <% if (request.merchantDecisionReason) { %><p><strong>Merchant decision reason:</strong> <%= request.merchantDecisionReason %></p><% } %>
                 <% } %>
-                <p><strong>Payment-processing deduction:</strong> $<%= Number(request.processingFeeDeduction || 0).toFixed(2) %></p>
+                <p><strong>Refund Administration Fee:</strong> $<%= Number(request.processingFeeDeduction || 0).toFixed(2) %></p>
                 <% if (Number(request.otherDeductionAmount || 0) > 0) { %>
                     <p><strong>Other deduction:</strong> $<%= Number(request.otherDeductionAmount || 0).toFixed(2) %></p>
                 <% } %>
                 <% if (Number(request.approvedRefundAmount || 0) > 0) { %>
-                    <p><strong>Net customer refund:</strong> $<%= Number(request.netRefundAmount || request.approvedRefundAmount || 0).toFixed(2) %></p>
+                    <p><strong>Amount returned:</strong> $<%= Number(request.netRefundAmount || request.approvedRefundAmount || 0).toFixed(2) %></p>
                 <% } %>
                 <p><strong>Refund responsibility:</strong> <%= request.refundResponsibility || 'merchant' %></p>
                 <p><strong>Customer acknowledgement:</strong> <%= request.feeAcknowledgedAt ? formatDateTime(request.feeAcknowledgedAt) : 'Not required' %></p>
@@ -185,17 +187,13 @@
                         <% } %>
 
                         <div class="partial-refund-controls" data-partial-controls hidden>
-                            <p>The percentage is applied to the valid refund base, not the original order total.</p>
+                            <p>Partial refund presets are applied to the remaining valid refund base.</p>
                             <div class="refund-preset-row">
-                                <% [25, 50, 75, 100].forEach((percentage) => { %>
+                                <% [25, 50, 75].forEach((percentage) => { %>
                                     <button type="button" data-refund-preset="<%= percentage %>"><%= percentage %>%</button>
                                 <% }) %>
                             </div>
-                            <label for="refund-percentage-<%= request.id %>">Custom percentage</label>
-                            <div class="percent-input-wrap">
-                                <input id="refund-percentage-<%= request.id %>" name="approvedPercentage" data-refund-percentage type="number" min="0.01" max="100" step="0.01" value="50">
-                                <span>%</span>
-                            </div>
+                            <input id="refund-percentage-<%= request.id %>" name="approvedPercentage" data-refund-percentage type="hidden" value="50">
                             <label for="partial-reason-<%= request.id %>">Partial refund reason</label>
                             <select id="partial-reason-<%= request.id %>" name="partialReasonPreset" data-partial-reason-select>
                                 <option value="">Select a reason</option>
@@ -206,7 +204,7 @@
                                 <option>Item returned in incomplete condition.</option>
                                 <option>Other.</option>
                             </select>
-                            <textarea name="partialReason" data-partial-reason rows="2" placeholder="Customer-facing reason for approving less than 100%."></textarea>
+                            <textarea name="partialReason" data-partial-reason rows="2" placeholder="Customer-facing reason for approving a 25%, 50% or 75% partial refund."></textarea>
                         </div>
 
                         <div data-reject-controls hidden>
@@ -234,7 +232,7 @@
                             <div><dt>Remaining eligible</dt><dd>S$<span data-preview-remaining><%= Number(request.remainingRefundableAmount || 0).toFixed(2) %></span></dd></div>
                             <div><dt>Selected percentage</dt><dd><span data-preview-percentage>100.00</span>%</dd></div>
                             <div><dt>Approved gross refund</dt><dd>S$<span data-preview-gross><%= Number(request.refundAmount || 0).toFixed(2) %></span></dd></div>
-                            <div><dt>Processing-fee deduction</dt><dd>S$<span data-preview-fee>0.00</span></dd></div>
+                            <div><dt>Refund Administration Fee</dt><dd>S$<span data-preview-fee>0.00</span></dd></div>
                             <div><dt>Other deduction</dt><dd>S$<span data-preview-other>0.00</span></dd></div>
                             <div><dt>External cash refund</dt><dd>S$<span data-preview-external>0.00</span></dd></div>
                             <div><dt>Wallet restored</dt><dd>S$<span data-preview-wallet>0.00</span></dd></div>
@@ -242,7 +240,7 @@
                             <div><dt>Points reversed</dt><dd><span data-preview-points-reversed>0</span> pts</dd></div>
                             <div><dt>Cashback restored</dt><dd>S$<span data-preview-cashback-restored>0.00</span></dd></div>
                             <div><dt>Cashback reversed</dt><dd>S$<span data-preview-cashback-reversed>0.00</span></dd></div>
-                            <div class="net-refund-row"><dt>Net refund to customer</dt><dd>S$<span data-preview-net><%= Number(request.refundAmount || 0).toFixed(2) %></span></dd></div>
+                            <div class="net-refund-row"><dt>Amount returned to customer</dt><dd>S$<span data-preview-net><%= Number(request.refundAmount || 0).toFixed(2) %></span></dd></div>
                             <div><dt>Remaining after refund</dt><dd>S$<span data-preview-after>0.00</span></dd></div>
                         </dl>
                         <p class="support-reply-feedback" data-refund-feedback></p>

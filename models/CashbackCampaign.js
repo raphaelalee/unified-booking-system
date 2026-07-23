@@ -44,6 +44,11 @@ function mapCampaign(row) {
         endAt: row.end_at,
         status: row.status,
         applicableType: row.applicable_type,
+        spinEnabled: Boolean(Number(row.spin_enabled ?? row.spinEnabled ?? 0)),
+        spinClaimLimit: row.spin_claim_limit === null || row.spin_claim_limit === undefined ? null : Number(row.spin_claim_limit),
+        spinInventoryRemaining: row.spin_inventory_remaining === null || row.spin_inventory_remaining === undefined ? null : Number(row.spin_inventory_remaining),
+        spinWinCount: Number(row.spin_win_count || row.spinWinCount || 0),
+        spinClaimCount: Number(row.spin_claim_count || row.spinClaimCount || 0),
         createdByUserId: row.created_by_user_id || null,
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -60,6 +65,9 @@ function buildCampaignPayload(form = {}) {
         endAt: normalizeDateTime(form.endAt || form.end_at || form.endDate || form.end_date),
         status: String(form.status || 'draft').trim(),
         applicableType: String(form.applicableType || form.applicable_type || 'both').trim(),
+        spinEnabled: ['1', 'true', 'on', 'yes'].includes(String(form.spinEnabled ?? form.spin_enabled ?? '').toLowerCase()),
+        spinClaimLimit: form.spinClaimLimit === '' || form.spin_claim_limit === '' ? null : Number(form.spinClaimLimit ?? form.spin_claim_limit ?? 0) || null,
+        spinInventoryRemaining: form.spinInventoryRemaining === '' || form.spin_inventory_remaining === '' ? null : Number(form.spinInventoryRemaining ?? form.spin_inventory_remaining ?? 0) || null,
         createdByUserId: form.createdByUserId || form.created_by_user_id || null
     };
 }
@@ -74,6 +82,8 @@ function validateCampaign(campaign = {}, options = {}) {
     const endAt = normalizeDateTime(campaign.endAt);
     const startDate = startAt ? new Date(startAt) : null;
     const endDate = endAt ? new Date(endAt) : null;
+    const spinClaimLimit = campaign.spinClaimLimit === null || campaign.spinClaimLimit === undefined ? null : Number(campaign.spinClaimLimit);
+    const spinInventoryRemaining = campaign.spinInventoryRemaining === null || campaign.spinInventoryRemaining === undefined ? null : Number(campaign.spinInventoryRemaining);
 
     if (requireSalonId && !Number(campaign.salonId)) {
         errors.push('Salon is required.');
@@ -111,6 +121,18 @@ function validateCampaign(campaign = {}, options = {}) {
         errors.push('Applicable type is invalid.');
     }
 
+    if (spinClaimLimit !== null && (!Number.isInteger(spinClaimLimit) || spinClaimLimit < 0)) {
+        errors.push('Wheel claim limit must be a non-negative whole number.');
+    }
+
+    if (spinInventoryRemaining !== null && (!Number.isInteger(spinInventoryRemaining) || spinInventoryRemaining < 0)) {
+        errors.push('Remaining wheel quantity must be a non-negative whole number.');
+    }
+
+    if (spinClaimLimit !== null && spinInventoryRemaining !== null && spinInventoryRemaining > spinClaimLimit) {
+        errors.push('Remaining wheel quantity cannot exceed the wheel claim limit.');
+    }
+
     return errors;
 }
 
@@ -126,6 +148,9 @@ function ensureSchema(callback) {
             end_at DATETIME NOT NULL,
             status ENUM('draft','active','inactive','expired') NOT NULL DEFAULT 'draft',
             applicable_type ENUM('products','services','both') NOT NULL DEFAULT 'both',
+            spin_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            spin_claim_limit INT DEFAULT NULL,
+            spin_inventory_remaining INT DEFAULT NULL,
             created_by_user_id INT DEFAULT NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -144,7 +169,28 @@ function ensureSchema(callback) {
             return;
         }
 
-        db.query('SHOW COLUMNS FROM loyalty_transactions', (columnError, columns = []) => {
+        db.query('SHOW COLUMNS FROM merchant_cashback_campaigns', (campaignColumnError, campaignColumns = []) => {
+            if (campaignColumnError) {
+                callback(campaignColumnError);
+                return;
+            }
+
+            const campaignFields = new Set(campaignColumns.map((column) => column.Field));
+            const campaignAlters = [];
+
+            if (!campaignFields.has('spin_enabled')) {
+                campaignAlters.push('ADD COLUMN spin_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER applicable_type');
+            }
+
+            if (!campaignFields.has('spin_claim_limit')) {
+                campaignAlters.push('ADD COLUMN spin_claim_limit INT DEFAULT NULL AFTER spin_enabled');
+            }
+
+            if (!campaignFields.has('spin_inventory_remaining')) {
+                campaignAlters.push('ADD COLUMN spin_inventory_remaining INT DEFAULT NULL AFTER spin_claim_limit');
+            }
+
+            const continueLoyaltySchema = () => db.query('SHOW COLUMNS FROM loyalty_transactions', (columnError, columns = []) => {
             if (columnError) {
                 callback(columnError);
                 return;
@@ -167,6 +213,21 @@ function ensureSchema(callback) {
             }
 
             db.query(`ALTER TABLE loyalty_transactions ${alters.join(', ')}`, callback);
+            });
+
+            if (campaignAlters.length) {
+                db.query(`ALTER TABLE merchant_cashback_campaigns ${campaignAlters.join(', ')}`, (alterError) => {
+                    if (alterError) {
+                        callback(alterError);
+                        return;
+                    }
+
+                    continueLoyaltySchema();
+                });
+                return;
+            }
+
+            continueLoyaltySchema();
         });
     });
 }
@@ -175,13 +236,24 @@ const SELECT_FIELDS = `
     merchant_cashback_campaigns.*,
     salons.salon_name,
     salons.merchant_id,
-    users.name AS merchant_name
+    users.name AS merchant_name,
+    COALESCE(spin_stats.spin_win_count, 0) AS spin_win_count,
+    COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
 `;
 
 const FROM_JOIN = `
     FROM merchant_cashback_campaigns
     INNER JOIN salons ON salons.salon_id = merchant_cashback_campaigns.salon_id
     LEFT JOIN users ON users.user_id = salons.merchant_id
+    LEFT JOIN (
+        SELECT
+            reward_source_id AS campaign_id,
+            COUNT(*) AS spin_win_count,
+            SUM(CASE WHEN status = 'claimed' THEN 1 ELSE 0 END) AS spin_claim_count
+        FROM spin_results
+        WHERE reward_source_type = 'cashback_campaign'
+        GROUP BY reward_source_id
+    ) spin_stats ON spin_stats.campaign_id = merchant_cashback_campaigns.campaign_id
 `;
 
 function getAll(callback) {
@@ -267,10 +339,16 @@ function createForMerchant(userId, campaign, callback) {
             end_at,
             status,
             applicable_type,
+            spin_enabled,
+            spin_claim_limit,
+            spin_inventory_remaining,
             created_by_user_id
         )
         SELECT
             salons.salon_id,
+            ?,
+            ?,
+            ?,
             ?,
             ?,
             ?,
@@ -293,6 +371,9 @@ function createForMerchant(userId, campaign, callback) {
         campaign.endAt,
         campaign.status,
         campaign.applicableType,
+        campaign.spinEnabled ? 1 : 0,
+        campaign.spinClaimLimit || null,
+        campaign.spinInventoryRemaining ?? campaign.spinClaimLimit ?? null,
         campaign.createdByUserId || userId,
         userId,
         campaign.salonId
@@ -310,8 +391,11 @@ function createAsAdmin(campaign, callback) {
             end_at,
             status,
             applicable_type,
+            spin_enabled,
+            spin_claim_limit,
+            spin_inventory_remaining,
             created_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(sql, [
@@ -323,6 +407,9 @@ function createAsAdmin(campaign, callback) {
         campaign.endAt,
         campaign.status,
         campaign.applicableType,
+        campaign.spinEnabled ? 1 : 0,
+        campaign.spinClaimLimit || null,
+        campaign.spinInventoryRemaining ?? campaign.spinClaimLimit ?? null,
         campaign.createdByUserId || null
     ], callback);
 }
@@ -338,7 +425,10 @@ function updateForMerchant(userId, campaignId, campaign, callback) {
             merchant_cashback_campaigns.start_at = ?,
             merchant_cashback_campaigns.end_at = ?,
             merchant_cashback_campaigns.status = ?,
-            merchant_cashback_campaigns.applicable_type = ?
+            merchant_cashback_campaigns.applicable_type = ?,
+            merchant_cashback_campaigns.spin_enabled = ?,
+            merchant_cashback_campaigns.spin_claim_limit = ?,
+            merchant_cashback_campaigns.spin_inventory_remaining = ?
         WHERE merchant_cashback_campaigns.campaign_id = ?
             AND salons.merchant_id = ?
             AND merchant_cashback_campaigns.salon_id = ?
@@ -352,6 +442,9 @@ function updateForMerchant(userId, campaignId, campaign, callback) {
         campaign.endAt,
         campaign.status,
         campaign.applicableType,
+        campaign.spinEnabled ? 1 : 0,
+        campaign.spinClaimLimit || null,
+        campaign.spinInventoryRemaining ?? campaign.spinClaimLimit ?? null,
         campaignId,
         userId,
         campaign.salonId
@@ -369,7 +462,10 @@ function updateAsAdmin(campaignId, campaign, callback) {
             start_at = ?,
             end_at = ?,
             status = ?,
-            applicable_type = ?
+            applicable_type = ?,
+            spin_enabled = ?,
+            spin_claim_limit = ?,
+            spin_inventory_remaining = ?
         WHERE campaign_id = ?
     `;
 
@@ -382,6 +478,9 @@ function updateAsAdmin(campaignId, campaign, callback) {
         campaign.endAt,
         campaign.status,
         campaign.applicableType,
+        campaign.spinEnabled ? 1 : 0,
+        campaign.spinClaimLimit || null,
+        campaign.spinInventoryRemaining ?? campaign.spinClaimLimit ?? null,
         campaignId
     ], callback);
 }

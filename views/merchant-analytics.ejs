@@ -65,6 +65,19 @@
         paymentLabels: paymentRows.length ? paymentRows.map((row) => row.method.replace(/_/g, ' ')) : ['No payments'],
         paymentValues: paymentRows.length ? paymentRows.map((row) => row.amount) : [0]
     };
+    const chartExplanationPayload = {
+        refundStats: safeRefundStats,
+        topProducts: recentOrders.slice(0, 5).map((order) => ({
+            name: order.itemNames || order.item_names || 'Product order',
+            value: Number(order.totalAmount || order.paidAmount || order.amount || 0)
+        })),
+        topCustomers: topCustomers.slice(0, 5).map((customer) => ({
+            name: customer.customerName || 'Customer',
+            visits: Number(customer.visits || 0),
+            spend: Number(customer.spend || 0)
+        })),
+        rewardRedemptions
+    };
 %>
 
 <section class="section compact merchant-analytics-page merchant-analytics-redesign">
@@ -362,6 +375,7 @@
 <script>
     (() => {
         const chartPayload = <%- JSON.stringify(chartPayload) %>;
+        const chartExplanationPayload = <%- JSON.stringify(chartExplanationPayload) %>;
         const palette = { green: '#3f6b3a', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
         const mainCanvas = document.getElementById('merchantAnalyticsChart');
         const title = document.querySelector('[data-merchant-chart-title]');
@@ -371,6 +385,61 @@
             maintainAspectRatio: false,
             plugins: { legend: { position: 'bottom' } },
             scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
+        };
+        const sum = (values = []) => values.reduce((total, value) => total + Number(value || 0), 0);
+        const formatPct = (value) => `${Number(value || 0).toFixed(0)}%`;
+        const topSlice = (labels = [], values = []) => labels.map((label, index) => ({ label, value: Number(values[index] || 0) })).sort((left, right) => right.value - left.value)[0];
+        const trendText = (values = [], label = 'value') => {
+            const numeric = values.map((value) => Number(value || 0));
+            const first = numeric.find((value) => value > 0) || 0;
+            const last = [...numeric].reverse().find((value) => value > 0) || 0;
+            const total = sum(numeric);
+            if (!total) return `No ${label} data is available for this chart yet.`;
+            if (!first || first === last) return `${label} is steady across the selected chart data.`;
+            const change = ((last - first) / first) * 100;
+            return `${label} ${change >= 0 ? 'increased' : 'decreased'} ${formatPct(Math.abs(change))} from the first active point to the latest active point.`;
+        };
+        const addChartExplanation = (anchor, titleText, bodyText) => {
+            if (!anchor) return;
+            let node = anchor.parentElement.querySelector(':scope > .analytics-ai-chart-explanation');
+            if (!node) {
+                node = document.createElement('div');
+                node.className = 'analytics-ai-chart-explanation';
+                const heading = document.createElement('strong');
+                const body = document.createElement('span');
+                node.append(heading, body);
+                anchor.insertAdjacentElement('afterend', node);
+            }
+            node.querySelector('strong').textContent = titleText;
+            node.querySelector('span').textContent = bodyText;
+        };
+        const explainShare = (labels = [], values = [], metric = 'activity') => {
+            const top = topSlice(labels, values);
+            const total = sum(values);
+            if (!top || !total) return `No ${metric} data is available for this chart yet.`;
+            return `${top.label} represents ${formatPct((top.value / total) * 100)} of ${metric} in this chart.`;
+        };
+        const merchantMainExplanation = (mode) => ({
+            sales: `${trendText(chartPayload.salesRevenue, 'Revenue')} ${trendText(chartPayload.salesOrders, 'Orders')}`,
+            services: explainShare(chartPayload.serviceLabels, chartPayload.serviceValues, 'service bookings'),
+            hours: explainShare(chartPayload.hourLabels, chartPayload.hourValues, 'booking demand by hour'),
+            customers: explainShare(chartPayload.contactLabels, chartPayload.contactValues, 'customer contact preference')
+        }[mode] || 'AI explanation is based on the current chart data.');
+        const renderMerchantChartExplanations = (mode = 'sales') => {
+            addChartExplanation(mainCanvas?.closest('.merchant-chart-box'), 'AI explanation', merchantMainExplanation(mode));
+            addChartExplanation(document.getElementById('merchantStatusChart')?.closest('.merchant-chart-box'), 'AI explanation', explainShare(chartPayload.statusLabels, chartPayload.statusValues, 'booking statuses'));
+            addChartExplanation(document.getElementById('merchantServiceChart')?.closest('.merchant-chart-box'), 'AI explanation', explainShare(chartPayload.serviceLabels, chartPayload.serviceValues, 'top services'));
+            addChartExplanation(document.getElementById('merchantPaymentChart')?.closest('.merchant-chart-box'), 'AI explanation', explainShare(chartPayload.paymentLabels, chartPayload.paymentValues, 'payment value'));
+            addChartExplanation(document.getElementById('merchantAgeChart')?.closest('.merchant-chart-box'), 'AI explanation', explainShare(chartPayload.ageLabels, chartPayload.ageValues, 'customer age profile'));
+            addChartExplanation(document.getElementById('merchantGenderChart')?.closest('.merchant-chart-box'), 'AI explanation', explainShare(chartPayload.genderLabels, chartPayload.genderValues, 'customer gender profile'));
+            const productTotal = sum((chartExplanationPayload.topProducts || []).map((row) => row.value));
+            const topProduct = (chartExplanationPayload.topProducts || []).sort((left, right) => right.value - left.value)[0];
+            addChartExplanation(document.querySelector('.merchant-analytics-table-list'), 'AI explanation', topProduct && productTotal ? `${topProduct.name} leads product orders with ${formatPct((topProduct.value / productTotal) * 100)} of recent product value.` : 'Top product performance appears when product orders are recorded.');
+            const refunds = chartExplanationPayload.refundStats || {};
+            const refundTotal = sum(['pendingCount', 'approvedCount', 'processingCount', 'refundedCount', 'rejectedCount', 'failedCount'].map((key) => refunds[key]));
+            addChartExplanation(document.querySelector('.merchant-refund-status-list'), 'AI explanation', refundTotal ? `Refund activity totals ${refundTotal} cases in the current report, with ${Number(refunds.pendingCount || 0)} still pending.` : 'No refund activity is available for the selected period.');
+            const rewards = chartExplanationPayload.rewardRedemptions || {};
+            addChartExplanation(document.querySelector('.merchant-loyalty-list'), 'AI explanation', Number(rewards.redemptionCount || 0) ? `Reward performance shows ${Number(rewards.redemptionCount || 0)} redemptions and S$${Number(rewards.redeemedValue || 0).toFixed(2)} redeemed value.` : 'Spin and reward performance appears after reward redemptions are recorded.');
         };
         const chartConfigs = {
             sales: {
@@ -407,6 +476,7 @@
             const config = chartConfigs[mode] || chartConfigs.sales;
             if (mainChart) mainChart.destroy();
             if (title) title.textContent = config.title;
+            renderMerchantChartExplanations(mode);
             mainChart = new Chart(mainCanvas, {
                 type: config.type,
                 data: { labels: config.labels, datasets: config.datasets },
@@ -433,6 +503,7 @@
         makeChart('merchantPaymentChart', { type: 'doughnut', data: { labels: chartPayload.paymentLabels, datasets: [{ data: chartPayload.paymentValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
         makeChart('merchantAgeChart', { type: 'bar', data: { labels: chartPayload.ageLabels, datasets: [{ label: 'Customers', data: chartPayload.ageValues, backgroundColor: 'rgba(32,137,156,.24)' }] }, options: baseOptions });
         makeChart('merchantGenderChart', { type: 'doughnut', data: { labels: chartPayload.genderLabels, datasets: [{ data: chartPayload.genderValues, backgroundColor: [palette.green, palette.blue, palette.orange, palette.yellow, palette.red] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+        renderMerchantChartExplanations('sales');
 
         const modal = document.querySelector('[data-export-modal]');
         const openButton = document.querySelector('[data-export-open]');
@@ -451,7 +522,659 @@
         const endDateInput = document.querySelector('[data-export-end-date]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
         let exportInProgress = false;
+        let aiInProgress = false;
+        let aiQuestionInProgress = false;
         let lastFocusedElement = null;
+
+        const aiPeriod = document.querySelector('[data-ai-period]');
+        const aiPeriodLabel = document.querySelector('[data-ai-period-label]');
+        const aiGenerate = document.querySelector('[data-ai-generate]');
+        const aiMessage = document.querySelector('[data-ai-message]');
+        const aiResults = document.querySelector('[data-ai-results]');
+        const aiSummary = document.querySelector('[data-ai-summary]');
+        const aiFindings = document.querySelector('[data-ai-findings]');
+        const aiActions = document.querySelector('[data-ai-actions]');
+        const aiRisks = document.querySelector('[data-ai-risks]');
+        const aiPositive = document.querySelector('[data-ai-positive]');
+        const aiQuestion = document.querySelector('[data-ai-question]');
+        const aiAsk = document.querySelector('[data-ai-ask]');
+        const aiQuestionMessage = document.querySelector('[data-ai-question-message]');
+        const aiAnswer = document.querySelector('[data-ai-answer]');
+        const aiActionPrompt = document.querySelector('[data-ai-action-prompt]');
+        const aiActionPrepare = document.querySelector('[data-ai-action-prepare]');
+        const aiScheduleRecommendations = document.querySelector('[data-ai-schedule-recommendations]');
+        const aiActionMessage = document.querySelector('[data-ai-action-message]');
+        const aiActionProposal = document.querySelector('[data-ai-action-proposal]');
+        const aiLoadReminders = document.querySelector('[data-ai-load-reminders]');
+        const aiReminderMessage = document.querySelector('[data-ai-reminder-message]');
+        const aiReminders = document.querySelector('[data-ai-reminders]');
+        const aiChatHistory = document.querySelector('[data-ai-chat-history]');
+        const aiChatInput = document.querySelector('[data-ai-chat-input]');
+        const aiChatSend = document.querySelector('[data-ai-chat-send]');
+        const aiChatPrompts = Array.from(document.querySelectorAll('[data-ai-chat-prompt]'));
+        const aiAssistantRoot = document.querySelector('[data-ai-chat-scope="merchant"]');
+        const aiAssistantToggle = document.querySelector('[data-ai-assistant-toggle]');
+        const aiAssistantClose = document.querySelector('[data-ai-assistant-close]');
+        const aiAssistantDrawer = document.querySelector('[data-ai-assistant-drawer]');
+        let aiActionInProgress = false;
+        let aiReminderInProgress = false;
+        let aiChatInProgress = false;
+        const aiChatStorageKey = 'vaniday:merchant-ai-chat';
+        const aiPanelStateKey = 'vaniday:merchant-ai-open';
+
+        const setStatus = (node, message, tone = '') => {
+            if (!node) return;
+            node.textContent = message || '';
+            node.dataset.tone = tone;
+        };
+        const clearNode = (node) => {
+            if (!node) return;
+            while (node.firstChild) node.removeChild(node.firstChild);
+        };
+        const emptyNote = (message) => {
+            const note = document.createElement('p');
+            note.className = 'merchant-analytics-empty';
+            note.textContent = message;
+            return note;
+        };
+        const renderInsightList = (node, rows, mapper, emptyMessage) => {
+            clearNode(node);
+            if (!node) return;
+            if (!rows || !rows.length) {
+                node.appendChild(emptyNote(emptyMessage));
+                return;
+            }
+            rows.forEach((row) => {
+                const mapped = mapper(row);
+                const article = document.createElement('article');
+                const body = document.createElement('div');
+                const titleNode = document.createElement('strong');
+                const detailNode = document.createElement('span');
+                titleNode.textContent = mapped.title || 'Insight';
+                detailNode.textContent = mapped.detail || '';
+                body.append(titleNode, detailNode);
+                article.appendChild(body);
+                if (mapped.meta) {
+                    const meta = document.createElement('b');
+                    meta.textContent = mapped.meta;
+                    article.appendChild(meta);
+                }
+                node.appendChild(article);
+            });
+        };
+        const syncAiButtons = () => {
+            if (aiGenerate) aiGenerate.disabled = aiInProgress;
+            if (aiAsk) aiAsk.disabled = aiQuestionInProgress;
+            if (aiActionPrepare) aiActionPrepare.disabled = aiActionInProgress;
+            if (aiScheduleRecommendations) aiScheduleRecommendations.disabled = aiActionInProgress;
+            if (aiLoadReminders) aiLoadReminders.disabled = aiReminderInProgress;
+            if (aiChatSend) aiChatSend.disabled = aiChatInProgress || !String(aiChatInput?.value || '').trim();
+            aiChatPrompts.forEach((button) => { button.disabled = aiChatInProgress; });
+        };
+        const setAiAssistantOpen = (open) => {
+            aiAssistantRoot?.classList.toggle('is-open', open);
+            if (aiAssistantToggle) aiAssistantToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (aiAssistantDrawer) aiAssistantDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+            sessionStorage.setItem(aiPanelStateKey, open ? 'open' : 'closed');
+            if (open) setTimeout(() => aiChatInput?.focus(), 180);
+        };
+        const fetchAiJson = async (url, body) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000);
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify(body),
+                    signal: controller.signal
+                });
+                const payload = await response.json().catch(() => ({}));
+                return { response, payload };
+            } catch (error) {
+                if (error?.name === 'AbortError') {
+                    throw new Error('AI request timed out. Please try again.');
+                }
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+            }
+        };
+        const renderMerchantInsights = (payload) => {
+            const insights = payload.insights || payload.fallback || {};
+            if (aiPeriodLabel) aiPeriodLabel.textContent = payload.period?.label || aiPeriod?.selectedOptions?.[0]?.textContent || 'Selected period';
+            if (aiResults) aiResults.hidden = false;
+            if (aiSummary) aiSummary.textContent = insights.summary || 'No summary returned.';
+            renderInsightList(aiFindings, insights.keyFindings, (row) => ({
+                title: row.title,
+                detail: row.detail,
+                meta: row.evidence
+            }), 'No key findings for this period.');
+            renderInsightList(aiActions, insights.recommendedActions, (row) => ({
+                title: row.action,
+                detail: row.reason,
+                meta: row.priority ? `Priority: ${row.priority}` : ''
+            }), 'No recommended actions for this period.');
+            renderInsightList(aiRisks, insights.risks, (row) => ({
+                title: row.issue,
+                detail: row.suggestedResponse,
+                meta: row.severity ? `Severity: ${row.severity}` : ''
+            }), 'No risks identified from the supplied summary.');
+            renderInsightList(aiPositive, insights.positiveSignals, (row) => ({
+                title: row.signal,
+                detail: row.evidence,
+                meta: ''
+            }), 'No positive signals identified yet.');
+        };
+        const renderMerchantAnswer = (answer = {}) => {
+            clearNode(aiAnswer);
+            if (!aiAnswer) return;
+            const main = document.createElement('article');
+            const body = document.createElement('div');
+            const titleNode = document.createElement('strong');
+            const detailNode = document.createElement('span');
+            titleNode.textContent = 'Answer';
+            detailNode.textContent = answer.answer || 'No answer returned.';
+            body.append(titleNode, detailNode);
+            main.appendChild(body);
+            aiAnswer.appendChild(main);
+            [
+                ...(answer.supportingEvidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(answer.suggestedNextSteps || []).map((item) => ({ title: 'Next step', detail: item })),
+                ...(answer.limitations || []).map((item) => ({ title: 'Limitation', detail: item }))
+            ].forEach((row) => {
+                const article = document.createElement('article');
+                const rowBody = document.createElement('div');
+                const rowTitle = document.createElement('strong');
+                const rowDetail = document.createElement('span');
+                rowTitle.textContent = row.title;
+                rowDetail.textContent = row.detail;
+                rowBody.append(rowTitle, rowDetail);
+                article.appendChild(rowBody);
+                aiAnswer.appendChild(article);
+            });
+        };
+        const actionConfirmEndpoint = (actionType) => ({
+            create_promotion: '/api/ai/merchant/actions/confirm-promotion',
+            change_service_price: '/api/ai/merchant/actions/confirm-price-change',
+            adjust_inventory: '/api/ai/merchant/actions/confirm-inventory-change',
+            create_reminder: '/api/ai/merchant/actions/confirm-reminder',
+            update_schedule: '/api/ai/merchant/actions/confirm-schedule-change'
+        }[actionType] || '');
+        const renderKeyValue = (container, label, value) => {
+            if (value === undefined || value === null || value === '') return;
+            const row = document.createElement('span');
+            row.textContent = `${label}: ${Array.isArray(value) ? value.join(', ') : value}`;
+            container.appendChild(row);
+        };
+        const renderActionProposal = (proposal) => {
+            clearNode(aiActionProposal);
+            if (!aiActionProposal || !proposal) return;
+            const article = document.createElement('article');
+            const body = document.createElement('div');
+            const title = document.createElement('strong');
+            const detail = document.createElement('span');
+            const meta = document.createElement('span');
+            title.textContent = proposal.title || 'AI action proposal';
+            detail.textContent = proposal.reason || 'Review this proposal before taking action.';
+            meta.textContent = `Type: ${proposal.actionType || 'proposal'} | Risk: ${proposal.riskLevel || 'review'}`;
+            body.append(title, detail, meta);
+            ['currentState', 'proposedState'].forEach((key) => {
+                const state = proposal[key] || {};
+                Object.keys(state).forEach((field) => renderKeyValue(body, field, state[field]));
+            });
+            (proposal.evidence || []).forEach((item) => renderKeyValue(body, 'Evidence', item));
+            (proposal.warnings || []).forEach((item) => renderKeyValue(body, 'Warning', item));
+            article.appendChild(body);
+            const endpoint = actionConfirmEndpoint(proposal.actionType);
+            if (endpoint && proposal.riskLevel !== 'recommend_only' && proposal.proposalId) {
+                const confirmButton = document.createElement('button');
+                confirmButton.type = 'button';
+                confirmButton.className = 'button primary';
+                confirmButton.textContent = 'Confirm Action';
+                confirmButton.addEventListener('click', async () => {
+                    if (aiActionInProgress) return;
+                    aiActionInProgress = true;
+                    confirmButton.disabled = true;
+                    setStatus(aiActionMessage, 'Confirming action...', 'loading');
+                    syncAiButtons();
+                    try {
+                        const { response, payload } = await fetchAiJson(endpoint, { proposalId: proposal.proposalId });
+                        if (!response.ok || !payload.success) throw new Error(payload.message || 'Action could not be confirmed.');
+                        setStatus(aiActionMessage, 'Action confirmed. Refresh if you want to see updated dashboard totals.', 'success');
+                    } catch (error) {
+                        setStatus(aiActionMessage, error.message || 'Action could not be confirmed.', 'error');
+                        confirmButton.disabled = false;
+                    } finally {
+                        aiActionInProgress = false;
+                        syncAiButtons();
+                    }
+                });
+                article.appendChild(confirmButton);
+            }
+            aiActionProposal.appendChild(article);
+        };
+        const renderReminders = (rows = []) => {
+            clearNode(aiReminders);
+            if (!aiReminders) return;
+            if (!rows.length) {
+                aiReminders.appendChild(emptyNote('No smart reminders for this period.'));
+                return;
+            }
+            rows.forEach((reminder) => {
+                const article = document.createElement('article');
+                const body = document.createElement('div');
+                const title = document.createElement('strong');
+                const detail = document.createElement('span');
+                const meta = document.createElement('b');
+                title.textContent = reminder.title || 'Reminder';
+                detail.textContent = reminder.message || '';
+                meta.textContent = `${reminder.priority || 'medium'} priority`;
+                body.append(title, detail);
+                article.append(body, meta);
+                if (reminder.recommendedAction?.href) {
+                    const link = document.createElement('a');
+                    link.className = 'button ghost';
+                    link.href = reminder.recommendedAction.href;
+                    link.textContent = reminder.recommendedAction.label || 'Open';
+                    article.appendChild(link);
+                }
+                const updateReminder = async (url, successMessage) => {
+                    try {
+                        const { response, payload } = await fetchAiJson(url, { reminderId: reminder.id });
+                        if (!response.ok || !payload.success) throw new Error(payload.message || 'Reminder could not be updated.');
+                        article.remove();
+                        if (!aiReminders.children.length) aiReminders.appendChild(emptyNote('No smart reminders for this period.'));
+                        setStatus(aiReminderMessage, successMessage, 'success');
+                    } catch (error) {
+                        setStatus(aiReminderMessage, error.message || 'Reminder could not be updated.', 'error');
+                    }
+                };
+                const dismissButton = document.createElement('button');
+                dismissButton.type = 'button';
+                dismissButton.className = 'button ghost';
+                dismissButton.textContent = 'Dismiss';
+                dismissButton.addEventListener('click', () => updateReminder('/api/ai/merchant/reminders/dismiss', 'Reminder dismissed.'));
+                const doneButton = document.createElement('button');
+                doneButton.type = 'button';
+                doneButton.className = 'button secondary';
+                doneButton.textContent = 'Mark Done';
+                doneButton.addEventListener('click', () => updateReminder('/api/ai/merchant/reminders/mark-done', 'Reminder marked done.'));
+                article.append(dismissButton, doneButton);
+                aiReminders.appendChild(article);
+            });
+        };
+        const persistAiChat = () => {
+            if (!aiChatHistory) return;
+            const rows = Array.from(aiChatHistory.querySelectorAll('.vaniday-ai-message')).map((message) => ({
+                role: message.dataset.role || 'assistant',
+                text: message.querySelector('.vaniday-ai-message-text')?.textContent || ''
+            })).filter((row) => row.text);
+            sessionStorage.setItem(aiChatStorageKey, JSON.stringify(rows.slice(-20)));
+        };
+        const appendAiMessage = (role, text, children = []) => {
+            if (!aiChatHistory) return null;
+            const message = document.createElement('article');
+            message.className = 'vaniday-ai-message';
+            message.dataset.role = role;
+            const label = document.createElement('strong');
+            label.textContent = role === 'user' ? 'You' : 'AI';
+            const content = document.createElement('div');
+            content.className = 'vaniday-ai-message-text';
+            content.textContent = text || '';
+            message.append(label, content);
+            children.forEach((child) => message.appendChild(child));
+            aiChatHistory.appendChild(message);
+            aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+            persistAiChat();
+            return message;
+        };
+        const appendTyping = () => {
+            const node = appendAiMessage('assistant', 'Thinking...');
+            node?.classList.add('is-typing');
+            return node;
+        };
+        const createAiDetailList = (rows = []) => {
+            const list = document.createElement('div');
+            list.className = 'vaniday-ai-card-list';
+            rows.filter(Boolean).forEach((row) => {
+                const item = document.createElement('article');
+                const title = document.createElement('strong');
+                const detail = document.createElement('span');
+                title.textContent = row.title || 'Insight';
+                detail.textContent = row.detail || '';
+                item.append(title, detail);
+                if (row.meta) {
+                    const meta = document.createElement('small');
+                    meta.textContent = row.meta;
+                    item.appendChild(meta);
+                }
+                list.appendChild(item);
+            });
+            return list;
+        };
+        const createProposalCard = (proposal) => {
+            const card = document.createElement('div');
+            card.className = 'vaniday-ai-action-card';
+            const rows = [
+                { title: proposal.title || 'AI action proposal', detail: proposal.reason || 'Review this proposal before taking action.', meta: proposal.riskLevel ? `Risk: ${proposal.riskLevel}` : '' },
+                ...(proposal.evidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(proposal.warnings || []).map((item) => ({ title: 'Warning', detail: item }))
+            ];
+            card.appendChild(createAiDetailList(rows));
+            const endpoint = actionConfirmEndpoint(proposal.actionType);
+            if (endpoint && proposal.riskLevel !== 'recommend_only' && proposal.proposalId) {
+                const confirmButton = document.createElement('button');
+                confirmButton.type = 'button';
+                confirmButton.className = 'button primary';
+                confirmButton.textContent = proposal.actionType === 'create_promotion'
+                    ? 'Create Promotion'
+                    : proposal.actionType === 'create_reminder'
+                        ? 'Create Reminder'
+                        : 'Confirm Action';
+                confirmButton.addEventListener('click', async () => {
+                    if (aiChatInProgress) return;
+                    aiChatInProgress = true;
+                    syncAiButtons();
+                    confirmButton.disabled = true;
+                    const typing = appendTyping();
+                    try {
+                        const { response, payload } = await fetchAiJson(endpoint, { proposalId: proposal.proposalId });
+                        if (!response.ok || !payload.success) throw new Error(payload.message || 'Action could not be confirmed.');
+                        typing?.remove();
+                        appendAiMessage('assistant', 'Action confirmed. Refresh the dashboard if you want to see the latest totals.');
+                    } catch (error) {
+                        typing?.remove();
+                        appendAiMessage('assistant', error.message || 'Action could not be confirmed.');
+                        confirmButton.disabled = false;
+                    } finally {
+                        aiChatInProgress = false;
+                        syncAiButtons();
+                    }
+                });
+                card.appendChild(confirmButton);
+            }
+            const dismissButton = document.createElement('button');
+            dismissButton.type = 'button';
+            dismissButton.className = 'button ghost';
+            dismissButton.textContent = 'Dismiss';
+            dismissButton.addEventListener('click', () => {
+                card.closest('.vaniday-ai-message')?.remove();
+                persistAiChat();
+            });
+            card.appendChild(dismissButton);
+            return card;
+        };
+        const createReminderCards = (rows = []) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'vaniday-ai-card-list';
+            if (!rows.length) {
+                const note = document.createElement('article');
+                const title = document.createElement('strong');
+                const detail = document.createElement('span');
+                title.textContent = 'No reminders';
+                detail.textContent = 'No smart reminders for this period.';
+                note.append(title, detail);
+                wrap.appendChild(note);
+                return wrap;
+            }
+            rows.forEach((reminder) => {
+                const card = document.createElement('article');
+                const title = document.createElement('strong');
+                const detail = document.createElement('span');
+                const actions = document.createElement('div');
+                title.textContent = reminder.title || 'Reminder';
+                detail.textContent = reminder.message || '';
+                actions.className = 'vaniday-ai-card-actions';
+                const updateReminder = async (url, successMessage) => {
+                    if (aiChatInProgress) return;
+                    aiChatInProgress = true;
+                    syncAiButtons();
+                    try {
+                        const { response, payload } = await fetchAiJson(url, { reminderId: reminder.id });
+                        if (!response.ok || !payload.success) throw new Error(payload.message || 'Reminder could not be updated.');
+                        card.remove();
+                        appendAiMessage('assistant', successMessage);
+                    } catch (error) {
+                        appendAiMessage('assistant', error.message || 'Reminder could not be updated.');
+                    } finally {
+                        aiChatInProgress = false;
+                        syncAiButtons();
+                    }
+                };
+                const done = document.createElement('button');
+                done.type = 'button';
+                done.className = 'button secondary';
+                done.textContent = 'Mark Done';
+                done.addEventListener('click', () => updateReminder('/api/ai/merchant/reminders/mark-done', 'Reminder marked done.'));
+                const dismiss = document.createElement('button');
+                dismiss.type = 'button';
+                dismiss.className = 'button ghost';
+                dismiss.textContent = 'Dismiss';
+                dismiss.addEventListener('click', () => updateReminder('/api/ai/merchant/reminders/dismiss', 'Reminder dismissed.'));
+                actions.append(done, dismiss);
+                card.append(title, detail, actions);
+                wrap.appendChild(card);
+            });
+            return wrap;
+        };
+        const renderInsightsToChat = (payload) => {
+            const insights = payload.insights || payload.fallback || {};
+            const rows = [
+                ...(insights.keyFindings || []).map((row) => ({ title: row.title, detail: row.detail, meta: row.evidence })),
+                ...(insights.recommendedActions || []).map((row) => ({ title: row.action, detail: row.reason, meta: row.priority ? `Priority: ${row.priority}` : '' })),
+                ...(insights.risks || []).map((row) => ({ title: row.issue, detail: row.suggestedResponse, meta: row.severity ? `Severity: ${row.severity}` : '' }))
+            ].slice(0, 8);
+            appendAiMessage('assistant', insights.summary || 'Here is the current analytics summary.', rows.length ? [createAiDetailList(rows)] : []);
+        };
+        const renderAnswerToChat = (answer = {}) => {
+            const rows = [
+                ...(answer.supportingEvidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(answer.suggestedNextSteps || []).map((item) => ({ title: 'Next step', detail: item })),
+                ...(answer.limitations || []).map((item) => ({ title: 'Limitation', detail: item }))
+            ];
+            appendAiMessage('assistant', answer.answer || 'No answer returned.', rows.length ? [createAiDetailList(rows)] : []);
+        };
+        const merchantChatIntent = (prompt) => {
+            const text = String(prompt || '').toLowerCase();
+            if (/\b(reminder|remind)\b/.test(text)) return 'reminders';
+            if (/\b(summarise|summarize|summary|performance|overview)\b/.test(text)) return 'insights';
+            if (/\b(promotion|price|restock|inventory|schedule|action|prepare|refunds?\s+need|attention)\b/.test(text)) return 'proposal';
+            return 'question';
+        };
+        const submitMerchantChat = async (prompt) => {
+            const text = String(prompt || '').trim();
+            if (!text || aiChatInProgress) return;
+            appendAiMessage('user', text);
+            if (aiChatInput) aiChatInput.value = '';
+            aiChatInProgress = true;
+            setStatus(aiMessage, 'AI is working...', 'loading');
+            syncAiButtons();
+            const typing = appendTyping();
+            try {
+                const period = aiPeriod?.value || 'last30';
+                const intent = merchantChatIntent(text);
+                let response;
+                let payload;
+                if (intent === 'insights') {
+                    ({ response, payload } = await fetchAiJson('/api/ai/merchant/business-insights', { period }));
+                    if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI insights could not be generated.');
+                    typing?.remove();
+                    renderMerchantInsights(payload);
+                    renderInsightsToChat(payload);
+                } else if (intent === 'reminders') {
+                    ({ response, payload } = await fetchAiJson('/api/ai/merchant/smart-reminders', { period }));
+                    if (!response.ok || !payload.success) throw new Error(payload.message || 'Smart reminders could not be loaded.');
+                    typing?.remove();
+                    renderReminders(payload.reminders || []);
+                    appendAiMessage('assistant', 'Here are the smart reminders for this period.', [createReminderCards(payload.reminders || [])]);
+                } else if (intent === 'proposal') {
+                    ({ response, payload } = await fetchAiJson('/api/ai/merchant/action-proposal', { period, prompt: text }));
+                    if (!response.ok || !payload.success) throw new Error(payload.message || 'Action proposal could not be prepared.');
+                    typing?.remove();
+                    renderActionProposal(payload.proposal);
+                    appendAiMessage('assistant', 'I prepared a safe proposal for review.', [createProposalCard(payload.proposal)]);
+                } else {
+                    ({ response, payload } = await fetchAiJson('/api/ai/merchant/ask-analytics', { period, question: text }));
+                    if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI answer could not be generated.');
+                    typing?.remove();
+                    renderMerchantAnswer(payload.answer || payload.fallback || {});
+                    renderAnswerToChat(payload.answer || payload.fallback || {});
+                }
+                setStatus(aiMessage, 'AI response ready.', 'success');
+            } catch (error) {
+                typing?.remove();
+                appendAiMessage('assistant', error.message || 'AI is temporarily unavailable.');
+                setStatus(aiMessage, error.message || 'AI is temporarily unavailable.', 'error');
+            } finally {
+                aiChatInProgress = false;
+                syncAiButtons();
+            }
+        };
+        const restoreAiChat = () => {
+            if (!aiChatHistory) return;
+            let saved = [];
+            try {
+                saved = JSON.parse(sessionStorage.getItem(aiChatStorageKey) || '[]');
+            } catch (error) {
+                saved = [];
+            }
+            if (Array.isArray(saved) && saved.length) {
+                saved.forEach((row) => appendAiMessage(row.role, row.text));
+            } else {
+                appendAiMessage('assistant', 'Hi, I can summarise analytics, answer questions, prepare safe actions, and show smart reminders.');
+            }
+        };
+
+        aiChatSend?.addEventListener('click', () => submitMerchantChat(aiChatInput?.value));
+        aiAssistantToggle?.addEventListener('click', () => {
+            setAiAssistantOpen(!aiAssistantRoot?.classList.contains('is-open'));
+        });
+        aiAssistantClose?.addEventListener('click', () => setAiAssistantOpen(false));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && aiAssistantRoot?.classList.contains('is-open')) {
+                setAiAssistantOpen(false);
+            }
+        });
+        aiChatInput?.addEventListener('input', syncAiButtons);
+        aiChatInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                submitMerchantChat(aiChatInput.value);
+            }
+        });
+        aiChatPrompts.forEach((button) => {
+            button.addEventListener('click', () => submitMerchantChat(button.dataset.aiChatPrompt));
+        });
+
+        aiGenerate?.addEventListener('click', async () => {
+            if (aiInProgress) return;
+            aiInProgress = true;
+            aiGenerate.textContent = 'Generating...';
+            setStatus(aiMessage, 'Generating AI insights...', 'loading');
+            syncAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/merchant/business-insights', { period: aiPeriod?.value || 'last30' });
+                if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI insights could not be generated.');
+                renderMerchantInsights(payload);
+                setStatus(aiMessage, payload.success ? 'AI insights generated.' : payload.message, payload.success ? 'success' : 'warning');
+            } catch (error) {
+                setStatus(aiMessage, error.message || 'AI insights are temporarily unavailable. Your analytics data is still available.', 'error');
+            } finally {
+                aiInProgress = false;
+                aiGenerate.textContent = 'Generate Insights';
+                syncAiButtons();
+            }
+        });
+
+        aiAsk?.addEventListener('click', async () => {
+            const question = String(aiQuestion?.value || '').trim();
+            if (!question) {
+                setStatus(aiQuestionMessage, 'Enter a question first.', 'error');
+                return;
+            }
+            if (aiQuestionInProgress) return;
+            aiQuestionInProgress = true;
+            aiAsk.textContent = 'Asking...';
+            setStatus(aiQuestionMessage, 'Asking AI...', 'loading');
+            syncAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/merchant/ask-analytics', { period: aiPeriod?.value || 'last30', question });
+                if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI answer could not be generated.');
+                renderMerchantAnswer(payload.answer || payload.fallback || {});
+                setStatus(aiQuestionMessage, payload.success ? 'Answer generated.' : payload.message, payload.success ? 'success' : 'warning');
+            } catch (error) {
+                setStatus(aiQuestionMessage, error.message || 'AI answer is temporarily unavailable.', 'error');
+            } finally {
+                aiQuestionInProgress = false;
+                aiAsk.textContent = 'Ask AI';
+                syncAiButtons();
+            }
+        });
+
+        aiActionPrepare?.addEventListener('click', async () => {
+            const prompt = String(aiActionPrompt?.value || '').trim();
+            if (!prompt) {
+                setStatus(aiActionMessage, 'Enter the action you want prepared.', 'error');
+                return;
+            }
+            if (aiActionInProgress) return;
+            aiActionInProgress = true;
+            aiActionPrepare.textContent = 'Preparing...';
+            setStatus(aiActionMessage, 'Preparing a safe proposal...', 'loading');
+            syncAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/merchant/action-proposal', { period: aiPeriod?.value || 'last30', prompt });
+                if (!response.ok || !payload.success) throw new Error(payload.message || 'Action proposal could not be prepared.');
+                renderActionProposal(payload.proposal);
+                setStatus(aiActionMessage, 'Proposal prepared for review.', 'success');
+            } catch (error) {
+                setStatus(aiActionMessage, error.message || 'Action proposal could not be prepared.', 'error');
+            } finally {
+                aiActionInProgress = false;
+                aiActionPrepare.textContent = 'Prepare Action';
+                syncAiButtons();
+            }
+        });
+
+        aiScheduleRecommendations?.addEventListener('click', async () => {
+            if (aiActionInProgress) return;
+            aiActionInProgress = true;
+            aiScheduleRecommendations.textContent = 'Loading...';
+            setStatus(aiActionMessage, 'Reviewing booking patterns...', 'loading');
+            syncAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/merchant/schedule-recommendations', { period: aiPeriod?.value || 'last30' });
+                if (!response.ok || !payload.success) throw new Error(payload.message || 'Schedule recommendations could not be loaded.');
+                renderActionProposal((payload.recommendations || [])[0]);
+                setStatus(aiActionMessage, 'Schedule recommendation ready. Apply changes through schedule tools.', 'success');
+            } catch (error) {
+                setStatus(aiActionMessage, error.message || 'Schedule recommendations could not be loaded.', 'error');
+            } finally {
+                aiActionInProgress = false;
+                aiScheduleRecommendations.textContent = 'Schedule Ideas';
+                syncAiButtons();
+            }
+        });
+
+        aiLoadReminders?.addEventListener('click', async () => {
+            if (aiReminderInProgress) return;
+            aiReminderInProgress = true;
+            aiLoadReminders.textContent = 'Loading...';
+            setStatus(aiReminderMessage, 'Loading smart reminders...', 'loading');
+            syncAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/merchant/smart-reminders', { period: aiPeriod?.value || 'last30' });
+                if (!response.ok || !payload.success) throw new Error(payload.message || 'Smart reminders could not be loaded.');
+                renderReminders(payload.reminders || []);
+                setStatus(aiReminderMessage, 'Smart reminders loaded.', 'success');
+            } catch (error) {
+                setStatus(aiReminderMessage, error.message || 'Smart reminders could not be loaded.', 'error');
+            } finally {
+                aiReminderInProgress = false;
+                aiLoadReminders.textContent = 'Load Reminders';
+                syncAiButtons();
+            }
+        });
 
         const selectedDatasets = () => datasetInputs.filter((input) => input.checked).map((input) => input.value);
         const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -602,6 +1325,9 @@
             }
         });
 
+        setAiAssistantOpen(sessionStorage.getItem(aiPanelStateKey) === 'open');
+        restoreAiChat();
+        syncAiButtons();
         renderMainChart('sales');
         syncExportState();
     })();

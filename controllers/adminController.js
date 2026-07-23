@@ -938,6 +938,13 @@ const showBookings = renderAdminView('admin-bookings', 'Admin Bookings');
 const showMerchants = renderAdminView('admin-merchants', 'Admin Merchants');
 const showReviews = renderAdminView('admin-reviews', 'Admin Reviews');
 const showAnalytics = renderAdminView('admin-analytics', 'Admin Analytics');
+
+function showAiExecutiveSummary(req, res) {
+    return res.render('admin-ai-executive-summary', {
+        title: 'Admin AI Executive Summary'
+    });
+}
+
 function showAuditTrail(req, res) {
     return AuditLog.listRecent(50, (auditError, auditLogs = []) => {
         if (auditError) {
@@ -2392,6 +2399,7 @@ module.exports = {
     showMerchants,
     showReviews,
     showAnalytics,
+    showAiExecutiveSummary,
     showAuditTrail,
     showPlatformHealth,
     showNewMerchant,

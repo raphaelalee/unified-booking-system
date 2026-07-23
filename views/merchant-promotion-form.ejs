@@ -89,16 +89,16 @@
         <section class="merchant-spin-settings-panel" aria-label="Spin and Discover settings">
             <div>
                 <p class="eyebrow">Spin & Discover</p>
-                <h2>Wheel eligibility</h2>
-                <p class="muted">Eligible active promotions can appear in the customer reward wheel until their dates or limits expire.</p>
+                <h2>Include in Spin & Discover</h2>
+                <p class="muted">Active and valid promotions can appear on the customer reward wheel until their dates, claim limit or wheel inventory expire.</p>
             </div>
             <input type="hidden" name="spinEligible" value="0">
             <label class="merchant-package-toggle">
                 <input type="checkbox" name="spinEligible" value="1" <%= form.spinEligible ? 'checked' : '' %>>
-                Allow this promotion to appear in Spin & Discover
+                Include this promotion on the reward wheel
             </label>
             <label>
-                Spin reward type
+                Wheel reward type
                 <select name="spinRewardType">
                     <option value="">Select reward type</option>
                     <% (spinRewardTypes || []).forEach((type) => { %>
@@ -108,11 +108,11 @@
             </label>
             <div class="merchant-service-editor-pair">
                 <label>
-                    Spin claim limit
+                    Maximum number of wheel wins
                     <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
                 </label>
                 <label>
-                    Remaining reward inventory
+                    Remaining wheel reward quantity
                     <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
                 </label>
             </div>

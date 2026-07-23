@@ -1,0 +1,73 @@
+<%
+    const aiAssistantRole = currentUser && currentUser.role === 'admin' ? 'admin' : 'merchant';
+%>
+
+<section class="vaniday-ai-assistant-card"
+    data-floating-ai-root
+    data-floating-ai-role="<%= aiAssistantRole %>"
+    data-floating-ai-current-path="<%= typeof currentPath !== 'undefined' ? currentPath : '' %>">
+    <button class="vaniday-ai-launcher" type="button" data-floating-ai-toggle aria-expanded="false" aria-controls="vaniday-ai-drawer" aria-label="Open Vaniday AI Assistant">
+        <span>AI</span>
+        <strong>Assistant</strong>
+    </button>
+    <div class="vaniday-ai-drawer" id="vaniday-ai-drawer" data-floating-ai-drawer role="dialog" aria-modal="false" aria-labelledby="vaniday-ai-title" aria-describedby="vaniday-ai-description" aria-hidden="true">
+        <div class="vaniday-ai-drawer-header">
+            <div>
+                <p class="eyebrow">Vaniday AI Assistant</p>
+                <h2 id="vaniday-ai-title" data-floating-ai-heading><%= aiAssistantRole === 'admin' ? 'Admin Copilot' : 'Merchant Copilot' %></h2>
+            </div>
+            <div class="vaniday-ai-header-actions">
+                <button class="vaniday-ai-history-toggle" type="button" data-floating-ai-memory-toggle aria-expanded="false">History</button>
+                <details class="vaniday-ai-menu">
+                    <summary>More</summary>
+                    <div class="vaniday-ai-menu-list">
+                        <button type="button" data-floating-ai-presentation-toggle aria-pressed="false">Presentation Mode</button>
+                        <button type="button" data-floating-ai-new-conversation>Start New Conversation</button>
+                        <button type="button" data-floating-ai-clear-memory>Clear Conversation</button>
+                        <button type="button" data-floating-ai-export="text">Export Text</button>
+                        <button type="button" data-floating-ai-export="print">Print / PDF</button>
+                    </div>
+                </details>
+            </div>
+            <button class="vaniday-ai-close" type="button" data-floating-ai-close aria-label="Minimise Vaniday AI Assistant">x</button>
+        </div>
+        <div class="vaniday-ai-assistant-layout">
+            <div class="vaniday-ai-assistant-intro">
+                <p class="eyebrow" data-floating-ai-page-label><%= aiAssistantRole === 'admin' ? 'Admin' : 'Merchant' %></p>
+                <h3 data-floating-ai-page-title>Current page support</h3>
+                <p id="vaniday-ai-description" data-floating-ai-page-help>I can use this page as context for your question.</p>
+                <label class="vaniday-ai-period-control">
+                    <span>Analysis period</span>
+                    <select data-floating-ai-period>
+                        <option value="last7">Last 7 days</option>
+                        <option value="last30" selected>Last 30 days</option>
+                        <option value="last90">Last 90 days</option>
+                        <option value="thisMonth">This month</option>
+                        <option value="previousMonth">Previous month</option>
+                    </select>
+                </label>
+                <span class="merchant-analytics-status-pill" data-floating-ai-period-label>Last 30 days</span>
+            </div>
+            <div class="vaniday-ai-chatbox">
+                <aside class="vaniday-ai-memory-panel" data-floating-ai-memory-panel hidden>
+                    <div class="vaniday-ai-memory-heading">
+                        <strong>Session history</strong>
+                    </div>
+                    <label class="vaniday-ai-memory-search">
+                        <span class="sr-only">Search conversation history</span>
+                        <input type="search" data-floating-ai-search placeholder="Search this conversation">
+                    </label>
+                    <div class="vaniday-ai-memory-list" data-floating-ai-memory-list></div>
+                </aside>
+                <div class="vaniday-ai-messages" data-floating-ai-history role="log" aria-live="polite" aria-relevant="additions text"></div>
+                <div class="vaniday-ai-prompts" data-floating-ai-prompts aria-label="Suggested AI prompts"></div>
+                <div class="vaniday-ai-composer">
+                    <label class="sr-only" for="vaniday-ai-input">Ask Vaniday AI about this page</label>
+                    <textarea id="vaniday-ai-input" data-floating-ai-input rows="2" maxlength="500" placeholder="Ask AI about this page"></textarea>
+                    <button class="button primary" type="button" data-floating-ai-send aria-label="Send message to Vaniday AI">Send</button>
+                </div>
+                <p class="merchant-analytics-control-message" data-floating-ai-status role="status" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+</section>

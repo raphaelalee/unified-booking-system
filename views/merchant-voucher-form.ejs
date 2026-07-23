@@ -110,6 +110,29 @@
                 <input type="number" name="usageLimitTotal" value="<%= form.usageLimitTotal %>" min="1" step="1" placeholder="100">
             </label>
 
+            <section class="merchant-spin-settings-panel" aria-label="Spin and Discover voucher settings">
+                <div>
+                    <p class="eyebrow">Spin & Discover</p>
+                    <h2>Include in Spin & Discover</h2>
+                    <p class="muted">Active and valid merchant vouchers can be won on the reward wheel and saved to the customer's voucher area.</p>
+                </div>
+                <input type="hidden" name="spinEnabled" value="0">
+                <label class="merchant-package-toggle">
+                    <input type="checkbox" name="spinEnabled" value="1" <%= form.spinEnabled ? 'checked' : '' %>>
+                    Include this voucher on the reward wheel
+                </label>
+                <div class="merchant-service-editor-pair">
+                    <label>
+                        Maximum number of wheel wins
+                        <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
+                    </label>
+                    <label>
+                        Remaining wheel reward quantity
+                        <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
+                    </label>
+                </div>
+            </section>
+
             <label>
                 Status
                 <select name="status" required>

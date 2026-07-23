@@ -69,6 +69,17 @@
         return reward && typeof reward.payload === 'object' && reward.payload ? reward.payload : {};
     }
 
+    function rewardInstruction(reward, payload, noPrize) {
+        if (noPrize) return 'Complete another booking or product order to earn a new spin chance.';
+        if (reward.rewardType === 'loyalty_points') return 'Your VaniGlints have been added. View your wallet history for the transaction.';
+        if (reward.rewardType === 'cashback' && reward.sourceType === 'platform') return `S$${Number(reward.value || payload.cashback || 0).toFixed(2)} cashback was added to your wallet.`;
+        if (reward.sourceType === 'cashback_campaign') return 'This cashback entitlement is saved to your rewards. Use it on an eligible future checkout with this merchant.';
+        if (reward.rewardType === 'service_discount') return 'Use this voucher when booking the eligible service from the listed merchant.';
+        if (reward.rewardType === 'product_discount') return 'Use this voucher during checkout for the eligible product from the listed merchant.';
+        if (reward.rewardType === 'voucher') return 'Your voucher is saved and ready in your profile rewards area.';
+        return 'Your reward has been saved. View your rewards to redeem it on an eligible booking or checkout.';
+    }
+
     function findSegmentIndex(reward) {
         if (!segments.length) return 0;
         const sourceId = reward.sourceId === null || reward.sourceId === undefined ? '' : String(reward.sourceId);
@@ -164,7 +175,7 @@
 
     function launchConfetti() {
         if (!confetti || prefersReducedMotion.matches) return;
-        confetti.innerHTML = '';
+        while (confetti.firstChild) confetti.removeChild(confetti.firstChild);
         const colors = ['#d9b35f', '#83a474', '#bd7565', '#8eb1a0', '#fff2c7'];
         for (let index = 0; index < 34; index += 1) {
             const piece = document.createElement('span');
@@ -190,9 +201,7 @@
         modal.querySelector('[data-spin-modal-title]').textContent = reward.title || 'Reward unlocked';
         modal.querySelector('[data-spin-modal-description]').textContent = reward.description || '';
         modal.querySelector('[data-spin-modal-status]').textContent = noPrize ? 'No reward claimed this time' : 'Saved to your account';
-        modal.querySelector('[data-spin-modal-instructions]').textContent = noPrize
-            ? 'Complete another booking or product order to earn a new spin chance.'
-            : 'Your reward has been saved. View your wallet or vouchers to redeem it on an eligible booking or checkout.';
+        modal.querySelector('[data-spin-modal-instructions]').textContent = rewardInstruction(reward, payload, noPrize);
 
         const merchantWrap = modal.querySelector('[data-spin-modal-merchant-wrap]');
         const merchantValue = modal.querySelector('[data-spin-modal-merchant]');

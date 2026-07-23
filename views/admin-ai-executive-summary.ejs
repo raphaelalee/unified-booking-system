@@ -1,0 +1,36 @@
+<%- include('partials/header', { title }) %>
+
+<section class="section compact merchant-ai-report-page admin-ai-report-page">
+    <div class="merchant-ai-report-shell">
+        <header class="merchant-ai-report-hero">
+            <div>
+                <p class="eyebrow">Admin AI Report</p>
+                <h1>Platform Executive Summary</h1>
+                <span>Generate a focused platform report from current admin analytics. The report uses admin-level data only and avoids unsupported assumptions.</span>
+            </div>
+            <div class="merchant-ai-report-actions">
+                <a class="button secondary" href="/admin/overview">Back to admin dashboard</a>
+                <button class="button primary" type="button" data-ai-report-generate>Generate report</button>
+            </div>
+        </header>
+
+        <section class="merchant-ai-report-guidance" data-ai-report-empty>
+            <article>
+                <span>What it includes</span>
+                <strong>Paid transaction sales, platform bookings, refunds, active merchants, approvals, ratings and admin focus areas.</strong>
+            </article>
+            <article>
+                <span>How to use it</span>
+                <strong>Generate it only when you need a readable admin snapshot, then print or save it for demonstration.</strong>
+            </article>
+            <article>
+                <span>Important</span>
+                <strong>AI suggestions are advisory only. Admin actions still go through the normal secured admin tools.</strong>
+            </article>
+        </section>
+
+        <div class="merchant-ai-report-target" data-ai-executive-report-target></div>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

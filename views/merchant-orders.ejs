@@ -2,7 +2,14 @@
 
 <%
     const sales = salesReport || {};
-    const orders = Array.isArray(sales.allOrders) ? sales.allOrders : [];
+    const allOrders = Array.isArray(sales.allOrders) ? sales.allOrders : [];
+    const isCompletedOrder = (order) => {
+        const deliveryStatus = String(order.deliveryStatus || '').toLowerCase();
+        const pickupStatus = String(order.pickupStatus || '').toLowerCase();
+        return deliveryStatus === 'completed' || ['picked_up', 'collected'].includes(pickupStatus);
+    };
+    const orders = allOrders.filter((order) => !isCompletedOrder(order));
+    const completedOrders = allOrders.filter(isCompletedOrder);
     const payoutSummary = sales.payoutSummary || {
         grossOrderSales: 0,
         totalCommissionDeducted: 0,
@@ -14,6 +21,7 @@
         { value: 'shipped', label: 'Shipped' },
         { value: 'out_for_delivery', label: 'Out for Delivery' },
         { value: 'delivered', label: 'Delivered' },
+        { value: 'completed', label: 'Completed' },
         { value: 'cancelled', label: 'Cancelled' }
     ];
     const pickupStatusOptions = [
@@ -21,6 +29,7 @@
         { value: 'packed', label: 'Packed' },
         { value: 'ready_for_pickup', label: 'Ready for Pickup' },
         { value: 'delivered_to_pickup_location', label: 'Delivered to Pickup Location' },
+        { value: 'completed', label: 'Completed' },
         { value: 'cancelled', label: 'Cancelled' }
     ];
     const statusLabels = [...deliveryStatusOptions, ...pickupStatusOptions, { value: 'completed', label: 'Completed' }, { value: 'picked_up', label: 'Picked Up' }].reduce((labels, option) => {
@@ -168,6 +177,86 @@
                                     </label>
                                     <button class="button primary" type="submit" <%= pickupVerified ? 'disabled' : '' %>>Update</button>
                                 </form>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </section>
+
+        <section class="merchant-product-orders-panel merchant-orders-management-panel">
+            <div class="merchant-card-heading">
+                <div>
+                    <p class="eyebrow">History</p>
+                    <h2>Completed product orders</h2>
+                </div>
+                <span><%= completedOrders.length %> completed</span>
+            </div>
+
+            <% if (!completedOrders.length) { %>
+                <div class="merchant-empty-state">
+                    <span>OK</span>
+                    <strong>No completed product orders yet</strong>
+                    <p class="muted">Orders will move here after you mark them as completed.</p>
+                </div>
+            <% } else { %>
+                <div class="merchant-order-management-list">
+                    <% completedOrders.forEach((order) => {
+                        const isPickupOrder = String(order.fulfilmentType || 'pickup').toLowerCase() === 'pickup';
+                        const currentStatus = String(order.deliveryStatus || 'completed');
+                        const orderReference = order.order_number || order.orderNumber || ('#' + order.id);
+                        const itemCount = (order.items || []).reduce((total, item) => total + Number(item.quantity || 1), 0);
+                    %>
+                        <article class="merchant-order-management-card">
+                            <div class="merchant-order-management-main">
+                                <div class="merchant-order-identity">
+                                    <span class="merchant-order-id"><%= orderReference %></span>
+                                    <strong><%= order.customerName || 'Customer' %></strong>
+                                    <small><%= compactOrderDate(order.createdAt) %> Â· <%= isPickupOrder ? 'Pickup' : 'Delivery' %> Â· <%= order.paymentMethod || 'Payment' %></small>
+                                </div>
+                                <div class="merchant-order-quick-meta">
+                                    <span><%= itemCount %> item<%= itemCount === 1 ? '' : 's' %></span>
+                                    <strong>$<%= formatCurrency(order.grossAmount || order.totalAmount) %></strong>
+                                </div>
+                                <span class="merchant-status-badge status-completed">
+                                    <%= statusLabels[currentStatus] || 'Completed' %>
+                                </span>
+                            </div>
+
+                            <div class="merchant-order-management-items">
+                                <% (order.items || []).slice(0, 2).forEach((item) => { %>
+                                    <p>
+                                        <span><%= item.name %></span>
+                                        <strong>x<%= item.quantity %></strong>
+                                        <em>$<%= formatCurrency(item.lineTotal) %></em>
+                                    </p>
+                                <% }) %>
+                                <% if ((order.items || []).length > 2) { %>
+                                    <p class="merchant-order-more-items">
+                                        <span>More items</span>
+                                        <strong>+<%= (order.items || []).length - 2 %></strong>
+                                        <em>completed</em>
+                                    </p>
+                                <% } %>
+                            </div>
+
+                            <div class="merchant-order-management-footer">
+                                <div>
+                                    <span>Gross</span>
+                                    <strong>$<%= formatCurrency(order.grossAmount || order.totalAmount) %></strong>
+                                </div>
+                                <div>
+                                    <span>Commission</span>
+                                    <strong>$<%= formatCurrency(order.commissionAmount) %></strong>
+                                </div>
+                                <div>
+                                    <span>Net payout</span>
+                                    <strong>$<%= formatCurrency(order.payoutAmount || order.totalAmount) %></strong>
+                                </div>
+                                <div class="merchant-order-completed-note">
+                                    <span>Status</span>
+                                    <strong>Completed</strong>
+                                </div>
                             </div>
                         </article>
                     <% }) %>

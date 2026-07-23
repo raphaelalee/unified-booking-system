@@ -65,6 +65,13 @@
         merchantRevenue: merchantPerformance.map((row) => Number(row.revenue.toFixed(2))),
         merchantBookings: merchantPerformance.map((row) => row.bookings)
     };
+    const chartExplanationPayload = {
+        stats,
+        merchantStats: merchantReport,
+        loyaltySummary,
+        categoryRows: categoryRows.slice(0, 6),
+        merchantPerformance
+    };
     const exportPayload = {
         bookingTrends: days.map((day) => ({ date: day.key, bookings: day.bookings, revenue: Number(day.revenue.toFixed(2)) })),
         merchantPerformance,
@@ -88,7 +95,7 @@
             <div>
                 <p class="eyebrow">Platform Analytics</p>
                 <h1>Admin Decision Hub</h1>
-                <p>Track marketplace revenue, merchant health, booking quality, and export the exact dataset needed for reporting.</p>
+                <p>Track booking revenue, merchant health, booking quality, and export the exact dataset needed for reporting.</p>
             </div>
             <div class="analytics-toolbar" data-export-scope="admin">
                 <label>
@@ -106,7 +113,7 @@
         </header>
 
         <section class="analytics-kpi-strip">
-            <article class="analytics-kpi-card accent-green"><span>Total revenue</span><strong>$<%= formatCurrency(uniqueBookingRevenue) %></strong><small>deduplicated booking revenue</small></article>
+            <article class="analytics-kpi-card accent-green"><span>Booking revenue</span><strong>$<%= formatCurrency(uniqueBookingRevenue) %></strong><small>deduplicated service bookings only</small></article>
             <article class="analytics-kpi-card accent-blue"><span>Total bookings</span><strong><%= uniqueBookings.length %></strong><small><%= stats.uniqueBookedCustomers %> unique booked customers</small></article>
             <article class="analytics-kpi-card accent-orange"><span>Merchants</span><strong><%= stats.merchantCount %></strong><small><%= merchantReport.merchantsWithoutServices.length %> need services</small></article>
             <article class="analytics-kpi-card accent-yellow"><span>Reward activity</span><strong><%= loyaltySummary?.redemptionCount || 0 %></strong><small>reward redemptions</small></article>
@@ -118,7 +125,7 @@
                 <h2>Switch the main chart by business question</h2>
             </div>
             <div class="analytics-segmented-control" role="group" aria-label="Admin analytics chart view">
-                <button type="button" class="active" data-admin-chart-mode="revenue">Revenue</button>
+                <button type="button" class="active" data-admin-chart-mode="revenue">Booking revenue</button>
                 <button type="button" data-admin-chart-mode="bookings">Bookings</button>
                 <button type="button" data-admin-chart-mode="merchants">Merchants</button>
                 <button type="button" data-admin-chart-mode="status">Status</button>
@@ -128,7 +135,7 @@
         <section class="admin-grid">
             <article class="admin-panel admin-chart-panel span-8 analytics-chart-panel">
                 <div class="admin-panel-heading">
-                    <div><p class="eyebrow">Trend</p><h2 data-admin-chart-title>Revenue trend</h2></div>
+                    <div><p class="eyebrow">Trend</p><h2 data-admin-chart-title>Booking revenue trend</h2></div>
                     <span class="analytics-data-note"><%= days[0].label %> - <%= days[days.length - 1].label %></span>
                 </div>
                 <div class="admin-chart-box analytics-main-chart"><canvas id="adminAnalyticsChart"></canvas></div>
@@ -145,7 +152,7 @@
 
         <section class="admin-grid">
             <article class="admin-panel span-6">
-                <div class="admin-panel-heading"><div><p class="eyebrow">Merchant Performance</p><h2>Top merchants by revenue</h2></div></div>
+                <div class="admin-panel-heading"><div><p class="eyebrow">Merchant Performance</p><h2>Top merchants by booking revenue</h2></div></div>
                 <div class="analytics-ranking-list">
                     <% merchantPerformance.forEach((row, index) => { %>
                         <article>
@@ -182,18 +189,22 @@
 <script>
     (() => {
         const chartPayload = <%- JSON.stringify(chartPayload) %>;
+        const chartExplanationPayload = <%- JSON.stringify(chartExplanationPayload) %>;
         const exportPayload = <%- JSON.stringify(exportPayload) %>;
         const palette = { green: '#4f6847', blue: '#20899c', orange: '#df7c16', yellow: '#d4a017', red: '#a64032' };
         const canvas = document.getElementById('adminAnalyticsChart');
         const title = document.querySelector('[data-admin-chart-title]');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
         let mainChart;
+        let adminAiInProgress = false;
+        let adminAiQuestionInProgress = false;
 
         const chartConfigs = {
             revenue: {
-                title: 'Revenue trend',
+                title: 'Booking revenue trend',
                 type: 'line',
                 labels: chartPayload.labels,
-                datasets: [{ label: 'Revenue', data: chartPayload.revenue, borderColor: palette.green, backgroundColor: 'rgba(79,104,71,.14)', fill: true, tension: 0.35 }]
+                datasets: [{ label: 'Booking revenue', data: chartPayload.revenue, borderColor: palette.green, backgroundColor: 'rgba(79,104,71,.14)', fill: true, tension: 0.35 }]
             },
             bookings: {
                 title: 'Booking trend',
@@ -202,10 +213,10 @@
                 datasets: [{ label: 'Bookings', data: chartPayload.bookings, backgroundColor: 'rgba(32,137,156,.34)', borderColor: palette.blue, borderWidth: 1 }]
             },
             merchants: {
-                title: 'Merchant revenue leaderboard',
+                title: 'Merchant booking revenue leaderboard',
                 type: 'bar',
                 labels: chartPayload.merchantLabels,
-                datasets: [{ label: 'Revenue', data: chartPayload.merchantRevenue, backgroundColor: 'rgba(79,104,71,.32)' }]
+                datasets: [{ label: 'Booking revenue', data: chartPayload.merchantRevenue, backgroundColor: 'rgba(79,104,71,.32)' }]
             },
             status: {
                 title: 'Booking status mix',
@@ -221,12 +232,63 @@
             plugins: { legend: { position: 'bottom' } },
             scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
         };
+        const sum = (values = []) => values.reduce((total, value) => total + Number(value || 0), 0);
+        const formatPct = (value) => `${Number(value || 0).toFixed(0)}%`;
+        const topSlice = (labels = [], values = []) => labels.map((label, index) => ({ label, value: Number(values[index] || 0) })).sort((left, right) => right.value - left.value)[0];
+        const trendText = (values = [], label = 'value') => {
+            const numeric = values.map((value) => Number(value || 0));
+            const first = numeric.find((value) => value > 0) || 0;
+            const last = [...numeric].reverse().find((value) => value > 0) || 0;
+            const total = sum(numeric);
+            if (!total) return `No ${label} data is available for this chart yet.`;
+            if (!first || first === last) return `${label} is steady across the selected chart data.`;
+            const change = ((last - first) / first) * 100;
+            return `${label} ${change >= 0 ? 'increased' : 'decreased'} ${formatPct(Math.abs(change))} from the first active point to the latest active point.`;
+        };
+        const addChartExplanation = (anchor, titleText, bodyText) => {
+            if (!anchor) return;
+            let node = anchor.parentElement.querySelector(':scope > .analytics-ai-chart-explanation');
+            if (!node) {
+                node = document.createElement('div');
+                node.className = 'analytics-ai-chart-explanation';
+                const heading = document.createElement('strong');
+                const body = document.createElement('span');
+                node.append(heading, body);
+                anchor.insertAdjacentElement('afterend', node);
+            }
+            node.querySelector('strong').textContent = titleText;
+            node.querySelector('span').textContent = bodyText;
+        };
+        const explainShare = (labels = [], values = [], metric = 'activity') => {
+            const top = topSlice(labels, values);
+            const total = sum(values);
+            if (!top || !total) return `No ${metric} data is available for this chart yet.`;
+            return `${top.label} represents ${formatPct((top.value / total) * 100)} of ${metric} in this chart.`;
+        };
+        const adminMainExplanation = (mode) => ({
+            revenue: trendText(chartPayload.revenue, 'Booking revenue'),
+            bookings: trendText(chartPayload.bookings, 'Bookings'),
+            merchants: explainShare(chartPayload.merchantLabels, chartPayload.merchantRevenue, 'merchant booking revenue'),
+            status: explainShare(chartPayload.statusLabels, chartPayload.statusValues, 'booking status')
+        }[mode] || 'AI explanation is based on the current chart data.');
+        const renderAdminChartExplanations = (mode = 'revenue') => {
+            addChartExplanation(canvas?.closest('.admin-chart-box'), 'AI explanation', adminMainExplanation(mode));
+            addChartExplanation(document.getElementById('adminStatusChart')?.closest('.admin-chart-box'), 'AI explanation', explainShare(chartPayload.statusLabels, chartPayload.statusValues, 'booking status'));
+            addChartExplanation(document.querySelector('.analytics-ranking-list'), 'AI explanation', explainShare(chartPayload.merchantLabels, chartPayload.merchantRevenue, 'top merchant booking revenue'));
+            addChartExplanation(document.querySelector('.analytics-mini-table'), 'AI explanation', explainShare((chartExplanationPayload.categoryRows || []).map((row) => row.category), (chartExplanationPayload.categoryRows || []).map((row) => row.merchants), 'merchant category coverage'));
+            const stats = chartExplanationPayload.stats || {};
+            const loyalty = chartExplanationPayload.loyaltySummary || {};
+            const merchantStats = chartExplanationPayload.merchantStats || {};
+            addChartExplanation(document.querySelector('.analytics-kpi-strip'), 'AI explanation', `Customer growth is ${Number(stats.customerCount || 0)} total customers, with ${Number(stats.uniqueBookedCustomers || 0)} unique booked customers. Merchant growth shows ${Number(stats.merchantCount || 0)} active merchant records and ${Number(stats.merchantUserCount || 0)} merchant accounts.`);
+            addChartExplanation(document.querySelector('.analytics-action-card .analytics-insight-list'), 'AI explanation', `Refund and reporting signals should be reviewed with the existing admin analytics endpoint. Spin performance currently shows ${Number(loyalty.redemptionCount || 0)} reward redemptions, while ${Number(merchantStats.merchantsWithoutServices?.length || 0)} merchants need service coverage.`);
+        };
 
         const renderMainChart = (mode) => {
             if (!canvas || typeof Chart === 'undefined') return;
             const config = chartConfigs[mode] || chartConfigs.revenue;
             if (mainChart) mainChart.destroy();
             if (title) title.textContent = config.title;
+            renderAdminChartExplanations(mode);
             mainChart = new Chart(canvas, {
                 type: config.type,
                 data: { labels: config.labels, datasets: config.datasets },
@@ -252,6 +314,7 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });
         }
+        renderAdminChartExplanations('revenue');
 
         const toCsv = (rows) => {
             if (!rows || !rows.length) return '';
@@ -271,6 +334,384 @@
             URL.revokeObjectURL(link.href);
         });
 
+        const aiPeriod = document.querySelector('[data-admin-ai-period]');
+        const aiPeriodLabel = document.querySelector('[data-admin-ai-period-label]');
+        const aiGenerate = document.querySelector('[data-admin-ai-generate]');
+        const aiMessage = document.querySelector('[data-admin-ai-message]');
+        const aiResults = document.querySelector('[data-admin-ai-results]');
+        const aiSummary = document.querySelector('[data-admin-ai-summary]');
+        const aiTrends = document.querySelector('[data-admin-ai-trends]');
+        const aiMerchants = document.querySelector('[data-admin-ai-merchants]');
+        const aiRisks = document.querySelector('[data-admin-ai-risks]');
+        const aiGrowth = document.querySelector('[data-admin-ai-growth]');
+        const aiPriorities = document.querySelector('[data-admin-ai-priorities]');
+        const aiQuestion = document.querySelector('[data-admin-ai-question]');
+        const aiAsk = document.querySelector('[data-admin-ai-ask]');
+        const aiQuestionMessage = document.querySelector('[data-admin-ai-question-message]');
+        const aiAnswer = document.querySelector('[data-admin-ai-answer]');
+        const aiActionPrompt = document.querySelector('[data-admin-ai-action-prompt]');
+        const aiActionPrepare = document.querySelector('[data-admin-ai-action-prepare]');
+        const aiActionMessage = document.querySelector('[data-admin-ai-action-message]');
+        const aiActionProposal = document.querySelector('[data-admin-ai-action-proposal]');
+        const aiChatHistory = document.querySelector('[data-admin-ai-chat-history]');
+        const aiChatInput = document.querySelector('[data-admin-ai-chat-input]');
+        const aiChatSend = document.querySelector('[data-admin-ai-chat-send]');
+        const aiChatPrompts = Array.from(document.querySelectorAll('[data-admin-ai-chat-prompt]'));
+        const aiAssistantRoot = document.querySelector('[data-ai-chat-scope="admin"]');
+        const aiAssistantToggle = document.querySelector('[data-admin-ai-assistant-toggle]');
+        const aiAssistantClose = document.querySelector('[data-admin-ai-assistant-close]');
+        const aiAssistantDrawer = document.querySelector('[data-admin-ai-assistant-drawer]');
+        let adminAiActionInProgress = false;
+        let adminAiChatInProgress = false;
+        const adminAiChatStorageKey = 'vaniday:admin-ai-chat';
+        const adminAiPanelStateKey = 'vaniday:admin-ai-open';
+        const setAiStatus = (node, message, tone = '') => {
+            if (!node) return;
+            node.textContent = message || '';
+            node.dataset.tone = tone;
+        };
+        const clearNode = (node) => {
+            if (!node) return;
+            while (node.firstChild) node.removeChild(node.firstChild);
+        };
+        const renderList = (node, rows, mapper, emptyMessage) => {
+            clearNode(node);
+            if (!node) return;
+            if (!rows || !rows.length) {
+                const note = document.createElement('p');
+                note.className = 'muted';
+                note.textContent = emptyMessage;
+                node.appendChild(note);
+                return;
+            }
+            rows.forEach((row) => {
+                const mapped = mapper(row);
+                const article = document.createElement('article');
+                const body = document.createElement('div');
+                const titleNode = document.createElement('strong');
+                const detailNode = document.createElement('span');
+                titleNode.textContent = mapped.title || 'Insight';
+                detailNode.textContent = mapped.detail || '';
+                body.append(titleNode, detailNode);
+                article.appendChild(body);
+                if (mapped.meta) {
+                    const meta = document.createElement('b');
+                    meta.textContent = mapped.meta;
+                    article.appendChild(meta);
+                }
+                node.appendChild(article);
+            });
+        };
+        const syncAdminAiButtons = () => {
+            if (aiGenerate) aiGenerate.disabled = adminAiInProgress;
+            if (aiAsk) aiAsk.disabled = adminAiQuestionInProgress;
+            if (aiActionPrepare) aiActionPrepare.disabled = adminAiActionInProgress;
+            if (aiChatSend) aiChatSend.disabled = adminAiChatInProgress || !String(aiChatInput?.value || '').trim();
+            aiChatPrompts.forEach((button) => { button.disabled = adminAiChatInProgress; });
+        };
+        const setAdminAiAssistantOpen = (open) => {
+            aiAssistantRoot?.classList.toggle('is-open', open);
+            if (aiAssistantToggle) aiAssistantToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (aiAssistantDrawer) aiAssistantDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+            sessionStorage.setItem(adminAiPanelStateKey, open ? 'open' : 'closed');
+            if (open) setTimeout(() => aiChatInput?.focus(), 180);
+        };
+        const fetchAiJson = async (url, body) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000);
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify(body),
+                    signal: controller.signal
+                });
+                const payload = await response.json().catch(() => ({}));
+                return { response, payload };
+            } catch (error) {
+                if (error?.name === 'AbortError') {
+                    throw new Error('AI request timed out. Please try again.');
+                }
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+            }
+        };
+        const renderAdminInsights = (payload) => {
+            const insights = payload.insights || payload.fallback || {};
+            if (aiPeriodLabel) aiPeriodLabel.textContent = payload.period?.label || aiPeriod?.selectedOptions?.[0]?.textContent || 'Selected period';
+            if (aiResults) aiResults.hidden = false;
+            if (aiSummary) aiSummary.textContent = insights.executiveSummary || 'No summary returned.';
+            renderList(aiTrends, insights.platformTrends, (row) => ({ title: row.trend, detail: row.impact, meta: row.evidence }), 'No trends returned for this period.');
+            renderList(aiMerchants, insights.merchantAttention, (row) => ({ title: row.merchantName || row.issue, detail: row.recommendedAction || row.issue, meta: row.severity ? `Severity: ${row.severity}` : row.evidence }), 'No merchants require AI-highlighted review.');
+            renderList(aiRisks, insights.operationalRisks, (row) => ({ title: row.risk, detail: row.recommendedAction, meta: row.severity ? `Severity: ${row.severity}` : row.evidence }), 'No operational risks returned.');
+            renderList(aiGrowth, insights.growthOpportunities, (row) => ({ title: row.opportunity, detail: row.recommendedAction, meta: row.evidence }), 'No growth opportunities returned.');
+            renderList(aiPriorities, insights.adminPriorities, (row) => ({ title: row.priority, detail: row.reason, meta: row.urgency ? `Urgency: ${row.urgency}` : '' }), 'No priorities returned.');
+        };
+        const renderAdminAnswer = (answer = {}) => {
+            clearNode(aiAnswer);
+            if (!aiAnswer) return;
+            [
+                { title: 'Answer', detail: answer.answer || 'No answer returned.' },
+                ...(answer.supportingEvidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(answer.recommendedAdminActions || []).map((item) => ({ title: 'Admin action', detail: item })),
+                ...(answer.limitations || []).map((item) => ({ title: 'Limitation', detail: item }))
+            ].forEach((row) => {
+                const article = document.createElement('article');
+                const body = document.createElement('div');
+                const titleNode = document.createElement('strong');
+                const detailNode = document.createElement('span');
+                titleNode.textContent = row.title;
+                detailNode.textContent = row.detail;
+                body.append(titleNode, detailNode);
+                article.appendChild(body);
+                aiAnswer.appendChild(article);
+            });
+        };
+        const renderAdminActionProposal = (proposal = {}) => {
+            clearNode(aiActionProposal);
+            if (!aiActionProposal) return;
+            const rows = [
+                { title: proposal.title || 'Admin recommendation', detail: proposal.reason || 'Review manually before taking any action.' },
+                { title: 'Risk level', detail: proposal.riskLevel || 'restricted_admin_confirmation' },
+                ...(proposal.evidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(proposal.warnings || []).map((item) => ({ title: 'Warning', detail: item }))
+            ];
+            renderList(aiActionProposal, rows, (row) => row, 'No admin recommendation returned.');
+        };
+        const persistAdminAiChat = () => {
+            if (!aiChatHistory) return;
+            const rows = Array.from(aiChatHistory.querySelectorAll('.vaniday-ai-message')).map((message) => ({
+                role: message.dataset.role || 'assistant',
+                text: message.querySelector('.vaniday-ai-message-text')?.textContent || ''
+            })).filter((row) => row.text);
+            sessionStorage.setItem(adminAiChatStorageKey, JSON.stringify(rows.slice(-20)));
+        };
+        const appendAdminAiMessage = (role, text, children = []) => {
+            if (!aiChatHistory) return null;
+            const message = document.createElement('article');
+            message.className = 'vaniday-ai-message';
+            message.dataset.role = role;
+            const label = document.createElement('strong');
+            label.textContent = role === 'user' ? 'You' : 'AI';
+            const content = document.createElement('div');
+            content.className = 'vaniday-ai-message-text';
+            content.textContent = text || '';
+            message.append(label, content);
+            children.forEach((child) => message.appendChild(child));
+            aiChatHistory.appendChild(message);
+            aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+            persistAdminAiChat();
+            return message;
+        };
+        const appendAdminTyping = () => {
+            const node = appendAdminAiMessage('assistant', 'Thinking...');
+            node?.classList.add('is-typing');
+            return node;
+        };
+        const createAdminAiDetailList = (rows = []) => {
+            const list = document.createElement('div');
+            list.className = 'vaniday-ai-card-list';
+            rows.filter(Boolean).forEach((row) => {
+                const item = document.createElement('article');
+                const title = document.createElement('strong');
+                const detail = document.createElement('span');
+                title.textContent = row.title || 'Insight';
+                detail.textContent = row.detail || '';
+                item.append(title, detail);
+                if (row.meta) {
+                    const meta = document.createElement('small');
+                    meta.textContent = row.meta;
+                    item.appendChild(meta);
+                }
+                list.appendChild(item);
+            });
+            return list;
+        };
+        const renderAdminInsightsToChat = (payload) => {
+            const insights = payload.insights || payload.fallback || {};
+            const rows = [
+                ...(insights.platformTrends || []).map((row) => ({ title: row.trend, detail: row.impact, meta: row.evidence })),
+                ...(insights.merchantAttention || []).map((row) => ({ title: row.merchantName || row.issue, detail: row.recommendedAction || row.issue, meta: row.severity ? `Severity: ${row.severity}` : row.evidence })),
+                ...(insights.operationalRisks || []).map((row) => ({ title: row.risk, detail: row.recommendedAction, meta: row.severity ? `Severity: ${row.severity}` : row.evidence })),
+                ...(insights.adminPriorities || []).map((row) => ({ title: row.priority, detail: row.reason, meta: row.urgency ? `Urgency: ${row.urgency}` : '' }))
+            ].slice(0, 8);
+            appendAdminAiMessage('assistant', insights.executiveSummary || 'Here is the current platform summary.', rows.length ? [createAdminAiDetailList(rows)] : []);
+        };
+        const renderAdminAnswerToChat = (answer = {}) => {
+            const rows = [
+                ...(answer.supportingEvidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(answer.recommendedAdminActions || []).map((item) => ({ title: 'Admin action', detail: item })),
+                ...(answer.limitations || []).map((item) => ({ title: 'Limitation', detail: item }))
+            ];
+            appendAdminAiMessage('assistant', answer.answer || 'No answer returned.', rows.length ? [createAdminAiDetailList(rows)] : []);
+        };
+        const renderAdminProposalToChat = (proposal = {}) => {
+            const rows = [
+                { title: proposal.title || 'Admin recommendation', detail: proposal.reason || 'Review manually before taking any action.', meta: proposal.riskLevel || 'restricted_admin_confirmation' },
+                ...(proposal.evidence || []).map((item) => ({ title: 'Evidence', detail: item })),
+                ...(proposal.warnings || []).map((item) => ({ title: 'Warning', detail: item }))
+            ];
+            appendAdminAiMessage('assistant', 'I prepared a recommendation-only admin review card.', [createAdminAiDetailList(rows)]);
+        };
+        const adminChatIntent = (prompt) => {
+            const text = String(prompt || '').toLowerCase();
+            if (/\b(summarise|summarize|summary|performance|overview)\b/.test(text)) return 'insights';
+            if (/\b(prepare|recommendation|review|suspend|campaign|detect|unusual|inactive|declining)\b/.test(text)) return 'proposal';
+            return 'question';
+        };
+        const submitAdminChat = async (prompt) => {
+            const text = String(prompt || '').trim();
+            if (!text || adminAiChatInProgress) return;
+            appendAdminAiMessage('user', text);
+            if (aiChatInput) aiChatInput.value = '';
+            adminAiChatInProgress = true;
+            setAiStatus(aiMessage, 'AI is working...', 'loading');
+            syncAdminAiButtons();
+            const typing = appendAdminTyping();
+            try {
+                const period = aiPeriod?.value || 'last30';
+                const intent = adminChatIntent(text);
+                let response;
+                let payload;
+                if (intent === 'insights') {
+                    ({ response, payload } = await fetchAiJson('/api/ai/admin/platform-insights', { period }));
+                    if (!response.ok && !payload.fallback) throw new Error(payload.message || 'Platform insights could not be generated.');
+                    typing?.remove();
+                    renderAdminInsights(payload);
+                    renderAdminInsightsToChat(payload);
+                } else if (intent === 'proposal') {
+                    ({ response, payload } = await fetchAiJson('/api/ai/admin/action-proposal', { period, prompt: text }));
+                    if (!response.ok || !payload.success) throw new Error(payload.message || 'Admin recommendation could not be prepared.');
+                    typing?.remove();
+                    renderAdminActionProposal(payload.proposal);
+                    renderAdminProposalToChat(payload.proposal);
+                } else {
+                    ({ response, payload } = await fetchAiJson('/api/ai/admin/ask-analytics', { period, question: text }));
+                    if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI answer could not be generated.');
+                    typing?.remove();
+                    renderAdminAnswer(payload.answer || payload.fallback || {});
+                    renderAdminAnswerToChat(payload.answer || payload.fallback || {});
+                }
+                setAiStatus(aiMessage, 'AI response ready.', 'success');
+            } catch (error) {
+                typing?.remove();
+                appendAdminAiMessage('assistant', error.message || 'AI is temporarily unavailable.');
+                setAiStatus(aiMessage, error.message || 'AI is temporarily unavailable.', 'error');
+            } finally {
+                adminAiChatInProgress = false;
+                syncAdminAiButtons();
+            }
+        };
+        const restoreAdminAiChat = () => {
+            if (!aiChatHistory) return;
+            let saved = [];
+            try {
+                saved = JSON.parse(sessionStorage.getItem(adminAiChatStorageKey) || '[]');
+            } catch (error) {
+                saved = [];
+            }
+            if (Array.isArray(saved) && saved.length) {
+                saved.forEach((row) => appendAdminAiMessage(row.role, row.text));
+            } else {
+                appendAdminAiMessage('assistant', 'Hi, I can summarise platform metrics, answer admin analytics questions, and prepare recommendation-only review cards.');
+            }
+        };
+
+        aiChatSend?.addEventListener('click', () => submitAdminChat(aiChatInput?.value));
+        aiAssistantToggle?.addEventListener('click', () => {
+            setAdminAiAssistantOpen(!aiAssistantRoot?.classList.contains('is-open'));
+        });
+        aiAssistantClose?.addEventListener('click', () => setAdminAiAssistantOpen(false));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && aiAssistantRoot?.classList.contains('is-open')) {
+                setAdminAiAssistantOpen(false);
+            }
+        });
+        aiChatInput?.addEventListener('input', syncAdminAiButtons);
+        aiChatInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                submitAdminChat(aiChatInput.value);
+            }
+        });
+        aiChatPrompts.forEach((button) => {
+            button.addEventListener('click', () => submitAdminChat(button.dataset.adminAiChatPrompt));
+        });
+
+        aiGenerate?.addEventListener('click', async () => {
+            if (adminAiInProgress) return;
+            adminAiInProgress = true;
+            aiGenerate.textContent = 'Generating...';
+            setAiStatus(aiMessage, 'Generating platform insights...', 'loading');
+            syncAdminAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/admin/platform-insights', { period: aiPeriod?.value || 'last30' });
+                if (!response.ok && !payload.fallback) throw new Error(payload.message || 'Platform insights could not be generated.');
+                renderAdminInsights(payload);
+                setAiStatus(aiMessage, payload.success ? 'Platform insights generated.' : payload.message, payload.success ? 'success' : 'warning');
+            } catch (error) {
+                setAiStatus(aiMessage, error.message || 'AI insights are temporarily unavailable.', 'error');
+            } finally {
+                adminAiInProgress = false;
+                aiGenerate.textContent = 'Generate Insights';
+                syncAdminAiButtons();
+            }
+        });
+
+        aiAsk?.addEventListener('click', async () => {
+            const question = String(aiQuestion?.value || '').trim();
+            if (!question) {
+                setAiStatus(aiQuestionMessage, 'Enter a question first.', 'error');
+                return;
+            }
+            if (adminAiQuestionInProgress) return;
+            adminAiQuestionInProgress = true;
+            aiAsk.textContent = 'Asking...';
+            setAiStatus(aiQuestionMessage, 'Asking AI...', 'loading');
+            syncAdminAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/admin/ask-analytics', { period: aiPeriod?.value || 'last30', question });
+                if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI answer could not be generated.');
+                renderAdminAnswer(payload.answer || payload.fallback || {});
+                setAiStatus(aiQuestionMessage, payload.success ? 'Answer generated.' : payload.message, payload.success ? 'success' : 'warning');
+            } catch (error) {
+                setAiStatus(aiQuestionMessage, error.message || 'AI answer is temporarily unavailable.', 'error');
+            } finally {
+                adminAiQuestionInProgress = false;
+                aiAsk.textContent = 'Ask AI';
+                syncAdminAiButtons();
+            }
+        });
+
+        aiActionPrepare?.addEventListener('click', async () => {
+            const prompt = String(aiActionPrompt?.value || '').trim();
+            if (!prompt) {
+                setAiStatus(aiActionMessage, 'Enter the admin review you want prepared.', 'error');
+                return;
+            }
+            if (adminAiActionInProgress) return;
+            adminAiActionInProgress = true;
+            aiActionPrepare.textContent = 'Preparing...';
+            setAiStatus(aiActionMessage, 'Preparing recommendation...', 'loading');
+            syncAdminAiButtons();
+            try {
+                const { response, payload } = await fetchAiJson('/api/ai/admin/action-proposal', { period: aiPeriod?.value || 'last30', prompt });
+                if (!response.ok || !payload.success) throw new Error(payload.message || 'Admin recommendation could not be prepared.');
+                renderAdminActionProposal(payload.proposal);
+                setAiStatus(aiActionMessage, 'Recommendation ready for manual admin review.', 'success');
+            } catch (error) {
+                setAiStatus(aiActionMessage, error.message || 'Admin recommendation could not be prepared.', 'error');
+            } finally {
+                adminAiActionInProgress = false;
+                aiActionPrepare.textContent = 'Prepare Recommendation';
+                syncAdminAiButtons();
+            }
+        });
+
+        setAdminAiAssistantOpen(sessionStorage.getItem(adminAiPanelStateKey) === 'open');
+        restoreAdminAiChat();
+        syncAdminAiButtons();
         renderMainChart('revenue');
     })();
 </script>

@@ -1,5 +1,13 @@
 const crypto = require('crypto');
 const db = require('../db');
+const CashbackCampaign = require('./CashbackCampaign');
+const Promotion = require('./Promotion');
+const RewardVoucher = require('./RewardVoucher');
+const {
+    getCashbackEligibility,
+    getPromotionEligibility,
+    getVoucherEligibility
+} = require('../services/spinDiscoverEligibilityService');
 
 const TOKEN_EXPIRY_DAYS = 30;
 
@@ -315,11 +323,30 @@ function getPromotionRewards(callback) {
                     hasLimitedInventory: row.spin_inventory_remaining !== null && row.spin_inventory_remaining !== undefined
                 }
             };
-        }));
+        }).filter((reward) => getPromotionEligibility({
+            spinEligible: true,
+            spinRewardType: reward.rewardType,
+            status: 'active',
+            serviceId: reward.payload.serviceId,
+            productId: reward.payload.productId,
+            discountType: reward.payload.discountType,
+            discountValue: reward.payload.discountValue,
+            startDate: new Date(),
+            endDate: reward.payload.expiresAt,
+            spinClaimLimit: null,
+            spinInventoryRemaining: reward.payload.hasLimitedInventory ? 1 : null,
+            spinClaimCount: 0
+        }).eligible));
     });
 }
 
 function getCashbackRewards(callback) {
+    CashbackCampaign.ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
     const sql = `
         SELECT
             merchant_cashback_campaigns.campaign_id,
@@ -329,13 +356,27 @@ function getCashbackRewards(callback) {
             merchant_cashback_campaigns.minimum_spend,
             merchant_cashback_campaigns.applicable_type,
             merchant_cashback_campaigns.end_at,
-            salons.salon_name
+            merchant_cashback_campaigns.spin_enabled,
+            merchant_cashback_campaigns.spin_claim_limit,
+            merchant_cashback_campaigns.spin_inventory_remaining,
+            salons.salon_name,
+            COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
         FROM merchant_cashback_campaigns
         INNER JOIN salons ON salons.salon_id = merchant_cashback_campaigns.salon_id
+        LEFT JOIN (
+            SELECT reward_source_id AS campaign_id, COUNT(*) AS spin_claim_count
+            FROM spin_results
+            WHERE reward_source_type = 'cashback_campaign'
+                AND status = 'claimed'
+            GROUP BY reward_source_id
+        ) spin_stats ON spin_stats.campaign_id = merchant_cashback_campaigns.campaign_id
         WHERE merchant_cashback_campaigns.status = 'active'
+            AND merchant_cashback_campaigns.spin_enabled = 1
             AND salons.approval_status = 'approved'
             AND merchant_cashback_campaigns.start_at <= NOW()
             AND merchant_cashback_campaigns.end_at >= NOW()
+            AND (merchant_cashback_campaigns.spin_claim_limit IS NULL OR COALESCE(spin_stats.spin_claim_count, 0) < merchant_cashback_campaigns.spin_claim_limit)
+            AND (merchant_cashback_campaigns.spin_inventory_remaining IS NULL OR merchant_cashback_campaigns.spin_inventory_remaining > 0)
         ORDER BY merchant_cashback_campaigns.cashback_percent DESC, merchant_cashback_campaigns.campaign_id DESC
         LIMIT 16
     `;
@@ -351,7 +392,7 @@ function getCashbackRewards(callback) {
             sourceType: 'cashback_campaign',
             sourceId: row.campaign_id,
             title: row.title,
-            description: `${Number(row.cashback_percent || 0).toFixed(0)}% cashback at ${row.salon_name}.`,
+            description: `${Number(row.cashback_percent || 0).toFixed(0)}% cashback entitlement for a future eligible purchase at ${row.salon_name}.`,
             value: Number(row.cashback_percent || 0),
             weight: 10,
             payload: {
@@ -359,25 +400,60 @@ function getCashbackRewards(callback) {
                 salonId: row.salon_id,
                 salonName: row.salon_name,
                 cashbackPercent: Number(row.cashback_percent || 0),
+                discountType: 'percentage',
+                discountValue: Number(row.cashback_percent || 0),
+                discountPercent: Number(row.cashback_percent || 0),
+                voucherValue: 0,
                 minimumSpend: Number(row.minimum_spend || 0),
+                bookingOnly: row.applicable_type === 'products' ? false : true,
+                linkedItemType: null,
+                linkedItemId: null,
                 applicableType: row.applicable_type,
-                expiresAt: row.end_at
+                expiresAt: row.end_at,
+                hasLimitedInventory: row.spin_inventory_remaining !== null && row.spin_inventory_remaining !== undefined
             }
-        })));
+        })).filter((reward) => getCashbackEligibility({
+            status: 'active',
+            spinEnabled: true,
+            cashbackPercent: reward.payload.cashbackPercent,
+            startAt: new Date(),
+            endAt: reward.payload.expiresAt,
+            spinClaimLimit: null,
+            spinInventoryRemaining: 1,
+            spinClaimCount: 0
+        }).eligible));
+    });
     });
 }
 
 function getVoucherRewards(callback) {
+    RewardVoucher.ensureSchema((schemaError) => {
+        if (schemaError) {
+            callback(schemaError);
+            return;
+        }
+
     const sql = `
         SELECT
             reward_shop_vouchers.*,
-            salons.salon_name
+            salons.salon_name,
+            COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
         FROM reward_shop_vouchers
         LEFT JOIN salons ON salons.salon_id = reward_shop_vouchers.merchant_id
+        LEFT JOIN (
+            SELECT reward_source_id AS voucher_id, COUNT(*) AS spin_claim_count
+            FROM spin_results
+            WHERE reward_source_type = 'reward_shop_voucher'
+                AND status = 'claimed'
+            GROUP BY reward_source_id
+        ) spin_stats ON spin_stats.voucher_id = reward_shop_vouchers.voucher_id
         WHERE reward_shop_vouchers.status = 'active'
+            AND reward_shop_vouchers.spin_enabled = 1
             AND (salons.salon_id IS NULL OR salons.approval_status = 'approved')
             AND (reward_shop_vouchers.start_date IS NULL OR reward_shop_vouchers.start_date <= NOW())
             AND (reward_shop_vouchers.expiry_date IS NULL OR reward_shop_vouchers.expiry_date >= NOW())
+            AND (reward_shop_vouchers.spin_claim_limit IS NULL OR COALESCE(spin_stats.spin_claim_count, 0) < reward_shop_vouchers.spin_claim_limit)
+            AND (reward_shop_vouchers.spin_inventory_remaining IS NULL OR reward_shop_vouchers.spin_inventory_remaining > 0)
         ORDER BY reward_shop_vouchers.sort_order, reward_shop_vouchers.voucher_id DESC
         LIMIT 20
     `;
@@ -413,10 +489,26 @@ function getVoucherRewards(callback) {
                     bookingOnly: Boolean(row.applies_to_booking),
                     linkedItemType: row.linked_item_type || (linkedProductId ? 'product' : (linkedServiceId ? 'service' : null)),
                     linkedItemId: linkedProductId || linkedServiceId || null,
-                    expiresAt: row.expiry_date
+                    expiresAt: row.expiry_date,
+                    hasLimitedInventory: row.spin_inventory_remaining !== null && row.spin_inventory_remaining !== undefined
                 }
             };
-        }));
+        }).filter((reward) => getVoucherEligibility({
+            voucherSource: reward.payload.merchantId ? 'merchant' : 'platform',
+            spinEnabled: true,
+            status: 'active',
+            linkedItemType: reward.payload.linkedItemType,
+            linkedServiceId: reward.payload.linkedItemType === 'service' ? reward.payload.linkedItemId : null,
+            linkedProductId: reward.payload.linkedItemType === 'product' ? reward.payload.linkedItemId : null,
+            discountType: reward.payload.discountType,
+            discountValue: reward.payload.discountValue,
+            startDate: new Date(),
+            expiryDate: reward.payload.expiresAt,
+            spinClaimLimit: null,
+            spinInventoryRemaining: 1,
+            spinClaimCount: 0
+        }).eligible));
+    });
     });
 }
 
@@ -585,7 +677,8 @@ function applyReward(connection, userId, reward, resultId, callback) {
         return;
     }
 
-    if (['promotion', 'service_discount', 'product_discount', 'voucher'].includes(reward.rewardType)) {
+    if (['promotion', 'service_discount', 'product_discount', 'voucher'].includes(reward.rewardType)
+        || (reward.rewardType === 'cashback' && reward.sourceType === 'cashback_campaign')) {
         insertVoucherReward(connection, userId, reward, resultId, (error, result) => {
             if (error) {
                 callback(error);
@@ -631,6 +724,189 @@ function consumePromotionInventory(connection, reward, callback) {
             callback(null);
         }
     );
+}
+
+function consumeVoucherInventory(connection, reward, callback) {
+    if (reward.sourceType !== 'reward_shop_voucher' || !reward.payload?.hasLimitedInventory) {
+        callback(null);
+        return;
+    }
+
+    connection.query(
+        `
+            UPDATE reward_shop_vouchers
+            SET spin_inventory_remaining = spin_inventory_remaining - 1
+            WHERE voucher_id = ?
+                AND spin_inventory_remaining IS NOT NULL
+                AND spin_inventory_remaining > 0
+        `,
+        [reward.sourceId],
+        (error, result) => {
+            if (error || result.affectedRows === 0) {
+                callback(error || new Error('This Spin & Discover reward is no longer available.'));
+                return;
+            }
+
+            callback(null);
+        }
+    );
+}
+
+function consumeCashbackInventory(connection, reward, callback) {
+    if (reward.sourceType !== 'cashback_campaign' || !reward.payload?.hasLimitedInventory) {
+        callback(null);
+        return;
+    }
+
+    connection.query(
+        `
+            UPDATE merchant_cashback_campaigns
+            SET spin_inventory_remaining = spin_inventory_remaining - 1
+            WHERE campaign_id = ?
+                AND spin_inventory_remaining IS NOT NULL
+                AND spin_inventory_remaining > 0
+        `,
+        [reward.sourceId],
+        (error, result) => {
+            if (error || result.affectedRows === 0) {
+                callback(error || new Error('This Spin & Discover reward is no longer available.'));
+                return;
+            }
+
+            callback(null);
+        }
+    );
+}
+
+function consumeRewardInventory(connection, reward, callback) {
+    consumePromotionInventory(connection, reward, (promotionError) => {
+        if (promotionError) return callback(promotionError);
+
+        consumeVoucherInventory(connection, reward, (voucherError) => {
+            if (voucherError) return callback(voucherError);
+
+            consumeCashbackInventory(connection, reward, callback);
+        });
+    });
+}
+
+function revalidateReward(connection, reward, callback) {
+    if (reward.sourceType === 'platform') {
+        callback(null, true);
+        return;
+    }
+
+    const sourceChecks = {
+        promotion: {
+            sql: `
+                SELECT p.*, COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
+                FROM promotions p
+                INNER JOIN salons s ON s.salon_id = p.salon_id
+                LEFT JOIN (
+                    SELECT reward_source_id AS promotion_id, COUNT(*) AS spin_claim_count
+                    FROM spin_results
+                    WHERE reward_source_type = 'promotion'
+                        AND status = 'claimed'
+                    GROUP BY reward_source_id
+                ) spin_stats ON spin_stats.promotion_id = p.promotion_id
+                WHERE p.promotion_id = ?
+                    AND s.approval_status = 'approved'
+                LIMIT 1
+                FOR UPDATE
+            `,
+            map: (row) => getPromotionEligibility({
+                spinEligible: Boolean(Number(row.spin_eligible || 0)),
+                spinRewardType: row.spin_reward_type,
+                status: row.status,
+                serviceId: row.service_id,
+                productId: row.product_id,
+                discountType: row.discount_type === 'percentage' ? 'percentage' : 'fixed',
+                discountValue: row.discount_value,
+                startDate: row.start_date,
+                endDate: row.end_date,
+                spinClaimLimit: row.spin_claim_limit,
+                spinInventoryRemaining: row.spin_inventory_remaining,
+                spinClaimCount: row.spin_claim_count
+            })
+        },
+        reward_shop_voucher: {
+            sql: `
+                SELECT v.*, s.approval_status, COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
+                FROM reward_shop_vouchers v
+                LEFT JOIN salons s ON s.salon_id = v.merchant_id
+                LEFT JOIN (
+                    SELECT reward_source_id AS voucher_id, COUNT(*) AS spin_claim_count
+                    FROM spin_results
+                    WHERE reward_source_type = 'reward_shop_voucher'
+                        AND status = 'claimed'
+                    GROUP BY reward_source_id
+                ) spin_stats ON spin_stats.voucher_id = v.voucher_id
+                WHERE v.voucher_id = ?
+                    AND (s.salon_id IS NULL OR s.approval_status = 'approved')
+                LIMIT 1
+                FOR UPDATE
+            `,
+            map: (row) => getVoucherEligibility({
+                voucherSource: row.voucher_source,
+                spinEnabled: Boolean(Number(row.spin_enabled || 0)),
+                status: row.status,
+                linkedItemType: row.linked_item_type,
+                linkedServiceId: row.linked_service_id,
+                linkedProductId: row.linked_product_id,
+                discountType: row.discount_type,
+                discountValue: row.discount_value,
+                startDate: row.start_date,
+                expiryDate: row.expiry_date,
+                spinClaimLimit: row.spin_claim_limit,
+                spinInventoryRemaining: row.spin_inventory_remaining,
+                spinClaimCount: row.spin_claim_count
+            })
+        },
+        cashback_campaign: {
+            sql: `
+                SELECT c.*, COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count
+                FROM merchant_cashback_campaigns c
+                INNER JOIN salons s ON s.salon_id = c.salon_id
+                LEFT JOIN (
+                    SELECT reward_source_id AS campaign_id, COUNT(*) AS spin_claim_count
+                    FROM spin_results
+                    WHERE reward_source_type = 'cashback_campaign'
+                        AND status = 'claimed'
+                    GROUP BY reward_source_id
+                ) spin_stats ON spin_stats.campaign_id = c.campaign_id
+                WHERE c.campaign_id = ?
+                    AND s.approval_status = 'approved'
+                LIMIT 1
+                FOR UPDATE
+            `,
+            map: (row) => getCashbackEligibility({
+                spinEnabled: Boolean(Number(row.spin_enabled || 0)),
+                status: row.status,
+                cashbackPercent: row.cashback_percent,
+                startAt: row.start_at,
+                endAt: row.end_at,
+                spinClaimLimit: row.spin_claim_limit,
+                spinInventoryRemaining: row.spin_inventory_remaining,
+                spinClaimCount: row.spin_claim_count
+            })
+        }
+    };
+
+    const check = sourceChecks[reward.sourceType];
+    if (!check) {
+        callback(null, false);
+        return;
+    }
+
+    connection.query(check.sql, [reward.sourceId], (error, rows = []) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        const eligibility = rows[0] ? check.map(rows[0]) : { eligible: false };
+        callback(null, eligibility.eligible);
+    });
 }
 
 function spin(userId, callback) {
@@ -703,6 +979,14 @@ function spin(userId, callback) {
                         const reward = pickWeightedReward(rewards);
                         const status = reward.rewardType === 'try_again' ? 'no_prize' : 'claimed';
 
+                        revalidateReward(connection, reward, (revalidateError, stillEligible) => {
+                            if (revalidateError || !stillEligible) {
+                                return connection.rollback(() => {
+                                    connection.release();
+                                    callback(revalidateError || new Error('This Spin & Discover reward is no longer available.'));
+                                });
+                            }
+
                         const resultSql = `
                             INSERT INTO spin_results
                                 (token_id, user_id, reward_type, reward_source_type, reward_source_id, title, description, reward_value, reward_payload_json, status)
@@ -730,7 +1014,7 @@ function spin(userId, callback) {
 
                             const resultId = result.insertId;
 
-                            consumePromotionInventory(connection, reward, (inventoryError) => {
+                            consumeRewardInventory(connection, reward, (inventoryError) => {
                                 if (inventoryError) {
                                     return connection.rollback(() => {
                                         connection.release();
@@ -801,6 +1085,7 @@ function spin(userId, callback) {
                                 });
                             });
                             });
+                        });
                         });
                     });
                 });

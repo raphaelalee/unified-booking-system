@@ -18,6 +18,7 @@ const {
 } = require('../services/smsAutomation');
 const { refundTransaction } = require('../services/refundProcessor');
 const {
+    REFUND_ADMINISTRATION_FEE_AMOUNT,
     REFUND_TERMS_VERSION,
     calculateRefund,
     normalizeReasonCategory
@@ -34,6 +35,7 @@ const SHIPPED_STATUSES = ['shipped', 'out_for_delivery', 'in_delivery'];
 const ORDER_STATUSES = ['processing', 'packed', 'shipped', 'delivered', 'cancelled'];
 const REFUND_REQUEST_TYPES = ['order_refund', 'booking_refund'];
 const RESOLVED_REQUEST_STATUSES = ['partially_refunded', 'refunded', 'rejected', 'cancelled', 'closed'];
+const MERCHANT_PARTIAL_REFUND_PERCENTAGES = new Set([25, 50, 75]);
 
 const requestLabels = {
     order_refund: 'Order refund',
@@ -205,6 +207,14 @@ function parseRefundPercentage(value, { allowFull = true } = {}) {
         throw new Error(allowFull ? 'Refund percentage cannot exceed 100.' : 'Partial refund percentage must be less than 100.');
     }
     return Math.round(percentage * 100) / 100;
+}
+
+function parseMerchantPartialRefundPercentage(value) {
+    const percentage = parseRefundPercentage(value, { allowFull: false });
+    if (!MERCHANT_PARTIAL_REFUND_PERCENTAGES.has(percentage)) {
+        throw new Error('Please select a valid partial refund percentage: 25%, 50% or 75%.');
+    }
+    return percentage;
 }
 
 function normalizeMerchantRefundDecision(value) {
@@ -708,7 +718,8 @@ async function showHelpCenter(req, res) {
             requests: [],
             bookings: [],
             orders: [],
-            orderStatuses: ORDER_STATUSES
+            orderStatuses: ORDER_STATUSES,
+            refundAdministrationFeeAmount: REFUND_ADMINISTRATION_FEE_AMOUNT
         };
 
         if (role === 'customer') {
@@ -966,7 +977,7 @@ async function buildOrderRequest(req, requestType, targetId, body) {
         : null;
 
     if (preliminary?.acknowledgementRequired && !acknowledgementAccepted) {
-        throw new Error('Please acknowledge the disclosed payment-processing deduction before submitting this refund request.');
+        throw new Error(`Please acknowledge that a fixed S$${REFUND_ADMINISTRATION_FEE_AMOUNT.toFixed(2)} Refund Administration Fee will be deducted from the approved refund amount.`);
     }
 
     const calculation = transactionId
@@ -1070,7 +1081,7 @@ async function buildBookingRequest(req, requestType, targetId, body) {
         : null;
 
     if (preliminary?.acknowledgementRequired && !acknowledgementAccepted) {
-        throw new Error('Please acknowledge the disclosed payment-processing deduction before submitting this refund request.');
+        throw new Error(`Please acknowledge that a fixed S$${REFUND_ADMINISTRATION_FEE_AMOUNT.toFixed(2)} Refund Administration Fee will be deducted from the approved refund amount.`);
     }
 
     const calculation = booking.transaction_id
@@ -1363,7 +1374,7 @@ async function merchantRefundPreview(req, res) {
 
         const percentage = decision === 'full_refund'
             ? 100
-            : parseRefundPercentage(body.approvedPercentage, { allowFull: false });
+            : parseMerchantPartialRefundPercentage(body.approvedPercentage);
         const transactionId = request.paymentTransactionId || parseOrderTransactionId(request.targetId);
         if (!transactionId) {
             throw new Error('The original payment transaction could not be found.');
@@ -1540,7 +1551,7 @@ async function merchantRespond(req, res) {
 
         const percentage = decision === 'full_refund'
             ? 100
-            : parseRefundPercentage(body.approvedPercentage, { allowFull: false });
+            : parseMerchantPartialRefundPercentage(body.approvedPercentage);
 
         if (decision === 'partial_refund' && partialReason.length < 8) {
             throw new Error('Please add a customer-facing reason for the partial refund.');
@@ -1556,7 +1567,7 @@ async function merchantRespond(req, res) {
         });
 
         if (approvalCalculation.approvedGrossRefund <= 0 || approvalCalculation.netCustomerRefund <= 0) {
-            throw new Error('The calculated refund amount is zero. Check the remaining refundable balance.');
+            throw new Error(`The approved refund amount must be more than the S$${REFUND_ADMINISTRATION_FEE_AMOUNT.toFixed(2)} Refund Administration Fee.`);
         }
 
         const customerFacingReason = decision === 'partial_refund'
@@ -1586,7 +1597,7 @@ async function merchantRespond(req, res) {
             actorUserId: req.session.user.id,
             type: 'support_request',
             title: decision === 'partial_refund' ? 'Your refund was partially approved' : 'Your refund was fully approved',
-            message: `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} was approved for ${approvalCalculation.approvedRefundPercentage.toFixed(2)}% of the valid refund base. Net refund S$${approvalCalculation.netCustomerRefund.toFixed(2)} is now processing.`,
+            message: `${requestLabels[request.requestType]} #${request.id} for ${requestTargetReference} was approved for S$${approvalCalculation.approvedGrossRefund.toFixed(2)}. Refund Administration Fee: S$${approvalCalculation.processingFeeDeduction.toFixed(2)}. Amount returned: S$${approvalCalculation.netCustomerRefund.toFixed(2)}.`,
             linkUrl: '/help-center',
             dedupeKey: `support-customer-merchant-${request.id}-approved`
         });

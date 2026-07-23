@@ -1,0 +1,36 @@
+<%- include('partials/header', { title }) %>
+
+<section class="section compact merchant-ai-report-page">
+    <div class="merchant-ai-report-shell">
+        <header class="merchant-ai-report-hero">
+            <div>
+                <p class="eyebrow">Merchant AI Report</p>
+                <h1>Executive Summary</h1>
+                <span>Generate a focused business report from your current merchant analytics. The report uses existing dashboard data and avoids unsupported assumptions.</span>
+            </div>
+            <div class="merchant-ai-report-actions">
+                <a class="button secondary" href="/merchant/dashboard">Back to dashboard</a>
+                <button class="button primary" type="button" data-ai-report-generate>Generate report</button>
+            </div>
+        </header>
+
+        <section class="merchant-ai-report-guidance" data-ai-report-empty>
+            <article>
+                <span>What it includes</span>
+                <strong>Total tracked sales, service bookings, product orders, refunds, ratings, inventory signals and recommended focus areas.</strong>
+            </article>
+            <article>
+                <span>How to use it</span>
+                <strong>Generate it when you need a readable business snapshot, then print or save the report for sharing.</strong>
+            </article>
+            <article>
+                <span>Important</span>
+                <strong>AI suggestions are advisory only. Confirm actions through the normal merchant tools.</strong>
+            </article>
+        </section>
+
+        <div class="merchant-ai-report-target" data-ai-executive-report-target></div>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

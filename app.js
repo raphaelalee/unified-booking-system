@@ -10,6 +10,7 @@ const aiController = require('./controllers/aiController');
 const adminController = require('./controllers/adminController');
 const routineFinderController = require('./controllers/routineFinderController');
 const spinDiscoverController = require('./controllers/spinDiscoverController');
+const SpinDiscover = require('./models/SpinDiscover');
 const receiptController = require('./controllers/receiptController');
 const profileController = require('./controllers/profileController');
 const loyaltyController = require('./controllers/loyaltyController');
@@ -436,12 +437,70 @@ app.get('/api/ai/booking-slots', aiRateLimit, allowGuestOrCustomer, aiController
 app.get('/api/ai/customer-bookings', aiRateLimit, requireCustomer, aiController.getGuidedCustomerBookings);
 app.post('/api/ai/chat', aiRateLimit, allowGuestOrCustomer, aiController.getBeautyAdvice);
 app.use('/api/ai', aiRateLimit, aiRoutes);
+app.use('/api/ai', (err, req, res, next) => {
+    console.error('AI API route error:', {
+        path: req.path,
+        code: err?.code,
+        status: err?.status || err?.statusCode,
+        message: err?.message,
+        sqlMessage: err?.sqlMessage,
+        sqlState: err?.sqlState
+    });
+
+    if (res.headersSent) {
+        return next(err);
+    }
+
+    if (req.path.includes('/ask-analytics')) {
+        return res.status(200).json({
+            success: false,
+            error: err?.code || 'AI_ANALYTICS_QUESTION_FAILED',
+            message: 'AI could not complete this analytics question right now, so a limited fallback answer was shown.',
+            fallback: {
+                fallback: true,
+                answer: 'I could not load the live AI analytics answer for this request. Your dashboard data is still available, so refresh the page and try again.',
+                supportingEvidence: ['The assistant recovered from an internal analytics error.'],
+                suggestedNextSteps: ['Refresh the dashboard.', 'Try a shorter question.', 'Use the visible analytics cards while AI recovers.'],
+                limitations: ['This fallback does not include live chart-level reasoning.']
+            }
+        });
+    }
+
+    if (req.path.includes('/business-insights') || req.path.includes('/platform-insights')) {
+        return res.status(200).json({
+            success: false,
+            error: err?.code || 'AI_INSIGHTS_FAILED',
+            message: 'AI insights could not be fully generated right now, so a limited fallback summary was shown.',
+            fallback: {
+                fallback: true,
+                summary: 'AI insights are temporarily unavailable. Your dashboard metrics are still visible and unchanged.',
+                executiveSummary: 'AI insights are temporarily unavailable. Your dashboard metrics are still visible and unchanged.',
+                topOpportunities: ['Refresh the dashboard and generate insights again.'],
+                risks: ['Live AI analysis could not be completed for this request.'],
+                recommendedActions: ['Use the dashboard cards and charts while AI recovers.'],
+                confidence: 'Low'
+            },
+            summary: {
+                period: { key: 'last30', label: 'Last 30 days' },
+                currency: 'SGD',
+                metrics: {}
+            }
+        });
+    }
+
+    return res.status(err?.status || err?.statusCode || 500).json({
+        success: false,
+        error: err?.code || 'AI_REQUEST_FAILED',
+        message: err?.message || 'AI request could not be completed.'
+    });
+});
 app.post('/api/ai/product-copy', aiRateLimit, requireMerchantJson, aiController.generateProductCopy);
 app.post('/api/ai/service-setup', aiRateLimit, requireApprovedMerchant, aiController.generateServiceSetup);
 app.get('/merchant', requireRole('merchant'), (req, res) => res.redirect('/merchant/dashboard'));
 app.get('/merchant/onboarding', requireRole('merchant'), merchantDashboardController.showOnboarding);
 app.post('/merchant/onboarding', requireRole('merchant'), merchantDashboardController.updateOnboarding);
 app.get('/merchant/dashboard', requireApprovedMerchant, merchantDashboardController.showDashboard);
+app.get('/merchant/ai-executive-summary', requireApprovedMerchant, merchantDashboardController.showAiExecutiveSummary);
 app.get('/merchant/bookings', requireApprovedMerchant, merchantDashboardController.showBookings);
 app.get('/merchant/orders', requireApprovedMerchant, merchantDashboardController.showOrders);
 app.post('/merchant/orders/:transactionId/status', requireApprovedMerchant, merchantDashboardController.updateOrderStatus);
@@ -499,15 +558,18 @@ app.post('/merchant/vouchers', requireApprovedMerchant, merchantDashboardControl
 app.get('/merchant/vouchers/:voucherId/edit', requireApprovedMerchant, merchantDashboardController.showEditVoucher);
 app.post('/merchant/vouchers/:voucherId', requireApprovedMerchant, merchantDashboardController.updateVoucher);
 app.post('/merchant/vouchers/:voucherId/delete', requireApprovedMerchant, merchantDashboardController.deleteVoucher);
-app.get('/merchant/rewards-game', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions'));
-app.get('/merchant/rewards-game/prizes/new', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions/new'));
-app.post('/merchant/rewards-game/prizes', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions'));
-app.get('/merchant/rewards-game/prizes/:prizeId/edit', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions'));
-app.post('/merchant/rewards-game/prizes/:prizeId', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions'));
-app.post('/merchant/rewards-game/prizes/:prizeId/delete', requireApprovedMerchant, (req, res) => res.redirect('/merchant/promotions'));
+app.get('/merchant/spin-discover', requireApprovedMerchant, merchantDashboardController.showSpinDiscover);
+app.post('/merchant/spin-discover/:sourceType/:rewardId', requireApprovedMerchant, merchantDashboardController.updateSpinReward);
+app.get('/merchant/rewards-game', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
+app.get('/merchant/rewards-game/prizes/new', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
+app.post('/merchant/rewards-game/prizes', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
+app.get('/merchant/rewards-game/prizes/:prizeId/edit', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
+app.post('/merchant/rewards-game/prizes/:prizeId', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
+app.post('/merchant/rewards-game/prizes/:prizeId/delete', requireApprovedMerchant, (req, res) => res.redirect('/merchant/spin-discover'));
 app.get('/merchant/:merchantId', requireCustomer, merchantController.showPublicMerchantBooking);
 app.get('/admin', requireRole('admin'), (req, res) => res.redirect('/admin/overview'));
 app.get('/admin/overview', requireRole('admin'), adminController.showOverview);
+app.get('/admin/ai-executive-summary', requireRole('admin'), adminController.showAiExecutiveSummary);
 app.get('/admin/bookings', requireRole('admin'), adminController.showBookings);
 app.get('/admin/merchants', requireRole('admin'), adminController.showMerchants);
 app.get('/admin/users', requireRole('admin'), adminController.showUsers);
@@ -809,8 +871,15 @@ function initializeDatabaseSchemas(callback) {
                 return;
             }
 
-            CashbackCampaign.ensureSchema((cashbackError) => {
-                callback(cashbackError);
+            SpinDiscover.ensureSchema((spinError) => {
+                if (spinError) {
+                    callback(spinError);
+                    return;
+                }
+
+                CashbackCampaign.ensureSchema((cashbackError) => {
+                    callback(cashbackError);
+                });
             });
         });
     });

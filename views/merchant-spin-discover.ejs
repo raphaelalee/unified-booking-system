@@ -1,0 +1,422 @@
+<%- include('partials/header', { title }) %>
+
+<%
+    const rewardList = Array.isArray(rewards) ? rewards : [];
+    const stats = dashboard?.stats || {};
+    const formatDate = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Not set';
+        return date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+    const formatRewardValue = (reward) => {
+        if (reward.rewardKind === 'cashback_campaign') return `${Number(reward.cashbackPercent || 0).toFixed(2)}% cashback`;
+        if (reward.discountType === 'percentage') return `${Number(reward.discountValue || 0).toFixed(2)}% off`;
+        if (reward.discountValue !== null && reward.discountValue !== undefined) return `$${Number(reward.discountValue || 0).toFixed(2)} off`;
+        return 'Configured reward';
+    };
+    const sourceLabel = (kind) => ({
+        promotion: 'Promotion',
+        voucher: 'Voucher',
+        cashback_campaign: 'Cashback'
+    }[kind] || 'Reward');
+    const sourceRoute = (reward) => ({
+        promotion: `/merchant/promotions/${reward.id}/edit`,
+        voucher: `/merchant/vouchers/${reward.id}/edit`,
+        cashback_campaign: `/merchant/cashback/${reward.id}/edit`
+    }[reward.rewardKind] || '#');
+    const sourceTypeForRoute = (reward) => ({
+        promotion: 'promotion',
+        voucher: 'voucher',
+        cashback_campaign: 'cashback'
+    }[reward.rewardKind]);
+    const endDate = (reward) => reward.endDate || reward.expiryDate || reward.endAt || null;
+    const selectedRewards = rewardList.filter((reward) => reward.wheelSelected);
+    const selectedRewardDates = selectedRewards
+        .flatMap((reward) => [reward.startDate || reward.startAt, endDate(reward)])
+        .filter(Boolean)
+        .map((value) => new Date(value))
+        .filter((date) => !Number.isNaN(date.getTime()))
+        .sort((left, right) => left - right);
+    const spinAiPayload = {
+        stats: {
+            activeRewards: stats.activeCount || 0,
+            inactiveRewards: stats.inactiveCount || 0,
+            expiredRewards: stats.expiredCount || 0,
+            depletedRewards: stats.depletedCount || 0,
+            totalWins: stats.totalWins || 0,
+            remainingInventory: stats.remainingInventory || 0,
+            rewardsClaimed: rewardList.reduce((sum, reward) => sum + Number(reward.redemptionCount || reward.redeemedCount || 0), 0),
+            uniquePlayers: null,
+            repeatPlayers: null,
+            campaignStart: selectedRewardDates[0] ? selectedRewardDates[0].toISOString() : null,
+            campaignEnd: selectedRewardDates[selectedRewardDates.length - 1] ? selectedRewardDates[selectedRewardDates.length - 1].toISOString() : null
+        },
+        rewards: rewardList.slice(0, 20).map((reward) => ({
+            name: reward.rewardName,
+            type: sourceLabel(reward.rewardKind),
+            value: formatRewardValue(reward),
+            selected: !!reward.wheelSelected,
+            available: !!reward.wheelEligibleNow,
+            status: reward.availabilityReason,
+            wins: Number(reward.issuedCount || 0),
+            redemptions: Number(reward.redemptionCount || reward.redeemedCount || 0),
+            conversionRate: Number(reward.conversionRate || 0),
+            inventoryRemaining: reward.spinInventoryRemaining === null || reward.spinInventoryRemaining === undefined ? null : Number(reward.spinInventoryRemaining),
+            claimLimit: reward.spinClaimLimit === null || reward.spinClaimLimit === undefined ? null : Number(reward.spinClaimLimit)
+        }))
+    };
+    const spinAiPayloadJson = JSON.stringify(spinAiPayload).replace(/</g, '\\u003c');
+%>
+
+<section class="section compact merchant-portal-page">
+    <% if (success) { %><div class="notice success"><p><%= success %></p></div><% } %>
+    <% if (error) { %><div class="notice error"><p><%= error %></p></div><% } %>
+
+    <header class="merchant-dashboard-hero merchant-portal-hero">
+        <div>
+            <p class="eyebrow">Rewards Wheel</p>
+            <h1>Spin & Discover Rewards</h1>
+            <span>Choose which eligible promotions, vouchers and cashback rewards customers can win. Only active and valid rewards appear on the customer wheel.</span>
+        </div>
+        <div class="merchant-hero-actions">
+            <a class="button secondary" href="/merchant/promotions/new">Create promotion reward</a>
+            <a class="button secondary" href="/merchant/vouchers/new">Create voucher reward</a>
+            <a class="button primary" href="/merchant/cashback/new">Create cashback campaign</a>
+        </div>
+    </header>
+
+    <section class="marketplace-stat-grid merchant-portal-stats">
+        <article data-spin-kpi="Active wheel rewards"><span>Active wheel rewards</span><strong><%= stats.activeCount || 0 %></strong></article>
+        <article data-spin-kpi="Inactive rewards"><span>Inactive rewards</span><strong><%= stats.inactiveCount || 0 %></strong></article>
+        <article data-spin-kpi="Expired rewards"><span>Expired rewards</span><strong><%= stats.expiredCount || 0 %></strong></article>
+        <article data-spin-kpi="Depleted rewards"><span>Depleted rewards</span><strong><%= stats.depletedCount || 0 %></strong></article>
+        <article data-spin-kpi="Customer wins"><span>Customer wins</span><strong><%= stats.totalWins || 0 %></strong></article>
+        <article data-spin-kpi="Remaining inventory"><span>Remaining inventory</span><strong><%= stats.remainingInventory || 0 %></strong></article>
+    </section>
+
+    <section class="marketplace-admin-panel merchant-portal-panel spin-ai-intelligence-panel" data-spin-ai-panel>
+        <div class="marketplace-admin-toolbar">
+            <div>
+                <p class="eyebrow">AI Campaign Intelligence</p>
+                <h2>Spin campaign health</h2>
+            </div>
+            <div class="marketplace-filter-row">
+                <button class="button secondary compact" type="button" data-spin-ai-refresh>Refresh analysis</button>
+            </div>
+        </div>
+        <div class="spin-ai-grid" data-spin-ai-content></div>
+    </section>
+
+    <section class="marketplace-admin-panel merchant-portal-panel">
+        <div class="marketplace-admin-toolbar">
+            <div>
+                <p class="eyebrow">Wheel Rewards</p>
+                <h2>Manage eligible rewards</h2>
+            </div>
+            <div class="marketplace-filter-row">
+                <a class="button secondary compact" href="/spin-discover">View customer wheel</a>
+            </div>
+        </div>
+
+        <% if (!rewardList.length) { %>
+            <div class="empty-state marketplace-empty-state">
+                <h2>No rewards available yet</h2>
+                <p class="muted">Create a promotion, voucher or cashback campaign first, then enable it for Spin & Discover.</p>
+            </div>
+        <% } else { %>
+            <div class="admin-table-wrap marketplace-table-wrap">
+                <table class="admin-table marketplace-admin-table">
+                    <thead>
+                        <tr>
+                            <th>Reward</th>
+                            <th>Value</th>
+                            <th>Dates</th>
+                            <th>Wheel status</th>
+                            <th>Wins</th>
+                            <th>Inventory</th>
+                            <th>Manage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% rewardList.forEach((reward) => { %>
+                            <tr>
+                                <td>
+                                    <strong><%= reward.rewardName %></strong>
+                                    <small><%= sourceLabel(reward.rewardKind) %> · <%= reward.linkedName || 'Merchant reward' %></small>
+                                </td>
+                                <td><%= formatRewardValue(reward) %><small>Min spend $<%= Number(reward.minimumSpend || 0).toFixed(2) %></small></td>
+                                <td><%= formatDate(reward.startDate || reward.startAt) %><small>to <%= formatDate(endDate(reward)) %></small></td>
+                                <td>
+                                    <span class="sync-pill <%= reward.wheelEligibleNow ? 'success' : '' %>"><%= reward.availabilityReason %></span>
+                                    <small><%= reward.wheelSelected ? 'Selected for wheel' : 'Not selected' %></small>
+                                </td>
+                                <td>
+                                    <%= reward.issuedCount || 0 %>
+                                    <small><%= reward.redemptionCount || reward.redeemedCount || 0 %> redeemed · <%= reward.conversionRate || 0 %>%</small>
+                                </td>
+                                <td>
+                                    <%= reward.spinInventoryRemaining === null || reward.spinInventoryRemaining === undefined ? 'No cap' : reward.spinInventoryRemaining %>
+                                    <small>Limit <%= reward.spinClaimLimit === null || reward.spinClaimLimit === undefined ? 'No cap' : reward.spinClaimLimit %></small>
+                                </td>
+                                <td>
+                                    <form class="marketplace-action-row" action="/merchant/spin-discover/<%= sourceTypeForRoute(reward) %>/<%= reward.id %>" method="POST">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                        <input type="hidden" name="spinEnabled" value="<%= reward.wheelSelected ? '0' : '1' %>">
+                                        <% if (reward.rewardKind === 'promotion') { %>
+                                            <input type="hidden" name="spinRewardType" value="<%= reward.rewardCategory %>">
+                                        <% } %>
+                                        <label>
+                                            <span class="sr-only">Wheel claim limit</span>
+                                            <input type="number" name="spinClaimLimit" min="0" step="1" placeholder="Limit" value="<%= reward.spinClaimLimit === null || reward.spinClaimLimit === undefined ? '' : reward.spinClaimLimit %>">
+                                        </label>
+                                        <label>
+                                            <span class="sr-only">Remaining wheel quantity</span>
+                                            <input type="number" name="spinInventoryRemaining" min="0" step="1" placeholder="Remaining" value="<%= reward.spinInventoryRemaining === null || reward.spinInventoryRemaining === undefined ? '' : reward.spinInventoryRemaining %>">
+                                        </label>
+                                        <button class="button <%= reward.wheelSelected ? 'secondary' : 'primary' %> compact" type="submit"><%= reward.wheelSelected ? 'Remove' : 'Add' %></button>
+                                        <a class="button secondary compact" href="<%= sourceRoute(reward) %>">Edit</a>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
+    </section>
+
+    <section class="marketplace-admin-panel merchant-portal-panel">
+        <div class="marketplace-admin-toolbar">
+            <div>
+                <p class="eyebrow">Platform rewards</p>
+                <h2>Managed by Vaniday</h2>
+            </div>
+        </div>
+        <p class="muted">Platform loyalty points, platform wallet cashback and try-again results may appear as fallback rewards. Merchants cannot edit those rewards here.</p>
+    </section>
+</section>
+
+<script type="application/json" id="vanidaySpinDiscoverAiData"><%- spinAiPayloadJson %></script>
+<script>
+(() => {
+    const dataNode = document.getElementById('vanidaySpinDiscoverAiData');
+    const panel = document.querySelector('[data-spin-ai-panel]');
+    const target = document.querySelector('[data-spin-ai-content]');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    if (!dataNode || !panel || !target) return;
+
+    const money = (value) => `$${Number(value || 0).toFixed(2)}`;
+    const number = (value) => Number(value || 0).toLocaleString('en-SG');
+    const percent = (value) => `${Number(value || 0).toFixed(1)}%`;
+    const clamp = (value) => Math.max(0, Math.min(100, Math.round(Number(value || 0))));
+    const safeText = (value) => String(value || '');
+    let payload = {};
+    try {
+        payload = JSON.parse(dataNode.textContent || '{}');
+    } catch (error) {
+        payload = {};
+    }
+    const stats = payload.stats || {};
+    const rewards = Array.isArray(payload.rewards) ? payload.rewards : [];
+    const selectedRewards = rewards.filter((reward) => reward.selected);
+    const totalWins = Number(stats.totalWins || 0);
+    const totalRedeemed = selectedRewards.reduce((sum, reward) => sum + Number(reward.redemptions || 0), 0);
+    const redemptionRate = totalWins ? (totalRedeemed / totalWins) * 100 : 0;
+    const ranked = [...selectedRewards].sort((left, right) => Number(right.wins || 0) - Number(left.wins || 0));
+    const mostPopular = ranked[0];
+    const leastPopular = [...selectedRewards].sort((left, right) => Number(left.wins || 0) - Number(right.wins || 0))[0];
+    const highestValue = [...selectedRewards].sort((left, right) => {
+        const leftValue = Number(String(left.value || '').match(/[\d.]+/)?.[0] || 0);
+        const rightValue = Number(String(right.value || '').match(/[\d.]+/)?.[0] || 0);
+        return rightValue - leftValue;
+    })[0];
+    const unusedRewards = selectedRewards.filter((reward) => Number(reward.wins || 0) === 0);
+    const lowInventory = selectedRewards.filter((reward) => reward.inventoryRemaining !== null && Number(reward.inventoryRemaining || 0) <= 3);
+    const depleted = selectedRewards.filter((reward) => /claim limit|no inventory|depleted/i.test(reward.status || '') || Number(reward.inventoryRemaining || 0) === 0 && reward.inventoryRemaining !== null);
+    const typeCounts = selectedRewards.reduce((map, reward) => {
+        map[reward.type] = (map[reward.type] || 0) + 1;
+        return map;
+    }, {});
+    const balanceWarning = Object.entries(typeCounts).find(([, count]) => selectedRewards.length && count / selectedRewards.length > 0.65);
+    const fatigue = selectedRewards.filter((reward) => Number(reward.wins || 0) > 0 && Number(reward.conversionRate || 0) < 20);
+
+    const campaignDays = (() => {
+        const start = stats.campaignStart ? new Date(stats.campaignStart) : null;
+        const end = stats.campaignEnd ? new Date(stats.campaignEnd) : null;
+        if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+        return Math.max(1, Math.round((end - start) / (24 * 60 * 60 * 1000)));
+    })();
+
+    const healthCategories = {
+        Engagement: totalWins ? clamp(45 + Math.min(totalWins, 40)) : 35,
+        'Reward Balance': selectedRewards.length ? clamp(92 - (balanceWarning ? 25 : 0) - Math.max(0, selectedRewards.length - 8) * 3) : 40,
+        Inventory: clamp(88 - (lowInventory.length * 14) - (depleted.length * 18)),
+        Redemption: totalWins ? clamp(50 + redemptionRate) : 35,
+        Retention: stats.repeatPlayers === null ? 62 : clamp(50 + Number(stats.repeatPlayers || 0) * 5),
+        'Campaign Effectiveness': selectedRewards.length ? clamp(55 + Math.min(totalWins, 25) + Math.min(redemptionRate, 20)) : 35
+    };
+    const healthScore = clamp(Object.values(healthCategories).reduce((sum, value) => sum + value, 0) / Object.values(healthCategories).length);
+    const healthStatus = healthScore >= 80 ? 'Healthy' : healthScore >= 60 ? 'Watch list' : 'Needs attention';
+
+    const seasonalSuggestions = (() => {
+        const month = new Date().getMonth() + 1;
+        if (month === 12) return ['Create a Christmas gifting reward.', 'Feature gift card or voucher prizes.'];
+        if (month === 1 || month === 2) return ['Prepare Chinese New Year refresh rewards.', 'Use beauty-prep service vouchers.'];
+        if (month === 5) return ["Create Mother's Day service bundles.", 'Feature premium salon vouchers.'];
+        if (month === 6) return ["Create Father's Day grooming rewards.", 'Test product bundle prizes.'];
+        if (month === 2) return ["Create Valentine's Day couple-service rewards."];
+        if ([3, 6, 9, 11].includes(month)) return ['Use school-holiday family-friendly rewards.', 'Rotate slow rewards before holiday demand.'];
+        return ['Rotate older rewards monthly.', 'Use weekend rewards when engagement is low.'];
+    })();
+
+    const timeline = [
+        stats.campaignStart ? { title: 'Campaign started', detail: new Date(stats.campaignStart).toLocaleDateString('en-SG') } : null,
+        totalWins ? { title: 'High engagement signal', detail: `${number(totalWins)} customer win${totalWins === 1 ? '' : 's'} recorded.` } : null,
+        lowInventory.length ? { title: 'Inventory warning', detail: `${lowInventory.map((reward) => reward.name).join(', ')} running low.` } : null,
+        fatigue.length ? { title: 'Engagement fatigue', detail: `${fatigue.map((reward) => reward.name).slice(0, 2).join(', ')} have low redemption after wins.` } : null,
+        stats.campaignEnd ? { title: 'Campaign end', detail: new Date(stats.campaignEnd).toLocaleDateString('en-SG') } : null
+    ].filter(Boolean);
+
+    const recommendations = [
+        lowInventory[0] ? `Increase quantity for ${lowInventory[0].name} or replace it before inventory runs out.` : '',
+        fatigue[0] ? `Replace or improve ${fatigue[0].name} because redemption is weak.` : '',
+        unusedRewards[0] ? `Rotate ${unusedRewards[0].name} because it has not been won yet.` : '',
+        balanceWarning ? `Balance reward mix; ${balanceWarning[0]} rewards dominate the wheel.` : '',
+        mostPopular ? `Use ${mostPopular.name} as the model for the next reward campaign.` : '',
+        ...seasonalSuggestions
+    ].filter(Boolean).slice(0, 6);
+
+    const summaryRows = [
+        ['Total Spins', number(totalWins)],
+        ['Unique Players', stats.uniquePlayers === null ? 'Not available' : number(stats.uniquePlayers)],
+        ['Repeat Players', stats.repeatPlayers === null ? 'Not available' : number(stats.repeatPlayers)],
+        ['Rewards Claimed', number(totalRedeemed)],
+        ['Reward Redemption Rate', percent(redemptionRate)],
+        ['Most Popular Reward', mostPopular?.name || 'Not available'],
+        ['Least Popular Reward', leastPopular?.name || 'Not available'],
+        ['Highest Value Reward', highestValue ? `${highestValue.name} (${highestValue.value})` : 'Not available'],
+        ['Unused Rewards', number(unusedRewards.length)],
+        ['Reward Inventory Remaining', number(stats.remainingInventory)],
+        ['Campaign Duration', campaignDays ? `${campaignDays} days` : 'Not available'],
+        ['Campaign Health Score', `${healthScore}/100`],
+        ['Overall Campaign Status', healthStatus]
+    ];
+
+    const createEl = (tag, className = '', text = '') => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text) node.textContent = text;
+        return node;
+    };
+
+    const renderList = (title, rows) => {
+        const card = createEl('article', 'spin-ai-card');
+        card.appendChild(createEl('h3', '', title));
+        const list = createEl('ul');
+        rows.filter(Boolean).forEach((row) => list.appendChild(createEl('li', '', row)));
+        card.appendChild(list);
+        return card;
+    };
+
+    const explainTextFor = (label) => {
+        const lower = safeText(label).toLowerCase();
+        if (lower.includes('win') || lower.includes('spin')) return `Customer wins show engagement. This campaign has ${number(totalWins)} wins, with ${mostPopular?.name || 'no clear reward'} leading.`;
+        if (lower.includes('inventory')) return lowInventory.length ? `${lowInventory.length} reward inventory warning${lowInventory.length === 1 ? '' : 's'} found: ${lowInventory.map((reward) => reward.name).join(', ')}.` : 'Reward inventory looks stable from the current Spin data.';
+        if (lower.includes('depleted')) return depleted.length ? `${depleted.length} reward${depleted.length === 1 ? '' : 's'} may be exhausted or blocked by limits.` : 'No selected rewards appear depleted from the current Spin data.';
+        if (lower.includes('active')) return `${number(selectedRewards.length)} rewards are selected for the wheel. A balanced mix helps keep customer interest.`;
+        return `Spin health is ${healthScore}/100. The current status is ${healthStatus}.`;
+    };
+
+    const render = () => {
+        target.innerHTML = '';
+        const summary = createEl('article', 'spin-ai-card spin-ai-card-large');
+        summary.innerHTML = `<div class="spin-ai-score"><span>Campaign Health</span><strong>${healthScore}/100</strong><small>${healthStatus}</small></div>`;
+        const summaryList = createEl('dl', 'spin-ai-summary-list');
+        summaryRows.forEach(([label, value]) => {
+            const row = createEl('div');
+            row.append(createEl('dt', '', label), createEl('dd', '', value));
+            summaryList.appendChild(row);
+        });
+        summary.appendChild(summaryList);
+        target.appendChild(summary);
+
+        target.appendChild(renderList('Health categories', Object.entries(healthCategories).map(([label, value]) => `${label}: ${value}/100`)));
+        target.appendChild(renderList('AI recommendations', recommendations));
+        target.appendChild(renderList('Reward fatigue and balance', [
+            fatigue.length ? `${fatigue.length} reward${fatigue.length === 1 ? '' : 's'} have low redemption after wins.` : 'No clear reward fatigue from current data.',
+            balanceWarning ? `${balanceWarning[0]} rewards make up most of the wheel.` : 'Reward type distribution looks balanced enough.',
+            unusedRewards.length ? `${unusedRewards.length} selected reward${unusedRewards.length === 1 ? '' : 's'} have no wins yet.` : 'Selected rewards have recorded engagement or no issue yet.'
+        ]));
+        target.appendChild(renderList('Inventory impact', [
+            lowInventory.length ? `${lowInventory.map((reward) => `${reward.name}: ${reward.inventoryRemaining} left`).join('; ')}` : 'No low reward inventory detected.',
+            depleted.length ? `${depleted.map((reward) => reward.name).join(', ')} may be depleted.` : 'No depleted selected rewards detected.',
+            'Cashback and voucher budgets use existing reward records; no automatic changes are made.'
+        ]));
+        target.appendChild(renderList('Business impact', [
+            mostPopular ? `${mostPopular.name} may be contributing to customer attraction.` : 'Most popular reward is not available yet.',
+            `${percent(redemptionRate)} redemption rate indicates how often wins become claimed value.`,
+            'Booking, purchase and revenue impact should be read together with merchant analytics.'
+        ]));
+        target.appendChild(renderList('Campaign timeline', timeline.length ? timeline.map((item) => `${item.title}: ${item.detail}`) : ['Timeline needs campaign dates or engagement events.']));
+        target.appendChild(renderList('Seasonal suggestions', seasonalSuggestions));
+
+        const rewardCard = createEl('article', 'spin-ai-card spin-ai-card-large');
+        rewardCard.appendChild(createEl('h3', '', 'Reward performance analysis'));
+        const table = createEl('div', 'spin-ai-reward-list');
+        ranked.forEach((reward, index) => {
+            const row = createEl('article');
+            row.append(
+                createEl('strong', '', `${index + 1}. ${reward.name}`),
+                createEl('span', '', `${reward.type} - ${reward.value}`),
+                createEl('small', '', `${number(reward.wins)} won - ${number(reward.redemptions)} redeemed - ${percent(reward.conversionRate)} redemption - inventory ${reward.inventoryRemaining ?? 'no cap'} - limit ${reward.claimLimit ?? 'no cap'}`)
+            );
+            table.appendChild(row);
+        });
+        rewardCard.appendChild(table);
+        target.appendChild(rewardCard);
+    };
+
+    document.querySelectorAll('[data-spin-kpi]').forEach((card) => {
+        const label = card.dataset.spinKpi || card.textContent.trim();
+        const actions = createEl('div', 'spin-ai-kpi-actions');
+        ['Explain', 'Show Trend', 'Compare Previous Campaign', 'Generate Recommendation'].forEach((action) => {
+            const button = createEl('button', 'button secondary compact', action);
+            button.type = 'button';
+            button.addEventListener('click', async () => {
+                let answer = card.querySelector('.spin-ai-kpi-answer');
+                if (!answer) {
+                    answer = createEl('div', 'spin-ai-kpi-answer');
+                    card.appendChild(answer);
+                }
+                if (action === 'Generate Recommendation') {
+                    answer.textContent = 'Preparing a safe recommendation proposal...';
+                    try {
+                        const response = await fetch('/api/ai/merchant/action-proposal', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                            body: JSON.stringify({ period: 'last30', prompt: `Create a safe review-only Spin & Discover recommendation for ${label}. Context: ${explainTextFor(label)} Do not apply automatically.`.slice(0, 500) })
+                        });
+                        const result = await response.json().catch(() => ({}));
+                        answer.textContent = response.ok && result.success ? `${result.proposal?.title || 'Recommendation prepared'}: ${result.proposal?.reason || 'Review before confirming any action.'}` : (result.message || 'Recommendation could not be prepared.');
+                    } catch (error) {
+                        answer.textContent = 'Recommendation could not be prepared.';
+                    }
+                    return;
+                }
+                answer.textContent = action === 'Compare Previous Campaign'
+                    ? `${label}: previous campaign data is not available in the current Spin dashboard payload, so compare manually with merchant analytics until historical campaign metrics are exposed.`
+                    : action === 'Show Trend'
+                        ? `${label}: trend is based on current wins, redemption and inventory. ${explainTextFor(label)}`
+                        : explainTextFor(label);
+            });
+            actions.appendChild(button);
+        });
+        card.appendChild(actions);
+    });
+
+    document.querySelector('[data-spin-ai-refresh]')?.addEventListener('click', render);
+    render();
+})();
+</script>
+
+<%- include('partials/footer') %>

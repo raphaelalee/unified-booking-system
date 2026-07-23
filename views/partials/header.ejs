@@ -20,13 +20,18 @@
     <link rel="stylesheet" href="/css/green-theme.css?v=3">
     <link rel="stylesheet" href="/css/promotions.css?v=1">
     <link rel="stylesheet" href="/css/readability.css?v=16">
-    <link rel="stylesheet" href="/css/sage-theme.css?v=68">
+    <link rel="stylesheet" href="/css/sage-theme.css?v=74">
     <link rel="stylesheet" href="/css/portal-refresh.css?v=7">
     <link rel="stylesheet" href="/css/notifications.css?v=1">
     <script src="/js/security.js?v=1" defer></script>
     <script src="/js/cart-feedback.js?v=1" defer></script>
+    <% if (currentUser && ['merchant', 'admin'].includes(currentUser.role)) { %>
+        <script src="/js/ai-ui-components.js?v=2" defer></script>
+        <script src="/js/floating-ai-assistant.js?v=9" defer></script>
+        <script src="/js/ai-executive-dashboard.js?v=6" defer></script>
+    <% } %>
 </head>
-<body>
+<body data-user-role="<%= currentUser && currentUser.role ? currentUser.role : '' %>">
     <%
         const navUserName = currentUser ? (currentUser.name || currentUser.email || currentUser.role || 'Account') : '';
         const navUserInitial = navUserName ? navUserName.charAt(0).toUpperCase() : 'V';
@@ -185,5 +190,8 @@
             </div>
         </nav>
     </header>
+    <% if (currentUser && ['merchant', 'admin'].includes(currentUser.role)) { %>
+        <%- include('ai-floating-assistant') %>
+    <% } %>
     <main>
         <div class="page-container">

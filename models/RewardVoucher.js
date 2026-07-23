@@ -155,6 +155,9 @@ function ensureSchema(callback) {
             linked_product_id INT DEFAULT NULL,
             linked_item_type VARCHAR(20) DEFAULT NULL,
             linked_item_id INT DEFAULT NULL,
+            spin_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            spin_claim_limit INT DEFAULT NULL,
+            spin_inventory_remaining INT DEFAULT NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (voucher_id),
@@ -245,6 +248,18 @@ function ensureSchema(callback) {
 
             if (!fields.has('linked_item_id')) {
                 alters.push('ADD COLUMN linked_item_id INT DEFAULT NULL AFTER linked_item_type');
+            }
+
+            if (!fields.has('spin_enabled')) {
+                alters.push('ADD COLUMN spin_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER linked_item_id');
+            }
+
+            if (!fields.has('spin_claim_limit')) {
+                alters.push('ADD COLUMN spin_claim_limit INT DEFAULT NULL AFTER spin_enabled');
+            }
+
+            if (!fields.has('spin_inventory_remaining')) {
+                alters.push('ADD COLUMN spin_inventory_remaining INT DEFAULT NULL AFTER spin_claim_limit');
             }
 
             if (alters.length === 0) {
@@ -389,6 +404,11 @@ function mapVoucher(row) {
         linkedItemType: row.linked_item_type || row.linkedItemType || '',
         linkedItemId: row.linked_item_id ? Number(row.linked_item_id) : null,
         linkedItemName: row.linked_item_name || row.linkedItemName || '',
+        spinEnabled: Boolean(Number(row.spin_enabled ?? row.spinEnabled ?? 0)),
+        spinClaimLimit: row.spin_claim_limit === null || row.spin_claim_limit === undefined ? null : Number(row.spin_claim_limit),
+        spinInventoryRemaining: row.spin_inventory_remaining === null || row.spin_inventory_remaining === undefined ? null : Number(row.spin_inventory_remaining),
+        spinWinCount: Number(row.spin_win_count || row.spinWinCount || 0),
+        spinClaimCount: Number(row.spin_claim_count || row.spinClaimCount || 0),
         isDefault: false,
         createdAt: row.created_at || null,
         updatedAt: row.updated_at || null
@@ -422,6 +442,11 @@ function buildSelectSql(whereClause = '', orderBy = 'v.sort_order ASC, COALESCE(
             v.linked_product_id,
             v.linked_item_type,
             v.linked_item_id,
+            v.spin_enabled,
+            v.spin_claim_limit,
+            v.spin_inventory_remaining,
+            COALESCE(spin_stats.spin_win_count, 0) AS spin_win_count,
+            COALESCE(spin_stats.spin_claim_count, 0) AS spin_claim_count,
             v.created_at,
             v.updated_at,
             s.salon_name AS merchant_name,
@@ -441,6 +466,15 @@ function buildSelectSql(whereClause = '', orderBy = 'v.sort_order ASC, COALESCE(
             ON svc.service_id = COALESCE(v.linked_service_id, CASE WHEN v.linked_item_type = 'service' THEN v.linked_item_id ELSE NULL END)
         LEFT JOIN products prod
             ON prod.product_id = COALESCE(v.linked_product_id, CASE WHEN v.linked_item_type = 'product' THEN v.linked_item_id ELSE NULL END)
+        LEFT JOIN (
+            SELECT
+                reward_source_id AS voucher_id,
+                COUNT(*) AS spin_win_count,
+                SUM(CASE WHEN status = 'claimed' THEN 1 ELSE 0 END) AS spin_claim_count
+            FROM spin_results
+            WHERE reward_source_type = 'reward_shop_voucher'
+            GROUP BY reward_source_id
+        ) spin_stats ON spin_stats.voucher_id = v.voucher_id
         ${whereClause}
         ORDER BY ${orderBy}
     `;
@@ -602,7 +636,10 @@ function buildCreateParams(voucher = {}) {
         linkedServiceId,
         linkedProductId,
         linkedItemType,
-        linkedItemType ? (voucher.linkedItemId || null) : null
+        linkedItemType ? (voucher.linkedItemId || null) : null,
+        voucher.spinEnabled ? 1 : 0,
+        voucher.spinClaimLimit || null,
+        voucher.spinInventoryRemaining ?? voucher.spinClaimLimit ?? null
     ];
 }
 
@@ -618,8 +655,8 @@ function create(voucher, callback) {
                 (glints_cost, voucher_value, title, detail, status, sort_order, voucher_source, merchant_id, discount_type,
                     discount_value, minimum_spend, points_required, start_date, expiry_date, usage_limit_per_user,
                     usage_limit_total, redemption_count, created_by, applies_to_booking, linked_service_id, linked_product_id,
-                    linked_item_type, linked_item_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    linked_item_type, linked_item_id, spin_enabled, spin_claim_limit, spin_inventory_remaining)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(sql, buildCreateParams(voucher), callback);
@@ -657,7 +694,10 @@ function update(voucherId, voucher, callback) {
                 linked_service_id = ?,
                 linked_product_id = ?,
                 linked_item_type = ?,
-                linked_item_id = ?
+                linked_item_id = ?,
+                spin_enabled = ?,
+                spin_claim_limit = ?,
+                spin_inventory_remaining = ?
             WHERE voucher_id = ?
         `;
 

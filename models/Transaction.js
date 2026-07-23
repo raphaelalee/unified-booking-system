@@ -701,14 +701,16 @@ function canTransitionOrderStatus(row, requestedStatus) {
         packed: new Set(['shipped', 'cancelled']),
         shipped: new Set(['out_for_delivery']),
         out_for_delivery: new Set(['delivered']),
-        delivered: new Set([]),
+        delivered: new Set(['completed']),
+        completed: new Set([]),
         cancelled: new Set([])
     };
     const pickupTransitions = {
         processing: new Set(['packed', 'cancelled']),
         packed: new Set(['ready_for_pickup', 'delivered_to_pickup_location', 'cancelled']),
         ready_for_pickup: new Set(['delivered_to_pickup_location']),
-        delivered_to_pickup_location: new Set([]),
+        delivered_to_pickup_location: new Set(['completed']),
+        completed: new Set([]),
         cancelled: new Set([])
     };
 
@@ -2127,14 +2129,16 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
                         updateFields.push('shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)');
                     }
 
-                    if (requestedStatus === 'delivered') {
+                    if (requestedStatus === 'delivered' || requestedStatus === 'completed') {
                         updateFields.push('delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)');
                     }
 
                     if (isPickup) {
                         const pickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
                             ? requestedStatus
-                            : requestedStatus === 'cancelled'
+                            : requestedStatus === 'completed'
+                                ? 'picked_up'
+                                : requestedStatus === 'cancelled'
                                 ? 'cancelled'
                                 : 'pending_pickup';
 
@@ -2143,6 +2147,10 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
 
                         if (isPickupReadyStatus(pickupStatus)) {
                             updateFields.push('pickup_ready_at = COALESCE(pickup_ready_at, CURRENT_TIMESTAMP)');
+                        }
+
+                        if (pickupStatus === 'picked_up') {
+                            updateFields.push('collected_at = COALESCE(collected_at, CURRENT_TIMESTAMP)');
                         }
                     }
 
@@ -2164,12 +2172,18 @@ function updateDeliveryStatus(transactionId, status, options = {}, callback) {
                         if (isPickup) {
                             const historyPickupStatus = requestedStatus === 'ready_for_pickup' || requestedStatus === 'delivered_to_pickup_location'
                                 ? requestedStatus
-                                : requestedStatus === 'cancelled'
+                                : requestedStatus === 'completed'
+                                    ? 'picked_up'
+                                    : requestedStatus === 'cancelled'
                                     ? 'cancelled'
                                     : 'pending_pickup';
 
                             historyFields.push('pickup_status = ?');
                             historyValues.push(historyPickupStatus);
+
+                            if (historyPickupStatus === 'picked_up') {
+                                historyFields.push('pickup_at = COALESCE(pickup_at, CURRENT_TIMESTAMP)');
+                            }
                         }
 
                         const historySql = `

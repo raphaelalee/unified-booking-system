@@ -79,14 +79,13 @@
         const end = start + segmentAngle;
         return `${wheelColor(reward.rewardType, index)} ${start.toFixed(3)}deg ${end.toFixed(3)}deg`;
     }).join(', ');
-    const featuredRewards = rewardList.filter((reward) => reward.rewardType !== 'try_again').slice(0, 4);
-    const latestPromotions = rewardList.filter((reward) => ['promotion', 'service_discount'].includes(reward.rewardType)).slice(0, 4);
-    const popularDeals = rewardList.filter((reward) => ['product_discount', 'voucher', 'cashback'].includes(reward.rewardType)).slice(0, 4);
-    const rewardCategories = ['service_discount', 'product_discount', 'cashback', 'loyalty_points', 'promotion'].map((type) => ({
-        type,
-        label: rewardTypeLabel(type),
-        count: rewardList.filter((reward) => reward.rewardType === type).length
-    }));
+    const rewardPreview = [
+        'Service discounts',
+        'Product discounts',
+        'Vouchers',
+        'Cashback',
+        'Loyalty points'
+    ];
     const spinConfig = {
         isCustomer,
         canSpin,
@@ -108,40 +107,29 @@
     };
 %>
 
-<section class="page-title spin-discover-hero">
+<section class="page-title spin-discover-hero spin-discover-hero-clean">
     <div class="spin-discover-copy">
-        <p class="eyebrow">Marketplace Rewards</p>
-        <h1>Spin & Discover beauty deals.</h1>
-        <p>Turn completed bookings and product orders into live merchant rewards, beauty vouchers, cashback, and loyalty perks.</p>
+        <p class="eyebrow">Rewards</p>
+        <h1>Spin & Discover</h1>
+        <p>Complete an eligible paid booking or product order to earn one spin.</p>
         <div class="spin-hero-actions">
             <% if (isCustomer) { %>
-                <a class="button secondary" href="/profile#wallet">View wallet</a>
+                <a class="button secondary" href="/profile#vouchers">View my rewards</a>
                 <a class="button secondary" href="/profile/history">Earn more spins</a>
             <% } else { %>
                 <a class="button primary" href="/login?returnTo=%2Fspin-discover">Log in to spin</a>
             <% } %>
-            <a class="button secondary" href="/promotions">Browse promotions</a>
         </div>
     </div>
     <aside class="spin-hero-preview">
         <div class="spin-preview-card">
-            <p class="eyebrow">Live reward pool</p>
-            <strong><%= rewardList.length %> rewards</strong>
-            <span>Merchant promos, vouchers, cashback, and VaniGlints</span>
+            <p class="eyebrow">Available spins</p>
+            <strong data-spin-count><%= isCustomer ? availableSpins : 'Log in' %></strong>
+            <span>Your reward will be saved automatically.</span>
             <div class="spin-preview-chips">
-                <% rewardCategories.filter((category) => category.count > 0).slice(0, 4).forEach((category) => { %>
-                    <span class="<%= rewardCategoryClass(category.type) %>"><%= category.label %></span>
+                <% rewardPreview.slice(0, 4).forEach((label) => { %>
+                    <span><%= label %></span>
                 <% }) %>
-            </div>
-        </div>
-        <div class="spin-preview-metrics">
-            <div>
-                <span>Your spins</span>
-                <strong data-spin-count><%= isCustomer ? availableSpins : 'Log in' %></strong>
-            </div>
-            <div>
-                <span>Validity</span>
-                <strong><%= settings.tokenExpiryDays || 30 %> days</strong>
             </div>
         </div>
     </aside>
@@ -196,8 +184,8 @@
 
             <div class="spin-action-panel">
                 <p class="eyebrow"><%= settings.isEnabled ? 'Ready to reveal' : 'Paused' %></p>
-                <h2>Discover live merchant rewards.</h2>
-                <p class="muted">The backend chooses and records the reward securely. The wheel animation only reveals the confirmed result.</p>
+                <h2>Spin now</h2>
+                <p class="muted">Your result is securely selected and saved to your account.</p>
                 <div class="spin-status-strip" data-spin-status>
                     <span><%= canSpin ? 'Tap spin to begin' : (isCustomer ? 'Complete bookings or orders to earn spins' : 'Log in to use spin chances') %></span>
                 </div>
@@ -224,27 +212,9 @@
                 </form>
                 <div class="spin-earn-card">
                     <strong>How to earn more</strong>
-                    <p>Each completed booking or paid product order unlocks one spin chance. Unused chances expire after <%= settings.tokenExpiryDays || 30 %> days.</p>
+                    <p>Complete an eligible paid booking or product order. You may win service discounts, product discounts, vouchers, cashback or loyalty points.</p>
                 </div>
             </div>
-        </div>
-
-        <div class="spin-feature-grid">
-            <article>
-                <span>Secure</span>
-                <strong>Backend verified rewards</strong>
-                <p>Reward outcomes, token usage, and issued vouchers are recorded in MySQL before reveal.</p>
-            </article>
-            <article>
-                <span>Merchant powered</span>
-                <strong>Live marketplace campaigns</strong>
-                <p>Active merchant promotions and reward-shop vouchers automatically enter the discovery pool.</p>
-            </article>
-            <article>
-                <span>Fresh</span>
-                <strong>Expired deals are excluded</strong>
-                <p>Inactive and expired campaigns stay out of the wheel, keeping recommendations presentation-ready.</p>
-            </article>
         </div>
     </div>
 
@@ -268,21 +238,8 @@
         </div>
 
         <div class="dashboard-report-card spin-side-card">
-            <p class="eyebrow">Reward Categories</p>
-            <h2>What can appear</h2>
-            <div class="spin-category-list">
-                <% rewardCategories.forEach((category) => { %>
-                    <span class="<%= rewardCategoryClass(category.type) %>">
-                        <%= category.label %>
-                        <strong><%= category.count %></strong>
-                    </span>
-                <% }) %>
-            </div>
-        </div>
-
-        <div class="dashboard-report-card spin-side-card">
-            <p class="eyebrow">Spin History</p>
-            <h2>Recently won rewards</h2>
+            <p class="eyebrow">Recent wins</p>
+            <h2>Your Spin results</h2>
             <% if (!isCustomer) { %>
                 <p class="muted">Log in to see your spin history and redemption status.</p>
             <% } else if (recentHistory.length === 0) { %>
@@ -306,12 +263,12 @@
     <div class="spin-reward-section">
         <div class="section-heading">
             <div>
-                <p class="eyebrow">Featured Rewards</p>
-                <h2>Presentation-ready prizes from the live pool.</h2>
+                <p class="eyebrow">Reward preview</p>
+                <h2>What you may win</h2>
             </div>
         </div>
         <div class="spin-market-grid">
-            <% (featuredRewards.length ? featuredRewards : wheelRewards).slice(0, 4).forEach((reward) => { %>
+            <% wheelRewards.filter((reward) => reward.rewardType !== 'try_again').slice(0, 4).forEach((reward) => { %>
                 <article class="spin-market-card">
                     <span class="spin-reward-icon <%= rewardCategoryClass(reward.rewardType) %>"><%= rewardIcon(reward.rewardType) %></span>
                     <div class="spin-card-badge-row">
@@ -326,50 +283,6 @@
                     <% if (formatExpiry(reward)) { %>
                         <small>Valid until <%= formatExpiry(reward) %></small>
                     <% } %>
-                </article>
-            <% }) %>
-        </div>
-    </div>
-
-    <div class="spin-reward-section">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">Latest Promotions</p>
-                <h2>Fresh merchant campaigns in the wheel.</h2>
-            </div>
-            <a class="text-link" href="/promotions">View all promotions</a>
-        </div>
-        <div class="spin-promo-list">
-            <% if (latestPromotions.length === 0) { %>
-                <p class="muted">No active merchant promotions are available right now.</p>
-            <% } %>
-            <% latestPromotions.forEach((reward) => { %>
-                <article>
-                    <span class="<%= rewardCategoryClass(reward.rewardType) %>"><%= rewardTypeLabel(reward.rewardType) %><b>New</b></span>
-                    <strong><%= reward.title %></strong>
-                    <p><%= reward.description %></p>
-                    <small><%= reward.payload?.salonName || reward.payload?.merchantName || 'Vaniday marketplace' %><%= formatExpiry(reward) ? ` - expires ${formatExpiry(reward)}` : '' %></small>
-                </article>
-            <% }) %>
-        </div>
-    </div>
-
-    <div class="spin-reward-section">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">Popular Merchant Deals</p>
-                <h2>Cashback, product, and voucher opportunities.</h2>
-            </div>
-        </div>
-        <div class="spin-promo-list compact">
-            <% if (popularDeals.length === 0) { %>
-                <p class="muted">More merchant deals will appear as merchants create active promotions.</p>
-            <% } %>
-            <% popularDeals.forEach((reward) => { %>
-                <article>
-                    <span class="<%= rewardCategoryClass(reward.rewardType) %>"><%= rewardTypeLabel(reward.rewardType) %><b>Limited</b></span>
-                    <strong><%= reward.title %></strong>
-                    <p><%= reward.description %></p>
                 </article>
             <% }) %>
         </div>

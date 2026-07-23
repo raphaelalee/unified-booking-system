@@ -6,7 +6,9 @@ const {
     getOriginalExternalPaidCents
 } = require('./refundAllocation');
 
-const REFUND_TERMS_VERSION = 'refund-policy-2026-07-processing-fee';
+const REFUND_TERMS_VERSION = 'refund-policy-2026-07-admin-fee';
+const REFUND_ADMINISTRATION_FEE_CENTS = 200;
+const REFUND_ADMINISTRATION_FEE_AMOUNT = fromCents(REFUND_ADMINISTRATION_FEE_CENTS);
 const CUSTOMER_RESPONSIBILITY_REASONS = new Set(['customer_cancellation']);
 const MERCHANT_RESPONSIBILITY_REASONS = new Set(['merchant_cancellation', 'unavailable', 'duplicate_charge', 'incorrect_charge']);
 const PLATFORM_RESPONSIBILITY_REASONS = new Set(['platform_error']);
@@ -63,6 +65,10 @@ function canDeductProcessingFee(transaction, responsibility) {
     if (provider === 'internal_wallet') return false;
     if (!['provider_reported', 'calculated_snapshot', 'merchant_contract'].includes(source)) return false;
     return toCents(transaction.processingFeeAmount) > 0;
+}
+
+function getRefundAdministrationFeeCents(approvedRefundCents) {
+    return approvedRefundCents > 0 ? REFUND_ADMINISTRATION_FEE_CENTS : 0;
 }
 
 function calculateProcessingFeeDeduction({
@@ -125,20 +131,22 @@ function calculateRefund({
         previousSourceRefunds,
         previousRefundedByAllocationId
     });
-    const feeAllocation = calculateProcessingFeeForExternalPortion({
+    const providerFeeAllocation = calculateProcessingFeeForExternalPortion({
         originalProcessingFee: transaction.processingFeeAmount,
         originalExternalPaid: fromCents(getOriginalExternalPaidCents(transaction)),
         cumulativeExternalGrossRefunded: fromCents(toCents(previousExternalGrossRefunds) + toCents(grossAllocationBeforeFee.externalGrossRefundAmount)),
-        previousFeeDeductions,
+        previousFeeDeductions: 0,
         previousMerchantFeeLoss,
         responsibility,
-        acknowledgementAccepted: canDeductProcessingFee(transaction, responsibility) && acknowledgementAccepted
+        acknowledgementAccepted: false
     });
-    const feeDeduction = canDeductProcessingFee(transaction, responsibility) ? feeAllocation.processingFeeDeduction : 0;
-    const feeDeductionCents = toCents(feeDeduction);
+    const feeDeductionCents = Math.min(getRefundAdministrationFeeCents(cappedGrossCents), cappedGrossCents);
+    if (cappedGrossCents > 0 && cappedGrossCents <= REFUND_ADMINISTRATION_FEE_CENTS) {
+        throw new Error(`The approved refund amount must be more than the ${formatMoney(REFUND_ADMINISTRATION_FEE_AMOUNT)} Refund Administration Fee.`);
+    }
     const netRefundCents = Math.max(cappedGrossCents - lateFeeCents - feeDeductionCents, 0);
     const originalFeeCents = Math.max(toCents(transaction.processingFeeAmount), 0);
-    const merchantFeeLossCents = toCents(feeAllocation.merchantProcessingFeeLoss);
+    const merchantFeeLossCents = toCents(providerFeeAllocation.merchantProcessingFeeLoss);
     const fundingAllocation = calculateRefundFundingAllocation({
         transaction,
         cumulativeGrossRefund: fromCents(previousGrossCents + cappedGrossCents),
@@ -168,7 +176,8 @@ function calculateRefund({
         fundingAllocations: fundingAllocation.allocations,
         originalProcessingFee: fromCents(originalFeeCents),
         processingFeeDeduction: fromCents(feeDeductionCents),
-        processingFeeAllocation: feeAllocation.processingFeeAllocation,
+        refundAdministrationFee: fromCents(feeDeductionCents),
+        processingFeeAllocation: providerFeeAllocation.processingFeeAllocation,
         otherDeductions: fromCents(lateFeeCents),
         netCustomerRefund: fromCents(netRefundCents),
         remainingRefundableAfterRefund: fromCents(Math.max(remainingRefundableCents - cappedGrossCents, 0)),
@@ -178,12 +187,12 @@ function calculateRefund({
         refundReasonCategory: normalizeReasonCategory(reasonCategory),
         feeDeductionApplies: deductionApplies,
         processingFeeSource: transaction.processingFeeSource || 'unknown',
-        acknowledgementRequired,
+        acknowledgementRequired: deductionApplies && !acknowledgementAccepted,
         paymentMethodLabel,
         paymentProvider: normalizePaymentProvider(transaction.paymentProvider, transaction.paymentMethod),
         explanation: deductionApplies
-            ? `Your order was paid using ${paymentMethodLabel}. Under the customer-cancellation refund policy, the disclosed payment-processing fee deduction is ${formatMoney(fromCents(feeDeductionCents))}. Your estimated refund is ${formatMoney(fromCents(netRefundCents))}.`
-            : `No payment-processing deduction is passed to the customer for this refund. Estimated refund: ${formatMoney(fromCents(netRefundCents))}.`
+            ? `A fixed ${formatMoney(fromCents(feeDeductionCents))} Refund Administration Fee will be deducted from the approved refund amount, regardless of the original payment method. Your estimated refund is ${formatMoney(fromCents(netRefundCents))}.`
+            : `Estimated refund: ${formatMoney(fromCents(netRefundCents))}.`
     };
 }
 
@@ -235,6 +244,8 @@ function extractProviderFeeSnapshot({ provider, method, amount, providerResponse
 }
 
 module.exports = {
+    REFUND_ADMINISTRATION_FEE_AMOUNT,
+    REFUND_ADMINISTRATION_FEE_CENTS,
     REFUND_TERMS_VERSION,
     VALID_REASON_CATEGORIES,
     calculateRefund,

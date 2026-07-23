@@ -661,8 +661,8 @@
                                 <div><dt>Requested</dt><dd><%= formatMoney(refund.customerRequestedAmount) %></dd></div>
                                 <div><dt>Approved</dt><dd><%= Number(refund.approvedPercentage || 0).toFixed(2) %>%</dd></div>
                                 <div><dt>Gross refund</dt><dd><%= formatMoney(refund.approvedGrossRefund) %></dd></div>
-                                <div><dt>Processing-fee deduction</dt><dd><%= formatMoney(refund.processingFeeDeduction) %></dd></div>
-                                <div><dt>External returned</dt><dd><%= formatMoney(refund.netExternalRefund) %></dd></div>
+                                <div><dt>Refund Administration Fee</dt><dd><%= formatMoney(refund.processingFeeDeduction) %></dd></div>
+                                <div><dt>Amount returned</dt><dd><%= formatMoney(refund.netExternalRefund) %></dd></div>
                                 <% if (Number(refund.walletRestored || 0) > 0) { %><div><dt>Wallet restored</dt><dd><%= formatMoney(refund.walletRestored) %></dd></div><% } %>
                                 <% if (Number(refund.pointsRestored || 0) > 0 || Number(refund.pointsReversed || 0) > 0) { %><div><dt>Points</dt><dd>+<%= Number(refund.pointsRestored || 0) %> / -<%= Number(refund.pointsReversed || 0) %></dd></div><% } %>
                                 <% if (Number(refund.cashbackRestored || 0) > 0 || Number(refund.cashbackReversed || 0) > 0) { %><div><dt>Cashback</dt><dd>+<%= formatMoney(refund.cashbackRestored) %> / -<%= formatMoney(refund.cashbackReversed) %></dd></div><% } %>

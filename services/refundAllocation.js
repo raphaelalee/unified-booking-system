@@ -135,7 +135,27 @@ function calculateRefundFundingAllocation({
         if (source.sourceType === 'discount') totals.discountNonRefundableCents += source.amountCents;
     });
 
-    const internalReturnedCents = totals.walletCents + totals.cashbackCents + totals.pointsValueCents;
+    let internalReturnedCents = totals.walletCents + totals.cashbackCents + totals.pointsValueCents;
+    if (internalReturnedCents > netCustomerCents) {
+        let overageCents = internalReturnedCents - netCustomerCents;
+        ['loyalty_points', 'cashback', 'wallet'].forEach((sourceType) => {
+            if (overageCents <= 0) return;
+            allocations
+                .filter((allocation) => allocation.sourceType === sourceType && toCents(allocation.refundAmount) > 0)
+                .reverse()
+                .forEach((allocation) => {
+                    if (overageCents <= 0) return;
+                    const currentCents = toCents(allocation.refundAmount);
+                    const reductionCents = Math.min(currentCents, overageCents);
+                    allocation.refundAmount = fromCents(currentCents - reductionCents);
+                    overageCents -= reductionCents;
+                    if (sourceType === 'wallet') totals.walletCents -= reductionCents;
+                    if (sourceType === 'cashback') totals.cashbackCents -= reductionCents;
+                    if (sourceType === 'loyalty_points') totals.pointsValueCents -= reductionCents;
+                });
+        });
+        internalReturnedCents = totals.walletCents + totals.cashbackCents + totals.pointsValueCents;
+    }
     const externalNetCents = Math.max(Math.min(netCustomerCents - internalReturnedCents, totals.externalGrossCents), 0);
     const totalReturnedCents = externalNetCents + internalReturnedCents;
     const roundingToleranceCents = 1;

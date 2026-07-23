@@ -821,7 +821,7 @@ const COLUMNS = {
         ['originalProcessingFee', 'Original Processing Fee', 'currency'],
         ['processingFeeSource', 'Processing Fee Source'],
         ['grossRefundAmount', 'Gross Refund Amount', 'currency'],
-        ['customerProcessingFeeDeduction', 'Customer Processing-Fee Deduction', 'currency'],
+        ['customerProcessingFeeDeduction', 'Refund Administration Fee', 'currency'],
         ['otherDeductionAmount', 'Other Deduction', 'currency'],
         ['netCustomerRefund', 'Net Customer Refund', 'currency'],
         ['externalRefundAmount', 'External Cash Refund', 'currency'],

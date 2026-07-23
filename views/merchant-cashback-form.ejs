@@ -61,6 +61,29 @@
                 </label>
             </div>
 
+            <section class="merchant-spin-settings-panel" aria-label="Spin and Discover cashback settings">
+                <div>
+                    <p class="eyebrow">Spin & Discover</p>
+                    <h2>Include in Spin & Discover</h2>
+                    <p class="muted">Wheel wins create a future-use cashback entitlement for this merchant. Cashback is still earned through the existing eligible checkout flow.</p>
+                </div>
+                <input type="hidden" name="spinEnabled" value="0">
+                <label class="merchant-package-toggle">
+                    <input type="checkbox" name="spinEnabled" value="1" <%= form.spinEnabled ? 'checked' : '' %>>
+                    Include this cashback campaign on the reward wheel
+                </label>
+                <div class="merchant-service-editor-pair">
+                    <label>
+                        <span>Maximum number of wheel wins</span>
+                        <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
+                    </label>
+                    <label>
+                        <span>Remaining wheel reward quantity</span>
+                        <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
+                    </label>
+                </div>
+            </section>
+
             <div class="form-actions">
                 <button class="button primary" type="submit">Save campaign</button>
                 <a class="button secondary" href="/merchant/cashback">Cancel</a>
