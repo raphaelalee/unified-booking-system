@@ -34,6 +34,16 @@ function signGuestReceiptToken(bookingId) {
     return `${id}.${signature}`;
 }
 
+function signReceiptAccessToken(receiptId) {
+    const id = String(receiptId);
+    const signature = crypto
+        .createHmac('sha256', getSecret())
+        .update(`receipt-access:${id}`)
+        .digest('base64url');
+
+    return `${id}.${signature}`;
+}
+
 function verifyMerchantToken(merchantId, token) {
     if (!merchantId || !token) {
         return false;
@@ -95,6 +105,32 @@ function verifyGuestReceiptToken(token) {
     }
 
     return bookingId;
+}
+
+function verifyReceiptAccessToken(receiptId, token) {
+    if (!receiptId || !token) {
+        return false;
+    }
+
+    const value = String(token);
+    const separatorIndex = value.lastIndexOf('.');
+
+    if (separatorIndex <= 0) {
+        return false;
+    }
+
+    const tokenReceiptId = value.slice(0, separatorIndex);
+
+    if (String(receiptId) !== tokenReceiptId) {
+        return false;
+    }
+
+    const expected = signReceiptAccessToken(receiptId);
+    const expectedBuffer = Buffer.from(expected);
+    const tokenBuffer = Buffer.from(value);
+
+    return expectedBuffer.length === tokenBuffer.length
+        && crypto.timingSafeEqual(expectedBuffer, tokenBuffer);
 }
 
 function getPublicBaseUrl(req) {
@@ -176,7 +212,9 @@ module.exports = {
     signMerchantToken,
     signBookingCheckInToken,
     signGuestReceiptToken,
+    signReceiptAccessToken,
     verifyBookingCheckInToken,
     verifyGuestReceiptToken,
+    verifyReceiptAccessToken,
     verifyMerchantToken
 };

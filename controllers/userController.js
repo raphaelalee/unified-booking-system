@@ -972,7 +972,6 @@ function getRoleLabel(role) {
 
 function setAuthenticatedSession(req, user, message, callback) {
     const preserved = {
-        cart: req.session.cart,
         favouriteMerchantIds: req.session.favouriteMerchantIds
     };
 
@@ -980,10 +979,6 @@ function setAuthenticatedSession(req, user, message, callback) {
         if (sessionError) {
             callback(sessionError);
             return;
-        }
-
-        if (preserved.cart) {
-            req.session.cart = preserved.cart;
         }
 
         if (preserved.favouriteMerchantIds) {

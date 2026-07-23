@@ -47,6 +47,7 @@ const {
     getMerchantStorefrontUrl,
     parseMerchantStorefrontSlug,
     signMerchantToken,
+    signReceiptAccessToken,
     verifyBookingCheckInToken,
     verifyMerchantToken
 } = require('../utils/qrToken');
@@ -4207,6 +4208,24 @@ function getPublicBaseUrl(req) {
     return `${req.protocol}://${req.get('host')}`;
 }
 
+function getRequestBaseUrl(req) {
+    const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+    const protocol = forwardedProto || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:3000';
+
+    return `${protocol}://${host}`.replace(/\/$/, '');
+}
+
+function getReceiptRedirectPath(receiptId) {
+    const id = String(receiptId || '').trim();
+
+    if (!id) {
+        return '/profile#orders';
+    }
+
+    return `/receipt/${encodeURIComponent(id)}?receiptToken=${encodeURIComponent(signReceiptAccessToken(id))}`;
+}
+
 function saveSession(req) {
     return new Promise((resolve, reject) => {
         if (!req.session) {
@@ -4327,6 +4346,16 @@ function clearPendingHitPayPayment(req, requestId) {
     }
 
     hitpayPendingStore.delete(key);
+}
+
+function clearPendingStripePayment(req, sessionId) {
+    const key = String(sessionId || '').trim();
+
+    if (!key || !req.session?.pendingStripePayments) {
+        return;
+    }
+
+    delete req.session.pendingStripePayments[key];
 }
 
 function findExistingReceipt(receiptId) {
@@ -5207,9 +5236,42 @@ async function applyPaymentSideEffects(req, payment) {
     if (payment.kind !== 'order') return;
 
     const selectedIds = String(payment.selectedItemIds || '').split(',').map((id) => id.trim()).filter(Boolean);
-    const filterPurchased = (cart) => selectedIds.length
-        ? (cart || []).filter((item) => !selectedIds.includes(String(item.id)))
-        : [];
+    const selectedIdSet = new Set(selectedIds);
+    const purchasedItems = Array.isArray(payment.items) ? payment.items : [];
+    const purchasedKeys = new Set(purchasedItems.map((item) => {
+        const type = String(item.type || '').trim().toLowerCase();
+        const serviceId = String(item.serviceId || '').trim();
+        const name = String(item.name || item.serviceName || '').trim().toLowerCase();
+
+        return [type, serviceId, name].join(':');
+    }).filter((key) => key !== '::'));
+    const filterPurchased = (cart) => {
+        const items = Array.isArray(cart) ? cart : [];
+
+        if (!items.length) {
+            return [];
+        }
+
+        if (selectedIdSet.size) {
+            const filteredById = items.filter((item) => !selectedIdSet.has(String(item.id)));
+
+            if (filteredById.length !== items.length) {
+                return filteredById;
+            }
+        }
+
+        if (!purchasedKeys.size) {
+            return selectedIdSet.size ? items : [];
+        }
+
+        return items.filter((item) => {
+            const type = String(item.type || '').trim().toLowerCase();
+            const serviceId = String(item.serviceId || '').trim();
+            const name = String(item.serviceName || item.name || '').trim().toLowerCase();
+
+            return !purchasedKeys.has([type, serviceId, name].join(':'));
+        });
+    };
 
     req.session.cart = filterPurchased(req.session.cart || []);
 
@@ -6097,7 +6159,7 @@ async function startHitPayPayment(req, res, trustedPayment) {
         }, 'HitPay is not configured on the server.');
     }
 
-    const baseUrl = getPublicBaseUrl(req);
+    const baseUrl = getRequestBaseUrl(req);
     const redirectUrl = `${baseUrl}/payment/hitpay/return`;
 
     try {
@@ -6149,7 +6211,7 @@ async function handleHitPayReturn(req, res) {
 
     if (!requestId || !pendingPayment) {
         if (redirectStatus === 'completed' && recordedReceiptId) {
-            return res.redirect(`/receipt/${encodeURIComponent(recordedReceiptId)}`);
+            return res.redirect(getReceiptRedirectPath(recordedReceiptId));
         }
 
         return res.status(400).render('error', {
@@ -6161,7 +6223,7 @@ async function handleHitPayReturn(req, res) {
     try {
         if (redirectStatus === 'completed' && shouldTrustHitPayRedirect()) {
             const { receiptId } = await finalizeHitPayPayment(req, requestId, pendingPayment);
-            return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+            return res.redirect(getReceiptRedirectPath(receiptId));
         }
 
         const { actualStatus } = await getStableHitPayStatus(requestId, redirectStatus);
@@ -6186,12 +6248,12 @@ async function handleHitPayReturn(req, res) {
         }
 
         const { receiptId } = await finalizeHitPayPayment(req, requestId, pendingPayment);
-        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+        return res.redirect(getReceiptRedirectPath(receiptId));
     } catch (error) {
         console.error('HitPay return verification failed:', error.payload || error.message);
 
         if (redirectStatus === 'completed' && recordedReceiptId) {
-            return res.redirect(`/receipt/${encodeURIComponent(recordedReceiptId)}`);
+            return res.redirect(getReceiptRedirectPath(recordedReceiptId));
         }
 
         return renderPaymentForm(res, {
@@ -6216,7 +6278,7 @@ async function getHitPayStatus(req, res) {
             return res.json({
                 success: true,
                 status: 'completed',
-                redirectUrl: `/receipt/${encodeURIComponent(recordedReceiptId)}`
+                redirectUrl: getReceiptRedirectPath(recordedReceiptId)
             });
         }
 
@@ -6233,7 +6295,7 @@ async function getHitPayStatus(req, res) {
             return res.json({
                 success: true,
                 status: 'completed',
-                redirectUrl: `/receipt/${encodeURIComponent(result.receiptId)}`
+                redirectUrl: getReceiptRedirectPath(result.receiptId)
             });
         }
 
@@ -6321,15 +6383,7 @@ async function startStripePayment(req, res, trustedPayment) {
         }, 'Stripe is not configured on the server.');
     }
 
-    const appUrl = String(process.env.APP_URL || '').trim().replace(/\/$/, '');
-    
-    if (!appUrl) {
-        console.error('Stripe payment failed: APP_URL not configured in environment');
-        return renderPaymentForm(res, {
-            ...trustedPayment,
-            redeemPointsRequested: trustedPayment.redeemPointsRequested || 0
-        }, 'Server configuration error. Please try again.');
-    }
+    const appUrl = getRequestBaseUrl(req);
 
     const successUrl = `${appUrl}/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${appUrl}/stripe/cancel?session_id={CHECKOUT_SESSION_ID}`;
@@ -6396,7 +6450,13 @@ async function handleStripeReturn(req, res) {
     }
 
     if (durableAttempt?.status === 'completed' && durableAttempt.receiptId) {
-        return res.redirect(`/receipt/${encodeURIComponent(durableAttempt.receiptId)}`);
+        await applyPaymentSideEffects(req, durableAttempt.payment || {}).catch((cleanupError) => {
+            console.error('Completed Stripe cart cleanup failed:', cleanupError.message || cleanupError);
+        });
+        await saveSession(req).catch((sessionError) => {
+            console.error('Completed Stripe session save failed:', sessionError.message || sessionError);
+        });
+        return res.redirect(getReceiptRedirectPath(durableAttempt.receiptId));
     }
 
     if (!pendingPayment) {
@@ -6422,13 +6482,22 @@ async function handleStripeReturn(req, res) {
         // Check if payment was successful
         if (paymentIntent.status !== 'succeeded') {
             console.warn(`Stripe payment not succeeded. Status: ${paymentIntent.status}`);
-            delete req.session.pendingStripePayments[sessionId];
+            clearPendingStripePayment(req, sessionId);
             await saveSession(req);
             
             return res.status(400).render('error', {
                 title: 'Payment Failed',
                 message: 'The Stripe payment was not completed. Please try again.'
             });
+        }
+
+        const expectedAmount = Math.round(Number(pendingPayment.amount || 0) * 100);
+        const paidAmount = Number(session.amount_total || 0);
+        const expectedCurrency = String(process.env.STRIPE_CURRENCY || 'sgd').toLowerCase();
+        const paidCurrency = String(session.currency || '').toLowerCase();
+
+        if (paidAmount !== expectedAmount || paidCurrency !== expectedCurrency) {
+            throw new Error('Stripe payment details do not match the pending payment.');
         }
 
         let feeSnapshot = { amount: 0, currency: 'SGD', source: 'unknown' };
@@ -6451,16 +6520,16 @@ async function handleStripeReturn(req, res) {
             processingFeeSource: feeSnapshot.source,
             processingFeeCapturedAt: feeSnapshot.source === 'provider_reported' ? new Date() : null
         }, 'Stripe');
-        delete req.session.pendingStripePayments[sessionId];
+        clearPendingStripePayment(req, sessionId);
         req.session.lastPayment = { receiptId };
         await saveSession(req);
 
         console.log(`Stripe payment successful. Receipt: ${receiptId}, Session: ${sessionId}`);
 
-        return res.redirect(`/receipt/${encodeURIComponent(receiptId)}`);
+        return res.redirect(getReceiptRedirectPath(receiptId));
     } catch (error) {
         console.error('Stripe return handler error:', error.message);
-        delete req.session.pendingStripePayments[sessionId];
+        clearPendingStripePayment(req, sessionId);
         
         return res.status(500).render('error', {
             title: 'Payment Error',

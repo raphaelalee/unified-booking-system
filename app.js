@@ -92,6 +92,16 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 8
     }
 }));
+app.use((req, res, next) => {
+    const isHttpsRequest = req.secure || String(req.get('x-forwarded-proto') || '').split(',')[0].trim() === 'https';
+
+    if (isHttpsRequest) {
+        req.session.cookie.secure = true;
+        req.session.cookie.sameSite = 'none';
+    }
+
+    next();
+});
 app.use(passport.initialize());
 app.use(ensureCsrfToken);
 
@@ -799,12 +809,12 @@ app.get('/payment', requireCustomer, merchantController.showPayment);
 app.post('/payment', requireCustomer, merchantController.confirmPayment);
 app.post('/api/paypal/create-order', requireCustomer, merchantController.createPayPalOrder);
 app.post('/api/paypal/capture-order', requireCustomer, merchantController.capturePayPalOrder);
-app.get('/payment/hitpay/return', requireCustomer, merchantController.handleHitPayReturn);
-app.get('/payment/hitpay/status/:requestId', requireCustomer, merchantController.getHitPayStatus);
-app.get('/stripe/success', requireCustomer, merchantController.handleStripeReturn);
-app.get('/stripe/cancel', requireCustomer, merchantController.handleStripeCancel);
-app.get('/payment/stripe/success', requireCustomer, merchantController.handleStripeReturn);
-app.get('/payment/stripe/cancel', requireCustomer, merchantController.handleStripeCancel);
+app.get('/payment/hitpay/return', merchantController.handleHitPayReturn);
+app.get('/payment/hitpay/status/:requestId', merchantController.getHitPayStatus);
+app.get('/stripe/success', merchantController.handleStripeReturn);
+app.get('/stripe/cancel', merchantController.handleStripeCancel);
+app.get('/payment/stripe/success', merchantController.handleStripeReturn);
+app.get('/payment/stripe/cancel', merchantController.handleStripeCancel);
 app.get('/payment/success', requireCustomer, merchantController.showPaymentSuccess);
 app.get('/receipt/:id', receiptController.showReceipt);
 app.get('/receipt/:id/pdf', receiptController.downloadReceiptPdf);

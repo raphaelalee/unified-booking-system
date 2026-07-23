@@ -10,7 +10,8 @@ const {
     getBookingCheckInUrl,
     getPublicBaseUrl,
     signBookingCheckInToken,
-    verifyGuestReceiptToken
+    verifyGuestReceiptToken,
+    verifyReceiptAccessToken
 } = require('../utils/qrToken');
 const {
     formatAppointmentDateTime,
@@ -611,9 +612,17 @@ function receiptItemsBelongToMerchant(receipt, merchant, merchantUserId) {
 
 function canViewReceipt(req, receipt, merchant = null) {
     const user = req.session.user;
+    const receiptToken = req.query.receiptToken || req.query.token;
+
+    if (receipt && (
+        verifyReceiptAccessToken(receipt.id, receiptToken)
+        || verifyReceiptAccessToken(receipt.orderNumber || receipt.order_number, receiptToken)
+    )) {
+        return true;
+    }
 
     if (!user && receipt?.type === 'booking') {
-        const tokenBookingId = verifyGuestReceiptToken(req.query.receiptToken || req.query.token);
+        const tokenBookingId = verifyGuestReceiptToken(receiptToken);
         return tokenBookingId && String(tokenBookingId) === String(receipt.id);
     }
 
@@ -775,6 +784,7 @@ async function loadReceipt(req, id) {
     const user = req.session.user;
     const merchant = user?.role === 'merchant' ? await getMerchantForUser(user.id) : null;
     const sessionReceipt = getSessionReceipt(req, id);
+    const hasReceiptAccessToken = verifyReceiptAccessToken(id, req.query.receiptToken || req.query.token);
 
     if (sessionReceipt && canViewReceipt(req, sessionReceipt, merchant)) {
         return sessionReceipt;
@@ -787,16 +797,16 @@ async function loadReceipt(req, id) {
         }
     }
 
-    if (!user) {
+    if (!user && !hasReceiptAccessToken) {
         return null;
     }
 
-    const persistentReceipt = user.role === 'customer'
+    const persistentReceipt = user?.role === 'customer'
         ? await getCustomerPurchaseHistoryReceipt(id, user.id)
         : await getAnyPurchaseHistoryReceipt(id);
 
     if (persistentReceipt) {
-        if (user.role === 'customer') {
+        if (user?.role === 'customer') {
             persistentReceipt.userName = user.name || persistentReceipt.userName || 'Customer';
         } else {
             persistentReceipt.userName = persistentReceipt.userName || 'Customer';
@@ -805,7 +815,7 @@ async function loadReceipt(req, id) {
         return canViewReceipt(req, persistentReceipt, merchant) ? persistentReceipt : null;
     }
 
-    const orderReceipt = user.role === 'customer'
+    const orderReceipt = user?.role === 'customer'
         ? await getCustomerOrderReceipt(id, user.id)
         : await getAnyOrderReceipt(id);
     if (orderReceipt) {
