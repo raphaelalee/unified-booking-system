@@ -478,25 +478,37 @@ function getImageInput(imageData) {
 
 function normalizeImageModerationResult(result = {}) {
     const categories = result.categories || {};
-    const recommendedAction = ['approve', 'reject', 'send_for_admin_review'].includes(result.recommendedAction)
-        ? result.recommendedAction
-        : 'send_for_admin_review';
     const confidence = Math.max(0, Math.min(1, Number(result.confidence || 0)));
+    const normalizedCategories = {
+        sexualContent: Boolean(categories.sexualContent),
+        graphicViolence: Boolean(categories.graphicViolence),
+        offensiveContent: Boolean(categories.offensiveContent),
+        unrelatedContent: Boolean(categories.unrelatedContent),
+        gore: Boolean(categories.gore),
+        threateningWeapon: Boolean(categories.threateningWeapon),
+        illegalActivity: Boolean(categories.illegalActivity),
+        hateSymbol: Boolean(categories.hateSymbol)
+    };
+    const clearRejectContent = normalizedCategories.sexualContent
+        || normalizedCategories.graphicViolence
+        || normalizedCategories.gore
+        || normalizedCategories.threateningWeapon
+        || normalizedCategories.illegalActivity
+        || normalizedCategories.hateSymbol
+        || normalizedCategories.offensiveContent;
+    const recommendedAction = clearRejectContent ? 'reject' : 'approve';
 
     return {
-        safe: Boolean(result.safe) && recommendedAction !== 'reject',
-        relatedToReview: Boolean(result.relatedToReview),
-        requiresAdminReview: Boolean(result.requiresAdminReview) || recommendedAction === 'send_for_admin_review' || confidence < 0.65,
+        safe: !clearRejectContent,
+        relatedToReview: result.relatedToReview === false ? false : true,
+        requiresAdminReview: false,
         detectedContent: cleanText(result.detectedContent, 240),
-        categories: {
-            sexualContent: Boolean(categories.sexualContent),
-            graphicViolence: Boolean(categories.graphicViolence),
-            offensiveContent: Boolean(categories.offensiveContent),
-            unrelatedContent: Boolean(categories.unrelatedContent)
-        },
+        categories: normalizedCategories,
         confidence,
-        reason: cleanText(result.reason, 500),
-        recommendedAction: confidence < 0.65 && recommendedAction === 'approve' ? 'send_for_admin_review' : recommendedAction
+        reason: clearRejectContent
+            ? cleanText(result.reason, 500) || 'Image contains content that is not allowed in customer reviews.'
+            : cleanText(result.reason, 500),
+        recommendedAction
     };
 }
 
@@ -508,12 +520,15 @@ async function moderateReviewImage(data = {}) {
             'You are an image review moderation engine for a beauty, wellness, salon, product, and booking marketplace.',
             'Return strict JSON only.',
             'Do not treat normal skin exposure in beauty, massage, facial, hair, or nail contexts as sexual content.',
-            'Uncertain cases should be sent for admin review, not automatically rejected.'
+            'Approve normal review photos by default, including shampoo, skincare, packaging, cosmetics, product bottles, salon interiors, service results, hair, nail, facial, and non-explicit beauty treatment photos.',
+            'Reject only images that clearly contain pornographic or explicit nudity, graphic violence, gore, weapons used to threaten or harm, illegal activities, hate symbols, or extremely offensive content.',
+            'Do not reject harmless product photos because they are unrelated-looking; mark unrelatedContent only when the image is clearly spam or irrelevant.',
+            'Uncertain cases should be approved unless there is clear high-risk content from the reject list.'
         ].join(' '),
         text: [
             'Moderate this review image for safety and relevance to the reviewed service or product.',
             'Return exactly this JSON shape:',
-            '{"safe":true,"relatedToReview":true,"requiresAdminReview":false,"detectedContent":"","categories":{"sexualContent":false,"graphicViolence":false,"offensiveContent":false,"unrelatedContent":false},"confidence":0,"reason":"","recommendedAction":"approve"}',
+            '{"safe":true,"relatedToReview":true,"requiresAdminReview":false,"detectedContent":"","categories":{"sexualContent":false,"graphicViolence":false,"offensiveContent":false,"unrelatedContent":false,"gore":false,"threateningWeapon":false,"illegalActivity":false,"hateSymbol":false},"confidence":0,"reason":"","recommendedAction":"approve"}',
             '',
             JSON.stringify({
                 reviewContext: {
