@@ -165,7 +165,7 @@
 <% if (typeof reviewModerationPopup !== 'undefined' && reviewModerationPopup) { %>
     <script>
         window.addEventListener('DOMContentLoaded', () => {
-            alert(<%- JSON.stringify(`Review blocked: ${reviewModerationPopup}`) %>);
+            window.VanidayAlerts?.error(<%- JSON.stringify(`Review blocked: ${reviewModerationPopup}`) %>);
         });
     </script>
 <% } %>

@@ -1,0 +1,61 @@
+<%
+    const providedAlerts = Array.isArray(typeof alertMessages !== 'undefined' ? alertMessages : null)
+        ? alertMessages
+        : [];
+    const collectedAlerts = [...providedAlerts];
+    const collectAlert = (type, value, title) => {
+        if (Array.isArray(value)) {
+            value.forEach((entry) => collectAlert(type, entry, title));
+            return;
+        }
+
+        const message = typeof value === 'object' && value !== null
+            ? (value.message || value.msg || value.text || '')
+            : value;
+        const normalizedMessage = String(message || '').trim();
+
+        if (normalizedMessage) {
+            collectedAlerts.push({ type, title, message: normalizedMessage });
+        }
+    };
+
+    if (typeof success !== 'undefined') collectAlert('success', success);
+    if (typeof error !== 'undefined') collectAlert('error', error);
+    if (typeof warning !== 'undefined') collectAlert('warning', warning);
+    if (typeof info !== 'undefined') collectAlert('info', info);
+    if (typeof errors !== 'undefined') collectAlert('error', errors, 'Please check the form');
+    const alertTypeLabels = {
+        success: 'Success',
+        error: 'Error',
+        warning: 'Warning',
+        info: 'Info'
+    };
+    const alertIcons = {
+        success: 'OK',
+        error: '!',
+        warning: '!',
+        info: 'i'
+    };
+%>
+<div class="alert-banner-container" data-alert-container aria-live="polite" aria-relevant="additions">
+    <% collectedAlerts.forEach((item) => { %>
+        <%
+            const alertType = ['success', 'error', 'warning', 'info'].includes(String(item.type || '').toLowerCase())
+                ? String(item.type).toLowerCase()
+                : 'info';
+            const alertMessage = String(item.message || item.text || '').trim();
+            const alertTitle = item.title || alertTypeLabels[alertType];
+            const alertTimeout = item.timeout || '';
+        %>
+        <% if (alertMessage) { %>
+            <article class="alert-banner is-<%= alertType %>" data-alert-banner data-alert-type="<%= alertType %>" <% if (alertTimeout) { %>data-alert-timeout="<%= alertTimeout %>"<% } %>>
+                <span class="alert-banner-icon" aria-hidden="true"><%= alertIcons[alertType] %></span>
+                <div class="alert-banner-copy">
+                    <strong><%= alertTitle %></strong>
+                    <p><%= alertMessage %></p>
+                </div>
+                <button class="alert-banner-close" type="button" data-alert-dismiss aria-label="Dismiss notification">&times;</button>
+            </article>
+        <% } %>
+    <% }) %>
+</div>

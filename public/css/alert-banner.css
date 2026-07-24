@@ -1,0 +1,182 @@
+:root {
+    --alert-banner-radius: 10px;
+    --alert-banner-shadow: 0 18px 46px rgba(35, 42, 32, 0.14);
+    --alert-banner-border: rgba(79, 104, 71, 0.16);
+    --alert-banner-bg: rgba(255, 253, 247, 0.98);
+    --alert-banner-ink: #263b28;
+    --alert-banner-muted: #687763;
+    --alert-banner-success: #2f6f45;
+    --alert-banner-error: #9a4132;
+    --alert-banner-warning: #9a6a2f;
+    --alert-banner-info: #3f5f7b;
+}
+
+.alert-banner-container {
+    position: fixed;
+    top: clamp(156px, 13vw, 190px);
+    right: clamp(12px, 2vw, 24px);
+    z-index: 5000;
+    width: min(420px, calc(100vw - 24px));
+    display: grid;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.alert-banner {
+    --alert-accent: var(--alert-banner-info);
+    position: relative;
+    min-width: 0;
+    padding: 14px 14px 14px 12px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    gap: 12px;
+    align-items: start;
+    border: 1px solid var(--alert-banner-border);
+    border-left: 4px solid var(--alert-accent);
+    border-radius: var(--alert-banner-radius);
+    background: var(--alert-banner-bg);
+    color: var(--alert-banner-ink);
+    box-shadow: var(--alert-banner-shadow);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(-10px);
+    animation: alertBannerIn 180ms ease forwards;
+    backdrop-filter: blur(14px);
+}
+
+.alert-banner.is-success {
+    --alert-accent: var(--alert-banner-success);
+}
+
+.alert-banner.is-error {
+    --alert-accent: var(--alert-banner-error);
+}
+
+.alert-banner.is-warning {
+    --alert-accent: var(--alert-banner-warning);
+}
+
+.alert-banner.is-info {
+    --alert-accent: var(--alert-banner-info);
+}
+
+.alert-banner.is-dismissing {
+    animation: alertBannerOut 160ms ease forwards;
+}
+
+.alert-banner-icon {
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--alert-accent) 13%, #ffffff);
+    color: var(--alert-accent);
+    font-size: 0.92rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.alert-banner-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.alert-banner-copy strong {
+    margin: 0;
+    color: var(--alert-banner-ink);
+    font-size: 0.92rem;
+    font-weight: 900;
+    line-height: 1.25;
+}
+
+.alert-banner-copy p {
+    margin: 0;
+    color: var(--alert-banner-muted);
+    font-size: 0.88rem;
+    font-weight: 650;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.alert-banner-close {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid rgba(79, 104, 71, 0.12);
+    border-radius: 50%;
+    background: rgba(238, 244, 233, 0.76);
+    color: #40503c;
+    font: inherit;
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.alert-banner-close:hover,
+.alert-banner-close:focus-visible {
+    border-color: rgba(79, 104, 71, 0.24);
+    background: #fffdf7;
+    color: var(--alert-banner-ink);
+    outline: none;
+}
+
+@keyframes alertBannerIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes alertBannerOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+}
+
+@media (max-width: 640px) {
+    .alert-banner-container {
+        top: auto;
+        right: 10px;
+        bottom: 88px;
+        left: 10px;
+        width: auto;
+    }
+
+    .alert-banner {
+        grid-template-columns: 32px minmax(0, 1fr) 32px;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .alert-banner-icon,
+    .alert-banner-close {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .alert-banner,
+    .alert-banner.is-dismissing {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}

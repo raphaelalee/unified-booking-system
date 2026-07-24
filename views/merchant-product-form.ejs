@@ -225,7 +225,7 @@
                 ingredientsInput.value = data.ingredients || ingredientsInput.value;
                 howToUseInput.value = data.howToUse || howToUseInput.value;
             } catch (error) {
-                window.alert(error.message || 'AI could not generate product details right now.');
+                window.VanidayAlerts?.error(error.message || 'AI could not generate product details right now.');
             } finally {
                 button.disabled = false;
                 button.textContent = originalText;

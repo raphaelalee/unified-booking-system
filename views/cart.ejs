@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (getSelectedChecks().length === 0) {
                 event.preventDefault();
-                alert(isDeleteSelected ? 'Please select at least one item to clear.' : 'Please select at least one item to checkout.');
+                window.VanidayAlerts?.warning(isDeleteSelected ? 'Please select at least one item to clear.' : 'Please select at least one item to checkout.');
                 return;
             }
 
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (voucherInputs.length && !voucherInputs.some((input) => input.checked)) {
                 event.preventDefault();
-                alert('Please choose a voucher or select "Do not use a voucher".');
+                window.VanidayAlerts?.warning('Please choose a voucher or select "Do not use a voucher".');
                 return;
             }
         });

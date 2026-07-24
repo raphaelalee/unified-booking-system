@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="/css/cart.css?v=11">
     <link rel="stylesheet" href="/css/payment.css?v=13">
     <link rel="stylesheet" href="/css/notifications.css?v=1">
+    <link rel="stylesheet" href="/css/alert-banner.css?v=2">
     <script src="/js/security.js?v=1" defer></script>
     <script src="/js/cart-feedback.js?v=1" defer></script>
     <% if (currentUser && ['merchant', 'admin'].includes(currentUser.role)) { %>
@@ -190,6 +191,7 @@
             </div>
         </nav>
     </header>
+    <%- include('alert-banner') %>
     <% if (currentUser && ['merchant', 'admin'].includes(currentUser.role)) { %>
         <%- include('ai-floating-assistant') %>
     <% } %>
