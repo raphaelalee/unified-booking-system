@@ -298,43 +298,57 @@
     <% } %>
 
     <% if (activeServicePromotions.length > 0) { %>
-        <div class="section-heading profile-heading">
-            <div>
-                <p class="eyebrow">Limited-time deals</p>
-                <h2>Service promotions</h2>
-                <p class="muted">Book an active promotion at its verified discounted price.</p>
+        <section class="services-promo-showcase" aria-label="Service promotions">
+            <div class="section-heading profile-heading services-promo-heading">
+                <div>
+                    <p class="eyebrow">Limited-time deals</p>
+                    <h2>Service promotions</h2>
+                    <p class="muted">Book active deals at verified discounted prices.</p>
+                </div>
+                <span class="services-promo-count"><%= activeServicePromotions.length %> live deals</span>
             </div>
-        </div>
-        <div class="service-catalog-grid unified-service-grid services-shop-grid">
-            <% activeServicePromotions.forEach((promotion, index) => { %>
-                <article class="service-catalog-card unified-service-card service-shop-card">
-                    <div class="service-card-body">
-                        <div class="service-card-topline">
-                            <span class="tag"><%= promotion.campaignLabel %></span>
-                            <span class="tag"><%= promotion.discountPercent %>% OFF</span>
+
+            <div class="service-catalog-grid unified-service-grid services-shop-grid services-promo-grid">
+                <% activeServicePromotions.forEach((promotion, index) => { %>
+                    <%
+                        const originalPrice = Number(promotion.originalPrice || 0);
+                        const dealPrice = Number(promotion.price || 0);
+                        const savings = Math.max(0, originalPrice - dealPrice);
+                    %>
+                    <article class="service-catalog-card unified-service-card service-shop-card service-promo-card" style="--promo-index: <%= index %>;">
+                        <div class="service-card-body">
+                            <div class="service-promo-topline">
+                                <span><%= promotion.campaignLabel %></span>
+                                <strong><%= promotion.discountPercent %>% OFF</strong>
+                            </div>
+
+                            <div class="service-promo-main">
+                                <h3><%= promotion.name %></h3>
+                                <p class="service-merchant-line">
+                                    <span><%= promotion.merchantName %></span>
+                                    <span><%= promotion.merchantLocation %></span>
+                                </p>
+                                <p class="service-promo-copy"><%= promotion.merchantPromotion %></p>
+                            </div>
+
+                            <div class="service-promo-price-row">
+                                <span><%= promotion.duration %></span>
+                                <div>
+                                    <small>Save $<%= savings.toFixed(2) %></small>
+                                    <s>$<%= originalPrice.toFixed(2) %></s>
+                                    <strong>$<%= dealPrice.toFixed(2) %></strong>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <h3><%= promotion.name %></h3>
-                            <p class="service-merchant-line">
-                                <span><%= promotion.merchantName %></span>
-                                <span><%= promotion.merchantLocation %></span>
-                            </p>
-                            <p><%= promotion.merchantPromotion %></p>
+                        <div class="service-card-footer">
+                            <div class="service-shopping-actions">
+                                <a class="button primary full" href="<%= protectedHref(promotion.serviceBookingPath) %>">Book deal</a>
+                            </div>
                         </div>
-                        <div class="service-meta-pills">
-                            <span><%= promotion.duration %></span>
-                            <span><s>$<%= Number(promotion.originalPrice).toFixed(2) %></s></span>
-                            <span>$<%= Number(promotion.price).toFixed(2) %></span>
-                        </div>
-                    </div>
-                    <div class="service-card-footer">
-                        <div class="service-shopping-actions">
-                            <a class="button primary full" href="<%= protectedHref(promotion.serviceBookingPath) %>">Book deal</a>
-                        </div>
-                    </div>
-                </article>
-            <% }) %>
-        </div>
+                    </article>
+                <% }) %>
+            </div>
+        </section>
     <% } %>
 
     <div class="section-cta services-directory-cta">
