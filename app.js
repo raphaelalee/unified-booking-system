@@ -669,11 +669,148 @@ app.get('/terms', allowGuestOrCustomer, (req, res) => {
     res.render('legal', {
         title: 'Terms of Service',
         heading: 'Terms of Service',
-        summary: 'These prototype terms explain how Vaniday booking, rewards, and merchant services should be used.',
+        summary: 'These terms explain the rules for using Vaniday accounts, bookings, rewards, payments, merchant services, and support tools.',
+        updatedAt: '24 July 2026',
+        intro: [
+            'Please read these Terms of Service carefully before using Vaniday. By creating an account, making a booking, buying products, using rewards, applying as a merchant, or continuing to use the platform, you agree to these terms.',
+            'Vaniday is a beauty and wellness booking and commerce platform. Some services and products are supplied by independent merchants, salons, spas, wellness providers, payment processors, messaging providers, and other third parties. These terms do not remove any non-excludable rights you may have under applicable law.'
+        ],
         sections: [
-            { title: 'Bookings', copy: 'Customers are responsible for selecting accurate service, date, and contact details. Merchants may review, confirm, reschedule, or cancel bookings according to their availability policies.' },
-            { title: 'Accounts', copy: 'Keep your login details private and update your profile information when it changes. Vaniday may protect accounts from suspicious or abusive activity.' },
-            { title: 'Rewards and Payments', copy: 'Promotions, points, cashback, vouchers, and refunds are subject to eligibility checks and merchant review where applicable.' }
+            {
+                title: '1. Who We Are',
+                paragraphs: [
+                    'Vaniday provides account, discovery, booking, payment, rewards, QR check-in, merchant-management, customer-support, and notification features for beauty and wellness services and related products.',
+                    'Unless a service is expressly described as provided directly by Vaniday, merchants remain responsible for their own service descriptions, professional standards, licences, premises, staff, availability, pricing, fulfilment, hygiene practices, and customer interactions.'
+                ]
+            },
+            {
+                title: '2. Eligibility and Accounts',
+                items: [
+                    'You must provide accurate, current, and complete account, contact, booking, and payment information.',
+                    'You are responsible for keeping your password, one-time passwords, device access, and account session secure.',
+                    'You must update your profile if your email, phone number, preferred contact method, birthday, postal code, or other relevant details change.',
+                    'You must not create accounts using another person\'s details, impersonate someone else, bypass security controls, or use automated scripts to misuse the platform.',
+                    'Vaniday may suspend, restrict, or terminate accounts where we reasonably believe there is fraud, abuse, security risk, repeated no-shows, chargeback misuse, unlawful conduct, or breach of these terms.'
+                ]
+            },
+            {
+                title: '3. Bookings, Rescheduling, and Cancellations',
+                items: [
+                    'Customers are responsible for choosing the correct merchant, service, date, time, add-ons, contact details, and special requests before submitting a booking.',
+                    'A booking may be pending, confirmed, rescheduled, completed, cancelled, rejected, or otherwise updated depending on merchant availability and platform rules.',
+                    'Merchants may review, accept, reject, reschedule, or cancel bookings where a service is unavailable, the customer cannot be reached, payment fails, required details are missing, or the customer breaches merchant rules.',
+                    'You should arrive on time and follow reasonable merchant instructions, safety requirements, age restrictions, patch-test requirements, medical disclosure requests, and house rules.',
+                    'Cancellation, late-arrival, no-show, refund, and rescheduling outcomes may depend on the merchant policy, timing of the request, payment status, platform refund eligibility rules, and any applicable law.',
+                    'QR check-in, receipts, emails, SMS, WhatsApp messages, and notification records may be used to help verify attendance, completion, cancellation timing, and support requests.'
+                ]
+            },
+            {
+                title: '4. Products, Prices, Payments, and Refunds',
+                items: [
+                    'Prices, availability, promotions, taxes, fees, delivery or pickup options, and product information may change before checkout or merchant confirmation.',
+                    'Payments may be processed by third-party payment providers. Vaniday does not store full card numbers where payment providers handle card processing.',
+                    'A successful payment confirmation does not guarantee a service or product if there is a listing error, stock issue, fraud concern, payment reversal, merchant rejection, or other operational problem.',
+                    'Refunds may be full, partial, declined, delayed, or adjusted for administrative fees, payment-provider charges, delivered items, used services, voucher use, cashback, loyalty points, or merchant findings where allowed by policy and law.',
+                    'Chargebacks, duplicate refund requests, false claims, or abuse of support workflows may lead to account restrictions and recovery of amounts owed.'
+                ]
+            },
+            {
+                title: '5. Rewards, Vouchers, Promotions, and Wallet Features',
+                items: [
+                    'Points, cashback, spin rewards, referral benefits, gift cards, vouchers, and promotional offers are subject to eligibility checks, availability, expiry dates, campaign rules, and anti-abuse controls.',
+                    'Rewards have no cash value unless expressly stated. They may not be sold, transferred, exchanged, duplicated, or used with other offers unless the offer says so.',
+                    'Vaniday may correct, reverse, expire, withhold, or cancel rewards that were issued by mistake, obtained through abuse, linked to cancelled or refunded transactions, or inconsistent with campaign rules.',
+                    'Wallet balances, reward histories, and redemption records are maintained for account, audit, support, fraud-prevention, and refund-calculation purposes.'
+                ]
+            },
+            {
+                title: '6. Health, Beauty, and Service Results',
+                paragraphs: [
+                    'Beauty, grooming, spa, wellness, skincare, haircare, nail, massage, and related services can produce different results for different people. Service descriptions, recommendations, AI suggestions, routine guidance, reviews, and promotional content are informational only and are not medical advice.',
+                    'Tell the merchant about allergies, sensitivities, injuries, pregnancy, medical conditions, recent procedures, medications, and other relevant matters before receiving a service or using a product. Seek professional medical advice where needed.'
+                ]
+            },
+            {
+                title: '7. Customer Content and Reviews',
+                items: [
+                    'You are responsible for reviews, support messages, uploaded images, profile content, merchant communications, and other content you submit.',
+                    'Do not submit content that is false, defamatory, discriminatory, threatening, obscene, infringing, misleading, promotional spam, or that exposes another person\'s private information.',
+                    'Vaniday may moderate, hide, edit formatting, refuse, or remove content where reasonably necessary for safety, legal compliance, platform integrity, or policy enforcement.',
+                    'By submitting content, you allow Vaniday to host, display, process, and use it to operate, improve, investigate, support, and promote the platform, subject to the Privacy Policy.'
+                ]
+            },
+            {
+                title: '8. Merchant Responsibilities',
+                items: [
+                    'Merchants must keep business details, licences, service descriptions, prices, schedules, product stock, refund policies, contact details, and fulfilment information accurate.',
+                    'Merchants are responsible for service quality, safety, staff conduct, hygiene, professional qualifications, product authenticity, customer disputes, and compliance with applicable laws.',
+                    'Merchants must not manipulate reviews, create fake bookings, mislead customers, misuse customer data, avoid platform fees, or offer unlawful, unsafe, or infringing services or products.',
+                    'Vaniday may remove listings, pause merchant access, withhold features, or escalate issues where merchant conduct creates customer risk, legal risk, fraud risk, or repeated complaints.'
+                ]
+            },
+            {
+                title: '9. Communications and Notifications',
+                paragraphs: [
+                    'Vaniday and merchants may contact you about accounts, bookings, payments, receipts, check-in, support, refunds, rewards, merchant operations, security alerts, and service updates through email, SMS, WhatsApp, in-app notifications, or phone where relevant.',
+                    'You are responsible for charges, settings, blocking, filtering, or delivery failures from your email provider, mobile carrier, messaging app, or device.'
+                ]
+            },
+            {
+                title: '10. Prohibited Use',
+                items: [
+                    'Do not break the law, violate another person\'s rights, interfere with platform security, scrape data, overload services, reverse engineer restricted features, upload malware, or attempt unauthorised access.',
+                    'Do not use Vaniday to harass staff, customers, merchants, support teams, or other users.',
+                    'Do not submit fake evidence, false refund claims, fraudulent payment information, misleading merchant listings, or content intended to deceive customers or the platform.'
+                ]
+            },
+            {
+                title: '11. Third-Party Services',
+                paragraphs: [
+                    'Vaniday may rely on third-party services for maps, payments, email, SMS, WhatsApp, analytics, AI features, cloud hosting, file storage, QR codes, fraud controls, and merchant tools. Third-party terms, privacy notices, outages, and processing rules may apply.',
+                    'Vaniday is not responsible for third-party services except to the extent required by law or expressly stated in a written agreement.'
+                ]
+            },
+            {
+                title: '12. Intellectual Property',
+                paragraphs: [
+                    'Vaniday owns or licenses the platform design, software, branding, text, workflows, databases, graphics, and other platform materials. You may use the platform only for its intended booking, shopping, merchant, support, and account purposes.',
+                    'You must not copy, sell, sublicense, frame, reproduce, or commercially exploit Vaniday materials without permission.'
+                ]
+            },
+            {
+                title: '13. Disclaimers and Liability Limits',
+                paragraphs: [
+                    'The platform is provided on an "as is" and "as available" basis. To the fullest extent permitted by law, Vaniday does not guarantee uninterrupted access, error-free operation, exact search ranking, merchant availability, message delivery, third-party processing times, or that all listing information is always complete or current.',
+                    'To the fullest extent permitted by law, Vaniday is not liable for indirect, incidental, special, consequential, exemplary, or punitive damages, loss of profits, loss of goodwill, lost data, service dissatisfaction, or third-party conduct.',
+                    'Where liability cannot be excluded, Vaniday\'s liability will be limited to the maximum extent allowed by law. Nothing in these terms excludes liability that cannot legally be excluded, including rights under applicable consumer-protection laws.'
+                ]
+            },
+            {
+                title: '14. Indemnity',
+                paragraphs: [
+                    'You agree to indemnify and hold Vaniday, its officers, employees, contractors, and partners harmless from claims, losses, liabilities, damages, costs, and expenses arising from your breach of these terms, misuse of the platform, unlawful conduct, inaccurate information, content submissions, merchant obligations, or infringement of another person\'s rights.'
+                ]
+            },
+            {
+                title: '15. Disputes, Governing Law, and Notices',
+                paragraphs: [
+                    'These terms are governed by the laws of Singapore, unless mandatory law requires otherwise. Before starting a formal claim, you agree to contact Vaniday and give us a reasonable opportunity to investigate and resolve the issue.',
+                    'Customer disputes may involve Vaniday, the merchant, a payment provider, or another third party depending on the issue. We may ask for booking records, receipts, QR check-in records, photos, delivery evidence, payment records, merchant notes, and other relevant information.',
+                    'Legal notices and account-related notices may be sent to the email address in your account, shown in-app, or sent through other contact channels you provided.'
+                ]
+            },
+            {
+                title: '16. Changes to These Terms',
+                paragraphs: [
+                    'Vaniday may update these terms when features, laws, business practices, payment methods, merchant rules, rewards, or support processes change. The updated version will apply from the stated effective date. If a change materially affects your rights, we will take reasonable steps to notify you.'
+                ]
+            },
+            {
+                title: '17. Contact',
+                paragraphs: [
+                    'Questions about these terms can be sent to support@vaniday.example or raised through the Vaniday support channels. Replace this placeholder address with the real business contact before production use.'
+                ]
+            }
         ]
     });
 });
@@ -682,11 +819,135 @@ app.get('/privacy', allowGuestOrCustomer, (req, res) => {
     res.render('legal', {
         title: 'Privacy Policy',
         heading: 'Privacy Policy',
-        summary: 'This prototype privacy policy describes how Vaniday uses account, booking, and location-related data.',
+        summary: 'This policy explains what personal data Vaniday collects, why we use it, who we share it with, and how users can exercise privacy rights.',
+        updatedAt: '24 July 2026',
+        intro: [
+            'This Privacy Policy applies to Vaniday customers, guests, merchants, administrators, support contacts, and other users of the website, booking flows, merchant tools, wallet, rewards, QR check-in, notifications, and support features.',
+            'Vaniday is designed for Singapore beauty and wellness bookings. This policy is written with Singapore PDPA-style privacy obligations in mind, including notification, consent, purpose limitation, protection, retention, access, correction, withdrawal of consent, and breach handling. It should be reviewed by qualified legal counsel before production use.'
+        ],
         sections: [
-            { title: 'Account Data', copy: 'We use your name, email, phone number, and profile details to manage bookings, receipts, rewards, support requests, and notifications.' },
-            { title: 'Location Data', copy: 'Browser location is used only in your current session to sort nearby salons when you choose to allow it. Browsing remains available if permission is denied.' },
-            { title: 'Service Providers', copy: 'Booking confirmations and reminders may use configured email, SMS, WhatsApp, payment, and QR services.' }
+            {
+                title: '1. Personal Data We Collect',
+                items: [
+                    'Account details: name, email address, phone number, password hash, role, login status, account preferences, profile image, and account history.',
+                    'Customer profile details: birthday, age, gender, postal code, preferred contact method, referral code, loyalty status, reward records, voucher records, wallet activity, and purchase history.',
+                    'Booking and order details: selected services or products, merchant, date, time, add-ons, price, payment status, cancellation or refund status, receipts, QR check-in tokens, booking references, delivery or pickup records, and customer notes.',
+                    'Merchant details: salon name, owner name, business email, owner phone, business address, operating hours, service listings, product listings, promotions, order records, customer communications, merchant notes, analytics, and support records.',
+                    'Support and dispute data: refund reasons, cancellation reasons, photos or files uploaded as evidence, messages, internal notes, review decisions, timestamps, and investigation outcomes.',
+                    'Technical data: IP address, browser or device information, session cookies, security events, authentication attempts, error logs, page activity needed to operate the site, and approximate or precise location if you choose to share it.',
+                    'Communications data: emails, SMS, WhatsApp messages, in-app notifications, OTP delivery records, contact preferences, and whether messages were sent, skipped, failed, or received where available.',
+                    'AI and recommendation inputs: routine-finder answers, search terms, support messages, analytics prompts, generated recommendations, and related context used to provide automated assistance.'
+                ]
+            },
+            {
+                title: '2. How We Collect Data',
+                items: [
+                    'Directly from you when you sign up, log in, book, buy, review, contact support, upload files, update your profile, use merchant tools, or submit forms.',
+                    'Automatically when the platform records sessions, security events, bookings, QR check-ins, payment statuses, rewards, referrals, notifications, and operational logs.',
+                    'From merchants, administrators, payment providers, messaging providers, delivery or pickup workflows, fraud-prevention tools, and other service providers involved in the transaction or support process.',
+                    'From your browser or device when you allow location access, accept cookies, interact with forms, or use features that require device permissions.'
+                ]
+            },
+            {
+                title: '3. Why We Use Personal Data',
+                items: [
+                    'Create, authenticate, protect, maintain, suspend, or terminate accounts.',
+                    'Process bookings, check availability, send confirmations, support QR check-in, manage rescheduling, cancellations, refunds, receipts, and attendance records.',
+                    'Process product orders, pickup or delivery records, payment status updates, wallet activity, vouchers, cashback, loyalty points, referrals, gift cards, promotions, and campaign eligibility.',
+                    'Allow merchants to manage listings, orders, bookings, customers, support requests, promotions, refunds, analytics, and operational workflows.',
+                    'Send service messages, OTPs, reminders, support updates, refund outcomes, account notices, security alerts, and transactional notifications through your selected or available contact channels.',
+                    'Investigate fraud, abuse, duplicate accounts, suspicious payments, false claims, chargebacks, security incidents, policy breaches, and legal requests.',
+                    'Improve platform reliability, accessibility, user experience, ranking, search, recommendations, merchant quality, customer support, and business reporting.',
+                    'Comply with laws, court orders, regulator requests, tax, accounting, audit, recordkeeping, consumer-protection, data-protection, and dispute-resolution obligations.'
+                ]
+            },
+            {
+                title: '4. Consent, Withdrawal, and Required Data',
+                paragraphs: [
+                    'Where consent is required, we ask for it before collecting, using, or disclosing personal data for the stated purposes. Some data is required to provide the service, such as contact details for bookings, payment-related details for purchases, and security data for account protection.',
+                    'You may withdraw consent by contacting us, changing browser permissions, unsubscribing from optional marketing where available, or updating account settings. Withdrawal may mean we cannot provide certain features, process bookings, send reminders, verify identity, complete refunds, or maintain merchant access.',
+                    'We may continue using or retaining data after withdrawal where permitted or required for legal, audit, security, dispute, fraud-prevention, accounting, or legitimate business purposes.'
+                ]
+            },
+            {
+                title: '5. Location Data',
+                paragraphs: [
+                    'If you allow browser location access, Vaniday may use location data during your current session to sort nearby salons, show distance-related information, improve discovery, or support map features.',
+                    'You can deny or disable location permission in your browser or device settings. Core browsing remains available without precise location, although nearby sorting and map convenience may be limited.'
+                ]
+            },
+            {
+                title: '6. Cookies, Sessions, and Security Logs',
+                paragraphs: [
+                    'Vaniday uses cookies and similar technologies for login sessions, CSRF protection, cart state, security, fraud prevention, preferences, and basic site operation. Some cookies are essential for the platform to function.',
+                    'Security logs may record login attempts, OTP events, rate limits, device or browser signals, IP addresses, suspicious activity, administrative actions, payment updates, support actions, and other events needed to protect users and the platform.'
+                ]
+            },
+            {
+                title: '7. Sharing Personal Data',
+                items: [
+                    'With merchants so they can provide booked services, manage orders, contact customers about appointments, process service issues, and respond to support or refund requests.',
+                    'With payment providers so they can process payments, refunds, disputes, chargebacks, fraud checks, and payment confirmations.',
+                    'With email, SMS, WhatsApp, QR, hosting, storage, analytics, AI, and technical service providers that help operate Vaniday.',
+                    'With administrators, support staff, contractors, and professional advisers who need access to operate, investigate, secure, improve, or legally support the platform.',
+                    'With regulators, courts, law enforcement, payment networks, counterparties, or other parties where required or permitted by law, to enforce terms, protect rights, investigate harm, or respond to legal process.',
+                    'With another organisation if Vaniday is involved in a merger, acquisition, financing, restructuring, sale of assets, or similar business transaction, subject to appropriate safeguards.'
+                ]
+            },
+            {
+                title: '8. Overseas Transfers',
+                paragraphs: [
+                    'Some service providers may process or store data outside Singapore. Where personal data is transferred overseas, Vaniday will take reasonable steps to ensure comparable protection through contracts, provider safeguards, technical measures, or other legally recognised mechanisms where required.'
+                ]
+            },
+            {
+                title: '9. Retention',
+                paragraphs: [
+                    'We keep personal data only as long as reasonably needed for the purposes described in this policy, including account operation, booking records, receipts, rewards, audit logs, tax or accounting records, support history, legal claims, fraud prevention, and security.',
+                    'Retention periods may differ by data type. For example, support and refund records may be kept while a dispute may arise; transaction records may be kept for accounting and audit; security logs may be kept for investigation; inactive account data may be deleted, anonymised, or archived when no longer needed.',
+                    'When data is no longer needed for business or legal purposes, we will delete it, anonymise it, or securely restrict access where deletion is not immediately practical.'
+                ]
+            },
+            {
+                title: '10. Security',
+                paragraphs: [
+                    'Vaniday uses reasonable administrative, technical, and organisational measures to protect personal data against unauthorised access, collection, use, disclosure, copying, modification, disposal, loss, and similar risks.',
+                    'No online platform can guarantee perfect security. You should use a strong password, keep OTPs private, log out from shared devices, keep your contact details current, and contact us promptly if you suspect unauthorised account access.'
+                ]
+            },
+            {
+                title: '11. Access, Correction, and Questions',
+                paragraphs: [
+                    'You may request access to personal data that Vaniday holds about you, information about recent use or disclosure, or correction of inaccurate or incomplete data. We may need to verify your identity before responding.',
+                    'Some requests may be limited by law, security, confidentiality, technical feasibility, legal privilege, another person\'s privacy, ongoing investigations, or other permitted exceptions.',
+                    'Privacy questions, access requests, correction requests, withdrawal requests, and complaints can be sent to support@vaniday.example with the subject "Data Protection Request". Replace this placeholder address with the real Data Protection Officer or business contact before production use.'
+                ]
+            },
+            {
+                title: '12. Marketing and Preferences',
+                paragraphs: [
+                    'We may send optional marketing, promotions, loyalty updates, merchant offers, or product recommendations where permitted. You can opt out of optional marketing using unsubscribe options or account settings where available.',
+                    'Even if you opt out of marketing, we may still send transactional or service messages such as OTPs, booking confirmations, payment notices, refund outcomes, policy updates, security alerts, and support replies.'
+                ]
+            },
+            {
+                title: '13. Children and Minors',
+                paragraphs: [
+                    'Vaniday is not intended for children who cannot legally consent to use the platform or receive services without a parent or guardian. Merchants may apply age restrictions for certain services. If you believe a minor has provided personal data without appropriate consent, contact us so we can review the account or record.'
+                ]
+            },
+            {
+                title: '14. Data Breaches',
+                paragraphs: [
+                    'If a data breach occurs, Vaniday will assess the incident, take reasonable containment and remediation steps, and notify affected individuals or regulators where required by law.'
+                ]
+            },
+            {
+                title: '15. Changes to This Policy',
+                paragraphs: [
+                    'Vaniday may update this policy when our features, service providers, legal obligations, data practices, or business operations change. The updated version will apply from the stated effective date. If a change materially affects how we use personal data, we will take reasonable steps to notify affected users.'
+                ]
+            }
         ]
     });
 });

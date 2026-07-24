@@ -4,13 +4,40 @@
     <p class="eyebrow">Vaniday</p>
     <h1><%= heading %></h1>
     <p><%= summary %></p>
+    <% if (typeof updatedAt !== 'undefined' && updatedAt) { %>
+        <p class="legal-updated">Last updated: <%= updatedAt %></p>
+    <% } %>
 </section>
 
 <section class="section compact">
-    <article class="receipt-card">
+    <article class="receipt-card legal-document">
+        <% if (typeof intro !== 'undefined' && intro) { %>
+            <div class="legal-intro">
+                <% intro.forEach((paragraph) => { %>
+                    <p><%= paragraph %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
         <% sections.forEach((section) => { %>
-            <h2><%= section.title %></h2>
-            <p class="muted"><%= section.copy %></p>
+            <section class="legal-document-section">
+                <h2><%= section.title %></h2>
+                <% if (section.copy) { %>
+                    <p class="muted"><%= section.copy %></p>
+                <% } %>
+                <% if (section.paragraphs) { %>
+                    <% section.paragraphs.forEach((paragraph) => { %>
+                        <p class="muted"><%= paragraph %></p>
+                    <% }) %>
+                <% } %>
+                <% if (section.items) { %>
+                    <ul>
+                        <% section.items.forEach((item) => { %>
+                            <li><%= item %></li>
+                        <% }) %>
+                    </ul>
+                <% } %>
+            </section>
         <% }) %>
     </article>
 </section>
