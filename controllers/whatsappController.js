@@ -430,12 +430,18 @@ async function handleRescheduleDateStep(phone, text, session) {
 }
 
 async function handleRescheduleTimeStep(phone, text, session) {
+    const newBookingDate = normalizeDate(text);
+
+    if (newBookingDate) {
+        return handleRescheduleDateStep(phone, text, session);
+    }
+
     const bookingTime = normalizeTime(text);
     const slots = (session.availableSlots || []).map(normalizeTime).filter(Boolean);
 
     if (!bookingTime || !slots.includes(bookingTime)) {
         return sendReply(phone, slots.length
-            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}`
+            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}, or reply with another date in YYYY-MM-DD format.`
             : 'No available slots are currently selected. Reply RESCHEDULE to start again.');
     }
 
@@ -497,6 +503,9 @@ async function handleRescheduleTimeStep(phone, text, session) {
         if (error) console.error(error);
     });
 
+    await sendBookingNotification(booking).catch((error) => {
+        console.error('WhatsApp booking confirmation failed:', error.message);
+    });
     resetSession(phone);
 
     return sendReply(phone, [
@@ -547,12 +556,18 @@ async function handleDateStep(phone, text, session) {
 }
 
 async function handleTimeStep(phone, text, session) {
+    const newBookingDate = normalizeDate(text);
+
+    if (newBookingDate) {
+        return handleDateStep(phone, text, session);
+    }
+
     const bookingTime = normalizeTime(text);
     const slots = (session.availableSlots || []).map(normalizeTime).filter(Boolean);
 
     if (!bookingTime || !slots.includes(bookingTime)) {
         return sendReply(phone, slots.length
-            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}`
+            ? `Please choose an available time: ${(session.availableSlots || []).join(', ')}, or reply with another date in YYYY-MM-DD format.`
             : 'No available slots for this date. Please reply with another date.');
     }
 
@@ -566,7 +581,18 @@ async function handleTimeStep(phone, text, session) {
     });
 
     if (!confirmation?.created) {
-        return sendReply(phone, confirmation?.message || 'That slot is unavailable. Please reply with another time.');
+        if (Array.isArray(confirmation?.alternatives)) {
+            session.availableSlots = confirmation.alternatives;
+            session.step = confirmation.alternatives.length ? 'time' : 'date';
+            await persistSession(phone, session);
+        }
+
+        const retryMessage = confirmation?.message || 'That slot is unavailable. Please reply with another time.';
+        const dateHint = session.step === 'time'
+            ? 'You can also reply with another date in YYYY-MM-DD format.'
+            : 'Please reply with another date in YYYY-MM-DD format.';
+
+        return sendReply(phone, [retryMessage, dateHint].join('\n'));
     }
 
     const bookingId = confirmation.result.insertId;
@@ -659,9 +685,6 @@ async function handleTimeStep(phone, text, session) {
         });
     });
 
-    await sendBookingNotification(booking).catch((error) => {
-        console.error('WhatsApp booking confirmation failed:', error.message);
-    });
     resetSession(phone);
 
     return sendReply(phone, [
