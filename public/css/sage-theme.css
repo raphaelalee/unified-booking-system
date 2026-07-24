@@ -21178,6 +21178,213 @@ body:not(.flappy-page) .home-featured-content-section .storefront-product-strip 
     }
 }
 
+/* Final homepage hero containment fix */
+body:not(.flappy-page) main:has(.vaniday-home-hero) {
+    overflow: visible !important;
+}
+
+body:not(.flappy-page) .page-container:has(.vaniday-home-hero) {
+    overflow: visible !important;
+}
+
+body:not(.flappy-page) .page-container > .vaniday-home-hero {
+    width: min(1180px, calc(100% - 40px)) !important;
+    max-width: calc(100% - 40px) !important;
+    margin: clamp(20px, 3vw, 42px) auto 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.95fr) minmax(340px, 0.9fr) !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero-copy {
+    min-width: 0 !important;
+    min-height: clamp(430px, 50vh, 560px) !important;
+    padding: clamp(34px, 4.5vw, 58px) !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .eyebrow {
+    max-width: 100%;
+    margin-bottom: 18px !important;
+    overflow-wrap: anywhere;
+    letter-spacing: 0.22em !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero h1 {
+    max-width: 100%;
+    margin-bottom: 18px !important;
+    font-size: clamp(4.2rem, 7.2vw, 7.8rem) !important;
+    line-height: 0.9 !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .home-hero-tagline,
+body:not(.flappy-page) .vaniday-home-hero .hero-text {
+    max-width: 520px !important;
+}
+
+body:not(.flappy-page) .vaniday-home-hero .hero-text {
+    margin-bottom: 24px !important;
+    line-height: 1.65 !important;
+}
+
+body:not(.flappy-page) .vaniday-home-visual {
+    min-width: 0 !important;
+    min-height: clamp(430px, 50vh, 560px) !important;
+    width: 100% !important;
+}
+
+body:not(.flappy-page) .home-hero-stats {
+    width: min(520px, 100%) !important;
+    margin-top: 34px !important;
+}
+
+body:not(.flappy-page) .home-hero-stats span {
+    min-height: 84px !important;
+    padding: 15px !important;
+}
+
+body:not(.flappy-page) .home-hero-stats strong {
+    font-size: clamp(1.7rem, 2.4vw, 2.5rem) !important;
+}
+
+@media (max-width: 1080px) {
+    body:not(.flappy-page) .page-container > .vaniday-home-hero {
+        grid-template-columns: 1fr !important;
+        width: min(760px, calc(100% - 28px)) !important;
+        max-width: calc(100% - 28px) !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero-copy {
+        min-height: 0 !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: 390px !important;
+        border-left: 0 !important;
+        border-top: 1px solid rgba(79, 104, 71, 0.14);
+    }
+}
+
+@media (max-width: 640px) {
+    body:not(.flappy-page) .page-container > .vaniday-home-hero {
+        width: min(100% - 18px, 540px) !important;
+        max-width: calc(100% - 18px) !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero-copy {
+        padding: 30px 20px !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-hero h1 {
+        font-size: clamp(3.4rem, 18vw, 5.2rem) !important;
+    }
+
+    body:not(.flappy-page) .vaniday-home-visual {
+        min-height: 300px !important;
+    }
+
+    body:not(.flappy-page) .home-hero-stats {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Final responsive header guard */
+@media (max-width: 760px) {
+    body:not(.flappy-page) .site-header {
+        overflow: visible !important;
+    }
+
+    body:not(.flappy-page) .nav {
+        grid-template-columns: auto minmax(0, 1fr) !important;
+        align-items: center !important;
+    }
+
+    body:not(.flappy-page) .nav-links {
+        width: 100% !important;
+        grid-column: 1 / -1 !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        overflow: visible !important;
+    }
+
+    body:not(.flappy-page) .nav-dropdown,
+    body:not(.flappy-page) .nav-dropdown-trigger {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    body:not(.flappy-page) .nav-dropdown-trigger {
+        justify-content: center !important;
+    }
+
+    body:not(.flappy-page) .nav-dropdown-menu {
+        width: min(230px, calc(100vw - 36px)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 36px) !important;
+    }
+
+    body:not(.flappy-page) .nav-links .nav-dropdown:nth-child(2n) .nav-dropdown-menu {
+        right: 0 !important;
+        left: auto !important;
+    }
+}
+
+/* Final responsive homepage grid guard */
+body:not(.flappy-page) .home-carousel {
+    overflow: visible !important;
+}
+
+body:not(.flappy-page) .home-carousel-track {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)) !important;
+    grid-auto-flow: row !important;
+    gap: 16px !important;
+    overflow: visible !important;
+    scroll-snap-type: none !important;
+    cursor: default !important;
+}
+
+body:not(.flappy-page) .home-carousel-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    scroll-snap-align: unset !important;
+}
+
+body:not(.flappy-page) .home-carousel-controls,
+body:not(.flappy-page) .home-carousel-dots {
+    display: none !important;
+}
+
+body:not(.flappy-page) .home-flash-carousel {
+    padding-inline: 0 !important;
+}
+
+body:not(.flappy-page) .home-flash-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)) !important;
+    grid-auto-flow: row !important;
+    grid-auto-columns: unset !important;
+    gap: 16px !important;
+    overflow: visible !important;
+    cursor: default !important;
+}
+
+body:not(.flappy-page) .home-flash-arrow {
+    display: none !important;
+}
+
+body:not(.flappy-page) .home-flash-tile {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+@media (max-width: 380px) {
+    body:not(.flappy-page) .nav-links {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 /* Customer floating action buttons */
 body:not(.flappy-page) .ai-chatbot {
     right: 24px !important;
