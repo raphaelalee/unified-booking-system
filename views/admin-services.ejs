@@ -144,7 +144,14 @@
                                     <td>
                                         <div class="marketplace-action-row">
                                             <a class="button secondary compact" href="/admin/services/<%= service.id %>/edit">Edit</a>
-                                            <form action="/admin/services/<%= service.id %>/delete" method="POST">
+                                            <form
+                                                action="/admin/services/<%= service.id %>/delete"
+                                                method="POST"
+                                                data-admin-delete-service-form
+                                                data-service-name="<%= service.name || 'Unnamed service' %>"
+                                                data-service-merchant="<%= service.salonName || 'No merchant set' %>"
+                                                data-service-price="$<%= Number(service.price || 0).toFixed(2) %>"
+                                            >
                                                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <button class="button secondary compact danger-button" type="submit">Delete</button>
                                             </form>
@@ -159,6 +166,103 @@
         </section>
     </div>
 </section>
+
+<div class="admin-delete-confirm-backdrop" data-admin-delete-service-confirm hidden>
+    <section class="admin-delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-service-title" aria-describedby="admin-delete-service-copy">
+        <p class="eyebrow">Double Check First</p>
+        <h2 id="admin-delete-service-title">Delete this service?</h2>
+        <p id="admin-delete-service-copy">Please confirm the service details before deleting it from the admin catalogue.</p>
+        <div class="admin-delete-confirm-user">
+            <span>Service</span>
+            <strong data-admin-delete-service-name>Unnamed service</strong>
+            <span>Merchant</span>
+            <strong data-admin-delete-service-merchant>No merchant set</strong>
+            <span>Price</span>
+            <strong data-admin-delete-service-price>$0.00</strong>
+        </div>
+        <div class="admin-delete-confirm-actions">
+            <button class="button secondary" type="button" data-admin-delete-service-cancel>Cancel</button>
+            <button class="button danger" type="button" data-admin-delete-service-confirm-button>Yes, Delete Service</button>
+        </div>
+    </section>
+</div>
+
+<style>
+    .admin-delete-confirm-backdrop[hidden] {
+        display: none;
+    }
+
+    .admin-delete-confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(21, 33, 24, 0.46);
+        backdrop-filter: blur(4px);
+    }
+
+    .admin-delete-confirm-dialog {
+        width: min(440px, 100%);
+        border: 1px solid rgba(132, 59, 54, 0.18);
+        border-radius: 18px;
+        background: #fffdf8;
+        box-shadow: 0 24px 70px rgba(35, 48, 39, 0.24);
+        padding: 28px;
+    }
+
+    .admin-delete-confirm-dialog h2 {
+        margin: 4px 0 10px;
+        color: #263429;
+    }
+
+    .admin-delete-confirm-dialog p {
+        margin: 0;
+        color: #687568;
+    }
+
+    .admin-delete-confirm-user {
+        display: grid;
+        grid-template-columns: minmax(80px, auto) 1fr;
+        gap: 10px 16px;
+        margin: 22px 0;
+        padding: 16px;
+        border: 1px solid rgba(76, 95, 74, 0.14);
+        border-radius: 14px;
+        background: #f8faf5;
+    }
+
+    .admin-delete-confirm-user span {
+        color: #71806e;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .admin-delete-confirm-user strong {
+        color: #263429;
+        overflow-wrap: anywhere;
+    }
+
+    .admin-delete-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 520px) {
+        .admin-delete-confirm-dialog {
+            padding: 22px;
+        }
+
+        .admin-delete-confirm-actions .button {
+            width: 100%;
+        }
+    }
+</style>
 
 <script>
     (() => {
@@ -246,6 +350,69 @@
         search?.addEventListener('input', applyFilters);
         merchant?.addEventListener('change', applyFilters);
         category?.addEventListener('change', applyFilters);
+    })();
+</script>
+
+<script>
+    (() => {
+        const modal = document.querySelector('[data-admin-delete-service-confirm]');
+        const forms = Array.from(document.querySelectorAll('[data-admin-delete-service-form]'));
+
+        if (!modal || !forms.length) {
+            return;
+        }
+
+        const nameTarget = modal.querySelector('[data-admin-delete-service-name]');
+        const merchantTarget = modal.querySelector('[data-admin-delete-service-merchant]');
+        const priceTarget = modal.querySelector('[data-admin-delete-service-price]');
+        const cancelButton = modal.querySelector('[data-admin-delete-service-cancel]');
+        const confirmButton = modal.querySelector('[data-admin-delete-service-confirm-button]');
+        let pendingForm = null;
+
+        const closeModal = () => {
+            modal.hidden = true;
+            pendingForm = null;
+        };
+
+        forms.forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.confirmedDelete === 'true') {
+                    return;
+                }
+
+                event.preventDefault();
+                pendingForm = form;
+                nameTarget.textContent = form.dataset.serviceName || 'Unnamed service';
+                merchantTarget.textContent = form.dataset.serviceMerchant || 'No merchant set';
+                priceTarget.textContent = form.dataset.servicePrice || '$0.00';
+                modal.hidden = false;
+                cancelButton?.focus();
+            });
+        });
+
+        cancelButton?.addEventListener('click', closeModal);
+
+        confirmButton?.addEventListener('click', () => {
+            if (!pendingForm) {
+                closeModal();
+                return;
+            }
+
+            pendingForm.dataset.confirmedDelete = 'true';
+            pendingForm.submit();
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !modal.hidden) {
+                closeModal();
+            }
+        });
     })();
 </script>
 
