@@ -86,7 +86,15 @@
                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                         <button class="button secondary" type="submit" <%= user.role === 'admin' || user.account_status === 'terminated' ? 'disabled' : '' %>>Terminate</button>
                                     </form>
-                                    <form action="/admin/users/<%= user.user_id %>/delete" method="POST" class="admin-user-action-form">
+                                    <form
+                                        action="/admin/users/<%= user.user_id %>/delete"
+                                        method="POST"
+                                        class="admin-user-action-form"
+                                        data-admin-delete-user-form
+                                        data-user-name="<%= user.name || 'Unknown user' %>"
+                                        data-user-email="<%= user.email || 'No email available' %>"
+                                        data-user-role="<%= user.role || 'N/A' %>"
+                                    >
                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                         <button class="button danger" type="submit" <%= user.role === 'admin' ? 'disabled' : '' %>>Delete</button>
                                     </form>
@@ -99,5 +107,165 @@
         </section>
     </div>
 </section>
+
+<div class="admin-delete-confirm-backdrop" data-admin-delete-confirm hidden>
+    <section class="admin-delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-confirm-title" aria-describedby="admin-delete-confirm-copy">
+        <p class="eyebrow">Double Check First</p>
+        <h2 id="admin-delete-confirm-title">Delete this account?</h2>
+        <p id="admin-delete-confirm-copy">This action removes the user account. Please confirm the details before deleting.</p>
+        <div class="admin-delete-confirm-user">
+            <span>Name</span>
+            <strong data-admin-delete-name>Unknown user</strong>
+            <span>Email</span>
+            <strong data-admin-delete-email>No email available</strong>
+            <span>Role</span>
+            <strong data-admin-delete-role>N/A</strong>
+        </div>
+        <div class="admin-delete-confirm-actions">
+            <button class="button secondary" type="button" data-admin-delete-cancel>Cancel</button>
+            <button class="button danger" type="button" data-admin-delete-confirm-button>Yes, Delete Account</button>
+        </div>
+    </section>
+</div>
+
+<style>
+    .admin-delete-confirm-backdrop[hidden] {
+        display: none;
+    }
+
+    .admin-delete-confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(21, 33, 24, 0.46);
+        backdrop-filter: blur(4px);
+    }
+
+    .admin-delete-confirm-dialog {
+        width: min(440px, 100%);
+        border: 1px solid rgba(132, 59, 54, 0.18);
+        border-radius: 18px;
+        background: #fffdf8;
+        box-shadow: 0 24px 70px rgba(35, 48, 39, 0.24);
+        padding: 28px;
+    }
+
+    .admin-delete-confirm-dialog h2 {
+        margin: 4px 0 10px;
+        color: #263429;
+    }
+
+    .admin-delete-confirm-dialog p {
+        margin: 0;
+        color: #687568;
+    }
+
+    .admin-delete-confirm-user {
+        display: grid;
+        grid-template-columns: minmax(80px, auto) 1fr;
+        gap: 10px 16px;
+        margin: 22px 0;
+        padding: 16px;
+        border: 1px solid rgba(76, 95, 74, 0.14);
+        border-radius: 14px;
+        background: #f8faf5;
+    }
+
+    .admin-delete-confirm-user span {
+        color: #71806e;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .admin-delete-confirm-user strong {
+        color: #263429;
+        overflow-wrap: anywhere;
+    }
+
+    .admin-delete-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 520px) {
+        .admin-delete-confirm-dialog {
+            padding: 22px;
+        }
+
+        .admin-delete-confirm-actions .button {
+            width: 100%;
+        }
+    }
+</style>
+
+<script>
+    (() => {
+        const modal = document.querySelector('[data-admin-delete-confirm]');
+        const forms = Array.from(document.querySelectorAll('[data-admin-delete-user-form]'));
+
+        if (!modal || !forms.length) {
+            return;
+        }
+
+        const nameTarget = modal.querySelector('[data-admin-delete-name]');
+        const emailTarget = modal.querySelector('[data-admin-delete-email]');
+        const roleTarget = modal.querySelector('[data-admin-delete-role]');
+        const cancelButton = modal.querySelector('[data-admin-delete-cancel]');
+        const confirmButton = modal.querySelector('[data-admin-delete-confirm-button]');
+        let pendingForm = null;
+
+        const closeModal = () => {
+            modal.hidden = true;
+            pendingForm = null;
+        };
+
+        forms.forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.confirmedDelete === 'true') {
+                    return;
+                }
+
+                event.preventDefault();
+                pendingForm = form;
+                nameTarget.textContent = form.dataset.userName || 'Unknown user';
+                emailTarget.textContent = form.dataset.userEmail || 'No email available';
+                roleTarget.textContent = form.dataset.userRole || 'N/A';
+                modal.hidden = false;
+                cancelButton?.focus();
+            });
+        });
+
+        cancelButton?.addEventListener('click', closeModal);
+
+        confirmButton?.addEventListener('click', () => {
+            if (!pendingForm) {
+                closeModal();
+                return;
+            }
+
+            pendingForm.dataset.confirmedDelete = 'true';
+            pendingForm.submit();
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !modal.hidden) {
+                closeModal();
+            }
+        });
+    })();
+</script>
 
 <%- include('partials/footer') %>
