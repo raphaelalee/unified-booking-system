@@ -791,9 +791,13 @@ function getProductCategories(callback) {
         }
 
         const sql = `
-            SELECT category_id, category_name
+            SELECT
+                MIN(category_id) AS category_id,
+                category_name,
+                MIN(display_order) AS display_order
             FROM categories
             WHERE category_scope = 'product'
+            GROUP BY category_name
             ORDER BY display_order, category_name
         `;
 

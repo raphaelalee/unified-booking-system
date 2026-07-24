@@ -206,7 +206,7 @@ CREATE TABLE `categories` (
 
 LOCK TABLES `categories` WRITE;
 /*!40000 ALTER TABLE `categories` DISABLE KEYS */;
-INSERT INTO `categories` VALUES (1,'Hair',NULL,1,'service'),(2,'Spa',NULL,7,'service'),(3,'Nails',NULL,6,'service'),(4,'Massage',NULL,999,'service'),(5,'Barber',NULL,99,'service'),(6,'Sets',NULL,70,'product'),(7,'Makeup',NULL,50,'product'),(8,'Wellness',NULL,40,'product'),(9,'Bodycare',NULL,30,'product'),(10,'Skincare',NULL,20,'product'),(11,'Skincare',NULL,20,'product'),(12,'Haircare',NULL,10,'product'),(13,'Bodycare',NULL,30,'product'),(14,'Makeup',NULL,50,'product'),(15,'Wellness',NULL,40,'product'),(16,'Sets',NULL,70,'product'),(17,'Nailcare',NULL,60,'product');
+INSERT INTO `categories` VALUES (1,'Hair',NULL,1,'service'),(2,'Spa',NULL,7,'service'),(3,'Nails',NULL,6,'service'),(4,'Massage',NULL,999,'service'),(5,'Barber',NULL,99,'service'),(6,'Sets',NULL,70,'product'),(7,'Makeup',NULL,50,'product'),(8,'Wellness',NULL,40,'product'),(9,'Bodycare',NULL,30,'product'),(10,'Skincare',NULL,20,'product'),(12,'Haircare',NULL,10,'product'),(17,'Nailcare',NULL,60,'product');
 /*!40000 ALTER TABLE `categories` ENABLE KEYS */;
 UNLOCK TABLES;
 

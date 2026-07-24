@@ -90,8 +90,14 @@
                         Category
                         <select name="categoryId">
                             <option value="" <%= String(form.categoryId) === '' ? 'selected' : '' %>>Uncategorised</option>
-                            <% categories.forEach((category) => { %>
-                                <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>><%= category.category_name %></option>
+                            <%
+                                const selectedCategoryId = String(form.categoryId || '');
+                                const selectedCategoryIdExists = categories.some((category) => String(category.category_id) === selectedCategoryId);
+                                categories.forEach((category) => {
+                                const isSelectedCategory = String(form.categoryId) === String(category.category_id)
+                                    || (!selectedCategoryIdExists && product && String(product.category || '') === String(category.category_name || ''));
+                            %>
+                                <option value="<%= category.category_id %>" <%= isSelectedCategory ? 'selected' : '' %>><%= category.category_name %></option>
                             <% }) %>
                         </select>
                     </label>
