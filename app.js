@@ -199,7 +199,7 @@ app.use(verifyCsrfToken);
 const authRateLimit = createRateLimiter({
     namespace: 'auth',
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: 6,
     message: 'Too many sign-in attempts. Please wait a few minutes and try again.'
 });
 const aiRateLimit = createRateLimiter({
