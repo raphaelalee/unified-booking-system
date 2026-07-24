@@ -1973,6 +1973,36 @@
         appendMessage('user', text);
         rememberSessionEvent('prompt', { question: text });
         if (input) input.value = '';
+        if (/^\s*(what('| i)?s|what is|tell me|show me)?\s*(today'?s?\s+date|date today|current date|time now|current time|what day is it)\??\s*$/i.test(text)) {
+            const now = new Date();
+            const dateLabel = new Intl.DateTimeFormat('en-SG', {
+                timeZone: 'Asia/Singapore',
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }).format(now);
+            const timeLabel = new Intl.DateTimeFormat('en-SG', {
+                timeZone: 'Asia/Singapore',
+                hour: 'numeric',
+                minute: '2-digit'
+            }).format(now);
+            const answer = `Today is ${dateLabel}. The current time is ${timeLabel} in Singapore.`;
+            appendMessage('assistant', answer, [], {
+                progressive: true,
+                sourcePrompt: text,
+                transparency: {
+                    periodLabel: 'Asia/Singapore',
+                    sources: ['Browser date and time'],
+                    confidence: 'High',
+                    reasoning: 'Answered locally from the current browser session; no AI request or business data lookup was needed.'
+                }
+            });
+            rememberSessionEvent('answer', { question: text, answer });
+            setStatus('Date and time shown.', 'success');
+            syncButtons();
+            return;
+        }
         if (/^(hi|hello|hey|yo|good morning|good afternoon|good evening)$/i.test(text)) {
             const greeting = `Hi. I can help with ${context.page.toLowerCase()} questions, explain a metric, or prepare a recommendation when you ask for one.`;
             appendMessage('assistant', greeting, [], { progressive: true, sourcePrompt: text });

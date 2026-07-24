@@ -183,6 +183,10 @@ test('analytics question intent normalizer tolerates common merchant revenue typ
         normalizeAnalyticsQuestionIntent('which merchnat has the hughest revnue'),
         'which merchant has the highest revenue'
     );
+    assert.equal(
+        normalizeAnalyticsQuestionIntent('show refnud and bokking anayltics'),
+        'show refund and booking analytics'
+    );
 });
 
 test('merchant revenue data answer stays on revenue instead of unrelated metrics', () => {
@@ -276,4 +280,139 @@ test('admin unavailable data answer does not invent Spin data', () => {
     assert.ok(answer);
     assert.match(answer.answer, /Spin & Discover performance is not available/i);
     assert.ok(answer.limitations.length);
+});
+
+test('merchant attention question returns practical action items from available data', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {
+            refundCount: 2,
+            cancelledBookings: 1,
+            lowRatedReviews: 0
+        },
+        stockConcerns: [{ productName: 'Repair Shampoo', stockQuantity: 2 }],
+        lowestPerformingServices: [{ serviceName: 'Hair Spa', bookings: 0, revenue: 0 }],
+        lowestPerformingProducts: [{ productName: 'Face Mask', unitsSold: 0, revenue: 0 }]
+    }, 'what should I do today', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /main attention items/i);
+    assert.match(answer.answer, /Repair Shampoo/);
+    assert.match(answer.answer, /refund case/i);
+    assert.ok(answer.supportingEvidence.some((row) => row.includes('Lowest stock item')));
+});
+
+test('merchant weak product question answers weak product instead of top product', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: { totalOrders: 4 },
+        lowestPerformingProducts: [{ productName: 'Slow Serum', unitsSold: 0, revenue: 0 }],
+        topProductsByRevenue: [{ productName: 'Best Shampoo', unitsSold: 9, revenue: 180 }]
+    }, 'which products are performing poorly', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /weakest product signal/i);
+    assert.match(answer.answer, /Slow Serum/);
+    assert.doesNotMatch(answer.answer, /Best Shampoo/);
+});
+
+test('merchant payout question uses retained sales wording and avoids final payout claim', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {
+            totalRevenue: 500,
+            netRefundAmount: 40
+        }
+    }, 'what is my net revenue after refunds', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /estimated retained sales/i);
+    assert.match(answer.answer, /S\$460\.00/);
+    assert.match(answer.answer, /not final payout/i);
+});
+
+test('admin attention question highlights approval and support priorities', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {
+            pendingMerchantApprovals: 3,
+            unresolvedSupportCases: 2
+        },
+        merchantsWithHighestRefundRates: [{ merchantName: 'FreshGlow Spa', refundCount: 4 }],
+        merchantsWithHighestCancellationRates: [{ merchantName: 'Urban Groom', cancellationRate: 20 }]
+    }, 'what needs admin attention', 'admin');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /admin attention/i);
+    assert.match(answer.answer, /merchant approval/i);
+    assert.match(answer.answer, /unresolved support/i);
+    assert.ok(answer.recommendedAdminActions.length);
+});
+
+test('admin support question answers support case metrics directly', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {
+            supportTicketCount: 8,
+            unresolvedSupportCases: 3
+        }
+    }, 'show support cases', 'admin');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /support tickets total 8/i);
+    assert.match(answer.answer, /unresolved support cases are 3/i);
+});
+
+test('merchant best service question answers service performance directly', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {},
+        topServicesByRevenue: [{ serviceName: 'Hair Spa', bookings: 5, revenue: 350 }]
+    }, 'what is my best service', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /strongest service signal/i);
+    assert.match(answer.answer, /Hair Spa/);
+    assert.doesNotMatch(answer.answer, /service bookings total/i);
+});
+
+test('merchant worst service question answers weakest service directly', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {},
+        lowestPerformingServices: [{ serviceName: 'Manicure', bookings: 0, revenue: 0 }]
+    }, 'what is my worst service', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /weakest service signal/i);
+    assert.match(answer.answer, /Manicure/);
+});
+
+test('empty merchant revenue answer gives demo-friendly next step', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: { totalRevenue: 0, totalBookings: 0, totalOrders: 0 }
+    }, 'explain revenue', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /no total tracked sales/i);
+    assert.ok(answer.limitations.some((row) => /Revenue data is empty/i.test(row)));
+    assert.ok(answer.suggestedNextSteps.some((row) => /Last 90 days|source records/i.test(row)));
+});
+
+test('direct answer evidence and next steps stay compact by default', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'Last 30 days' },
+        metrics: {
+            totalPlatformRevenue: 531,
+            totalBookings: 4,
+            activeMerchants: 2,
+            revenueChange: { label: '+12%', value: 12 }
+        },
+        topMerchantsByRevenue: [{ merchantName: 'Vaniday Beauty', revenue: 420, bookings: 3 }]
+    }, 'explain revenue', 'admin');
+
+    assert.ok(answer);
+    assert.ok(answer.supportingEvidence.length <= 3);
+    assert.ok(answer.suggestedNextSteps.length <= 2);
 });

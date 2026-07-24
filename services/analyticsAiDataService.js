@@ -286,9 +286,17 @@ function normalizeAnalyticsQuestionIntent(value = '') {
         .replace(/\bmerhcant\b/g, 'merchant')
         .replace(/\bmerchat\b/g, 'merchant')
         .replace(/\bmerchnt\b/g, 'merchant')
+        .replace(/\bmercahnt\b/g, 'merchant')
         .replace(/\bhughest\b/g, 'highest')
         .replace(/\bhigest\b/g, 'highest')
         .replace(/\bhighst\b/g, 'highest')
+        .replace(/\banayltics\b/g, 'analytics')
+        .replace(/\banalytcis\b/g, 'analytics')
+        .replace(/\brefnud\b/g, 'refund')
+        .replace(/\brefnuds\b/g, 'refunds')
+        .replace(/\bbokking\b/g, 'booking')
+        .replace(/\bbokkings\b/g, 'bookings')
+        .replace(/\bpaymnet\b/g, 'payment')
         .replace(/\brevnuce\b/g, 'revenue')
         .replace(/\brevnue\b/g, 'revenue')
         .replace(/\brevenu\b/g, 'revenue');
@@ -312,9 +320,13 @@ function classifyAnalyticsDataQuestion(question = '', scope = 'merchant') {
     if (!normalized) return '';
 
     const isDataQuestion = /\b(explain|show|summari[sz]e|tell|what|which|who|how|total|highest|top|best|lowest|trend|breakdown|data|metric|kpi|performance)\b/.test(normalized);
-    if (!isDataQuestion) return '';
+    const isOperationalQuestion = /\b(today|attention|need attention|problem|issue|risk|priority|should i do|what should|action|actions|need action|pending|overdue|poor|weak|worst|underperform|low performing)\b/.test(normalized);
+    if (!isDataQuestion && !isOperationalQuestion) return '';
 
+    if (/\b(today|attention|need attention|problem|biggest problem|priority|should i do|what should|action|actions|need action|risk|risks)\b/.test(normalized)) return 'attention';
+    if (scope === 'merchant' && /\b(payout|retained|net sales|net revenue|take home|earnings after refund)\b/.test(normalized)) return 'payout';
     if (/\b(revenue|sales|earning|earnings|income|paid transaction|transaction sales)\b/.test(normalized)) return 'revenue';
+    if (scope === 'merchant' && /\b(service|services)\b/.test(normalized)) return 'services';
     if (/\b(booking|bookings|appointment|appointments|schedule demand|completed service|service booking)\b/.test(normalized)) return 'bookings';
     if (/\b(product|products|order|orders|units sold|item|items)\b/.test(normalized)) return 'products';
     if (/\b(refund|refunds|return|returns|cancellation|cancelled|canceled)\b/.test(normalized)) return 'refunds';
@@ -323,6 +335,7 @@ function classifyAnalyticsDataQuestion(question = '', scope = 'merchant') {
     if (/\b(payment|payments|method|provider|transaction)\b/.test(normalized)) return 'payments';
     if (/\b(customer|customers|repeat customer|active customer|new customer)\b/.test(normalized)) return 'customers';
     if (scope === 'admin' && /\b(merchant|merchants|salon|salons|approval|approvals)\b/.test(normalized)) return 'merchants';
+    if (scope === 'admin' && /\b(support|ticket|tickets|case|cases|dispute|disputes)\b/.test(normalized)) return 'support';
     if (/\b(loyalty|points|reward points)\b/.test(normalized)) return 'loyalty';
     if (/\b(cashback)\b/.test(normalized)) return 'cashback';
     if (/\b(spin|wheel|spin discover|redemption|reward popular)\b/.test(normalized)) return 'spin';
@@ -345,6 +358,10 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
     const addEvidence = (label, value) => {
         evidence.push(`${label}: ${value}`);
     };
+    const addEmptyDataGuidance = (topic) => {
+        limitations.push(`${topic} data is empty or not exposed for ${period}.`);
+        nextSteps.push('Try Last 90 days or create/complete source records first.');
+    };
 
     if (intent === 'revenue') {
         if (scope === 'admin') {
@@ -355,6 +372,7 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
                 : topMerchant?.merchantName
                     ? `For ${period}, the platform paid transaction sales total is not available in the current admin analytics summary.`
                     : `For ${period}, no paid transaction sales are available in the current admin analytics summary.`;
+            if (total <= 0) addEmptyDataGuidance('Revenue');
             addEvidence('Paid transaction sales', formatSgd(total));
             addEvidence('Sales trend', metrics.revenueChange?.label || 'No previous-period comparison');
             if (topMerchant?.merchantName) {
@@ -364,11 +382,15 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
             nextSteps.push('Use merchant performance and refund data before making admin decisions.');
         } else {
             const total = roundMoney(metrics.totalRevenue);
-            const topService = firstUsefulRow(summary.topServicesByRevenue || summary.topServicesByBookingCount, ['revenue', 'bookings']);
+            const serviceRows = Array.isArray(summary.topServicesByRevenue) && summary.topServicesByRevenue.length
+                ? summary.topServicesByRevenue
+                : summary.topServicesByBookingCount;
+            const topService = firstUsefulRow(serviceRows, ['revenue', 'bookings']);
             const topProduct = firstUsefulRow(summary.topProductsByRevenue, ['revenue', 'unitsSold']);
             answer = total > 0
                 ? `For ${period}, total tracked sales are ${formatSgd(total)} from service bookings and product orders. Refund amounts are tracked separately, so this is not a net-after-refund figure.`
                 : `For ${period}, no total tracked sales are available in the current merchant analytics summary.`;
+            if (total <= 0) addEmptyDataGuidance('Revenue');
             addEvidence('Total tracked sales', formatSgd(total));
             addEvidence('Service bookings', safeNumber(metrics.totalBookings));
             addEvidence('Product orders', safeNumber(metrics.totalOrders));
@@ -376,24 +398,85 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
             if (topProduct?.productName) addEvidence('Top product signal', `${topProduct.productName} (${formatSgd(topProduct.revenue)})`);
             nextSteps.push('Compare sales with refunds and booking/order counts before changing promotions.');
         }
+    } else if (intent === 'attention') {
+        if (scope === 'admin') {
+            const issues = [];
+            if (safeNumber(metrics.pendingMerchantApprovals) > 0) issues.push(`${safeNumber(metrics.pendingMerchantApprovals)} merchant approval${safeNumber(metrics.pendingMerchantApprovals) === 1 ? '' : 's'} waiting`);
+            if (safeNumber(metrics.unresolvedSupportCases) > 0) issues.push(`${safeNumber(metrics.unresolvedSupportCases)} unresolved support case${safeNumber(metrics.unresolvedSupportCases) === 1 ? '' : 's'}`);
+            const highRefundMerchant = firstUsefulRow(summary.merchantsWithHighestRefundRates, ['refundCount']);
+            const highCancelMerchant = firstUsefulRow(summary.merchantsWithHighestCancellationRates, ['cancellationRate']);
+            if (highRefundMerchant?.merchantName && safeNumber(highRefundMerchant.refundCount) > 0) issues.push(`${highRefundMerchant.merchantName} has the highest refund count`);
+            if (highCancelMerchant?.merchantName && safeNumber(highCancelMerchant.cancellationRate) > 0) issues.push(`${highCancelMerchant.merchantName} has the highest cancellation rate`);
+            answer = issues.length
+                ? `For ${period}, admin attention should go to: ${issues.slice(0, 3).join('; ')}.`
+                : `For ${period}, the admin analytics summary does not show urgent platform attention items.`;
+            addEvidence('Pending merchant approvals', safeNumber(metrics.pendingMerchantApprovals));
+            addEvidence('Unresolved support cases', safeNumber(metrics.unresolvedSupportCases));
+            if (highRefundMerchant?.merchantName) addEvidence('Highest refund merchant', `${highRefundMerchant.merchantName} (${safeNumber(highRefundMerchant.refundCount)} cases)`);
+            if (highCancelMerchant?.merchantName) addEvidence('Highest cancellation merchant', `${highCancelMerchant.merchantName} (${roundPercent(highCancelMerchant.cancellationRate)}%)`);
+            nextSteps.push('Review pending approvals, unresolved support cases and high-refund merchants first.');
+        } else {
+            const issues = [];
+            const lowStock = Array.isArray(summary.stockConcerns) ? summary.stockConcerns[0] : null;
+            const weakService = Array.isArray(summary.lowestPerformingServices) ? summary.lowestPerformingServices[0] : null;
+            const weakProduct = Array.isArray(summary.lowestPerformingProducts) ? summary.lowestPerformingProducts[0] : null;
+            if (lowStock?.productName) issues.push(`${lowStock.productName} is low on stock (${safeNumber(lowStock.stockQuantity)} left)`);
+            if (safeNumber(metrics.refundCount) > 0) issues.push(`${safeNumber(metrics.refundCount)} refund case${safeNumber(metrics.refundCount) === 1 ? '' : 's'} in the period`);
+            if (safeNumber(metrics.cancelledBookings) > 0) issues.push(`${safeNumber(metrics.cancelledBookings)} cancelled booking${safeNumber(metrics.cancelledBookings) === 1 ? '' : 's'}`);
+            if (safeNumber(metrics.lowRatedReviews) > 0) issues.push(`${safeNumber(metrics.lowRatedReviews)} low-rated review${safeNumber(metrics.lowRatedReviews) === 1 ? '' : 's'}`);
+            answer = issues.length
+                ? `For ${period}, your main attention items are: ${issues.slice(0, 3).join('; ')}.`
+                : `For ${period}, the merchant analytics summary does not show urgent action items.`;
+            if (lowStock?.productName) addEvidence('Lowest stock item', `${lowStock.productName}: ${safeNumber(lowStock.stockQuantity)} left`);
+            addEvidence('Refund cases', safeNumber(metrics.refundCount));
+            addEvidence('Cancelled bookings', safeNumber(metrics.cancelledBookings));
+            addEvidence('Low-rated reviews', safeNumber(metrics.lowRatedReviews));
+            if (weakService?.serviceName) addEvidence('Quietest service signal', `${weakService.serviceName}: ${safeNumber(weakService.bookings)} bookings`);
+            if (weakProduct?.productName) addEvidence('Weakest product signal', `${weakProduct.productName}: ${safeNumber(weakProduct.unitsSold)} units`);
+            nextSteps.push('Check refunds, low stock and weak performers before creating new promotions.');
+        }
     } else if (intent === 'bookings') {
         answer = `For ${period}, ${scope === 'admin' ? 'platform bookings' : 'service bookings'} total ${safeNumber(metrics.totalBookings)}. Completed bookings are ${safeNumber(metrics.completedBookings)}, cancelled bookings are ${safeNumber(metrics.cancelledBookings)}, and the cancellation rate is ${roundPercent(metrics.cancellationRate)}%.`;
+        if (safeNumber(metrics.totalBookings) <= 0) addEmptyDataGuidance('Booking');
         addEvidence('Total bookings', safeNumber(metrics.totalBookings));
         addEvidence('Completed bookings', safeNumber(metrics.completedBookings));
         addEvidence('Cancelled bookings', safeNumber(metrics.cancelledBookings));
         if ((summary.busiestBookingDays || [])[0]?.day) addEvidence('Busiest day', `${summary.busiestBookingDays[0].day} (${safeNumber(summary.busiestBookingDays[0].bookings)} bookings)`);
         nextSteps.push('Review cancelled and pending bookings before changing schedule or staffing.');
+    } else if (intent === 'services') {
+        const asksWeak = /\b(poor|weak|worst|lowest|underperform|low performing|poorly|quiet)\b/.test(normalizeAnalyticsQuestionIntent(question));
+        const serviceRows = Array.isArray(summary.topServicesByRevenue) && summary.topServicesByRevenue.length
+            ? summary.topServicesByRevenue
+            : summary.topServicesByBookingCount;
+        const service = asksWeak
+            ? (Array.isArray(summary.lowestPerformingServices) ? summary.lowestPerformingServices[0] : null)
+            : firstUsefulRow(serviceRows, ['revenue', 'bookings']);
+        answer = service
+            ? asksWeak
+                ? `For ${period}, the weakest service signal is ${service.serviceName}, with ${safeNumber(service.bookings)} bookings and ${formatSgd(service.revenue)} in service-booking sales.`
+                : `For ${period}, the strongest service signal is ${service.serviceName}, with ${safeNumber(service.bookings)} bookings and ${formatSgd(service.revenue)} in service-booking sales.`
+            : `For ${period}, service performance is not available in the current merchant analytics summary.`;
+        if (!service) addEmptyDataGuidance('Service');
+        if (service) addEvidence(asksWeak ? 'Weakest service' : 'Best service', `${service.serviceName}: ${safeNumber(service.bookings)} bookings, ${formatSgd(service.revenue)}`);
+        nextSteps.push(asksWeak ? 'Review pricing, timing and visibility before changing the service.' : 'Promote high-performing services only after checking capacity.');
     } else if (intent === 'products') {
-        const topProduct = firstUsefulRow(summary.topProductsByRevenue, ['revenue', 'unitsSold']);
+        const asksWeak = /\b(poor|weak|worst|lowest|underperform|low performing|poorly)\b/.test(normalizeAnalyticsQuestionIntent(question));
+        const topProduct = asksWeak
+            ? (Array.isArray(summary.lowestPerformingProducts) ? summary.lowestPerformingProducts[0] : null)
+            : firstUsefulRow(summary.topProductsByRevenue, ['revenue', 'unitsSold']);
         answer = topProduct
-            ? `For ${period}, the strongest product signal is ${topProduct.productName}, with ${safeNumber(topProduct.unitsSold)} units sold and ${formatSgd(topProduct.revenue)} in product-order sales.`
+            ? asksWeak
+                ? `For ${period}, the weakest product signal is ${topProduct.productName}, with ${safeNumber(topProduct.unitsSold)} units sold and ${formatSgd(topProduct.revenue)} in product-order sales.`
+                : `For ${period}, the strongest product signal is ${topProduct.productName}, with ${safeNumber(topProduct.unitsSold)} units sold and ${formatSgd(topProduct.revenue)} in product-order sales.`
             : `For ${period}, product/order performance is not available in the current analytics summary.`;
+        if (!topProduct) addEmptyDataGuidance('Product/order');
         addEvidence('Completed product orders', safeNumber(metrics.totalOrders));
-        if (topProduct) addEvidence('Top product', `${topProduct.productName} (${safeNumber(topProduct.unitsSold)} units, ${formatSgd(topProduct.revenue)})`);
+        if (topProduct) addEvidence(asksWeak ? 'Weakest product' : 'Top product', `${topProduct.productName} (${safeNumber(topProduct.unitsSold)} units, ${formatSgd(topProduct.revenue)})`);
         nextSteps.push('Check inventory before promoting top products.');
     } else if (intent === 'refunds') {
         const count = safeNumber(scope === 'admin' ? metrics.totalRefunds : metrics.refundCount);
         answer = `For ${period}, there are ${count} refund case${count === 1 ? '' : 's'}. Gross refunds are ${formatSgd(metrics.grossRefundAmount)} and net customer refunds are ${formatSgd(metrics.netRefundAmount)}.`;
+        if (count <= 0) nextSteps.push('No refund activity is a positive signal, but confirm with the refund history page.');
         addEvidence('Refund cases', count);
         addEvidence('Gross refunds', formatSgd(metrics.grossRefundAmount));
         addEvidence('Net customer refunds', formatSgd(metrics.netRefundAmount));
@@ -402,6 +485,7 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
         answer = metrics.averageCustomerRating == null
             ? `For ${period}, rating data is not available in the current analytics summary.`
             : `For ${period}, the average customer rating is ${Number(metrics.averageCustomerRating).toFixed(1)} out of 5 from ${safeNumber(metrics.totalReviews)} review${safeNumber(metrics.totalReviews) === 1 ? '' : 's'}.`;
+        if (metrics.averageCustomerRating == null) addEmptyDataGuidance('Rating');
         addEvidence('Average rating', metrics.averageCustomerRating == null ? 'Not available' : `${Number(metrics.averageCustomerRating).toFixed(1)} / 5`);
         addEvidence('Low-rated reviews', safeNumber(metrics.lowRatedReviews));
         nextSteps.push('Follow up on low-rated reviews before making broad conclusions.');
@@ -410,6 +494,7 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
         answer = concerns.length
             ? `${concerns.length} low-stock item${concerns.length === 1 ? '' : 's'} are visible in the current analytics summary. The lowest item is ${concerns[0].productName} with ${safeNumber(concerns[0].stockQuantity)} left.`
             : `No low-stock inventory concerns are available in the current analytics summary.`;
+        if (!concerns.length) nextSteps.push('No low-stock items are flagged in the analytics summary.');
         concerns.slice(0, 5).forEach((row) => addEvidence(row.productName || 'Product', `${safeNumber(row.stockQuantity)} left`));
         nextSteps.push('Restock before running product or Spin rewards campaigns.');
     } else if (intent === 'payments') {
@@ -418,12 +503,14 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
         answer = top
             ? `For ${period}, the leading payment method is ${top.method}, with ${formatSgd(top.amount)} across ${safeNumber(top.count)} transaction${safeNumber(top.count) === 1 ? '' : 's'}.`
             : `For ${period}, payment method data is not available in the current analytics summary.`;
+        if (!top) addEmptyDataGuidance('Payment method');
         rows.slice(0, 5).forEach((row) => addEvidence(row.method || 'Payment method', `${formatSgd(row.amount)} from ${safeNumber(row.count)} transaction(s)`));
         nextSteps.push('Use payment mix together with refund and sales data.');
     } else if (intent === 'customers') {
         answer = scope === 'admin'
             ? `For ${period}, active customers are ${safeNumber(metrics.activeCustomers)} and new customers are ${safeNumber(metrics.newCustomers)}.`
             : `For ${period}, new customer signals are ${safeNumber(metrics.newCustomers)}. Repeat customer data is ${metrics.repeatCustomers == null ? 'not available' : safeNumber(metrics.repeatCustomers)} in the current analytics summary.`;
+        if (scope === 'admin' && safeNumber(metrics.activeCustomers) <= 0 && safeNumber(metrics.newCustomers) <= 0) addEmptyDataGuidance('Customer');
         addEvidence('New customers', safeNumber(metrics.newCustomers));
         if (scope === 'admin') addEvidence('Active customers', safeNumber(metrics.activeCustomers));
         if (scope !== 'admin') addEvidence('Repeat customers', metrics.repeatCustomers == null ? 'Not available' : safeNumber(metrics.repeatCustomers));
@@ -437,6 +524,18 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
         addEvidence('Pending approvals', safeNumber(metrics.pendingMerchantApprovals));
         if (topMerchant?.merchantName) addEvidence('Top merchant by paid sales', `${topMerchant.merchantName} (${formatSgd(topMerchant.revenue)})`);
         nextSteps.push('Use approval, rating, refund and paid-sales signals together for admin review.');
+    } else if (intent === 'support') {
+        answer = `For ${period}, support tickets total ${safeNumber(metrics.supportTicketCount)} and unresolved support cases are ${safeNumber(metrics.unresolvedSupportCases)}.`;
+        addEvidence('Support tickets', safeNumber(metrics.supportTicketCount));
+        addEvidence('Unresolved cases', safeNumber(metrics.unresolvedSupportCases));
+        nextSteps.push('Review unresolved cases before making platform-level decisions.');
+    } else if (intent === 'payout') {
+        const retainedBeforeFees = roundMoney(safeNumber(metrics.totalRevenue) - safeNumber(metrics.netRefundAmount));
+        answer = `For ${period}, estimated retained sales after net customer refunds are ${formatSgd(retainedBeforeFees)}. This is not final payout because commission, settlement timing and provider fees may still apply.`;
+        addEvidence('Total tracked sales', formatSgd(metrics.totalRevenue));
+        addEvidence('Net customer refunds', formatSgd(metrics.netRefundAmount));
+        addEvidence('Estimated retained sales', formatSgd(retainedBeforeFees));
+        nextSteps.push('Use wallet/payout records for final settlement confirmation.');
     } else {
         const labels = {
             loyalty: 'loyalty',
@@ -452,10 +551,10 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
     return {
         fallback: true,
         answer,
-        supportingEvidence: evidence.slice(0, 5),
-        suggestedNextSteps: nextSteps.slice(0, 4),
-        recommendedAdminActions: scope === 'admin' ? nextSteps.slice(0, 4) : undefined,
-        limitations
+        supportingEvidence: evidence.slice(0, 3),
+        suggestedNextSteps: nextSteps.slice(0, 2),
+        recommendedAdminActions: scope === 'admin' ? nextSteps.slice(0, 2) : undefined,
+        limitations: limitations.slice(0, 2)
     };
 }
 
