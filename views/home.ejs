@@ -243,54 +243,20 @@
     </section>
 <% } %>
 
-<section class="home-search-band" aria-label="Search Vaniday">
-    <div>
-        <p class="eyebrow">Find your appointment</p>
-        <h2>Search services, merchants, location, or price.</h2>
-    </div>
-    <form class="home-search-form" action="/services" method="GET">
-        <label>
-            <span>Service or merchant</span>
-            <input type="search" name="search" value="<%= serviceSearch %>" placeholder="Facial, spa, Orchard...">
-        </label>
-        <label>
-            <span>Category</span>
-            <select name="category">
-                <option value="">Any category</option>
-                <option value="facial">Facial</option>
-                <option value="hair">Hair</option>
-                <option value="spa">Spa</option>
-                <option value="nails">Nails</option>
-                <option value="grooming">Grooming</option>
-            </select>
-        </label>
-        <label>
-            <span>Max price</span>
-            <select name="maxPrice">
-                <option value="">Any price</option>
-                <option value="50">Under $50</option>
-                <option value="80">Under $80</option>
-                <option value="120">Under $120</option>
-            </select>
-        </label>
-        <button class="button primary" type="submit">Search</button>
-    </form>
-</section>
-
 <section class="home-section home-quick-links" aria-label="Browse Vaniday">
-    <a href="/services">
+    <a class="home-link-services" href="/services">
         <span>Services</span>
         <strong>Book appointments</strong>
     </a>
-    <a href="/merchants">
+    <a class="home-link-merchants" href="/merchants">
         <span>Merchants</span>
         <strong>Find salons</strong>
     </a>
-    <a href="/promotions">
+    <a class="home-link-promotions" href="/promotions">
         <span>Promotions</span>
         <strong>Use offers</strong>
     </a>
-    <a href="/routine-finder">
+    <a class="home-link-routine" href="/routine-finder">
         <span>Routine Finder</span>
         <strong>Get matches</strong>
     </a>
