@@ -1,7 +1,6 @@
-const Groq = require('groq-sdk');
-
 const DEFAULT_MODEL = process.env.PROFILE_AI_MODEL || process.env.GROQ_PROFILE_MODEL || 'llama-3.1-8b-instant';
 const MAX_SUMMARY_LENGTH = 420;
+let GroqClient;
 
 function cleanAiText(value) {
     return String(value || '')
@@ -55,10 +54,29 @@ function getOutputText(response) {
     return '{}';
 }
 
+function getGroqClient() {
+    if (GroqClient !== undefined) {
+        return GroqClient;
+    }
+
+    try {
+        GroqClient = require('groq-sdk');
+    } catch (error) {
+        if (error.code !== 'MODULE_NOT_FOUND') {
+            throw error;
+        }
+
+        GroqClient = null;
+    }
+
+    return GroqClient;
+}
+
 async function requestAiSummary(metrics) {
     const apiKey = process.env.GROQ_API_KEY;
+    const Groq = getGroqClient();
 
-    if (!apiKey) {
+    if (!apiKey || !Groq) {
         return null;
     }
 
