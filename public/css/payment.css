@@ -1207,3 +1207,344 @@
         font-size: 1rem;
     }
 }
+
+/* Checkout readability pass: keeps checkout readable instead of cramming panels into narrow columns. */
+body:has(.payment-page):not(.flappy-page) main,
+body:has(.payment-page):not(.flappy-page) .site-header,
+body:has(.payment-page):not(.flappy-page) .site-footer {
+    width: min(1440px, calc(100% - 32px)) !important;
+    max-width: none !important;
+}
+
+body:has(.payment-page):not(.flappy-page) main {
+    overflow: visible !important;
+}
+
+body:not(.flappy-page) .page-container > .payment-title {
+    width: min(100% - 32px, 1180px) !important;
+    min-height: 220px !important;
+    margin: 0 auto !important;
+    padding: 72px clamp(28px, 5vw, 72px) 40px !important;
+    display: grid !important;
+    align-content: center !important;
+}
+
+.payment-page {
+    width: min(100% - 32px, 1180px) !important;
+    max-width: none !important;
+    margin: 0 auto 42px !important;
+    margin-top: 0 !important;
+    padding: 22px !important;
+    border-radius: 14px !important;
+}
+
+.payment-page .payment-layout,
+.payment-page .checkout-layout {
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    gap: 20px !important;
+    align-items: start !important;
+}
+
+.payment-form {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    padding: 18px !important;
+    border-radius: 12px !important;
+    min-width: 0 !important;
+}
+
+.payment-form > input[type="hidden"] {
+    display: none !important;
+}
+
+.payment-form > .notice,
+.payment-form > .checkout-progress,
+.payment-form > .payment-form-header,
+.payment-form > .payment-method-card-wrap,
+.payment-form > .payment-submit-wrap,
+.payment-form > #paypal-message,
+.payment-form > #paypal-button-container {
+    grid-column: 1 / -1 !important;
+}
+
+.payment-form > .payment-fulfilment-section,
+.payment-form > .payment-rewards-card {
+    grid-column: 1 / -1 !important;
+}
+
+.checkout-progress {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.checkout-progress-pill {
+    min-height: 38px !important;
+    padding: 8px 12px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.8rem !important;
+}
+
+.payment-form-header {
+    min-height: 90px !important;
+    padding: 16px 18px !important;
+    border-radius: 10px !important;
+}
+
+.payment-form-header h2 {
+    font-size: clamp(1.8rem, 2.4vw, 2.3rem) !important;
+}
+
+.payment-form-header .muted {
+    max-width: 72ch !important;
+    overflow-wrap: anywhere !important;
+}
+
+.payment-form > .checkout-card {
+    padding: 0 !important;
+    overflow: hidden !important;
+    border-radius: 10px !important;
+}
+
+.payment-form > .checkout-card > :not(.checkout-card-header) {
+    margin: 0 14px 14px !important;
+}
+
+.payment-form > .checkout-card > .checkout-card-header {
+    padding: 13px 14px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--checkout-border) !important;
+    border-radius: 0 !important;
+}
+
+.payment-form > .checkout-card > .checkout-card-header h3 {
+    font-size: 0.98rem !important;
+}
+
+.payment-form > .checkout-card > .checkout-card-header p {
+    max-width: 72ch !important;
+}
+
+.payment-fulfilment-combined {
+    grid-template-columns: 210px minmax(0, 1fr) !important;
+    gap: 14px !important;
+}
+
+.payment-fulfilment-options .fulfilment-choice {
+    min-height: 62px !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+}
+
+.payment-fulfilment-details {
+    padding-left: 14px !important;
+}
+
+.payment-delivery-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.payment-pickup-merchant-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.payment-pickup-merchant-card {
+    border-radius: 8px !important;
+}
+
+.payment-pickup-merchant-card p {
+    overflow-wrap: anywhere !important;
+}
+
+.payment-rewards-card .cart-totals,
+.payment-summary-card .cart-totals {
+    gap: 7px !important;
+}
+
+.payment-rewards-card .cart-totals {
+    padding: 10px 12px !important;
+    border: 1px solid var(--checkout-border) !important;
+    border-radius: 10px !important;
+    min-height: 0 !important;
+}
+
+.payment-rewards-card .cart-totals p,
+.payment-summary-card .cart-totals p {
+    align-items: baseline !important;
+}
+
+.payment-method-card-wrap {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+}
+
+.payment-methods {
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+.payment-method-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+    gap: 12px !important;
+}
+
+.payment-method-card {
+    min-height: 112px !important;
+    padding: 16px !important;
+    gap: 14px !important;
+    border-radius: 10px !important;
+}
+
+.payment-method-card-wallet {
+    grid-column: auto !important;
+}
+
+.payment-method-main {
+    display: grid !important;
+    grid-template-columns: 116px minmax(0, 1fr) !important;
+    gap: 14px !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.payment-method-brand {
+    width: 116px !important;
+    min-width: 116px !important;
+    height: 42px !important;
+    padding: 0 10px !important;
+    border-radius: 8px !important;
+    font-size: 0.78rem !important;
+}
+
+.payment-method-copy strong {
+    font-size: 0.96rem !important;
+}
+
+.payment-method-copy small {
+    font-size: 0.82rem !important;
+    line-height: 1.35 !important;
+    max-width: 24ch !important;
+}
+
+.payment-method-notes {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+.payment-submit-wrap {
+    padding: 14px !important;
+    border-radius: 14px !important;
+}
+
+.payment-form > .payment-submit-wrap #payment-submit-button {
+    min-height: 54px !important;
+    border-radius: 12px !important;
+}
+
+.payment-submit-assurance {
+    max-width: 70ch !important;
+    margin: 10px auto 0 !important;
+}
+
+.payment-summary-card {
+    width: 100% !important;
+    top: 94px !important;
+    padding: 16px !important;
+    gap: 12px !important;
+    border-radius: 12px !important;
+}
+
+.payment-summary-card h2 {
+    font-size: 1.18rem !important;
+}
+
+.payment-summary-card > .muted {
+    margin: 0 !important;
+    overflow-wrap: anywhere !important;
+}
+
+.payment-detail-list,
+.payment-summary-card .cart-totals {
+    border-radius: 10px !important;
+}
+
+@media (max-width: 1180px) {
+    body:has(.payment-page):not(.flappy-page) main,
+    body:has(.payment-page):not(.flappy-page) .site-header,
+    body:has(.payment-page):not(.flappy-page) .site-footer {
+        width: min(100% - 20px, 1180px) !important;
+    }
+
+    .payment-page {
+        width: min(100% - 24px, 980px) !important;
+    }
+
+    .payment-page .payment-layout,
+    .payment-page .checkout-layout {
+        grid-template-columns: 1fr !important;
+    }
+
+    .payment-summary-card {
+        position: static !important;
+    }
+}
+
+@media (max-width: 760px) {
+    body:not(.flappy-page) .page-container > .payment-title {
+        width: min(100% - 20px, 680px) !important;
+        min-height: 190px !important;
+        padding: 42px 20px 30px !important;
+    }
+
+    .payment-page {
+        width: min(100% - 16px, 680px) !important;
+        padding: 12px !important;
+    }
+
+    .payment-form {
+        padding: 12px !important;
+    }
+
+    .payment-method-grid,
+    .payment-method-notes,
+    .payment-delivery-panel {
+        grid-template-columns: 1fr !important;
+    }
+
+    .payment-method-card {
+        min-height: 92px !important;
+    }
+
+    .payment-method-main {
+        grid-template-columns: 104px minmax(0, 1fr) !important;
+    }
+
+    .payment-method-brand {
+        width: 104px !important;
+        min-width: 104px !important;
+    }
+
+    .payment-method-card-wallet {
+        grid-column: auto !important;
+    }
+
+    .payment-fulfilment-combined {
+        grid-template-columns: 1fr !important;
+    }
+
+    .payment-fulfilment-details {
+        padding-left: 0 !important;
+        padding-top: 12px !important;
+        border-left: 0 !important;
+        border-top: 1px solid var(--checkout-border) !important;
+    }
+}

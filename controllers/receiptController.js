@@ -44,6 +44,38 @@ function getTokenSecret() {
         || 'vaniday_secret_key';
 }
 
+function sanitizeReceiptPdfFilename(receiptId) {
+    const safeId = String(receiptId || 'receipt')
+        .trim()
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'receipt';
+
+    return `receipt-${safeId}.pdf`;
+}
+
+function toPdfBuffer(pdf) {
+    if (Buffer.isBuffer(pdf)) {
+        return pdf;
+    }
+
+    if (pdf instanceof ArrayBuffer) {
+        return Buffer.from(pdf);
+    }
+
+    if (ArrayBuffer.isView(pdf)) {
+        return Buffer.from(pdf.buffer, pdf.byteOffset, pdf.byteLength);
+    }
+
+    throw new Error('PDF generator returned an unsupported response type.');
+}
+
+function assertPdfBuffer(pdfBuffer) {
+    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length < 5 || pdfBuffer.slice(0, 5).toString('ascii') !== '%PDF-') {
+        throw new Error('Generated receipt file is not a valid PDF.');
+    }
+}
+
 function signCheckinToken(receipt) {
     const isPickup = receipt.type !== 'booking';
 
@@ -1120,9 +1152,22 @@ async function downloadReceiptPdf(req, res) {
             pdf = await buildFallbackPdf(data);
         }
 
+        let pdfBuffer = toPdfBuffer(pdf);
+
+        try {
+            assertPdfBuffer(pdfBuffer);
+        } catch (invalidPdfError) {
+            console.error(invalidPdfError);
+            pdfBuffer = toPdfBuffer(await buildFallbackPdf(data));
+            assertPdfBuffer(pdfBuffer);
+        }
+
+        const filename = sanitizeReceiptPdfFilename(data.receipt.displayReference || data.receipt.orderNumber || data.receipt.order_number || data.receipt.id);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="receipt-${data.receipt.id}.pdf"`);
-        return res.send(pdf);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', String(pdfBuffer.length));
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.end(pdfBuffer);
     } catch (error) {
         console.error(error);
         return res.status(500).render('error', {

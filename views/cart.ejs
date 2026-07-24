@@ -34,10 +34,21 @@
             <div class="cart-list cart-main-panel">
                 <header class="cart-toolbar cart-control-bar">
                     <div class="cart-toolbar-left">
-                        <label class="cart-select-all">
-                            <input type="checkbox" id="select-all" checked>
-                            <span>Select all items</span>
-                        </label>
+                        <div class="cart-bulk-actions">
+                            <label class="cart-select-all">
+                                <input type="checkbox" id="select-all" checked>
+                                <span>Select all items</span>
+                            </label>
+                            <button
+                                class="button secondary compact cart-clear-selected-button"
+                                type="submit"
+                                form="cart-checkout-form"
+                                formaction="/cart/delete-selected"
+                                formmethod="POST"
+                                data-cart-clear-selected>
+                                Clear selected
+                            </button>
+                        </div>
                         <p class="muted">Toggle the items you want to checkout now.</p>
                     </div>
                     <div class="cart-toolbar-counts">
@@ -369,9 +380,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (checkoutForm) {
         checkoutForm.addEventListener('submit', function (event) {
+            const submitter = event.submitter || document.activeElement;
+            const isDeleteSelected = Boolean(submitter && submitter.matches('[data-cart-clear-selected]'));
+
             if (getSelectedChecks().length === 0) {
                 event.preventDefault();
-                alert('Please select at least one item to checkout.');
+                alert(isDeleteSelected ? 'Please select at least one item to clear.' : 'Please select at least one item to checkout.');
+                return;
+            }
+
+            if (isDeleteSelected) {
+                const selectedCount = getSelectedChecks().length;
+                if (!confirm('Clear ' + selectedCount + ' selected item' + (selectedCount === 1 ? '' : 's') + ' from your cart?')) {
+                    event.preventDefault();
+                }
                 return;
             }
 
