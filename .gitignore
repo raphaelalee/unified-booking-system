@@ -16,3 +16,5 @@ server.out.log
 .wwebjs_auth/
 .wwebjs_cache/
 package-lock.json
+.env.backup-20260724-135112
+.env.backup-20260724-135223

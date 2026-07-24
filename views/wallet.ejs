@@ -1,180 +1,183 @@
 <%- include('partials/header', { title }) %>
 
-<section class="page-title">
-    <p class="eyebrow">Rewards wallet</p>
-    <h1>Your loyalty balance.</h1>
-    <p>Track points, point-to-cashback conversions, merchant campaign cashback, and wallet cashback used at checkout.</p>
-</section>
+<%
+    const safeReceipts = typeof receipts !== 'undefined' && Array.isArray(receipts) ? receipts : [];
+    const safeTransactions = typeof transactions !== 'undefined' && Array.isArray(transactions) ? transactions : [];
+    const csrf = typeof csrfToken !== 'undefined' ? csrfToken : '';
+    const pointsBalance = Number(wallet.pointsBalance || 0);
+    const cashbackBalance = Number(wallet.cashbackBalance || 0);
+    const lifetimePoints = Number(wallet.lifetimePoints || 0);
+    const minimumRedeem = Number(rules.minPointsToRedeem || 0);
+    const pointsToCashRate = Number(rules.pointsToCashRate || 0.01);
+    const pointsPerDollar = Number(rules.pointsPerDollar || 0);
+    const pointsPerCashDollar = Math.round(1 / pointsToCashRate);
+    const redeemAvailable = pointsBalance >= minimumRedeem && rules.isEnabled;
+    const defaultRedeemPoints = redeemAvailable ? minimumRedeem : 0;
+%>
 
-<section class="section compact loyalty-page">
+<section class="wallet-standalone-page">
+    <header class="wallet-hero">
+        <div>
+            <p class="eyebrow">Rewards wallet</p>
+            <h1>Your loyalty balance</h1>
+            <p>Track points, cashback, receipts, and reward activity from one place.</p>
+        </div>
+        <a class="button secondary" href="/reward-shop">Reward shop</a>
+    </header>
+
     <% if (success) { %>
         <div class="notice success"><%= success %></div>
     <% } %>
     <% if (error) { %>
         <div class="notice error"><%= error %></div>
     <% } %>
+
     <% if (birthdayPromotion && birthdayPromotion.hasBirthday) { %>
-        <div class="notice birthday-celebration-card <%= birthdayPromotion.isBirthdayMonth ? 'success is-active' : '' %>">
-            <% if (birthdayPromotion.isBirthdayMonth) { %>
-                <div class="birthday-balloons" aria-hidden="true">
-                    <span class="birthday-balloon balloon-peach"></span>
-                    <span class="birthday-balloon balloon-rose"></span>
-                    <span class="birthday-balloon balloon-gold"></span>
-                    <span class="birthday-balloon balloon-sky"></span>
-                    <span class="birthday-balloon balloon-mint"></span>
-                </div>
-            <% } %>
-            <% if (birthdayPromotion.isBirthdayMonth) { %>
-                <p>
-                    Birthday month perks are active for <strong><%= birthdayPromotion.monthName %></strong>.
-                    Eligible booking payments earn <strong>2X points</strong>.
-                    <% if (birthdayPromotion.voucher) { %>
-                        Your birthday voucher is ready until <strong><%= birthdayPromotion.monthEndLabel %></strong>.
-                    <% } %>
-                </p>
-            <% } else { %>
-                <p>Your birthday rewards will appear automatically during your birthday month.</p>
-            <% } %>
+        <div class="wallet-birthday-card <%= birthdayPromotion.isBirthdayMonth ? 'is-active' : '' %>">
+            <div>
+                <p class="eyebrow">Birthday rewards</p>
+                <% if (birthdayPromotion.isBirthdayMonth) { %>
+                    <h2>Birthday perks are active</h2>
+                    <p>
+                        Payments in <%= birthdayPromotion.monthName %> earn <strong>2X points</strong>.
+                        <% if (birthdayPromotion.voucher) { %>
+                            Your birthday voucher is ready until <strong><%= birthdayPromotion.monthEndLabel %></strong>.
+                        <% } %>
+                    </p>
+                <% } else { %>
+                    <h2>Birthday perks unlock in your birthday month</h2>
+                    <p>Your birthday rewards will appear here automatically when they are available.</p>
+                <% } %>
+            </div>
         </div>
     <% } %>
 
-    <div class="loyalty-grid">
-        <article class="account-panel loyalty-balance-card">
-            <p class="eyebrow">Wallet</p>
-            <div class="loyalty-balance">
-                <div>
-                    <span>Points</span>
-                    <strong><%= wallet.pointsBalance %></strong>
-                </div>
-                <div>
-                    <span>Cashback</span>
-                    <strong>$<%= Number(wallet.cashbackBalance || 0).toFixed(2) %></strong>
-                </div>
-                <div>
-                    <span>Lifetime points</span>
-                    <strong><%= wallet.lifetimePoints %></strong>
-                </div>
-            </div>
+    <section class="wallet-overview-grid" aria-label="Wallet balances">
+        <article class="wallet-balance-card wallet-balance-card-primary">
+            <span>Points available</span>
+            <strong><%= pointsBalance %></strong>
+            <small><%= redeemAvailable ? `${pointsBalance - minimumRedeem} pts left after minimum redeem` : `${Math.max(minimumRedeem - pointsBalance, 0)} pts until redemption` %></small>
         </article>
+        <article class="wallet-balance-card">
+            <span>Cashback</span>
+            <strong>$<%= cashbackBalance.toFixed(2) %></strong>
+            <small>Use at checkout when cashback is available.</small>
+        </article>
+        <article class="wallet-balance-card">
+            <span>Lifetime points</span>
+            <strong><%= lifetimePoints %></strong>
+            <small>Total points earned across paid activity.</small>
+        </article>
+    </section>
 
-        <form class="account-panel loyalty-redeem-card" action="/customer/wallet/redeem" method="POST">
-            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+    <section class="wallet-content-grid">
+        <form class="wallet-redeem-card" action="/customer/wallet/redeem" method="POST">
+            <input type="hidden" name="_csrf" value="<%= csrf %>">
             <div>
                 <p class="eyebrow">Redeem</p>
-                <h2>Convert points to cashback</h2>
-                <p class="muted">
-                    Minimum <%= rules.minPointsToRedeem %> points.
-                    <%= Math.round(1 / Number(rules.pointsToCashRate || 0.01)) %> points = $1.00 cashback.
-                </p>
+                <h3>Convert points to cashback</h3>
+                <p class="muted">Minimum <%= minimumRedeem %> points. <%= pointsPerCashDollar %> points = $1.00 cashback.</p>
             </div>
             <label>
                 Points to redeem
-                <input type="number" name="points" min="<%= rules.minPointsToRedeem %>" step="1" max="<%= wallet.pointsBalance %>" value="<%= wallet.pointsBalance >= rules.minPointsToRedeem ? rules.minPointsToRedeem : 0 %>" <%= wallet.pointsBalance < rules.minPointsToRedeem ? 'disabled' : '' %>>
+                <input type="number" name="points" min="<%= minimumRedeem %>" step="1" max="<%= pointsBalance %>" value="<%= defaultRedeemPoints %>" <%= redeemAvailable ? '' : 'disabled' %>>
             </label>
-            <button class="button primary" type="submit" <%= wallet.pointsBalance < rules.minPointsToRedeem ? 'disabled' : '' %>>Redeem rewards</button>
+            <button class="button primary" type="submit" <%= redeemAvailable ? '' : 'disabled' %>>Convert points</button>
+            <% if (!redeemAvailable) { %>
+                <p class="wallet-inline-status"><%= rules.isEnabled ? 'You need more points before converting.' : 'Point conversion is currently paused.' %></p>
+            <% } %>
         </form>
-    </div>
 
-    <div class="account-panel loyalty-rules-panel">
-        <div class="account-panel-header">
+        <article class="wallet-receipt-card">
+            <div class="wallet-section-heading">
+                <div>
+                    <p class="eyebrow">Receipts</p>
+                    <h3>Recent linked receipts</h3>
+                </div>
+                <span><%= safeReceipts.length %> paid</span>
+            </div>
+
+            <% if (!safeReceipts.length) { %>
+                <p class="wallet-empty-state">No paid receipts are linked to this wallet yet.</p>
+            <% } else { %>
+                <div class="wallet-receipt-list">
+                    <% safeReceipts.slice(0, 6).forEach((receipt) => {
+                        const receiptLabel = receipt.order_number || receipt.orderNumber || (`#${receipt.id}`);
+                        const receiptHref = receipt.receiptId ? `/receipt/${encodeURIComponent(receipt.receiptId)}` : '#';
+                    %>
+                        <a class="wallet-receipt-row" href="<%= receiptHref %>">
+                            <span>
+                                <strong><%= receiptLabel %></strong>
+                                <small><%= receipt.itemNames || 'Receipt items' %></small>
+                            </span>
+                            <span>
+                                <strong>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></strong>
+                                <small><%= receipt.createdAt ? new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) : 'No date' %></small>
+                            </span>
+                        </a>
+                    <% }) %>
+                </div>
+            <% } %>
+        </article>
+    </section>
+
+    <section class="wallet-rules-panel">
+        <div class="wallet-section-heading">
             <div>
                 <p class="eyebrow">Rules</p>
-            <h2>How wallet activity is separated</h2>
+                <h3>How rewards are calculated</h3>
             </div>
             <a class="button secondary" href="/services">Book services</a>
         </div>
-        <div class="loyalty-rule-strip">
-            <p><span>Receipt points</span><strong><%= rules.pointsPerDollar %> / $1</strong></p>
-            <p><span>Minimum redeem</span><strong><%= rules.minPointsToRedeem %> pts</strong></p>
-            <p><span>Points value</span><strong>$<%= Number(rules.pointsToCashRate || 0).toFixed(4) %> / pt</strong></p>
-            <p><span>Max booking discount</span><strong><%= Number(rules.maxDiscountPercent || 0) %>%</strong></p>
-            <p><span>Points expire</span><strong><%= Number(rules.pointsExpiryDays || 0) %> days</strong></p>
-            <p><span>Status</span><strong><%= rules.isEnabled ? 'Active' : 'Paused' %></strong></p>
+        <div class="wallet-rules-grid">
+            <div><span>Receipt points</span><strong><%= pointsPerDollar %> / $1</strong></div>
+            <div><span>Minimum redeem</span><strong><%= minimumRedeem %> pts</strong></div>
+            <div><span>Points value</span><strong>$<%= pointsToCashRate.toFixed(4) %> / pt</strong></div>
+            <div><span>Max booking discount</span><strong><%= Number(rules.maxDiscountPercent || 0) %>%</strong></div>
+            <div><span>Points expire</span><strong><%= Number(rules.pointsExpiryDays || 0) %> days</strong></div>
+            <div><span>Status</span><strong><%= rules.isEnabled ? 'Active' : 'Paused' %></strong></div>
         </div>
-    </div>
+    </section>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">Receipts</p>
-        <h2>Recent linked receipts</h2>
-    </div>
-
-    <% const safeReceipts = typeof receipts !== 'undefined' && Array.isArray(receipts) ? receipts : []; %>
-    <% if (!safeReceipts.length) { %>
-        <div class="notice">No paid receipts linked to this wallet yet</div>
-    <% } else { %>
-        <div class="admin-table-wrap">
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Receipt ID</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Date</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% safeReceipts.slice(0, 8).forEach((receipt) => { %>
-                        <tr>
-                            <td><%= receipt.order_number || receipt.orderNumber || ('#' + receipt.id) %></td>
-                            <td><%= receipt.itemNames %></td>
-                            <td>$<%= Number(receipt.totalAmount || 0).toFixed(2) %></td>
-                            <td><%= new Date(receipt.createdAt).toLocaleDateString('en-SG', { dateStyle: 'medium' }) %></td>
-                            <td><a class="button secondary compact" href="/receipt/<%= encodeURIComponent(receipt.receiptId) %>">Open receipt</a></td>
-                        </tr>
-                    <% }) %>
-                </tbody>
-            </table>
+    <section class="wallet-activity-panel">
+        <div class="wallet-section-heading">
+            <div>
+                <p class="eyebrow">History</p>
+                <h3>Wallet transactions</h3>
+            </div>
+            <span><%= safeTransactions.length %> entries</span>
         </div>
-    <% } %>
 
-    <div class="section-heading profile-heading">
-        <p class="eyebrow">History</p>
-        <h2>Wallet transactions</h2>
-    </div>
-
-    <% if (!transactions.length) { %>
-        <div class="notice">No wallet transactions yet</div>
-    <% } else { %>
-        <div class="admin-table-wrap">
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Reference</th>
-                        <th>Merchant</th>
-                        <th>Expiry</th>
-                        <th>Points</th>
-                        <th>Cashback</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% transactions.forEach((entry) => { %>
-                        <tr>
-                            <td><%= entry.displayDateTime || '-' %></td>
-                            <td><span class="sync-pill"><%= entry.displayTitle %></span></td>
-                            <td>
-                                <% if (entry.displayLines && entry.displayLines.length) { %>
-                                    <% entry.displayLines.forEach((line) => { %>
-                                        <div><%= line %></div>
-                                    <% }) %>
-                                <% } else { %>
-                                    -
-                                <% } %>
-                            </td>
-                            <td><%= entry.displayOrderReference || '-' %></td>
-                            <td><%= entry.displayMerchantName || '-' %></td>
-                            <td><%= entry.displayExpiryDate || '-' %></td>
-                            <td><%= entry.displayPointsDelta || '-' %></td>
-                            <td><%= entry.displayCashbackDelta || '-' %></td>
-                        </tr>
-                    <% }) %>
-                </tbody>
-            </table>
-        </div>
-    <% } %>
+        <% if (!safeTransactions.length) { %>
+            <p class="wallet-empty-state">No wallet transactions yet.</p>
+        <% } else { %>
+            <div class="wallet-activity-list">
+                <% safeTransactions.forEach((entry) => {
+                    const pointsDelta = String(entry.displayPointsDelta || '');
+                    const cashbackDelta = String(entry.displayCashbackDelta || '');
+                    const pointsTone = pointsDelta.startsWith('-') ? 'negative' : pointsDelta && pointsDelta !== '-' ? 'positive' : '';
+                    const cashbackTone = cashbackDelta.startsWith('-') ? 'negative' : cashbackDelta && cashbackDelta !== '-' ? 'positive' : '';
+                %>
+                    <article class="wallet-activity-row">
+                        <div>
+                            <span class="wallet-activity-date"><%= entry.displayDateTime || '-' %></span>
+                            <strong><%= entry.displayTitle || 'Wallet activity' %></strong>
+                            <% if (entry.displayLines && entry.displayLines.length) { %>
+                                <% entry.displayLines.slice(0, 2).forEach((line) => { %>
+                                    <small><%= line %></small>
+                                <% }) %>
+                            <% } %>
+                            <small><%= entry.displayMerchantName || entry.displayOrderReference || 'Vaniday' %></small>
+                        </div>
+                        <div class="wallet-activity-values">
+                            <span class="<%= pointsTone %>"><%= pointsDelta || '-' %></span>
+                            <span class="<%= cashbackTone %>"><%= cashbackDelta || '-' %></span>
+                        </div>
+                    </article>
+                <% }) %>
+            </div>
+        <% } %>
+    </section>
 </section>
 
 <%- include('partials/footer') %>

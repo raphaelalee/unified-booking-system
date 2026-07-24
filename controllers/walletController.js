@@ -14,7 +14,20 @@ const TOPUP_2FA_TTL_MS = 5 * 60 * 1000;
 const MAX_TOPUP_AMOUNT = 1000;
 
 function getPublicBaseUrl(req) {
-    return String(process.env.BASE_URL || process.env.APP_URL || `http://${req.get('host') || 'localhost'}`).replace(/\/$/, '');
+    const explicitWalletBase = String(process.env.WALLET_PUBLIC_BASE_URL || '').trim();
+    if (explicitWalletBase) {
+        return explicitWalletBase.replace(/\/$/, '');
+    }
+
+    const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+    const host = req.get('host') || 'localhost:3000';
+    let protocol = forwardedProto || req.protocol || 'http';
+
+    if (protocol === 'http' && /(?:ngrok-free\.app|ngrok\.io|trycloudflare\.com)$/i.test(host.split(':')[0])) {
+        protocol = 'https';
+    }
+
+    return `${protocol}://${host}`.replace(/\/$/, '');
 }
 
 function setWalletSuccess(req, message) {
@@ -40,6 +53,154 @@ function formatAmount(value) {
 
 function cents(value) {
     return Math.round(Number(value || 0) * 100);
+}
+
+function isStripePaymentConfirmed(session) {
+    const paymentIntent = session?.payment_intent;
+    const paymentStatus = String(session?.payment_status || '').toLowerCase();
+    const intentStatus = typeof paymentIntent === 'string' ? '' : String(paymentIntent?.status || '').toLowerCase();
+
+    return paymentStatus === 'paid' && (!intentStatus || intentStatus === 'succeeded');
+}
+
+function getStripeMetadata(session = {}) {
+    return {
+        transactionId: Number(session.metadata?.walletTransactionId || 0),
+        userId: Number(session.metadata?.userId || 0)
+    };
+}
+
+function assertStripeTopupMatches(session, transaction, userId) {
+    const metadata = getStripeMetadata(session);
+
+    if (metadata.transactionId && metadata.transactionId !== Number(transaction.transactionId)) {
+        throw new Error('Stripe wallet top-up transaction mismatch.');
+    }
+
+    if (metadata.userId && metadata.userId !== Number(userId)) {
+        throw new Error('Stripe wallet top-up customer mismatch.');
+    }
+
+    const expectedAmount = cents(transaction.amount);
+    const paidAmount = Number(session.amount_total || 0);
+    const currency = String(session.currency || '').toLowerCase();
+
+    if (paidAmount !== expectedAmount || currency !== 'sgd') {
+        throw new Error('Stripe wallet top-up amount mismatch.');
+    }
+}
+
+function getHitPayStatus(paymentRequest = {}) {
+    return String(paymentRequest.status || paymentRequest.payment_status || '').trim().toLowerCase();
+}
+
+function getHitPayAmount(paymentRequest = {}) {
+    const directAmount = Number(paymentRequest.amount ?? paymentRequest.amount_total ?? paymentRequest.total_amount);
+
+    if (Number.isFinite(directAmount) && directAmount > 0) {
+        return directAmount;
+    }
+
+    const centAmount = Number(paymentRequest.amount_cents ?? paymentRequest.total_amount_cents);
+    if (Number.isFinite(centAmount) && centAmount > 0) {
+        return centAmount / 100;
+    }
+
+    return null;
+}
+
+function assertHitPayTopupMatches(paymentRequest, transaction) {
+    const actualAmount = getHitPayAmount(paymentRequest);
+
+    if (actualAmount !== null && Math.abs(actualAmount - Number(transaction.amount || 0)) > 0.001) {
+        throw new Error('HitPay wallet top-up amount mismatch.');
+    }
+}
+
+async function completeVerifiedTopup(transaction, userId, providerReference, description) {
+    return new Promise((resolve, reject) => {
+        EWallet.completePendingTransaction(transaction.transactionId, userId, {
+            description,
+            providerReference: providerReference || transaction.referenceId || ''
+        }, (error, result) => error ? reject(error) : resolve(result));
+    });
+}
+
+async function verifyAndCompleteStripeTopup(transaction, userId, sessionId = '') {
+    const reference = String(sessionId || transaction.referenceId || '').trim();
+
+    if (!reference) {
+        throw new Error('Stripe wallet top-up reference is missing.');
+    }
+
+    const session = await stripe.retrieveCheckoutSession(reference);
+
+    if (!isStripePaymentConfirmed(session)) {
+        return { completed: false, status: String(session?.payment_status || 'pending') };
+    }
+
+    assertStripeTopupMatches(session, transaction, userId);
+
+    const paymentIntent = session.payment_intent;
+    const providerReference = typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id || reference);
+    const completed = await completeVerifiedTopup(transaction, userId, providerReference, 'Wallet top-up completed via Stripe');
+
+    return { completed: completed?.status === 'COMPLETED', transaction: completed };
+}
+
+async function verifyAndCompleteHitPayTopup(transaction, userId, requestId = '') {
+    const reference = String(requestId || transaction.referenceId || '').trim();
+
+    if (!reference) {
+        throw new Error('HitPay wallet top-up reference is missing.');
+    }
+
+    const paymentRequest = await hitpay.getPaymentRequest(reference);
+    const status = getHitPayStatus(paymentRequest);
+
+    if (status !== 'completed') {
+        return { completed: false, status };
+    }
+
+    assertHitPayTopupMatches(paymentRequest, transaction);
+
+    const completed = await completeVerifiedTopup(transaction, userId, reference, 'Wallet top-up completed via PayNow/HitPay');
+
+    return { completed: completed?.status === 'COMPLETED', transaction: completed };
+}
+
+async function reconcilePendingTopups(userId) {
+    const pendingTopups = await new Promise((resolve, reject) => {
+        EWallet.getPendingTopups(userId, (error, rows = []) => error ? reject(error) : resolve(rows));
+    });
+
+    let completedCount = 0;
+
+    for (const transaction of pendingTopups) {
+        const method = String(transaction.paymentMethod || '').toUpperCase();
+
+        try {
+            let result = null;
+
+            if (method === 'STRIPE') {
+                result = await verifyAndCompleteStripeTopup(transaction, userId);
+            } else if (method === 'PAYNOW') {
+                result = await verifyAndCompleteHitPayTopup(transaction, userId);
+            }
+
+            if (result?.completed) {
+                completedCount += 1;
+            }
+        } catch (error) {
+            console.error('Pending wallet top-up reconciliation failed:', {
+                transactionId: transaction.transactionId,
+                method,
+                message: error.message || error
+            });
+        }
+    }
+
+    return completedCount;
 }
 
 function getProviderLabel(method) {
@@ -484,6 +645,7 @@ async function showWallet(req, res) {
 
     try {
         const wallet = await ensureWallet(req);
+        await reconcilePendingTopups(req.session.user.id);
         const walletSummary = await new Promise((resolve, reject) => {
             EWallet.getWalletSummary(req.session.user.id, (error, result) => error ? reject(error) : resolve(result));
         });
@@ -665,7 +827,7 @@ async function verifyTopup2fa(req, res) {
 }
 
 async function handleWalletSuccess(req, res) {
-    const transactionId = Number(req.query.transactionId || req.query.txnRetrievalRef || 0);
+    let transactionId = Number(req.query.transactionId || req.query.txnRetrievalRef || 0);
     const sessionId = String(req.query.session_id || '').trim();
     let referenceId = String(req.query.providerReference || req.query.referenceId || '').trim();
     let userId = req.session.user?.id ? Number(req.session.user.id) : 0;
@@ -674,25 +836,22 @@ async function handleWalletSuccess(req, res) {
         let stripeSession = null;
         if (sessionId) {
             stripeSession = await stripe.retrieveCheckoutSession(sessionId);
-            const paymentIntent = stripeSession?.payment_intent;
-            const paymentStatus = String(stripeSession?.payment_status || '').toLowerCase();
-            const intentStatus = typeof paymentIntent === 'string' ? '' : String(paymentIntent?.status || '').toLowerCase();
-            const metadataTransactionId = Number(stripeSession?.metadata?.walletTransactionId || 0);
-            const metadataUserId = Number(stripeSession?.metadata?.userId || 0);
+            const metadata = getStripeMetadata(stripeSession);
 
-            if (paymentStatus !== 'paid' || intentStatus !== 'succeeded') {
+            if (!isStripePaymentConfirmed(stripeSession)) {
                 throw new Error('Stripe did not confirm a successful wallet top-up.');
             }
 
-            if (metadataTransactionId && transactionId && metadataTransactionId !== transactionId) {
+            if (metadata.transactionId && transactionId && metadata.transactionId !== transactionId) {
                 throw new Error('Stripe wallet top-up details do not match this transaction.');
             }
 
-            if (metadataUserId && userId && metadataUserId !== userId) {
+            if (metadata.userId && userId && metadata.userId !== userId) {
                 throw new Error('Stripe wallet top-up belongs to a different customer.');
             }
 
-            userId = userId || metadataUserId;
+            transactionId = transactionId || metadata.transactionId;
+            userId = userId || metadata.userId;
             referenceId = referenceId || sessionId;
         }
 
@@ -700,47 +859,40 @@ async function handleWalletSuccess(req, res) {
             return res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
         }
 
-        let pendingTransaction = null;
-        if (transactionId) {
-            pendingTransaction = userId
-                ? await new Promise((resolve, reject) => {
-                    EWallet.getTransactionById(transactionId, userId, (error, result) => error ? reject(error) : resolve(result));
-                })
-                : null;
+        if (!transactionId) {
+            throw new Error('Wallet top-up transaction is missing.');
         }
 
-        if (!pendingTransaction) {
-            setWalletSuccess(req, 'Your wallet was updated successfully.');
-            return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
-        }
-
-        if (String(pendingTransaction.paymentMethod || '').toUpperCase() === 'STRIPE' && !stripeSession) {
-            throw new Error('Stripe wallet top-up confirmation is missing.');
-        }
-
-        if (stripeSession) {
-            const expectedAmount = cents(pendingTransaction.amount);
-            const paidAmount = Number(stripeSession.amount_total || 0);
-            const currency = String(stripeSession.currency || '').toLowerCase();
-
-            if (paidAmount !== expectedAmount || currency !== 'sgd') {
-                throw new Error('Stripe wallet top-up amount does not match this transaction.');
-            }
-        }
-
-        const completed = await new Promise((resolve, reject) => {
-            EWallet.completePendingTransaction(pendingTransaction.transactionId, userId, {
-                description: `Wallet top-up completed via ${getProviderLabel(normalizePaymentMethod(req.query.paymentMethod || req.query.provider || 'stripe'))}`,
-                providerReference: referenceId || pendingTransaction.referenceId || ''
-            }, (error, result) => error ? reject(error) : resolve(result));
+        const pendingTransaction = await new Promise((resolve, reject) => {
+            EWallet.getTransactionById(transactionId, userId, (error, result) => error ? reject(error) : resolve(result));
         });
 
-        if (completed && completed.status === 'COMPLETED') {
+        if (!pendingTransaction) {
+            throw new Error('Wallet top-up transaction could not be found.');
+        }
+
+        if (String(pendingTransaction.status || '').toUpperCase() === 'COMPLETED') {
             setWalletSuccess(req, 'Your wallet was topped up successfully.');
             return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
         }
 
-        setWalletError(req, 'Your wallet top-up could not be completed.');
+        const method = String(pendingTransaction.paymentMethod || '').toUpperCase();
+        let completion = null;
+
+        if (method === 'STRIPE') {
+            completion = await verifyAndCompleteStripeTopup(pendingTransaction, userId, referenceId || sessionId);
+        } else if (method === 'PAYNOW') {
+            completion = await verifyAndCompleteHitPayTopup(pendingTransaction, userId, referenceId);
+        } else {
+            throw new Error(`Wallet top-up method ${method || 'UNKNOWN'} must be completed by its own payment flow.`);
+        }
+
+        if (!completion?.completed) {
+            setWalletError(req, 'Payment has not been confirmed by the provider yet. Refresh your wallet in a moment.');
+            return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
+        }
+
+        setWalletSuccess(req, 'Your wallet was topped up successfully.');
         return req.session.user ? res.redirect('/profile/wallet') : res.redirect('/login?returnTo=' + encodeURIComponent('/profile/wallet'));
     } catch (error) {
         console.error(error);

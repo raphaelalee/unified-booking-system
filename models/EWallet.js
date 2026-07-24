@@ -116,6 +116,36 @@ function getWalletSummary(userId, callback) {
     });
 }
 
+function getPendingTopups(userId, callback) {
+    ensureTransactionColumn((columnError) => {
+        if (columnError) {
+            callback(columnError);
+            return;
+        }
+
+        db.query(
+            `
+                SELECT *
+                FROM e_wallet_transactions
+                WHERE user_id = ?
+                    AND transaction_type = 'TOPUP'
+                    AND status = 'PENDING'
+                ORDER BY created_at DESC, transaction_id DESC
+                LIMIT 20
+            `,
+            [userId],
+            (error, rows = []) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                callback(null, rows.map(mapTransaction));
+            }
+        );
+    });
+}
+
 function createPendingTopup(payload, callback) {
     ensureTransactionColumn((columnError) => {
         if (columnError) {
@@ -539,13 +569,14 @@ function getTransactionById(transactionId, userId, callback) {
             return;
         }
 
-        callback(null, mapTransaction(rows[0]));
+        callback(null, rows[0] ? mapTransaction(rows[0]) : null);
     });
 }
 
 module.exports = {
     ensureWalletForUser,
     getWalletSummary,
+    getPendingTopups,
     createPendingTopup,
     debitWalletForPayment,
     createAdjustment,
