@@ -622,6 +622,32 @@ function normalizeVoucherRecommendations(result = {}) {
     };
 }
 
+function normalizePlatformVoucherRecommendations(result = {}) {
+    const recommendations = Array.isArray(result.recommendations) ? result.recommendations.slice(0, 3) : [];
+
+    return {
+        summary: cleanText(result.summary || 'Platform voucher recommendations generated from the supplied reward-shop data.', 600),
+        recommendations: recommendations.map((recommendation = {}) => {
+            const appliesTo = cleanList(recommendation.appliesTo).filter((type) => ['booking', 'service', 'product'].includes(type));
+            const rawValue = Number(recommendation.voucherValue || recommendation.discountValue);
+            const rawCost = Number(recommendation.glintsCost || recommendation.pointsRequired);
+
+            return {
+                voucherTitle: cleanText(recommendation.voucherTitle || recommendation.title, 120),
+                voucherType: cleanText(recommendation.voucherType || recommendation.type, 80),
+                voucherValue: Number.isFinite(rawValue) && rawValue > 0 ? Number(rawValue.toFixed(2)) : 5,
+                glintsCost: Number.isInteger(rawCost) && rawCost > 0 ? rawCost : 500,
+                appliesTo: appliesTo.length ? appliesTo : ['booking'],
+                minimumSpend: cleanText(recommendation.minimumSpend || '$0.00', 40),
+                validityPeriod: cleanText(recommendation.validityPeriod || recommendation.recommendedPeriod || '30 days', 80),
+                reason: cleanText(recommendation.reason, 360),
+                expectedBenefit: cleanText(recommendation.expectedBenefit, 260),
+                detail: cleanText(recommendation.detail || recommendation.reason || recommendation.expectedBenefit, 255)
+            };
+        }).filter((recommendation) => recommendation.voucherTitle)
+    };
+}
+
 function normalizeFeaturedMerchants(result = {}) {
     const featuredMerchants = Array.isArray(result.featuredMerchants) ? result.featuredMerchants.slice(0, 10) : [];
 
@@ -906,7 +932,8 @@ async function generateVoucherRecommendations(data = {}) {
         merchantSales: cleanNumber(data.merchantSales),
         lowBookingDays: cleanList(data.lowBookingDays),
         existingVouchers: cleanList(data.existingVouchers),
-        voucherRedemptionPerformance: cleanList(data.voucherRedemptionPerformance)
+        voucherRedemptionPerformance: cleanList(data.voucherRedemptionPerformance),
+        requestVariant: cleanText(data.requestVariant, 80)
     };
     const result = await runJsonChat({
         model: GROQ_TEXT_MODEL,
@@ -917,6 +944,8 @@ async function generateVoucherRecommendations(data = {}) {
             'Recommend at most three realistic vouchers using only the supplied anonymised behaviour and merchant data.',
             'Prioritise retention, low booking days, loyalty, birthday, comeback, and reasonable profit protection.',
             'Do not recommend vouchers already active in existingVouchers.',
+            'When requestVariant changes, choose a different mix of voucher types, target groups, discount values, minimum spends, point costs, and validity periods where the supplied data supports it.',
+            'Do not repeat the same recommendation set unless the supplied data only supports one safe option.',
             'pointsRequired must be a positive whole number. Never return 0 points. Use at least 100 points for small vouchers and 500 points when unsure.',
             'minimumSpend must be a display string such as "$0.00", "$30.00", or "$50.00".',
             'Return exactly this JSON shape:',
@@ -927,6 +956,40 @@ async function generateVoucherRecommendations(data = {}) {
     });
 
     return normalizeVoucherRecommendations(result);
+}
+
+async function generatePlatformVoucherRecommendations(data = {}) {
+    const safeData = {
+        rewardShopVoucherCount: cleanNumber(data.rewardShopVoucherCount),
+        activeVoucherCount: cleanNumber(data.activeVoucherCount),
+        topVoucherValue: cleanNumber(data.topVoucherValue),
+        totalDailyRewardPoints: cleanNumber(data.totalDailyRewardPoints),
+        existingVouchers: cleanList(data.existingVouchers),
+        requestedFocus: cleanText(data.requestedFocus || 'platform vouchers, free delivery, reward-shop redemption, service/product checkout discounts', 240),
+        requestVariant: cleanText(data.requestVariant, 80)
+    };
+
+    const result = await runJsonChat({
+        model: GROQ_TEXT_MODEL,
+        temperature: 0.45,
+        maxTokens: 1300,
+        system: 'You produce strict JSON platform voucher recommendations for an admin reward shop. Do not write to the database.',
+        user: [
+            'Recommend at most three admin-created platform reward-shop vouchers.',
+            'Use only the supplied reward-shop data. Avoid recommending vouchers already active in existingVouchers.',
+            'Allowed voucher types include Platform discount, Free delivery, Service discount, Product discount, Loyalty points voucher, Birthday voucher, and Minimum-spend voucher.',
+            'When requestVariant changes, choose a different mix of voucher types, appliesTo values, value levels, Glints costs, minimum spends, and validity periods where the supplied data supports it.',
+            'Do not repeat the same recommendation set unless the supplied reward-shop data only supports one safe option.',
+            'Voucher value must be realistic. Glints cost must be a positive whole number and never 0.',
+            'appliesTo must contain one or more of: booking, service, product.',
+            'Return exactly this JSON shape:',
+            '{"summary":"","recommendations":[{"voucherTitle":"","voucherType":"","voucherValue":0,"glintsCost":0,"appliesTo":[],"minimumSpend":"","validityPeriod":"","reason":"","expectedBenefit":"","detail":""}]}',
+            '',
+            JSON.stringify({ rewardShopData: safeData }, null, 2)
+        ].join('\n')
+    });
+
+    return normalizePlatformVoucherRecommendations(result);
 }
 
 async function recommendFeaturedMerchants(merchantStatistics = []) {
@@ -1157,6 +1220,7 @@ module.exports = {
     classifyGroqError,
     generateAdminPlatformInsights,
     generateMerchantBusinessInsights,
+    generatePlatformVoucherRecommendations,
     generatePromotionRecommendations,
     generateReviewReply,
     generateVoucherRecommendations,

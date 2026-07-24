@@ -88,7 +88,7 @@
 
                     <label>
                         Category
-                        <select name="categoryId">
+                        <select data-readable-select name="categoryId">
                             <option value="" <%= String(form.categoryId) === '' ? 'selected' : '' %>>Uncategorised</option>
                             <%
                                 const selectedCategoryId = String(form.categoryId || '');
@@ -235,3 +235,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

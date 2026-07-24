@@ -46,6 +46,10 @@ function ensurePromotionSchema(callback) {
             alters.push('ADD COLUMN product_id INT DEFAULT NULL AFTER service_id');
         }
 
+        if (fields.has('type')) {
+            alters.push('MODIFY COLUMN type VARCHAR(80) NOT NULL');
+        }
+
         if (!fields.has('spin_eligible')) {
             alters.push('ADD COLUMN spin_eligible TINYINT(1) NOT NULL DEFAULT 0 AFTER terms');
         }

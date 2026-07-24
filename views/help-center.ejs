@@ -209,7 +209,7 @@
                                 <div class="support-step-title"><span>2</span><div><strong>Select the booking or order</strong><small>Unavailable references stay blocked and show the reason.</small></div></div>
                                 <label class="support-field">
                                     Reference
-                                    <select name="targetId" class="form-select" required data-support-reference-select>
+                                    <select data-readable-select name="targetId" class="form-select" required data-support-reference-select>
                                         <option value="">Choose booking or order</option>
                                         <% safeBookings.forEach((booking) => {
                                             const eligibility = booking.refundEligibility || {};
@@ -265,7 +265,7 @@
                                 <div class="support-step-title"><span>3</span><div><strong>Pick the reason</strong><small>Reason availability follows the selected reference and current eligibility rules.</small></div></div>
                                 <label class="support-field support-native-select">
                                     Refund reason category
-                                    <select name="reasonCategory" class="form-select" data-refund-reason-category required>
+                                    <select data-readable-select name="reasonCategory" class="form-select" data-refund-reason-category required>
                                         <option value="">Choose a reference first</option>
                                     </select>
                                 </label>
@@ -1139,3 +1139,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

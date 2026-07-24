@@ -87,7 +87,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter by merchant</span>
-                        <select class="js-marketplace-merchant-filter">
+                        <select data-readable-select class="js-marketplace-merchant-filter">
                             <option value="">All merchants</option>
                             <% merchantOptions.forEach((merchantName) => { %>
                                 <option value="<%= merchantName %>"><%= merchantName %></option>
@@ -96,7 +96,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter by category</span>
-                        <select class="js-marketplace-category-filter">
+                        <select data-readable-select class="js-marketplace-category-filter">
                             <option value="">All categories</option>
                             <% categoryOptions.forEach((category) => { %>
                                 <option value="<%= category %>"><%= category %></option>
@@ -417,3 +417,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

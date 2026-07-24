@@ -89,7 +89,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter by merchant</span>
-                        <select class="js-marketplace-merchant-filter">
+                        <select data-readable-select class="js-marketplace-merchant-filter">
                             <option value="">All merchants</option>
                             <% merchantOptions.forEach((merchantName) => { %>
                                 <option value="<%= merchantName %>"><%= merchantName %></option>
@@ -240,3 +240,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

@@ -38,6 +38,19 @@
             </div>
         <% } %>
 
+        <section class="admin-panel ai-platform-voucher-panel">
+            <div class="ai-platform-voucher-heading">
+                <div>
+                    <p class="eyebrow">AI Assistant</p>
+                    <h2>Platform voucher ideas</h2>
+                    <p class="muted">Generate admin voucher ideas such as free delivery, platform discounts, service vouchers, or product vouchers. Nothing is created until you choose an idea.</p>
+                </div>
+                <button class="button primary js-platform-voucher-ai-button" type="button">Generate ideas</button>
+            </div>
+            <div class="js-platform-voucher-ai-status muted"></div>
+            <div class="ai-platform-voucher-results js-platform-voucher-ai-results" hidden></div>
+        </section>
+
         <section class="marketplace-admin-panel rewards-admin-panel">
             <div class="marketplace-stat-grid">
                 <article><span>Voucher Tiers</span><strong><%= voucherList.length %></strong></article>
@@ -79,7 +92,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter status</span>
-                        <select class="js-rewards-status-filter">
+                        <select class="js-rewards-status-filter" data-readable-select>
                             <option value="">All statuses</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
@@ -143,9 +156,89 @@
 
 <script>
     (() => {
+        const voucherStats = <%- JSON.stringify({
+            rewardShopVoucherCount: voucherList.length,
+            activeVoucherCount: activeCount,
+            topVoucherValue: highestVoucher,
+            totalDailyRewardPoints: totalDailyPoints,
+            existingVouchers: voucherList.map((voucher) => ({
+                title: voucher.title,
+                detail: voucher.detail,
+                value: voucher.voucherValue,
+                cost: voucher.glintsCost,
+                status: voucher.status
+            }))
+        }) %>;
+        const aiButton = document.querySelector('.js-platform-voucher-ai-button');
+        const aiStatus = document.querySelector('.js-platform-voucher-ai-status');
+        const aiResults = document.querySelector('.js-platform-voucher-ai-results');
         const search = document.querySelector('.js-rewards-search');
         const status = document.querySelector('.js-rewards-status-filter');
         const rows = Array.from(document.querySelectorAll('.js-rewards-row'));
+
+        const money = (value) => `$${Number(value || 0).toFixed(2)}`;
+        const safe = (value) => String(value || '');
+        const escapeHtml = (value) => safe(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const createUrl = (idea) => {
+            const params = new URLSearchParams({
+                aiTitle: safe(idea.voucherTitle),
+                aiDetail: safe(idea.detail || idea.reason),
+                aiCost: safe(idea.glintsCost),
+                aiValue: safe(idea.voucherValue),
+                aiApplies: Array.isArray(idea.appliesTo) ? idea.appliesTo.join(',') : 'booking'
+            });
+            return `/admin/reward-shop/new?${params.toString()}`;
+        };
+
+        aiButton?.addEventListener('click', async () => {
+            aiButton.disabled = true;
+            aiStatus.textContent = 'Generating platform voucher ideas...';
+            aiResults.hidden = true;
+            aiResults.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/ai/admin/platform-vouchers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...voucherStats,
+                        requestedFocus: 'platform vouchers, free delivery, service vouchers, product vouchers, and low-minimum-spend reward-shop vouchers',
+                        requestVariant: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+                    })
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Platform voucher ideas could not be generated.');
+                }
+
+                const ideas = Array.isArray(payload.recommendations) ? payload.recommendations : [];
+                aiStatus.textContent = payload.summary || `${ideas.length} voucher ideas generated.`;
+                aiResults.innerHTML = ideas.map((idea) => `
+                    <article class="ai-platform-voucher-card">
+                        <span class="sync-pill">${escapeHtml(idea.voucherType || 'Voucher')}</span>
+                        <h3>${escapeHtml(idea.voucherTitle)}</h3>
+                        <p>${escapeHtml(idea.reason)}</p>
+                        <div class="ai-platform-voucher-meta">
+                            <span><strong>${money(idea.voucherValue)}</strong> value</span>
+                            <span><strong>${escapeHtml(idea.glintsCost)}</strong> VaniGlints</span>
+                            <span><strong>${escapeHtml((idea.appliesTo || []).join(', ') || 'booking')}</strong></span>
+                        </div>
+                        <a class="button secondary compact" href="${createUrl(idea)}">Create</a>
+                    </article>
+                `).join('');
+                aiResults.hidden = ideas.length === 0;
+            } catch (error) {
+                aiStatus.textContent = error.message || 'Platform voucher ideas could not be generated.';
+            } finally {
+                aiButton.disabled = false;
+            }
+        });
 
         const applyFilters = () => {
             const query = (search?.value || '').trim().toLowerCase();

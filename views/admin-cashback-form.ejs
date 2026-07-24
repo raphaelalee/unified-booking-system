@@ -24,7 +24,7 @@
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
             <label>Merchant
-                <select name="salonId" required>
+                <select data-readable-select name="salonId" required>
                     <option value="">Select merchant</option>
                     <% salons.forEach((salon) => { %>
                         <option value="<%= salon.salon_id %>" <%= String(form.salonId || '') === String(salon.salon_id) ? 'selected' : '' %>>
@@ -58,14 +58,14 @@
 
             <div class="form-row">
                 <label>Status
-                    <select name="status">
+                    <select data-readable-select name="status">
                         <% statuses.forEach((status) => { %>
                             <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
                         <% }) %>
                     </select>
                 </label>
                 <label>Applies to
-                    <select name="applicableType">
+                    <select data-readable-select name="applicableType">
                         <% applicableTypes.forEach((type) => { %>
                             <option value="<%= type %>" <%= form.applicableType === type ? 'selected' : '' %>><%= type %></option>
                         <% }) %>
@@ -82,3 +82,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

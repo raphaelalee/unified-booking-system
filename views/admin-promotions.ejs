@@ -55,7 +55,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter by merchant</span>
-                        <select class="js-marketplace-merchant-filter">
+                        <select class="js-marketplace-merchant-filter" data-readable-select>
                             <option value="">All merchants</option>
                             <% merchantOptions.forEach((merchantName) => { %>
                                 <option value="<%= merchantName %>"><%= merchantName %></option>
@@ -64,7 +64,7 @@
                     </label>
                     <label>
                         <span class="sr-only">Filter by type</span>
-                        <select class="js-marketplace-type-filter">
+                        <select class="js-marketplace-type-filter" data-readable-select>
                             <option value="">All types</option>
                             <% Object.keys(typeLabels).forEach((type) => { %>
                                 <option value="<%= type %>"><%= typeLabels[type] %></option>

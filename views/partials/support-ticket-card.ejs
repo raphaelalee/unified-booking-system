@@ -195,7 +195,7 @@
                             </div>
                             <input id="refund-percentage-<%= request.id %>" name="approvedPercentage" data-refund-percentage type="hidden" value="50">
                             <label for="partial-reason-<%= request.id %>">Partial refund reason</label>
-                            <select id="partial-reason-<%= request.id %>" name="partialReasonPreset" data-partial-reason-select>
+                            <select data-readable-select id="partial-reason-<%= request.id %>" name="partialReasonPreset" data-partial-reason-select>
                                 <option value="">Select a reason</option>
                                 <option>Part of service completed.</option>
                                 <option>Some products delivered successfully.</option>
@@ -265,3 +265,4 @@
         </div>
     <% } %>
 </article>
+

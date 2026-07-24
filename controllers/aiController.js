@@ -15,6 +15,7 @@ const {
     answerMerchantAnalyticsQuestion: answerMerchantAnalyticsQuestionWithGroq,
     generateAdminPlatformInsights: generateAdminPlatformInsightsWithGroq,
     generateMerchantBusinessInsights: generateMerchantBusinessInsightsWithGroq,
+    generatePlatformVoucherRecommendations: generatePlatformVoucherRecommendationsFromGroq,
     generatePromotionRecommendations: generatePromotionRecommendationsFromGroq,
     generateReviewReply: generateReviewReplyFromGroq,
     generateVoucherRecommendations: generateVoucherRecommendationsFromGroq,
@@ -1562,12 +1563,40 @@ exports.generateVoucherRecommendations = async (req, res) => {
             merchantSales: req.body.merchantSales,
             lowBookingDays: req.body.lowBookingDays,
             existingVouchers: req.body.existingVouchers,
-            voucherRedemptionPerformance: req.body.voucherRedemptionPerformance
+            voucherRedemptionPerformance: req.body.voucherRedemptionPerformance,
+            requestVariant: req.body.requestVariant
         });
 
         return res.json(result);
     } catch (error) {
         return sendAiError(res, error, 'Voucher recommendation error');
+    }
+};
+
+exports.generatePlatformVoucherRecommendations = async (req, res) => {
+    try {
+        const user = req.session.user;
+
+        if (!user || user.role !== 'admin') {
+            return res.status(user ? 403 : 401).json({
+                error: user ? 'FORBIDDEN' : 'UNAUTHENTICATED',
+                message: 'Please log in as an admin to generate platform voucher recommendations.'
+            });
+        }
+
+        const result = await generatePlatformVoucherRecommendationsFromGroq({
+            rewardShopVoucherCount: req.body.rewardShopVoucherCount,
+            activeVoucherCount: req.body.activeVoucherCount,
+            topVoucherValue: req.body.topVoucherValue,
+            totalDailyRewardPoints: req.body.totalDailyRewardPoints,
+            existingVouchers: req.body.existingVouchers,
+            requestedFocus: req.body.requestedFocus,
+            requestVariant: req.body.requestVariant
+        });
+
+        return res.json(result);
+    } catch (error) {
+        return sendAiError(res, error, 'Platform voucher recommendation error');
     }
 };
 

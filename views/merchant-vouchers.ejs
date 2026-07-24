@@ -186,24 +186,24 @@
 
             results.hidden = false;
             results.innerHTML = recommendations.map((recommendation) => `
-                <article class="service-catalog-card unified-service-card">
-                    <div class="portal-card-header">
+                <article class="service-catalog-card unified-service-card ai-recommendation-card">
+                    <div class="portal-card-header ai-recommendation-card-header">
                         <span class="tag">${escapeHtml(recommendation.voucherType || 'Voucher')}</span>
                         <span class="service-price slim">${escapeHtml(recommendation.discountValue || recommendation.discountType || '')}</span>
                     </div>
-                    <div>
+                    <div class="ai-recommendation-copy">
                         <h3>${escapeHtml(recommendation.voucherTitle || 'Recommended voucher')}</h3>
                         <p class="muted">${escapeHtml(recommendation.targetCustomerGroup || 'Relevant customers')}</p>
                         <p>${escapeHtml(recommendation.reason || '')}</p>
                     </div>
-                    <dl class="profile-booking-meta">
+                    <dl class="profile-booking-meta ai-recommendation-meta">
                         <div><dt>Minimum spend</dt><dd>${escapeHtml(formatMinimumSpend(recommendation.minimumSpend))}</dd></div>
                         <div><dt>Points</dt><dd>${escapeHtml(formatPoints(recommendation.pointsRequired))}</dd></div>
                         <div><dt>Validity</dt><dd>${escapeHtml(recommendation.validityPeriod || 'Next campaign period')}</dd></div>
                         <div><dt>Expected benefit</dt><dd>${escapeHtml(recommendation.expectedBenefit || '')}</dd></div>
                     </dl>
                     <div class="service-card-actions ai-recommendation-actions">
-                        <a class="button primary" href="${escapeHtml(buildCreateUrl(recommendation))}">Create voucher</a>
+                        <a class="button primary" href="${escapeHtml(buildCreateUrl(recommendation))}">Create</a>
                     </div>
                 </article>
             `).join('');
@@ -221,13 +221,17 @@
             setStatus('Generating voucher recommendations...');
 
             try {
+                const requestVariant = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
                 const response = await fetch('/api/ai/vouchers', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'x-csrf-token': csrfToken
                     },
-                    body: JSON.stringify(aiVoucherData)
+                    body: JSON.stringify({
+                        ...aiVoucherData,
+                        requestVariant
+                    })
                 });
                 const payload = await response.json();
 

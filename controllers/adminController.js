@@ -464,11 +464,14 @@ function buildProductPayload(form) {
 }
 
 function getPromotionForm(body = {}) {
+    const selectedType = String(body.type || '').trim();
+    const customType = String(body.customPromotionType || '').trim();
+
     return {
         salonId: String(body.salonId || '').trim(),
         serviceId: String(body.serviceId || '').trim(),
         title: String(body.title || '').trim(),
-        type: String(body.type || '').trim(),
+        type: selectedType === 'custom' ? normalizeCustomPromotionType(customType) : selectedType,
         discountType: String(body.discountType || '').trim(),
         discountValue: String(body.discountValue || '').trim(),
         startDate: String(body.startDate || '').trim(),
@@ -479,6 +482,20 @@ function getPromotionForm(body = {}) {
         terms: String(body.terms || '').trim(),
         showInFlashDeals: ['1', 'on', 'true', 'yes'].includes(String(body.showInFlashDeals || '').trim().toLowerCase())
     };
+}
+
+function normalizeCustomPromotionType(value = '') {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+}
+
+function isValidPromotionType(value = '') {
+    const type = String(value || '').trim();
+    return Promotion.PROMOTION_TYPES.includes(type) || /^[a-z0-9][a-z0-9_]{1,79}$/.test(type);
 }
 
 function normalizePromotionSlots(value = '') {
@@ -525,8 +542,8 @@ function validatePromotionForm(form, salons, services) {
         errors.push('Promotion title must be at least 2 characters.');
     }
 
-    if (!Promotion.PROMOTION_TYPES.includes(form.type)) {
-        errors.push('Please choose a valid promotion type.');
+    if (!isValidPromotionType(form.type)) {
+        errors.push('Please choose a valid promotion type or enter a custom promotion type.');
     }
 
     if (!Promotion.DISCOUNT_TYPES.includes(form.discountType)) {
@@ -1965,12 +1982,21 @@ function listRewardVouchers(req, res) {
 }
 
 function showNewRewardVoucher(req, res) {
+    const prefillApplicableTypes = String(req.query.aiApplies || '')
+        .split(',')
+        .map((type) => type.trim().toLowerCase())
+        .filter(Boolean);
+
     return renderRewardVoucherForm(res, {
         title: 'Add Reward Shop Voucher',
         form: getRewardVoucherForm({
+            title: req.query.aiTitle || '',
+            detail: req.query.aiDetail || '',
+            glintsCost: req.query.aiCost || '',
+            voucherValue: req.query.aiValue || '',
             status: 'active',
             sortOrder: '0',
-            applicableType: 'booking'
+            applicableTypes: prefillApplicableTypes.length ? prefillApplicableTypes : ['booking']
         })
     });
 }

@@ -118,7 +118,7 @@
                     <label class="merchant-settings-field">Max reschedules <input type="number" name="maxReschedulesAllowed" min="0" max="20" value="<%= Number(rescheduleSettings.maxReschedulesAllowed || 2) %>"></label>
                     <label class="merchant-settings-field">
                         <span>Business start</span>
-                        <select name="businessStart" required>
+                        <select data-readable-select name="businessStart" required>
                             <% timeOptions.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= option.value === selectedBusinessStart ? 'selected' : '' %>><%= option.label %></option>
                             <% }) %>
@@ -126,7 +126,7 @@
                     </label>
                     <label class="merchant-settings-field">
                         <span>Business end</span>
-                        <select name="businessEnd" required>
+                        <select data-readable-select name="businessEnd" required>
                             <% timeOptions.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= option.value === selectedBusinessEnd ? 'selected' : '' %>><%= option.label %></option>
                             <% }) %>
@@ -168,3 +168,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

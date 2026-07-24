@@ -70,7 +70,7 @@
 
                     <label class="signup-field">
                         <span>Gender</span>
-                        <select name="gender" data-validate="gender" required>
+                        <select data-readable-select name="gender" data-validate="gender" required>
                             <option value="">Select</option>
                             <option value="female" <%= form.gender === 'female' ? 'selected' : '' %>>Female</option>
                             <option value="male" <%= form.gender === 'male' ? 'selected' : '' %>>Male</option>
@@ -89,7 +89,7 @@
 
                     <label class="signup-field span-2">
                         <span>Preferred contact</span>
-                        <select name="preferredContactMethod" data-validate="preferredContactMethod" required>
+                        <select data-readable-select name="preferredContactMethod" data-validate="preferredContactMethod" required>
                             <option value="">Select contact method</option>
                             <option value="email" <%= form.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
                             <option value="phone" <%= form.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
@@ -165,3 +165,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

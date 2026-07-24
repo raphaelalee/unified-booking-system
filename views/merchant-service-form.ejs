@@ -60,7 +60,7 @@
 
                 <label>
                     Category
-                    <select name="categoryId" required data-ai-service-category>
+                    <select data-readable-select name="categoryId" required data-ai-service-category>
                         <option value="">Select category</option>
                         <% categories.forEach((category) => { %>
                             <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>>
@@ -133,7 +133,7 @@
                 <label>
                     Add timing
                     <div class="merchant-slot-picker">
-                        <select data-service-slot-select>
+                        <select data-readable-select data-service-slot-select>
                             <option value="">Select timing</option>
                             <% slotOptions.forEach((slot) => { %>
                                 <option value="<%= slot %>"><%= slot %></option>
@@ -194,7 +194,7 @@
                     <p class="muted">Link this service to one tracked product. If stock falls below the required quantity, the service is hidden from customers until inventory is replenished.</p>
                     <label>
                         Linked product
-                        <select name="inventoryProductId" data-ai-target-product>
+                        <select data-readable-select name="inventoryProductId" data-ai-target-product>
                             <option value="">No linked product</option>
                             <% (products || []).forEach((product) => { %>
                                 <option value="<%= product.id %>" data-product-name="<%= product.name %>" <%= String(form.inventoryProductId || '') === String(product.id) ? 'selected' : '' %>>
@@ -595,3 +595,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

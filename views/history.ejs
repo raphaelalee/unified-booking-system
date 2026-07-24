@@ -92,7 +92,7 @@
                                                                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                                 <label>
                                                                     Rating
-                                                                    <select name="rating" required>
+                                                                    <select data-readable-select name="rating" required>
                                                                         <option value="">Select</option>
                                                                         <option value="5">5 stars</option>
                                                                         <option value="4">4 stars</option>
@@ -171,3 +171,4 @@
 <% } %>
 
 <%- include('partials/footer') %>
+

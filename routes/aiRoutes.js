@@ -98,6 +98,7 @@ router.post('/review-reply', requireJsonRole('merchant'), aiController.generateR
 router.post('/admin/platform-insights', requireJsonRole('admin'), aiController.generateAdminPlatformInsights);
 router.post('/admin/ask-analytics', requireJsonRole('admin'), aiController.answerAdminAnalyticsQuestion);
 router.post('/admin/action-proposal', requireJsonRole('admin'), aiController.createAdminActionProposal);
+router.post('/admin/platform-vouchers', requireJsonRole('admin'), aiController.generatePlatformVoucherRecommendations);
 router.post('/featured-merchants', requireJsonRole('admin'), aiController.recommendFeaturedMerchants);
 router.post('/featured-services', requireJsonRole('admin'), aiController.recommendFeaturedServices);
 router.post('/featured-products', requireJsonRole('admin'), aiController.recommendFeaturedProducts);

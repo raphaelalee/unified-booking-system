@@ -22,81 +22,94 @@
             </div>
         <% } %>
 
-        <section class="admin-panel marketplace-crud-panel">
-            <form class="marketplace-admin-form" action="<%= voucher ? `/admin/reward-shop/${voucher.id}` : '/admin/reward-shop' %>" method="POST">
+        <section class="admin-panel marketplace-crud-panel compact-crud-panel">
+            <form class="marketplace-admin-form compact-crud-form" action="<%= voucher ? `/admin/reward-shop/${voucher.id}` : '/admin/reward-shop' %>" method="POST">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 
-                <div class="marketplace-form-grid">
-                    <label>
-                        <span>Voucher title</span>
-                        <input type="text" name="title" value="<%= form.title || '' %>" maxlength="120" placeholder="$5 Off Booking" required>
-                    </label>
+                <div class="compact-form-grid">
+                    <section class="compact-form-card compact-form-card-wide">
+                        <p class="eyebrow">Basics</p>
+                        <label>
+                            <span>Voucher title</span>
+                            <input type="text" name="title" value="<%= form.title || '' %>" maxlength="120" placeholder="$5 Off Booking" required>
+                        </label>
+                        <label>
+                            <span>Details</span>
+                            <textarea name="detail" rows="3" maxlength="255" placeholder="Short explanation customers see on the reward shop card." required><%= form.detail || '' %></textarea>
+                        </label>
+                    </section>
 
-                    <label>
-                        <span>Status</span>
-                        <select name="status" required>
-                            <% statuses.forEach((status) => { %>
-                                <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
-                            <% }) %>
-                        </select>
-                    </label>
-
-                    <label>
-                        <span>Glints cost</span>
-                        <input type="number" name="glintsCost" min="1" step="1" value="<%= form.glintsCost || '' %>" placeholder="5000" required>
-                    </label>
-
-                    <label>
-                        <span>Voucher value</span>
-                        <input type="number" name="voucherValue" min="0.01" step="0.01" value="<%= form.voucherValue || '' %>" placeholder="5" required>
-                    </label>
-
-                    <label>
-                        <span>Sort order</span>
-                        <input type="number" name="sortOrder" min="0" step="1" value="<%= form.sortOrder || '0' %>" placeholder="20" required>
-                    </label>
-
-                    <div class="marketplace-checkbox-group">
-                        <span>Voucher applies to</span>
-                        <div class="marketplace-checkbox-list js-admin-linked-types">
-                            <% availableApplicableTypes.forEach((type) => { %>
-                                <label class="marketplace-checkbox-item">
-                                    <input type="checkbox" name="applicableTypes" value="<%= type %>" <%= form.applicableTypes && form.applicableTypes.includes(type) ? 'checked' : '' %>>
-                                    <span><%= type.charAt(0).toUpperCase() + type.slice(1) %></span>
-                                </label>
-                            <% }) %>
+                    <section class="compact-form-card">
+                        <p class="eyebrow">Reward value</p>
+                        <div class="compact-field-pair">
+                            <label>
+                                <span>Voucher value</span>
+                                <input type="number" name="voucherValue" min="0.01" step="0.01" value="<%= form.voucherValue || '' %>" placeholder="5" required>
+                            </label>
+                            <label>
+                                <span>Glints cost</span>
+                                <input type="number" name="glintsCost" min="1" step="1" value="<%= form.glintsCost || '' %>" placeholder="500" required>
+                            </label>
                         </div>
-                    </div>
+                    </section>
 
-                    <label class="js-admin-linked-service-group" <%= form.applicableTypes && form.applicableTypes.includes('service') ? '' : 'style="display:none;"' %>>
-                        <span>Linked service</span>
-                        <select name="linkedServiceId" class="js-admin-linked-service-select">
-                            <option value="">Select a service</option>
-                            <% services.forEach((service) => { %>
-                                <option value="<%= service.id %>" <%= String(form.linkedServiceId || '') === String(service.id) ? 'selected' : '' %>>
-                                    <%= service.salonName %> - <%= service.name %>
-                                </option>
-                            <% }) %>
-                        </select>
-                    </label>
+                    <section class="compact-form-card">
+                        <p class="eyebrow">Availability</p>
+                        <label>
+                            <span>Status</span>
+                            <select name="status" data-readable-select required>
+                                <% statuses.forEach((status) => { %>
+                                    <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                                <% }) %>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Sort order</span>
+                            <input type="number" name="sortOrder" min="0" step="1" value="<%= form.sortOrder || '0' %>" placeholder="20" required>
+                        </label>
+                    </section>
 
-                    <label class="js-admin-linked-product-group" <%= form.applicableTypes && form.applicableTypes.includes('product') ? '' : 'style="display:none;"' %>>
-                        <span>Linked product</span>
-                        <select name="linkedProductId" class="js-admin-linked-product-select">
-                            <option value="">Select a product</option>
-                            <% products.forEach((product) => { %>
-                                <option value="<%= product.id %>" <%= String(form.linkedProductId || '') === String(product.id) ? 'selected' : '' %>>
-                                    <%= product.salonName %> - <%= product.name %>
-                                </option>
-                            <% }) %>
-                        </select>
-                    </label>
+                    <section class="compact-form-card compact-form-card-wide">
+                        <p class="eyebrow">Applies to</p>
+                        <div class="marketplace-checkbox-group">
+                            <span>Checkout type</span>
+                            <div class="marketplace-checkbox-list js-admin-linked-types">
+                                <% availableApplicableTypes.forEach((type) => { %>
+                                    <label class="marketplace-checkbox-item">
+                                        <input type="checkbox" name="applicableTypes" value="<%= type %>" <%= form.applicableTypes && form.applicableTypes.includes(type) ? 'checked' : '' %>>
+                                        <span><%= type.charAt(0).toUpperCase() + type.slice(1) %></span>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </div>
+
+                        <div class="compact-linked-targets">
+                            <label class="js-admin-linked-service-group" <%= form.applicableTypes && form.applicableTypes.includes('service') ? '' : 'style="display:none;"' %>>
+                                <span>Linked service</span>
+                                <select name="linkedServiceId" class="js-admin-linked-service-select" data-readable-select>
+                                    <option value="">Select a service</option>
+                                    <% services.forEach((service) => { %>
+                                        <option value="<%= service.id %>" <%= String(form.linkedServiceId || '') === String(service.id) ? 'selected' : '' %>>
+                                            <%= service.salonName %> - <%= service.name %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </label>
+
+                            <label class="js-admin-linked-product-group" <%= form.applicableTypes && form.applicableTypes.includes('product') ? '' : 'style="display:none;"' %>>
+                                <span>Linked product</span>
+                                <select name="linkedProductId" class="js-admin-linked-product-select" data-readable-select>
+                                    <option value="">Select a product</option>
+                                    <% products.forEach((product) => { %>
+                                        <option value="<%= product.id %>" <%= String(form.linkedProductId || '') === String(product.id) ? 'selected' : '' %>>
+                                            <%= product.salonName %> - <%= product.name %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </label>
+                        </div>
+                    </section>
                 </div>
-
-                <label>
-                    <span>Details</span>
-                    <textarea name="detail" rows="4" maxlength="255" placeholder="Short explanation customers see on the reward shop card." required><%= form.detail || '' %></textarea>
-                </label>
 
                 <div class="form-actions">
                     <button class="button primary" type="submit"><%= voucher ? 'Update voucher' : 'Create voucher' %></button>
@@ -114,10 +127,87 @@
         const productGroup = document.querySelector('.js-admin-linked-product-group');
         const serviceSelect = document.querySelector('.js-admin-linked-service-select');
         const productSelect = document.querySelector('.js-admin-linked-product-select');
+        const statusSelect = document.querySelector('select[name="status"]');
 
         if (!typeFields.length || !serviceGroup || !productGroup || !serviceSelect || !productSelect) {
             return;
         }
+
+        const setupReadableSelect = (select) => {
+            if (!select || select.dataset.readableSelectReady === '1') return;
+            select.dataset.readableSelectReady = '1';
+            select.classList.add('native-readable-select');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'custom-promotion-type-select custom-readable-select';
+
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'custom-promotion-type-trigger';
+            trigger.setAttribute('aria-haspopup', 'listbox');
+            trigger.setAttribute('aria-expanded', 'false');
+
+            const label = document.createElement('span');
+            const caret = document.createElement('span');
+            caret.className = 'custom-promotion-type-caret';
+            caret.setAttribute('aria-hidden', 'true');
+            caret.textContent = '⌄';
+            trigger.append(label, caret);
+
+            const menu = document.createElement('div');
+            menu.className = 'custom-promotion-type-menu';
+            menu.role = 'listbox';
+            menu.hidden = true;
+
+            const close = () => {
+                wrapper.classList.remove('is-open');
+                menu.hidden = true;
+                trigger.setAttribute('aria-expanded', 'false');
+            };
+
+            const open = () => {
+                wrapper.classList.add('is-open');
+                menu.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+            };
+
+            const sync = () => {
+                const selected = select.options[select.selectedIndex];
+                label.textContent = selected ? selected.textContent.trim() : 'Select';
+                Array.from(menu.querySelectorAll('button')).forEach((button) => {
+                    button.classList.toggle('is-selected', button.dataset.value === select.value);
+                });
+            };
+
+            const rebuild = () => {
+                menu.innerHTML = '';
+                Array.from(select.options).forEach((option) => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.role = 'option';
+                    item.dataset.value = option.value;
+                    item.textContent = option.textContent.trim();
+                    item.addEventListener('click', () => {
+                        select.value = option.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        close();
+                    });
+                    menu.appendChild(item);
+                });
+                sync();
+            };
+
+            trigger.addEventListener('click', () => {
+                menu.hidden ? open() : close();
+            });
+            document.addEventListener('click', (event) => {
+                if (!wrapper.contains(event.target)) close();
+            });
+            select.addEventListener('change', sync);
+            wrapper.append(trigger, menu);
+            select.insertAdjacentElement('afterend', wrapper);
+            rebuild();
+        };
 
         const hasType = (value) => typeFields.some((field) => field.checked && field.value === value);
 

@@ -1,5 +1,13 @@
 <%- include('partials/header', { title }) %>
 <section class="admin-dashboard-v2">
+    <%
+        const promotionTypeLabel = (type) => String(type || '')
+            .split('_')
+            .filter(Boolean)
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+        const isCustomPromotionType = form.type && !promotionTypes.includes(form.type);
+    %>
     <%- include('partials/admin-sidebar') %>
     <div class="admin-main-panel">
         <%- include('partials/admin-marketplace-tabs') %>
@@ -13,8 +21,8 @@
     <a class="button secondary" href="/admin/promotions">Back to promotions</a>
 </header>
 
-<section class="admin-panel marketplace-crud-panel">
-    <form class="marketplace-admin-form service-admin-form" action="<%= promotion ? `/admin/promotions/${promotion.id}` : '/admin/promotions' %>" method="POST">
+<section class="admin-panel marketplace-crud-panel compact-crud-panel">
+    <form class="marketplace-admin-form service-admin-form compact-crud-form" action="<%= promotion ? `/admin/promotions/${promotion.id}` : '/admin/promotions' %>" method="POST">
         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <% if (errors.length > 0) { %>
             <div class="notice error">
@@ -24,120 +32,149 @@
             </div>
         <% } %>
 
-        <label>
-            Merchant salon
-            <select name="salonId" required>
-                <option value="">Select merchant salon</option>
-                <% salons.forEach((salon) => { %>
-                    <option value="<%= salon.salon_id %>" <%= String(form.salonId) === String(salon.salon_id) ? 'selected' : '' %>>
-                        <%= salon.salon_name %> - <%= salon.owner_email %>
-                    </option>
-                <% }) %>
-            </select>
-        </label>
+        <div class="compact-form-grid">
+            <section class="compact-form-card compact-form-card-wide">
+                <p class="eyebrow">Campaign basics</p>
+                <label>
+                    Promotion title
+                    <input type="text" name="title" value="<%= form.title %>" placeholder="Weekday Happy Hour Facial" required>
+                </label>
+                <label>
+                    Description
+                    <textarea name="description" rows="3" placeholder="Explain what the promotion covers"><%= form.description %></textarea>
+                </label>
+            </section>
 
-        <label>
-            Linked service
-            <select name="serviceId">
-                <option value="">All merchant services</option>
-                <% services.forEach((service) => { %>
-                    <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
-                        <%= service.salonName %> - <%= service.name %>
-                    </option>
-                <% }) %>
-            </select>
-        </label>
+            <section class="compact-form-card">
+                <p class="eyebrow">Merchant target</p>
+                <label>
+                    Merchant salon
+                    <select name="salonId" data-readable-select required>
+                        <option value="">Select merchant salon</option>
+                        <% salons.forEach((salon) => { %>
+                            <option value="<%= salon.salon_id %>" <%= String(form.salonId) === String(salon.salon_id) ? 'selected' : '' %>>
+                                <%= salon.salon_name %> - <%= salon.owner_email %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </label>
 
-        <label>
-            Promotion title
-            <input type="text" name="title" value="<%= form.title %>" placeholder="Weekday Happy Hour Facial" required>
-        </label>
+                <label>
+                    Linked service
+                    <select name="serviceId" data-readable-select>
+                        <option value="">All merchant services</option>
+                        <% services.forEach((service) => { %>
+                            <option value="<%= service.id %>" <%= String(form.serviceId) === String(service.id) ? 'selected' : '' %>>
+                                <%= service.salonName %> - <%= service.name %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </label>
+            </section>
 
-        <label>
-            Promotion type
-            <select name="type" class="js-promotion-type" required>
-                <% promotionTypes.forEach((type) => { %>
-                    <option value="<%= type %>" <%= form.type === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
-                <% }) %>
-            </select>
-        </label>
+            <section class="compact-form-card">
+                <p class="eyebrow">Offer</p>
+                <label>
+                    Promotion type
+                    <select name="type" class="js-promotion-type" data-readable-select required>
+                        <% promotionTypes.forEach((type) => { %>
+                            <option value="<%= type %>" <%= form.type === type ? 'selected' : '' %>><%= promotionTypeLabel(type) %></option>
+                        <% }) %>
+                        <option value="custom" <%= isCustomPromotionType ? 'selected' : '' %>>Custom type</option>
+                    </select>
+                </label>
+                <label class="js-custom-promotion-type-group" <%= isCustomPromotionType ? '' : 'style="display:none;"' %>>
+                    Custom promotion type
+                    <input type="text" name="customPromotionType" class="js-custom-promotion-type-input" value="<%= isCustomPromotionType ? promotionTypeLabel(form.type) : '' %>" maxlength="80" placeholder="Student deal, Birthday offer, Free delivery">
+                </label>
+                <div class="compact-field-pair">
+                    <label>
+                        Discount type
+                        <select name="discountType" data-readable-select required>
+                            <% discountTypes.forEach((type) => { %>
+                                <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
+                            <% }) %>
+                        </select>
+                    </label>
 
-        <label>
-            Discount type
-            <select name="discountType" required>
-                <% discountTypes.forEach((type) => { %>
-                    <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type.replace(/_/g, ' ') %></option>
-                <% }) %>
-            </select>
-        </label>
+                    <label>
+                        Discount value
+                        <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20">
+                    </label>
+                </div>
+            </section>
 
-        <label>
-            Discount value
-            <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20">
-        </label>
+            <section class="compact-form-card compact-form-card-wide">
+                <p class="eyebrow">Schedule</p>
+                <div class="compact-field-pair">
+                    <label>
+                        Start date
+                        <input type="date" name="startDate" class="js-promotion-start" value="<%= form.startDate %>" required>
+                    </label>
 
-        <input type="hidden" name="showInFlashDeals" value="0">
-        <label class="merchant-package-toggle">
-            <input type="checkbox" name="showInFlashDeals" value="1" <%= form.showInFlashDeals ? 'checked' : '' %>>
-            Show this promotion in homepage Flash Deals
-        </label>
+                    <label>
+                        End date
+                        <input type="date" name="endDate" class="js-promotion-end" value="<%= form.endDate %>" required>
+                    </label>
+                </div>
 
-        <label>
-            Start date
-            <input type="date" name="startDate" class="js-promotion-start" value="<%= form.startDate %>" required>
-        </label>
+                <label class="js-regular-slots-group">
+                    Slots
+                    <input
+                        type="text"
+                        name="slots"
+                        class="js-promotion-slots-input"
+                        value="<%= form.slots || '' %>"
+                        placeholder="10:00, 14:00, 17:00">
+                </label>
 
-        <label>
-            End date
-            <input type="date" name="endDate" class="js-promotion-end" value="<%= form.endDate %>" required>
-        </label>
+                <label class="js-happy-hour-slots-group" style="display:none;">
+                    Happy Hour slot
+                    <select class="js-happy-hour-slots-select" data-readable-select>
+                        <option value="">Select a fixed slot</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="11:00">11:00 AM</option>
+                        <option value="12:00">12:00 PM</option>
+                        <option value="13:00">1:00 PM</option>
+                        <option value="14:00">2:00 PM</option>
+                        <option value="15:00">3:00 PM</option>
+                        <option value="16:00">4:00 PM</option>
+                    </select>
+                </label>
 
-        <label class="js-regular-slots-group">
-            Slots
-            <input
-                type="text"
-                name="slots"
-                class="js-promotion-slots-input"
-                value="<%= form.slots || '' %>"
-                placeholder="10:00, 14:00, 17:00">
-        </label>
+                <p class="muted js-happy-hour-note" style="display:none;">
+                    Happy Hour promotions use fixed booking slots between 10:00 AM and 4:00 PM, and can only run on weekdays.
+                </p>
+            </section>
 
-        <label class="js-happy-hour-slots-group" style="display:none;">
-            Happy Hour slot
-            <select class="js-happy-hour-slots-select">
-                <option value="">Select a fixed slot</option>
-                <option value="10:00">10:00 AM</option>
-                <option value="11:00">11:00 AM</option>
-                <option value="12:00">12:00 PM</option>
-                <option value="13:00">1:00 PM</option>
-                <option value="14:00">2:00 PM</option>
-                <option value="15:00">3:00 PM</option>
-                <option value="16:00">4:00 PM</option>
-            </select>
-        </label>
+            <section class="compact-form-card">
+                <p class="eyebrow">Status</p>
+                <label>
+                    Status
+                    <select name="status" data-readable-select required>
+                        <% statuses.forEach((status) => { %>
+                            <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                        <% }) %>
+                    </select>
+                </label>
+            </section>
 
-        <p class="muted js-happy-hour-note" style="display:none;">
-            Happy Hour promotions use fixed booking slots between 10:00 AM and 4:00 PM, and can only run on weekdays.
-        </p>
+            <section class="compact-form-card compact-form-card-wide">
+                <details>
+                    <summary>Optional visibility and terms</summary>
+                    <input type="hidden" name="showInFlashDeals" value="0">
+                    <label class="merchant-package-toggle">
+                        <input type="checkbox" name="showInFlashDeals" value="1" <%= form.showInFlashDeals ? 'checked' : '' %>>
+                        Show this promotion in homepage Flash Deals
+                    </label>
 
-        <label>
-            Status
-            <select name="status" required>
-                <% statuses.forEach((status) => { %>
-                    <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
-                <% }) %>
-            </select>
-        </label>
-
-        <label>
-            Description
-            <textarea name="description" placeholder="Explain what the promotion covers"><%= form.description %></textarea>
-        </label>
-
-        <label>
-            Terms
-            <textarea name="terms" placeholder="Valid weekdays only, once per customer, etc."><%= form.terms %></textarea>
-        </label>
+                    <label>
+                        Terms
+                        <textarea name="terms" rows="3" placeholder="Valid weekdays only, once per customer, etc."><%= form.terms %></textarea>
+                    </label>
+                </details>
+            </section>
+        </div>
 
         <div class="form-actions">
             <button class="button primary" type="submit"><%= promotion ? 'Update promotion' : 'Create promotion' %></button>
@@ -156,6 +193,8 @@
         const regularSlotsGroup = document.querySelector('.js-regular-slots-group');
         const happyHourSlotsGroup = document.querySelector('.js-happy-hour-slots-group');
         const happyHourSlotsSelect = document.querySelector('.js-happy-hour-slots-select');
+        const customTypeGroup = document.querySelector('.js-custom-promotion-type-group');
+        const customTypeInput = document.querySelector('.js-custom-promotion-type-input');
 
         if (!typeField || !startField || !endField || !note || !slotsField || !regularSlotsGroup || !happyHourSlotsGroup || !happyHourSlotsSelect) {
             return;
@@ -194,6 +233,11 @@
 
         const syncHappyHourState = () => {
             const isHappyHour = typeField.value === 'happy_hour';
+            const isCustom = typeField.value === 'custom';
+            if (customTypeGroup && customTypeInput) {
+                customTypeGroup.style.display = isCustom ? '' : 'none';
+                customTypeInput.required = isCustom;
+            }
             note.style.display = isHappyHour ? '' : 'none';
             regularSlotsGroup.style.display = isHappyHour ? 'none' : '';
             happyHourSlotsGroup.style.display = isHappyHour ? '' : 'none';

@@ -180,7 +180,7 @@
                                 <% } else { %>
                                     <label class="pickup-field">
                                         Choose pickup store
-                                        <select id="payment-pickup-merchant-select" name="pickupMerchantId">
+                                        <select data-readable-select id="payment-pickup-merchant-select" name="pickupMerchantId">
                                             <% paymentPickupOptions.forEach((merchant) => { %>
                                                 <option value="<%= merchant.id %>" data-pickup-address="<%= merchant.address || '' %>" <%= String(pickupMerchantId || '') === String(merchant.id) ? 'selected' : '' %>><%= merchant.name %></option>
                                             <% }) %>
@@ -834,3 +834,4 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <%- include('partials/footer') %>
+

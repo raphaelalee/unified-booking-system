@@ -526,7 +526,7 @@
 
                         <label>
                             Gender
-                            <select name="gender">
+                            <select data-readable-select name="gender">
                                 <option value="">Select gender</option>
                                 <% profileGenderOptions.forEach((option) => { %>
                                     <option value="<%= option.value %>" <%= profile.gender === option.value ? 'selected' : '' %>><%= option.label %></option>
@@ -541,7 +541,7 @@
 
                         <label>
                             Preferred contact method
-                            <select name="preferredContactMethod">
+                            <select data-readable-select name="preferredContactMethod">
                                 <option value="">Select contact method</option>
                                 <option value="email" <%= profile.preferredContactMethod === 'email' ? 'selected' : '' %>>Email</option>
                                 <option value="phone" <%= profile.preferredContactMethod === 'phone' ? 'selected' : '' %>>Phone call</option>
@@ -1784,7 +1784,7 @@
             <input type="hidden" name="responseType" value="json">
             <label>
                 Cancellation reason
-                <select name="reason" required>
+                <select data-readable-select name="reason" required>
                     <option value="">Select a reason</option>
                     <option value="Unable to attend">Unable to attend</option>
                     <option value="Need a different time">Need a different time</option>
@@ -2252,3 +2252,4 @@
     });
 })();
 </script>
+

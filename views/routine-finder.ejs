@@ -121,7 +121,7 @@
                 <div class="routine-field-grid routine-polished-fields">
                     <label>
                         <span>Preferred service type</span>
-                        <select name="category">
+                        <select data-readable-select name="category">
                             <% options.categories.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= selected('category', option.value) %>><%= option.label %></option>
                             <% }) %>
@@ -130,7 +130,7 @@
 
                     <label>
                         <span>Aftercare product need</span>
-                        <select name="productNeed">
+                        <select data-readable-select name="productNeed">
                             <% options.productNeeds.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= selected('productNeed', option.value) %>><%= option.label %></option>
                             <% }) %>
@@ -148,7 +148,7 @@
                 <div class="routine-field-grid routine-polished-fields">
                     <label>
                         <span>Budget</span>
-                        <select name="budget">
+                        <select data-readable-select name="budget">
                             <% options.budgets.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= selected('budget', option.value) %>><%= option.label %></option>
                             <% }) %>
@@ -157,7 +157,7 @@
 
                     <label>
                         <span>Service preference</span>
-                        <select name="genderTarget">
+                        <select data-readable-select name="genderTarget">
                             <% options.genderTargets.forEach((option) => { %>
                                 <option value="<%= option.value %>" <%= selected('genderTarget', option.value) %>><%= option.label %></option>
                             <% }) %>
@@ -441,3 +441,4 @@
 <script src="/js/routine-finder.js?v=1" defer></script>
 
 <%- include('partials/footer') %>
+

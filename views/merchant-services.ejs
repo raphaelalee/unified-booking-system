@@ -107,7 +107,7 @@
             <% if (categoryOptions.length > 1) { %>
                 <label>
                     <span class="sr-only">Filter by category</span>
-                    <select class="js-merchant-service-category-filter">
+                    <select data-readable-select class="js-merchant-service-category-filter">
                         <option value="">All categories</option>
                         <% categoryOptions.forEach((category) => { %>
                             <option value="<%= category %>"><%= category %></option>
@@ -271,3 +271,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

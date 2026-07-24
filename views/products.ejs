@@ -60,7 +60,7 @@
 
         <label>
             <span>Category</span>
-            <select data-product-category>
+            <select data-readable-select data-product-category>
                 <option value="">All categories</option>
                 <% categoryList.forEach((category) => { %>
                     <option value="<%= category %>"><%= category %></option>
@@ -70,7 +70,7 @@
 
         <label>
             <span>Sort</span>
-            <select data-product-sort>
+            <select data-readable-select data-product-sort>
                 <option value="featured">Featured</option>
                 <option value="price-asc">Price: low to high</option>
                 <option value="price-desc">Price: high to low</option>
@@ -243,3 +243,4 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <%- include('partials/footer') %>
+

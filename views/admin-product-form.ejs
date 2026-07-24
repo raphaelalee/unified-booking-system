@@ -29,7 +29,7 @@
                 <div class="marketplace-form-grid">
                     <label>
                         <span>Merchant salon</span>
-                        <select name="salonId" required>
+                        <select data-readable-select name="salonId" required>
                             <option value="">Select merchant salon</option>
                             <% salons.forEach((salon) => { %>
                                 <option value="<%= salon.salon_id %>" <%= String(form.salonId) === String(salon.salon_id) ? 'selected' : '' %>>
@@ -87,3 +87,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

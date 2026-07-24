@@ -13,7 +13,7 @@
             </div>
         </header>
 
-        <form class="login-form service-admin-form" action="<%= voucher ? `/merchant/vouchers/${voucher.id}` : '/merchant/vouchers' %>" method="POST">
+        <form class="login-form service-admin-form compact-crud-form" action="<%= voucher ? `/merchant/vouchers/${voucher.id}` : '/merchant/vouchers' %>" method="POST">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <% if (errors.length > 0) { %>
                 <div class="notice error">
@@ -23,124 +23,154 @@
                 </div>
             <% } %>
 
-            <label>
-                Voucher title
-                <input type="text" name="title" class="js-voucher-title-input" value="<%= form.title %>" placeholder="20% OFF Hydrating Facial" required>
-            </label>
-
-            <label>
-                Voucher description
-                <textarea name="detail" class="js-voucher-detail-input" placeholder="Explain the offer, minimum spend, and redemption rules." required><%= form.detail %></textarea>
-            </label>
-
-            <label>
-                Linked listing type
-                <select name="linkedItemType" class="js-linked-item-type" required>
-                    <% linkedItemTypes.forEach((type) => { %>
-                        <option value="<%= type %>" <%= form.linkedItemType === type ? 'selected' : '' %>><%= type %></option>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label class="js-linked-service-group">
-                Linked service
-                <select name="linkedItemId" class="js-linked-service-select">
-                    <option value="">Select a service</option>
-                    <% services.forEach((service) => { %>
-                        <option value="<%= service.id %>" data-item-name="<%= service.name %>" <%= form.linkedItemType === 'service' && String(form.linkedItemId) === String(service.id) ? 'selected' : '' %>>
-                            <%= service.name %>
-                        </option>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label class="js-linked-product-group" style="display:none;">
-                Linked product
-                <select class="js-linked-product-select">
-                    <option value="">Select a product</option>
-                    <% products.forEach((product) => { %>
-                        <option value="<%= product.id %>" data-item-name="<%= product.name %>" <%= form.linkedItemType === 'product' && String(form.linkedItemId) === String(product.id) ? 'selected' : '' %>>
-                            <%= product.name %>
-                        </option>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label>
-                Discount type
-                <select name="discountType" required>
-                    <% discountTypes.forEach((type) => { %>
-                        <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type %></option>
-                    <% }) %>
-                </select>
-            </label>
-
-            <label>
-                Discount value
-                <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20" required>
-            </label>
-
-            <label>
-                Minimum spend
-                <input type="number" name="minimumSpend" value="<%= form.minimumSpend %>" min="0" step="0.01" placeholder="50">
-            </label>
-
-            <label>
-                Redeem cost in VaniGlints
-                <input type="number" name="pointsRequired" value="<%= form.pointsRequired %>" min="1" step="1" placeholder="500" required>
-            </label>
-
-            <label>
-                Start date
-                <input type="datetime-local" name="startDate" value="<%= form.startDate %>">
-            </label>
-
-            <label>
-                Expiry date
-                <input type="datetime-local" name="expiryDate" value="<%= form.expiryDate %>">
-            </label>
-
-            <label>
-                Per-user usage limit
-                <input type="number" name="usageLimitPerUser" value="<%= form.usageLimitPerUser %>" min="1" step="1" placeholder="1">
-            </label>
-
-            <label>
-                Total usage limit
-                <input type="number" name="usageLimitTotal" value="<%= form.usageLimitTotal %>" min="1" step="1" placeholder="100">
-            </label>
-
-            <section class="merchant-spin-settings-panel" aria-label="Spin and Discover voucher settings">
-                <div>
-                    <p class="eyebrow">Spin & Discover</p>
-                    <h2>Include in Spin & Discover</h2>
-                    <p class="muted">Active and valid merchant vouchers can be won on the reward wheel and saved to the customer's voucher area.</p>
-                </div>
-                <input type="hidden" name="spinEnabled" value="0">
-                <label class="merchant-package-toggle">
-                    <input type="checkbox" name="spinEnabled" value="1" <%= form.spinEnabled ? 'checked' : '' %>>
-                    Include this voucher on the reward wheel
-                </label>
-                <div class="merchant-service-editor-pair">
+            <div class="compact-form-grid">
+                <section class="compact-form-card compact-form-card-wide">
+                    <p class="eyebrow">Voucher basics</p>
                     <label>
-                        Maximum number of wheel wins
-                        <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
+                        Voucher title
+                        <input type="text" name="title" class="js-voucher-title-input" value="<%= form.title %>" placeholder="20% OFF Hydrating Facial" required>
                     </label>
-                    <label>
-                        Remaining wheel reward quantity
-                        <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
-                    </label>
-                </div>
-            </section>
 
-            <label>
-                Status
-                <select name="status" required>
-                    <% statuses.forEach((status) => { %>
-                        <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
-                    <% }) %>
-                </select>
-            </label>
+                    <label>
+                        Voucher description
+                        <textarea name="detail" rows="3" class="js-voucher-detail-input" placeholder="Explain the offer, minimum spend, and redemption rules." required><%= form.detail %></textarea>
+                    </label>
+                </section>
+
+                <section class="compact-form-card">
+                    <p class="eyebrow">Linked item</p>
+                    <label>
+                        Linked listing type
+                        <select name="linkedItemType" class="js-linked-item-type" data-readable-select required>
+                            <% linkedItemTypes.forEach((type) => { %>
+                                <option value="<%= type %>" <%= form.linkedItemType === type ? 'selected' : '' %>><%= type %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+
+                    <label class="js-linked-service-group">
+                        Linked service
+                        <select name="linkedItemId" class="js-linked-service-select" data-readable-select>
+                            <option value="">Select a service</option>
+                            <% services.forEach((service) => { %>
+                                <option value="<%= service.id %>" data-item-name="<%= service.name %>" <%= form.linkedItemType === 'service' && String(form.linkedItemId) === String(service.id) ? 'selected' : '' %>>
+                                    <%= service.name %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </label>
+
+                    <label class="js-linked-product-group" style="display:none;">
+                        Linked product
+                        <select class="js-linked-product-select" data-readable-select>
+                            <option value="">Select a product</option>
+                            <% products.forEach((product) => { %>
+                                <option value="<%= product.id %>" data-item-name="<%= product.name %>" <%= form.linkedItemType === 'product' && String(form.linkedItemId) === String(product.id) ? 'selected' : '' %>>
+                                    <%= product.name %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </label>
+                </section>
+
+                <section class="compact-form-card">
+                    <p class="eyebrow">Reward value</p>
+                    <div class="compact-field-pair">
+                        <label>
+                            Discount type
+                            <select name="discountType" data-readable-select required>
+                                <% discountTypes.forEach((type) => { %>
+                                    <option value="<%= type %>" <%= form.discountType === type ? 'selected' : '' %>><%= type %></option>
+                                <% }) %>
+                            </select>
+                        </label>
+
+                        <label>
+                            Discount value
+                            <input type="number" name="discountValue" value="<%= form.discountValue %>" min="0" step="0.01" placeholder="20" required>
+                        </label>
+                    </div>
+
+                    <div class="compact-field-pair">
+                        <label>
+                            Minimum spend
+                            <input type="number" name="minimumSpend" value="<%= form.minimumSpend %>" min="0" step="0.01" placeholder="50">
+                        </label>
+
+                        <label>
+                            Redeem cost in VaniGlints
+                            <input type="number" name="pointsRequired" value="<%= form.pointsRequired %>" min="1" step="1" placeholder="500" required>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="compact-form-card compact-form-card-wide">
+                    <p class="eyebrow">Schedule and limits</p>
+                    <div class="compact-field-pair">
+                        <label>
+                            Start date
+                            <input type="datetime-local" name="startDate" value="<%= form.startDate %>">
+                        </label>
+
+                        <label>
+                            Expiry date
+                            <input type="datetime-local" name="expiryDate" value="<%= form.expiryDate %>">
+                        </label>
+                    </div>
+
+                    <div class="compact-field-pair">
+                        <label>
+                            Per-user usage limit
+                            <input type="number" name="usageLimitPerUser" value="<%= form.usageLimitPerUser %>" min="1" step="1" placeholder="1">
+                        </label>
+
+                        <label>
+                            Total usage limit
+                            <input type="number" name="usageLimitTotal" value="<%= form.usageLimitTotal %>" min="1" step="1" placeholder="100">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="compact-form-card">
+                    <p class="eyebrow">Status</p>
+                    <label>
+                        Status
+                        <select name="status" data-readable-select required>
+                            <% statuses.forEach((status) => { %>
+                                <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
+                            <% }) %>
+                        </select>
+                    </label>
+                </section>
+
+                <section class="compact-form-card compact-form-card-wide">
+                    <details>
+                        <summary>Optional Spin & Discover settings</summary>
+                        <section class="merchant-spin-settings-panel" aria-label="Spin and Discover voucher settings">
+                            <div>
+                                <p class="eyebrow">Spin & Discover</p>
+                                <h2>Include in Spin & Discover</h2>
+                                <p class="muted">Active and valid merchant vouchers can be won on the reward wheel and saved to the customer's voucher area.</p>
+                            </div>
+                            <input type="hidden" name="spinEnabled" value="0">
+                            <label class="merchant-package-toggle">
+                                <input type="checkbox" name="spinEnabled" value="1" <%= form.spinEnabled ? 'checked' : '' %>>
+                                Include this voucher on the reward wheel
+                            </label>
+                            <div class="merchant-service-editor-pair">
+                                <label>
+                                    Maximum number of wheel wins
+                                    <input type="number" name="spinClaimLimit" value="<%= form.spinClaimLimit || '' %>" min="0" step="1" placeholder="50">
+                                </label>
+                                <label>
+                                    Remaining wheel reward quantity
+                                    <input type="number" name="spinInventoryRemaining" value="<%= form.spinInventoryRemaining || '' %>" min="0" step="1" placeholder="Same as claim limit">
+                                </label>
+                            </div>
+                        </section>
+                    </details>
+                </section>
+            </div>
 
             <div class="form-actions">
                 <button class="button primary" type="submit"><%= voucher ? 'Update voucher' : 'Create voucher' %></button>
@@ -160,6 +190,7 @@
         const titleInput = document.querySelector('.js-voucher-title-input');
         const detailInput = document.querySelector('.js-voucher-detail-input');
         const discountTypeField = document.querySelector('select[name="discountType"]');
+        const statusField = document.querySelector('select[name="status"]');
         const discountValueField = document.querySelector('input[name="discountValue"]');
         const minimumSpendField = document.querySelector('input[name="minimumSpend"]');
         const pointsRequiredField = document.querySelector('input[name="pointsRequired"]');
@@ -170,6 +201,82 @@
 
         let lastAutoTitle = '';
         let lastAutoDetail = '';
+
+        const setupReadableSelect = (select) => {
+            if (!select || select.dataset.readableSelectReady === '1') return;
+            select.dataset.readableSelectReady = '1';
+            select.classList.add('native-readable-select');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'custom-promotion-type-select custom-readable-select';
+
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'custom-promotion-type-trigger';
+            trigger.setAttribute('aria-haspopup', 'listbox');
+            trigger.setAttribute('aria-expanded', 'false');
+
+            const label = document.createElement('span');
+            const caret = document.createElement('span');
+            caret.className = 'custom-promotion-type-caret';
+            caret.setAttribute('aria-hidden', 'true');
+            caret.textContent = '⌄';
+            trigger.append(label, caret);
+
+            const menu = document.createElement('div');
+            menu.className = 'custom-promotion-type-menu';
+            menu.role = 'listbox';
+            menu.hidden = true;
+
+            const close = () => {
+                wrapper.classList.remove('is-open');
+                menu.hidden = true;
+                trigger.setAttribute('aria-expanded', 'false');
+            };
+
+            const open = () => {
+                wrapper.classList.add('is-open');
+                menu.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+            };
+
+            const sync = () => {
+                const selected = select.options[select.selectedIndex];
+                label.textContent = selected ? selected.textContent.trim() : 'Select';
+                Array.from(menu.querySelectorAll('button')).forEach((button) => {
+                    button.classList.toggle('is-selected', button.dataset.value === select.value);
+                });
+            };
+
+            const rebuild = () => {
+                menu.innerHTML = '';
+                Array.from(select.options).forEach((option) => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.role = 'option';
+                    item.dataset.value = option.value;
+                    item.textContent = option.textContent.trim();
+                    item.addEventListener('click', () => {
+                        select.value = option.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        close();
+                    });
+                    menu.appendChild(item);
+                });
+                sync();
+            };
+
+            trigger.addEventListener('click', () => {
+                menu.hidden ? open() : close();
+            });
+            document.addEventListener('click', (event) => {
+                if (!wrapper.contains(event.target)) close();
+            });
+            select.addEventListener('change', sync);
+            wrapper.append(trigger, menu);
+            select.insertAdjacentElement('afterend', wrapper);
+            rebuild();
+        };
 
         const getActiveSelect = () => linkedTypeField.value === 'product' ? productSelect : serviceSelect;
         const getVoucherStyleTitle = (itemName) => {

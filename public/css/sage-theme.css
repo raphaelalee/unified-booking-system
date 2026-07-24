@@ -25318,3 +25318,304 @@ body:not(.flappy-page) section.ai-chatbot {
         forced-color-adjust: auto;
     }
 }
+
+.compact-crud-panel,
+.compact-crud-form {
+    max-width: 980px;
+}
+
+.compact-crud-form {
+    display: grid;
+    gap: 16px;
+}
+
+.compact-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.compact-form-card {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 14px 32px rgba(49, 69, 44, 0.06);
+}
+
+.compact-form-card-wide {
+    grid-column: 1 / -1;
+}
+
+.compact-form-card .eyebrow {
+    margin: 0;
+}
+
+.compact-field-pair,
+.compact-linked-targets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.compact-form-card details {
+    display: grid;
+    gap: 12px;
+}
+
+.compact-form-card summary {
+    cursor: pointer;
+    color: var(--sage-ink, #243225);
+    font-weight: 900;
+}
+
+.compact-form-card select,
+.compact-crud-form select {
+    font-weight: 800;
+    text-transform: none;
+}
+
+.compact-form-card select option,
+.compact-crud-form select option {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #243225;
+    background: #ffffff;
+}
+
+body:not(.flappy-page) select {
+    min-height: 42px;
+    color: #243225 !important;
+    font-size: 1rem !important;
+    font-weight: 800 !important;
+    line-height: 1.35 !important;
+}
+
+body:not(.flappy-page) select option {
+    color: #243225 !important;
+    background: #ffffff !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    line-height: 1.5 !important;
+    padding: 10px 12px !important;
+}
+
+body:not(.flappy-page) select option:checked {
+    color: #ffffff !important;
+    background: #4f6847 !important;
+}
+
+.ai-platform-voucher-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.ai-platform-voucher-heading {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.ai-platform-voucher-heading h2,
+.ai-platform-voucher-card h3 {
+    margin: 0;
+}
+
+.ai-platform-voucher-results {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.ai-platform-voucher-card {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(79, 104, 71, 0.16);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.ai-platform-voucher-card p {
+    margin: 0;
+    color: var(--sage-muted, #6f7d6b);
+    line-height: 1.45;
+}
+
+.ai-platform-voucher-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.ai-platform-voucher-meta span {
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(238, 244, 233, 0.72);
+    color: var(--sage-muted, #6f7d6b);
+    font-size: 0.78rem;
+}
+
+.ai-platform-voucher-meta strong {
+    color: var(--sage-ink, #243225);
+    overflow-wrap: anywhere;
+}
+
+.ai-recommendation-card {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 16px;
+    min-height: 360px;
+    padding: 20px;
+    border: 1px solid rgba(79, 104, 71, 0.18);
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top right, rgba(238, 244, 233, 0.9), transparent 34%),
+        rgba(255, 255, 255, 0.94);
+    box-shadow: 0 18px 44px rgba(49, 69, 44, 0.08);
+}
+
+.ai-recommendation-card-header {
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.ai-recommendation-card .tag {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+.ai-recommendation-copy {
+    display: grid;
+    gap: 7px;
+}
+
+.ai-recommendation-copy h3 {
+    margin: 0;
+    color: var(--sage-heading, #526f49);
+    font-size: clamp(1.2rem, 1.8vw, 1.45rem);
+    line-height: 1.12;
+}
+
+.ai-recommendation-copy p {
+    margin: 0;
+    color: var(--sage-muted, #6f7d6b);
+    line-height: 1.48;
+}
+
+.ai-recommendation-meta.profile-booking-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.ai-recommendation-meta.profile-booking-meta div {
+    min-height: auto;
+    padding: 10px;
+    border: 1px solid rgba(79, 104, 71, 0.08);
+    border-radius: 12px;
+    background: rgba(238, 244, 233, 0.62);
+}
+
+.ai-recommendation-meta.profile-booking-meta dt {
+    margin-bottom: 4px;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+}
+
+.ai-recommendation-meta.profile-booking-meta dd {
+    font-size: 0.88rem;
+    line-height: 1.28;
+}
+
+.ai-recommendation-actions {
+    align-self: end;
+    justify-content: flex-start;
+    margin-top: 2px;
+}
+
+.ai-recommendation-actions .button {
+    min-width: 98px;
+    border-radius: 999px;
+    padding-inline: 18px;
+}
+
+.merchant-analytics-page [data-ai-voucher-panel],
+.merchant-analytics-page [data-ai-promotion-panel] {
+    padding: 24px !important;
+    border-radius: 22px !important;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 244, 0.9)) !important;
+}
+
+.merchant-analytics-page [data-ai-voucher-panel] > .portal-card-header,
+.merchant-analytics-page [data-ai-promotion-panel] > .portal-card-header {
+    align-items: center !important;
+    margin-bottom: 12px;
+}
+
+.merchant-analytics-page [data-ai-voucher-results],
+.merchant-analytics-page [data-ai-promotion-results] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+    margin-top: 18px;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-card,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-card {
+    min-height: 0 !important;
+    padding: 18px !important;
+    gap: 14px !important;
+    border-radius: 18px !important;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-copy h3,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-copy h3 {
+    font-size: 1.18rem !important;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-copy p,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-copy p {
+    font-size: 0.92rem;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-meta.profile-booking-meta,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-meta.profile-booking-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-meta.profile-booking-meta div,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-meta.profile-booking-meta div {
+    padding: 9px 10px !important;
+}
+
+.merchant-analytics-page [data-ai-voucher-results] .ai-recommendation-actions,
+.merchant-analytics-page [data-ai-promotion-results] .ai-recommendation-actions {
+    margin-top: 0 !important;
+}
+
+@media (max-width: 900px) {
+    .compact-form-grid,
+    .compact-field-pair,
+    .compact-linked-targets,
+    .ai-platform-voucher-results,
+    .ai-platform-voucher-meta,
+    .ai-recommendation-meta.profile-booking-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-platform-voucher-heading {
+        display: grid;
+    }
+}

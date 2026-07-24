@@ -26,7 +26,7 @@
 
         <label>
             Merchant salon
-            <select name="salonId" required>
+            <select data-readable-select name="salonId" required>
                 <option value="">Select merchant salon</option>
                 <% salons.forEach((salon) => { %>
                     <option value="<%= salon.salon_id %>" <%= String(form.salonId) === String(salon.salon_id) ? 'selected' : '' %>>
@@ -43,7 +43,7 @@
 
         <label>
             Category
-            <select name="categoryId" required>
+            <select data-readable-select name="categoryId" required>
                 <option value="">Select category</option>
                 <% categories.forEach((category) => { %>
                     <option value="<%= category.category_id %>" <%= String(form.categoryId) === String(category.category_id) ? 'selected' : '' %>>
@@ -83,3 +83,4 @@
     </div>
 </section>
 <%- include('partials/footer') %>
+

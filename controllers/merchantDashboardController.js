@@ -435,11 +435,14 @@ function getProductForm(body = {}, imageUrlOverride = null) {
 }
 
 function getPromotionForm(body = {}) {
+    const selectedType = String(body.type || '').trim();
+    const customType = String(body.customPromotionType || '').trim();
+
     return {
         title: String(body.title || '').trim(),
         serviceId: String(body.serviceId || '').trim(),
         productId: String(body.productId || '').trim(),
-        type: String(body.type || '').trim(),
+        type: selectedType === 'custom' ? normalizeCustomPromotionType(customType) : selectedType,
         discountType: String(body.discountType || '').trim(),
         discountValue: String(body.discountValue || '').trim(),
         minimumSpend: String(body.minimumSpend || '').trim(),
@@ -456,6 +459,20 @@ function getPromotionForm(body = {}) {
         description: String(body.description || '').trim(),
         terms: String(body.terms || '').trim()
     };
+}
+
+function normalizeCustomPromotionType(value = '') {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+}
+
+function isValidPromotionType(value = '') {
+    const type = String(value || '').trim();
+    return Promotion.PROMOTION_TYPES.includes(type) || /^[a-z0-9][a-z0-9_]{1,79}$/.test(type);
 }
 
 function addDaysToDateKey(dateKey, daysToAdd) {
@@ -597,8 +614,8 @@ function validatePromotionForm(form, merchant, products = []) {
         errors.push('Promotion title must be at least 2 characters.');
     }
 
-    if (!Promotion.PROMOTION_TYPES.includes(form.type)) {
-        errors.push('Please choose a valid promotion type.');
+    if (!isValidPromotionType(form.type)) {
+        errors.push('Please choose a valid promotion type or enter a custom promotion type.');
     }
 
     if (!Promotion.DISCOUNT_TYPES.includes(form.discountType)) {

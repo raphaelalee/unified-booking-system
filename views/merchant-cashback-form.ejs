@@ -45,7 +45,7 @@
                 </label>
                 <label>
                     <span>Status</span>
-                    <select name="status">
+                    <select data-readable-select name="status">
                         <% statuses.forEach((status) => { %>
                             <option value="<%= status %>" <%= form.status === status ? 'selected' : '' %>><%= status %></option>
                         <% }) %>
@@ -53,7 +53,7 @@
                 </label>
                 <label>
                     <span>Applies to</span>
-                    <select name="applicableType">
+                    <select data-readable-select name="applicableType">
                         <% applicableTypes.forEach((type) => { %>
                             <option value="<%= type %>" <%= form.applicableType === type ? 'selected' : '' %>><%= type %></option>
                         <% }) %>
@@ -93,3 +93,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

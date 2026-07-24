@@ -137,7 +137,7 @@
                                     Recommended: <strong><%= recommendation.featuredType || 'trending' %></strong>
                                     <% if (recommendation.reason) { %> · <%= recommendation.reason %><% } %>
                                 </div>
-                                <select name="featuredType">
+                                <select data-readable-select name="featuredType">
                                     <option value="featured_month" <%= recommendation.featuredType === 'featured_month' ? 'selected' : '' %>>Featured Merchant of the Month</option>
                                     <option value="sponsored" <%= recommendation.featuredType === 'sponsored' ? 'selected' : '' %>>Sponsored</option>
                                     <option value="trending" <%= recommendation.featuredType === 'trending' ? 'selected' : '' %>>Trending</option>
@@ -158,3 +158,4 @@
 </section>
 
 <%- include('partials/footer') %>
+

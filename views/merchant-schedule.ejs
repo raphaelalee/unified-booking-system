@@ -63,8 +63,8 @@
                     </div>
                     <div class="merchant-calendar-controls">
                         <button class="button secondary compact" type="button" data-calendar-prev>Previous</button>
-                        <select aria-label="Calendar month" data-calendar-month></select>
-                        <select aria-label="Calendar year" data-calendar-year></select>
+                        <select data-readable-select aria-label="Calendar month" data-calendar-month></select>
+                        <select data-readable-select aria-label="Calendar year" data-calendar-year></select>
                         <button class="button secondary compact" type="button" data-calendar-next>Next</button>
                         <button class="button secondary compact" type="button" data-calendar-today>Today</button>
                     </div>
@@ -151,7 +151,7 @@
                 </div>
                 <div class="merchant-history-filters">
                     <label>Status
-                        <select data-history-status>
+                        <select data-readable-select data-history-status>
                             <option value="all">All</option>
                             <option value="pending">Pending</option>
                             <option value="confirmed">Confirmed</option>
@@ -161,8 +161,8 @@
                             <option value="no_show">No-show</option>
                         </select>
                     </label>
-                    <label>Month <select data-history-month></select></label>
-                    <label>Year <select data-history-year></select></label>
+                    <label>Month <select data-readable-select data-history-month></select></label>
+                    <label>Year <select data-readable-select data-history-year></select></label>
                 </div>
                 <div class="admin-table-wrap merchant-schedule-table-wrap">
                     <table class="admin-table merchant-schedule-table">
@@ -196,7 +196,7 @@
                 </div>
                 <div class="merchant-history-filters">
                     <label>QR status
-                        <select data-qr-status>
+                        <select data-readable-select data-qr-status>
                             <option value="all">All</option>
                             <option value="QR Not Generated">QR Not Generated</option>
                             <option value="QR Generated">QR Generated</option>
@@ -205,8 +205,8 @@
                             <option value="Expired">Expired</option>
                         </select>
                     </label>
-                    <label>Month <select data-qr-month></select></label>
-                    <label>Year <select data-qr-year></select></label>
+                    <label>Month <select data-readable-select data-qr-month></select></label>
+                    <label>Year <select data-readable-select data-qr-year></select></label>
                 </div>
                 <div class="admin-table-wrap merchant-schedule-table-wrap">
                     <table class="admin-table merchant-schedule-table">
@@ -731,3 +731,4 @@
 </script>
 
 <%- include('partials/footer') %>
+
