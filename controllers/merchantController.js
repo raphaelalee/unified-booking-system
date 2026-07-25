@@ -3431,7 +3431,22 @@ function createBooking(req, res) {
         }
 
         const bookingId = confirmation.result?.insertId || null;
+        const bookingReference = bookingId ? buildBookingReference(bookingId, req.body.bookingDate) : '';
+        const checkInUrl = bookingId ? getBookingCheckInUrl(req, bookingId) : '';
         notifyBookingCreated(req, merchant, validation, bookingId);
+        notifyBooking({
+            bookingId,
+            displayReference: bookingReference,
+            customerName: validation.customerName,
+            email: validation.email,
+            phone: validation.phone,
+            merchantName: merchant.name,
+            serviceName: validation.serviceName,
+            bookingDate: req.body.bookingDate,
+            bookingTime: validation.bookingTime,
+            checkInUrl,
+            receiptUrl: bookingId ? getGuestReceiptUrl(req, bookingId) : ''
+        });
         req.session.success = confirmation.confirmed
             ? `Booking confirmed for ${validation.serviceName} at ${merchant.name} on ${req.body.bookingDate}, ${validation.bookingTime}.`
             : `Booking submitted for ${validation.serviceName} at ${merchant.name} and is waiting for merchant review.`;

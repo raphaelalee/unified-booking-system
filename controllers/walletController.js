@@ -341,6 +341,18 @@ function getTopupOtpDeliveryError(method, reason = '') {
         return 'WhatsApp OTP could not be sent. Please check your profile phone number or WhatsApp setup, or change preferred contact to email.';
     }
 
+    if (reason === 'missing_email') {
+        return 'Your profile has no email address. Add an email address first, or change preferred contact to WhatsApp.';
+    }
+
+    if (reason === 'smtp_auth_failed') {
+        return 'Email OTP could not be sent because SMTP login failed. Check the Gmail app password in SMTP_PASS.';
+    }
+
+    if (reason === 'smtp_not_configured' || reason === 'not_configured') {
+        return 'Email OTP is not configured. Check SMTP_HOST, SMTP_USER, SMTP_PASS, and EMAIL_FROM.';
+    }
+
     return 'Email OTP could not be sent. Please check your profile email or SMTP configuration.';
 }
 
@@ -374,10 +386,25 @@ async function sendTopup2faCode(user, method, code) {
         }
 
         const message = `Your Vaniday wallet top-up code is ${code}. It expires in 5 minutes.`;
-        const result = await sendWhatsAppText(phone, message);
+        let result;
+
+        try {
+            result = await sendWhatsAppText(phone, message);
+        } catch (error) {
+            return {
+                sent: false,
+                reason: 'whatsapp_send_failed',
+                errorMessage: error.message || String(error)
+            };
+        }
 
         if (result?.skipped) {
-            return { sent: false, reason: result.reason || 'not_configured' };
+            return {
+                sent: false,
+                reason: result.reason || 'not_configured',
+                fallbackReason: result.fallbackReason || null,
+                errorMessage: result.errorMessage || null
+            };
         }
 
         return {
@@ -392,14 +419,24 @@ async function sendTopup2faCode(user, method, code) {
         return { sent: false, reason: 'missing_email' };
     }
 
-    const result = await sendWalletTopupOtpEmail({
-        email,
-        name: user?.name || 'there',
-        code
-    });
+    let result;
+
+    try {
+        result = await sendWalletTopupOtpEmail({
+            email,
+            name: user?.name || 'there',
+            code
+        });
+    } catch (error) {
+        return {
+            sent: false,
+            reason: 'smtp_send_failed',
+            errorMessage: error.message || String(error)
+        };
+    }
 
     if (result?.skipped) {
-        return { sent: false, reason: result.reason || 'not_configured' };
+        return { sent: false, reason: result.reason || 'smtp_not_configured' };
     }
 
     return {
@@ -731,7 +768,9 @@ async function topupWallet(req, res) {
             console.warn('Wallet top-up OTP delivery failed', {
                 userId: user.user_id,
                 method: preferredContactMethod,
-                reason: delivery.reason || 'unknown'
+                reason: delivery.reason || 'unknown',
+                fallbackReason: delivery.fallbackReason || null,
+                errorMessage: delivery.errorMessage || null
             });
             setWalletError(req, getTopupOtpDeliveryError(preferredContactMethod, delivery.reason));
             return res.redirect('/profile/wallet');
