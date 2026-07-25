@@ -783,13 +783,15 @@ function canViewReceipt(req, receipt, merchant = null) {
 function verifyPickupToken(orderId, token) {
     try {
         const payload = jwt.verify(token, getTokenSecret());
-        const receiptId = String(orderId);
+        const routeOrderId = String(orderId);
 
         if (payload.purpose !== 'pickup') {
             return null;
         }
 
-        if (String(payload.orderId) !== String(orderId) || String(payload.receiptId) !== receiptId) {
+        const signedOrderId = String(payload.orderId || payload.receiptId || '');
+
+        if (!signedOrderId || signedOrderId !== routeOrderId) {
             return null;
         }
 

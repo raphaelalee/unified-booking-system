@@ -14,7 +14,10 @@
 
 <section class="section compact receipt-section">
     <% if (message) { %>
-        <div class="notice <%= /confirmed/i.test(message) ? 'success' : 'error' %>"><%= message %></div>
+        <%
+            const isSuccessMessage = /confirmed|verified successfully/i.test(message);
+        %>
+        <div class="notice <%= isSuccessMessage ? 'success' : 'error' %>"><%= message %></div>
     <% } %>
 
     <% if (!invalid && order) { %>
@@ -80,7 +83,10 @@
                         <p><strong>Collected At:</strong> <%= order.collectedAtLabel %></p>
                     <% } %>
                 <% } else if (canConfirm) { %>
-                    <form action="/pickup-verify/order/<%= encodeURIComponent(order.id) %>/confirm?token=<%= encodeURIComponent(token) %>" method="POST">
+                    <%
+                        const pickupRouteId = order.order_number || order.orderNumber || order.receiptId || order.id;
+                    %>
+                    <form action="/pickup-verify/order/<%= encodeURIComponent(pickupRouteId) %>/confirm?token=<%= encodeURIComponent(token) %>" method="POST">
                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                         <input type="hidden" name="token" value="<%= token %>">
                         <button class="button primary full" type="submit">Verify Pickup</button>
