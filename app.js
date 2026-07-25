@@ -163,7 +163,7 @@ app.use((req, res, next) => {
     res.locals.cartCount = getCartItemCount(req.session.cart || []);
     res.locals.currentUser = req.session.user || null;
     res.locals.currentPath = req.path;
-    res.locals.showQrDebug = process.env.NODE_ENV === 'development';
+    res.locals.showQrDebug = process.env.SHOW_QR_DEBUG === 'true';
 
     if (!req.session.user) {
         res.locals.notificationUnreadCount = 0;

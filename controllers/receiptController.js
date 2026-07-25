@@ -1067,7 +1067,7 @@ async function buildReceiptViewModel(req, id) {
                 ? `/pickup-verify/order/${getOrderId(receipt)}?token=${token}`
                 : '',
         qrCodeDataUrl,
-        showQrDebug: process.env.NODE_ENV === 'development',
+        showQrDebug: process.env.SHOW_QR_DEBUG === 'true',
         appointmentLabel,
         paidAtLabel: formatDateTime(receipt.paidAt || receipt.checkedInAt || new Date()),
         checkedInAtLabel: formatDateTime(receipt.checkedInAt),

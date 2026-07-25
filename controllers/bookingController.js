@@ -796,7 +796,7 @@ function createBooking(req, res) {
                         receiptPath: getGuestReceiptPath(bookingId),
                         receiptUrl: getGuestReceiptUrl(req, bookingId)
                     },
-                    showQrDebug: process.env.NODE_ENV === 'development',
+                    showQrDebug: process.env.SHOW_QR_DEBUG === 'true',
                     emailSkipped
                 });
             } catch (confirmationError) {
@@ -1072,7 +1072,7 @@ function showCheckIn(req, res) {
                     : '',
             checkInOpensAtLabel: checkInAvailability.opensAtLabel,
             minutesUntilCheckInOpen: checkInAvailability.minutesUntilOpen,
-            showQrDebug: process.env.NODE_ENV === 'development',
+            showQrDebug: process.env.SHOW_QR_DEBUG === 'true',
             checkinUrl: getBookingCheckInUrl(req, bookingId),
             qrDebug: {
                 system: 'booking-check-in',
@@ -1129,7 +1129,7 @@ function confirmCheckIn(req, res) {
             canConfirmCheckIn: false,
             checkInOpensAtLabel: '',
             minutesUntilCheckInOpen: 0,
-            showQrDebug: process.env.NODE_ENV === 'development',
+            showQrDebug: process.env.SHOW_QR_DEBUG === 'true',
             qrDebug: {
                 system: 'booking-check-in',
                 label: 'Scan to Check In',
@@ -1216,7 +1216,7 @@ function confirmCheckIn(req, res) {
                 checkinAction: routeTarget,
                 checkinUrl: getBookingCheckInUrl(req, bookingId),
                 canConfirmCheckIn: false,
-                showQrDebug: process.env.NODE_ENV === 'development',
+                showQrDebug: process.env.SHOW_QR_DEBUG === 'true',
                 qrDebug: {
                     system: 'booking-check-in',
                     label: 'Scan to Check In',
