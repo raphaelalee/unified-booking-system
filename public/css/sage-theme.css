@@ -4772,11 +4772,12 @@ body:not(.flappy-page) .notification-count {
 
 .profile-redesign-page .custom-readable-select.is-open {
     z-index: 80;
-    margin-bottom: 236px;
 }
 
 .profile-redesign-page .custom-readable-select.is-open .custom-promotion-type-menu {
+    position: static;
     z-index: 90;
+    margin-top: 6px;
 }
 
 .profile-settings-stack {
