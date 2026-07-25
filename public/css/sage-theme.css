@@ -4766,6 +4766,19 @@ body:not(.flappy-page) .notification-count {
     gap: 16px;
 }
 
+.profile-redesign-page .form-grid label {
+    min-width: 0;
+}
+
+.profile-redesign-page .custom-readable-select.is-open {
+    z-index: 80;
+    margin-bottom: 236px;
+}
+
+.profile-redesign-page .custom-readable-select.is-open .custom-promotion-type-menu {
+    z-index: 90;
+}
+
 .profile-settings-stack {
     display: grid;
     gap: 18px;
