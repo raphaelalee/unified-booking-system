@@ -1099,15 +1099,40 @@ async function sendLoginOtp(user, method, code) {
     });
 }
 
+function getLoginOtpDeliveryMessage(method, reason = '') {
+    if (method === 'sms') {
+        if (reason === 'missing_phone') return 'Your account has no phone number for SMS verification.';
+        if (reason === 'sms_disabled') return 'SMS verification is disabled. Set SMS_NOTIFICATIONS_ENABLED=true.';
+        if (reason === 'missing_twilio_account_sid' || reason === 'missing_twilio_auth_token') {
+            return 'SMS verification is missing Twilio account credentials.';
+        }
+        if (reason === 'missing_twilio_phone_number') return 'SMS verification is missing TWILIO_PHONE_NUMBER.';
+        if (reason === 'invalid_phone') return 'Your phone number is invalid for SMS verification.';
+        if (reason === 'twilio_sms_send_failed') return 'Twilio could not send the SMS verification code. Check Render logs for the Twilio error code.';
+        return 'SMS verification code could not be sent. Please try email instead.';
+    }
+
+    return 'Email verification code could not be sent. Please try again.';
+}
+
 function sendAndStoreLoginOtp(req, user, method, callback) {
     const code = generateOtpCode();
 
     sendLoginOtp(user, method, code)
         .then((result) => {
             if (result?.skipped) {
+                console.warn('Login OTP delivery failed', {
+                    userId: user.user_id,
+                    method,
+                    reason: result.reason || 'unknown',
+                    status: result.status || null,
+                    code: result.code || null,
+                    errorMessage: result.errorMessage || null
+                });
                 callback(null, {
                     sent: false,
-                    reason: result.reason || 'not_configured'
+                    reason: result.reason || 'not_configured',
+                    message: getLoginOtpDeliveryMessage(method, result.reason)
                 });
                 return;
             }
@@ -1353,7 +1378,7 @@ function loginUser(req, res) {
                 }
 
                 if (!result.sent) {
-                    req.session.loginError = 'Email verification is not configured yet. Please contact the administrator.';
+                    req.session.loginError = result.message || 'Email verification is not configured yet. Please contact the administrator.';
                     req.session.loginForm = { email };
                     return res.redirect('/login');
                 }
@@ -1467,8 +1492,8 @@ function changeLoginOtpMethod(req, res) {
 
             if (!result.sent) {
                 const message = requestedMethod === 'sms'
-                    ? 'SMS verification is unavailable for this account. Check that the phone number and SMS settings are configured.'
-                    : 'Email verification is not configured yet. Please contact the administrator.';
+                    ? result.message || 'SMS verification is unavailable for this account. Check that the phone number and SMS settings are configured.'
+                    : result.message || 'Email verification is not configured yet. Please contact the administrator.';
 
                 return renderLoginOtp(req, res, { error: message });
             }

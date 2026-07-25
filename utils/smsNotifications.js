@@ -28,6 +28,16 @@ function getSmsConfig() {
     };
 }
 
+function getSmsSkipReason(config, to, body) {
+    if (!isSmsEnabled()) return 'sms_disabled';
+    if (!config.accountSid) return 'missing_twilio_account_sid';
+    if (!config.authToken) return 'missing_twilio_auth_token';
+    if (!config.from) return 'missing_twilio_phone_number';
+    if (!to) return 'invalid_phone';
+    if (!String(body || '').trim()) return 'empty_message';
+    return '';
+}
+
 function buildBookingConfirmationSms(booking) {
     return [
         'Vaniday booking confirmed.',
@@ -64,9 +74,10 @@ function buildBookingCancellationSms(booking) {
 async function sendSms(phone, body) {
     const config = getSmsConfig();
     const to = formatSmsPhone(phone);
+    const reason = getSmsSkipReason(config, to, body);
 
-    if (!isSmsEnabled() || !config.accountSid || !config.authToken || !config.from || !to) {
-        return { skipped: true };
+    if (reason) {
+        return { skipped: true, reason };
     }
 
     const params = new URLSearchParams({
@@ -86,7 +97,13 @@ async function sendSms(phone, body) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(data.message || `Twilio SMS failed with status ${response.status}`);
+        return {
+            skipped: true,
+            reason: 'twilio_sms_send_failed',
+            status: response.status,
+            code: data.code || null,
+            errorMessage: data.message || `Twilio SMS failed with status ${response.status}`
+        };
     }
 
     return data;
