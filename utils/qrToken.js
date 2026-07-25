@@ -133,9 +133,46 @@ function verifyReceiptAccessToken(receiptId, token) {
         && crypto.timingSafeEqual(expectedBuffer, tokenBuffer);
 }
 
+function isLocalHost(hostname) {
+    return /^(localhost|127\.0\.0\.1|::1)$/i.test(String(hostname || '').replace(/^\[|\]$/g, ''));
+}
+
+function getRequestBaseUrl(req) {
+    if (!req) {
+        return '';
+    }
+
+    const forwardedProto = String(req.get?.('x-forwarded-proto') || '').split(',')[0].trim();
+    const protocol = forwardedProto || req.protocol || 'http';
+    const host = req.get?.('host') || '';
+
+    return host ? `${protocol}://${host}`.replace(/\/$/, '') : '';
+}
+
+function getHostname(value) {
+    try {
+        return new URL(value).hostname;
+    } catch (error) {
+        return '';
+    }
+}
+
 function getPublicBaseUrl(req) {
-    const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-    return BASE_URL.replace(/\/$/, '');
+    const configured = String(process.env.PUBLIC_BASE_URL || process.env.BASE_URL || '').trim().replace(/\/$/, '');
+    const requestBaseUrl = getRequestBaseUrl(req);
+
+    if (!configured) {
+        return requestBaseUrl || 'http://localhost:3000';
+    }
+
+    const configuredIsLocal = isLocalHost(getHostname(configured));
+    const requestIsLocal = isLocalHost(getHostname(requestBaseUrl));
+
+    if (configuredIsLocal && requestBaseUrl && !requestIsLocal) {
+        return requestBaseUrl;
+    }
+
+    return configured;
 }
 
 function slugify(value) {
