@@ -841,7 +841,7 @@ function getDeliveryStatusLabel(value) {
         processing: 'Processing',
         packed: 'Packed',
         ready_for_pickup: 'Ready for Pickup',
-        delivered_to_pickup_location: 'Delivered to Pickup Location',
+        delivered_to_pickup_location: 'Ready for Pickup',
         shipped: 'Shipped',
         out_for_delivery: 'Out for Delivery',
         delivered: 'Delivered',

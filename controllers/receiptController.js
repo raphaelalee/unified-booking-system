@@ -114,7 +114,7 @@ function getPickupStatusLabel(value) {
         packed: 'Pending Pickup',
         ready: 'Ready for Pickup',
         ready_for_pickup: 'Ready for Pickup',
-        delivered_to_pickup_location: 'Delivered to Pickup Location',
+        delivered_to_pickup_location: 'Ready for Pickup',
         not_applicable: 'Not Applicable',
         picked_up: 'Picked Up',
         completed: 'Picked Up',

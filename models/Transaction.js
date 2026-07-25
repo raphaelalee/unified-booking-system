@@ -707,8 +707,8 @@ function canTransitionOrderStatus(row, requestedStatus) {
     };
     const pickupTransitions = {
         processing: new Set(['packed', 'cancelled']),
-        packed: new Set(['ready_for_pickup', 'delivered_to_pickup_location', 'cancelled']),
-        ready_for_pickup: new Set(['delivered_to_pickup_location']),
+        packed: new Set(['ready_for_pickup', 'cancelled']),
+        ready_for_pickup: new Set(['completed']),
         delivered_to_pickup_location: new Set(['completed']),
         completed: new Set([]),
         cancelled: new Set([])

@@ -28,11 +28,10 @@
         { value: 'processing', label: 'Processing' },
         { value: 'packed', label: 'Packed' },
         { value: 'ready_for_pickup', label: 'Ready for Pickup' },
-        { value: 'delivered_to_pickup_location', label: 'Delivered to Pickup Location' },
         { value: 'completed', label: 'Completed' },
         { value: 'cancelled', label: 'Cancelled' }
     ];
-    const statusLabels = [...deliveryStatusOptions, ...pickupStatusOptions, { value: 'completed', label: 'Completed' }, { value: 'picked_up', label: 'Picked Up' }].reduce((labels, option) => {
+    const statusLabels = [...deliveryStatusOptions, ...pickupStatusOptions, { value: 'completed', label: 'Completed' }, { value: 'picked_up', label: 'Picked Up' }, { value: 'delivered_to_pickup_location', label: 'Ready for Pickup' }].reduce((labels, option) => {
         labels[option.value] = option.label;
         return labels;
     }, {});
