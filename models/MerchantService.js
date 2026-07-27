@@ -14,48 +14,6 @@ const productCategoryOptions = [
     { name: 'Sets', order: 70 }
 ];
 
-ensureServiceSchema((error) => {
-    if (error) {
-        console.error('Service package schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureCategorySchema((error) => {
-    if (error) {
-        console.error('Service category schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureSalonCommissionSchema((error) => {
-    if (error) {
-        console.error('Salon commission schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureMerchantProfileSchema((error) => {
-    if (error) {
-        console.error('Merchant profile schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureMerchantFeaturedSchema((error) => {
-    if (error) {
-        console.error('Merchant featured schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureMerchantApprovalSchema((error) => {
-    if (error) {
-        console.error('Merchant approval schema could not be prepared:', error.message || error);
-    }
-});
-
-ensureServiceInventorySchema((error) => {
-    if (error) {
-        console.error('Service inventory schema could not be prepared:', error.message || error);
-    }
-});
-
 function formatTimeSlot(value) {
     if (!value) {
         return '';
@@ -180,6 +138,42 @@ function ensureServiceSchema(callback) {
 
         db.query(`ALTER TABLE services ${alters.join(', ')}`, callback);
     });
+}
+
+function ensureMerchantServiceSchemas(callback) {
+    const schemaTasks = [
+        ['Service package schema', ensureServiceSchema],
+        ['Service category schema', ensureCategorySchema],
+        ['Salon commission schema', ensureSalonCommissionSchema],
+        ['Merchant profile schema', ensureMerchantProfileSchema],
+        ['Merchant featured schema', ensureMerchantFeaturedSchema],
+        ['Merchant approval schema', ensureMerchantApprovalSchema],
+        ['Service inventory schema', ensureServiceInventorySchema]
+    ];
+    let index = 0;
+
+    function runNext(error) {
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        if (index >= schemaTasks.length) {
+            callback(null);
+            return;
+        }
+
+        const [label, task] = schemaTasks[index];
+        index += 1;
+        task((taskError) => {
+            if (taskError) {
+                taskError.message = `${label} could not be prepared: ${taskError.message}`;
+            }
+            runNext(taskError);
+        });
+    }
+
+    runNext();
 }
 
 function ensureMerchantFeaturedSchema(callback) {
@@ -2288,5 +2282,6 @@ module.exports = {
     createMerchant,
     updateApprovalStatus,
     updateCommissionRate,
-    updateMerchantProfile
+    updateMerchantProfile,
+    ensureMerchantServiceSchemas
 };

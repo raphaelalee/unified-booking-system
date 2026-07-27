@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const path = require('path');
 const passport = require('passport');
+const db = require('./db');
 const merchantController = require('./controllers/merchantController');
 const userController = require('./controllers/userController');
 const aiController = require('./controllers/aiController');
@@ -24,6 +25,7 @@ const aiRoutes = require('./routes/aiRoutes');
 const Booking = require('./models/Booking');
 const Review = require('./models/Review');
 const CashbackCampaign = require('./models/CashbackCampaign');
+const MerchantService = require('./models/MerchantService');
 const { uploadReviewMedia } = require('./utils/reviewUpload');
 const { uploadSupportScreenshot } = require('./utils/supportUpload');
 const { uploadProductImage } = require('./utils/productUpload');
@@ -50,6 +52,7 @@ const FavouriteMerchant = require('./models/FavouriteMerchant');
 const CustomerCart = require('./models/CustomerCart');
 const Promotion = require('./models/Promotion');
 const Loyalty = require('./models/Loyalty');
+const User = require('./models/User');
 const { getCartItemCount } = require('./utils/cart');
 
 const app = express();
@@ -1130,34 +1133,44 @@ app.use((err, req, res, next) => {
 });
 
 function initializeDatabaseSchemas(callback) {
-    Booking.ensureBookingManagementSchema((bookingError) => {
-        if (bookingError) {
-            callback(bookingError);
+    const schemaTasks = [
+        ['Merchant service schema', MerchantService.ensureMerchantServiceSchemas],
+        ['Promotion discovery schema', Promotion.ensurePromotionSchema],
+        ['Customer details schema', User.ensureCustomerDetailsSchema],
+        ['Booking management schema', Booking.ensureBookingManagementSchema],
+        ['Review schema', Review.ensureReviewSchema],
+        ['Spin & Discover schema', SpinDiscover.ensureSchema],
+        ['Cashback campaign schema', CashbackCampaign.ensureSchema]
+    ];
+    let index = 0;
+
+    function runNext(error) {
+        if (error) {
+            callback(error);
             return;
         }
 
-        Review.ensureReviewSchema((reviewError) => {
-            if (reviewError) {
-                callback(reviewError);
-                return;
+        if (index >= schemaTasks.length) {
+            callback(null);
+            return;
+        }
+
+        const [label, task] = schemaTasks[index];
+        index += 1;
+        task((taskError) => {
+            if (taskError) {
+                taskError.message = `${label} failed during startup: ${taskError.message}`;
             }
-
-            SpinDiscover.ensureSchema((spinError) => {
-                if (spinError) {
-                    callback(spinError);
-                    return;
-                }
-
-                CashbackCampaign.ensureSchema((cashbackError) => {
-                    callback(cashbackError);
-                });
-            });
+            runNext(taskError);
         });
-    });
+    }
+
+    runNext();
 }
 
 // Start Server
 const PORT = process.env.PORT || 3000;
+console.log('Using MySQL database configuration:', db.vanidayDbConfig);
 initializeDatabaseSchemas((schemaError) => {
     if (schemaError) {
         console.error('Database schema initialization failed:', schemaError);

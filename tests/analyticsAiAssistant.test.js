@@ -5,7 +5,9 @@ const {
     buildAdminFallbackInsights,
     buildAnalyticsDataAnswer,
     buildComparisonFallbackAnswer,
+    buildMultiIntentAnalyticsAnswer,
     buildMerchantFallbackInsights,
+    classifyAnalyticsDataTopics,
     normalizeAnalyticsQuestionIntent,
     parseAnalyticsComparisonQuestion,
     resolveAnalyticsPeriod,
@@ -415,4 +417,46 @@ test('direct answer evidence and next steps stay compact by default', () => {
     assert.ok(answer);
     assert.ok(answer.supportingEvidence.length <= 3);
     assert.ok(answer.suggestedNextSteps.length <= 2);
+});
+
+test('multi-intent answers keep requested metrics separate and factual', () => {
+    const answer = buildMultiIntentAnalyticsAnswer({
+        period: { label: 'This month' },
+        metrics: {
+            totalRevenue: 500,
+            totalBookings: 7,
+            totalOrders: 2,
+            refundCount: 1,
+            grossRefundAmount: 20,
+            netRefundAmount: 18
+        },
+        topServicesByRevenue: [{ serviceName: 'Hair Spa', bookings: 3, revenue: 250 }]
+    }, 'show revenue and refunds this month', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /S\$500\.00/);
+    assert.match(answer.answer, /refund case/);
+    assert.ok(answer.supportingEvidence.some((row) => /Total tracked sales/.test(row)));
+    assert.ok(answer.supportingEvidence.some((row) => /Refund cases/.test(row)));
+});
+
+test('topic classifier recognises business synonyms', () => {
+    assert.deepEqual(
+        classifyAnalyticsDataTopics('show turnover, appointments and repayment issues', 'merchant').slice(0, 3),
+        ['revenue', 'bookings', 'refunds']
+    );
+    assert.ok(classifyAnalyticsDataTopics('which salons have highest money made', 'admin').includes('merchants'));
+});
+
+test('unavailable data response names metric reason page and available metric', () => {
+    const answer = buildAnalyticsDataAnswer({
+        period: { label: 'This month' },
+        metrics: { totalRevenue: 100, totalBookings: 1 }
+    }, 'explain spin performance', 'merchant');
+
+    assert.ok(answer);
+    assert.match(answer.answer, /Spin & Discover performance is not available/i);
+    assert.ok(answer.supportingEvidence.some((row) => /Unavailable metric/.test(row)));
+    assert.ok(answer.supportingEvidence.some((row) => /Related available metric/.test(row)));
+    assert.ok(answer.suggestedNextSteps.some((row) => row.includes('/merchant/spin-discover')));
 });

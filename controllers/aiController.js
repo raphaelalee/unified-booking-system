@@ -50,6 +50,8 @@ const {
     createReminderProposal,
     normalizeActionProposal
 } = require('../services/aiActionProposalService');
+const { orchestrateAiQuestion } = require('../services/ai/aiOrchestrator');
+const { runAiHealthCheck } = require('../services/ai/aiHealthCheckService');
 
 // Shared Groq client for chatbot and product helper endpoints.
 const groq = new Groq({
@@ -951,64 +953,13 @@ exports.generateMerchantBusinessInsights = async (req, res) => {
 
 exports.answerMerchantAnalyticsQuestion = async (req, res) => {
     try {
-        const userId = req.session.user?.id;
         const question = validateAnalyticsQuestion(req.body?.question);
-        const comparisonRequest = parseAnalyticsComparisonQuestion(question);
-        if (comparisonRequest) {
-            const comparison = await buildMerchantComparisonSummary(userId, comparisonRequest);
-            const comparisonQuestion = [
-                question,
-                'Return a concise business comparison with Summary, Key Improvements, Key Declines, Reasons, Recommendations and Confidence.',
-                'Charts remain unchanged. Do not suggest applying changes without existing proposal confirmation.'
-            ].join(' ');
-
-            try {
-                const answer = await answerMerchantAnalyticsQuestionWithGroq({ summary: { comparison }, question: comparisonQuestion });
-                return res.json({
-                    success: true,
-                    period: comparison.periods.current,
-                    comparison,
-                    summary: comparison.current,
-                    answer
-                });
-            } catch (error) {
-                const fallback = buildComparisonFallbackAnswer(comparison);
-                return sendAnalyticsAiProviderError(res, error, fallback, comparison.current);
-            }
-        }
-        const period = getAnalyticsPeriod(req.body);
-        const summary = await buildMerchantAnalyticsSummary(userId, period);
-        const directDataAnswer = buildAnalyticsDataAnswer(summary, question, 'merchant');
-
-        if (directDataAnswer) {
-            return res.json({
-                success: true,
-                period: summary.period,
-                summary,
-                answer: directDataAnswer
-            });
-        }
-
-        try {
-            const answer = await answerMerchantAnalyticsQuestionWithGroq({ summary, question });
-            return res.json({
-                success: true,
-                period: summary.period,
-                summary,
-                answer
-            });
-        } catch (error) {
-            return sendAnalyticsAiProviderError(res, error, {
-                fallback: true,
-                answer: buildMerchantFallbackInsights(summary).summary,
-                supportingEvidence: [
-                    `Total tracked sales: S$${Number(summary.metrics.totalRevenue || 0).toFixed(2)}`,
-                    `Service bookings: ${Number(summary.metrics.totalBookings || 0)}`
-                ],
-                suggestedNextSteps: ['Review the dashboard charts while AI answers are unavailable.'],
-                limitations: ['Groq could not answer this question right now.']
-            }, summary);
-        }
+        const result = await orchestrateAiQuestion(req, {
+            role: 'merchant',
+            question,
+            period: getAnalyticsPeriod(req.body)
+        });
+        return res.json(result);
     } catch (error) {
         console.error('Merchant analytics question calculation error:', {
             code: error?.code,
@@ -1079,80 +1030,12 @@ exports.generateAdminPlatformInsights = async (req, res) => {
 exports.answerAdminAnalyticsQuestion = async (req, res) => {
     try {
         const question = validateAnalyticsQuestion(req.body?.question);
-        const comparisonRequest = parseAnalyticsComparisonQuestion(question);
-        if (comparisonRequest) {
-            const comparison = await buildAdminComparisonSummary(comparisonRequest);
-            const comparisonQuestion = [
-                question,
-                'Return a concise platform comparison with Summary, Key Improvements, Key Declines, Reasons, Recommendations and Confidence.',
-                'Charts remain unchanged. Do not suggest applying admin changes without existing approval or proposal confirmation.'
-            ].join(' ');
-
-            try {
-                const answer = await answerAdminAnalyticsQuestionWithGroq({ summary: { comparison }, question: comparisonQuestion });
-                return res.json({
-                    success: true,
-                    period: comparison.periods.current,
-                    comparison,
-                    summary: comparison.current,
-                    answer
-                });
-            } catch (error) {
-                const fallback = buildComparisonFallbackAnswer(comparison);
-                return sendAnalyticsAiProviderError(res, error, {
-                    ...fallback,
-                    recommendedAdminActions: fallback.recommendedAdminActions || fallback.suggestedNextSteps || []
-                }, comparison.current);
-            }
-        }
-        const period = getAnalyticsPeriod(req.body);
-        const summary = await buildAdminAnalyticsSummary(period);
-        const directAnswer = answerAdminDirectMetricQuestion(summary, question);
-
-        if (directAnswer) {
-            return res.json({
-                success: true,
-                period: summary.period,
-                summary,
-                answer: directAnswer
-            });
-        }
-
-        const directDataAnswer = buildAnalyticsDataAnswer(summary, question, 'admin');
-
-        if (directDataAnswer) {
-            return res.json({
-                success: true,
-                period: summary.period,
-                summary,
-                answer: directDataAnswer
-            });
-        }
-
-        try {
-            const answer = await answerAdminAnalyticsQuestionWithGroq({ summary, question });
-            const replacement = shouldReplaceUnavailableTopMerchantAnswer(question, answer)
-                ? answerAdminDirectMetricQuestion(summary, question)
-                : null;
-
-            return res.json({
-                success: true,
-                period: summary.period,
-                summary,
-                answer: replacement || answer
-            });
-        } catch (error) {
-            return sendAnalyticsAiProviderError(res, error, {
-                fallback: true,
-                answer: buildAdminFallbackInsights(summary).executiveSummary,
-                supportingEvidence: [
-                    `Paid transaction sales: S$${Number(summary.metrics.totalPlatformRevenue || 0).toFixed(2)}`,
-                    `Platform bookings: ${Number(summary.metrics.totalBookings || 0)}`
-                ],
-                recommendedAdminActions: ['Review platform analytics manually while AI answers are unavailable.'],
-                limitations: ['Groq could not answer this question right now.']
-            }, summary);
-        }
+        const result = await orchestrateAiQuestion(req, {
+            role: 'admin',
+            question,
+            period: getAnalyticsPeriod(req.body)
+        });
+        return res.json(result);
     } catch (error) {
         console.error('Admin analytics question calculation error:', {
             code: error?.code,
@@ -1182,6 +1065,30 @@ exports.answerAdminAnalyticsQuestion = async (req, res) => {
                 limitations: ['This fallback does not include live chart-level details.']
             },
             summary
+        });
+    }
+};
+
+exports.runDevelopmentAiHealthCheck = async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({
+            success: false,
+            error: 'NOT_FOUND',
+            message: 'AI health check is not available in production.'
+        });
+    }
+
+    try {
+        const result = await runAiHealthCheck();
+        return res.status(result.ok ? 200 : 503).json({
+            success: result.ok,
+            ...result
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: 'AI_HEALTH_CHECK_FAILED',
+            message: error.message || 'AI health check failed.'
         });
     }
 };

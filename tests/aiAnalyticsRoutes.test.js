@@ -104,6 +104,31 @@ function requestJson(path, body = {}, targetServer = server) {
     });
 }
 
+function requestGet(path, targetServer = server) {
+    return new Promise((resolve, reject) => {
+        const req = http.request({
+            host: '127.0.0.1',
+            port: targetServer.address().port,
+            path,
+            method: 'GET'
+        }, (res) => {
+            let raw = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => {
+                raw += chunk;
+            });
+            res.on('end', () => {
+                resolve({
+                    statusCode: res.statusCode,
+                    body: raw ? JSON.parse(raw) : {}
+                });
+            });
+        });
+        req.on('error', reject);
+        req.end();
+    });
+}
+
 test('merchant AI route rejects unauthenticated requests', async () => {
     currentUser = null;
     const response = await requestJson('/api/ai/merchant/business-insights');
@@ -197,4 +222,13 @@ test('admin AI action route allows admin role', async () => {
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.role, 'admin');
+});
+
+test('AI health check route is admin-only', async () => {
+    currentUser = { id: 8, role: 'merchant' };
+    merchantApprovalStatus = 'approved';
+    const denied = await requestGet('/api/ai/admin/health-check');
+
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.body.error, 'FORBIDDEN');
 });

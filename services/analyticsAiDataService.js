@@ -299,7 +299,100 @@ function normalizeAnalyticsQuestionIntent(value = '') {
         .replace(/\bpaymnet\b/g, 'payment')
         .replace(/\brevnuce\b/g, 'revenue')
         .replace(/\brevnue\b/g, 'revenue')
-        .replace(/\brevenu\b/g, 'revenue');
+        .replace(/\brevenu\b/g, 'revenue')
+        .replace(/\bturnover\b/g, 'revenue')
+        .replace(/\bmoney made\b/g, 'revenue')
+        .replace(/\bmade money\b/g, 'revenue')
+        .replace(/\bappointments?\b/g, 'bookings')
+        .replace(/\breservations?\b/g, 'bookings')
+        .replace(/\bschedule\b/g, 'bookings')
+        .replace(/\brepayments?\b/g, 'refunds')
+        .replace(/\breturns?\b/g, 'refunds')
+        .replace(/\bitems?\b/g, 'products')
+        .replace(/\bsalons?\b/g, 'merchants')
+        .replace(/\bbusinesses\b/g, 'merchants')
+        .replace(/\brviews\b/g, 'reviews')
+        .replace(/\bratingg\b/g, 'rating');
+}
+
+function getRelevantPageForMetric(metric = '', scope = 'merchant') {
+    const merchantPages = {
+        revenue: '/merchant/analytics',
+        bookings: '/merchant/bookings',
+        services: '/merchant/services',
+        products: '/merchant/products',
+        inventory: '/merchant/products',
+        refunds: '/help-center',
+        ratings: '/merchant/dashboard',
+        customers: '/merchant/customers',
+        payments: '/merchant/analytics',
+        loyalty: '/merchant/analytics',
+        cashback: '/merchant/analytics',
+        spin: '/merchant/spin-discover',
+        promotions: '/merchant/promotions',
+        vouchers: '/merchant/vouchers',
+        payout: '/merchant/analytics',
+        attention: '/merchant/dashboard'
+    };
+    const adminPages = {
+        revenue: '/admin/analytics',
+        bookings: '/admin/bookings',
+        services: '/admin/services',
+        products: '/admin/products',
+        inventory: '/admin/products',
+        refunds: '/admin/reports',
+        ratings: '/admin/reviews',
+        reviews: '/admin/reviews',
+        customers: '/admin/users',
+        users: '/admin/users',
+        merchants: '/admin/merchants',
+        payments: '/admin/analytics',
+        support: '/admin/reports',
+        loyalty: '/admin/analytics',
+        cashback: '/admin/analytics',
+        spin: '/admin/reward-shop-vouchers',
+        promotions: '/admin/promotions',
+        vouchers: '/admin/reward-shop-vouchers',
+        attention: '/admin/dashboard'
+    };
+
+    return (scope === 'admin' ? adminPages : merchantPages)[metric] || (scope === 'admin' ? '/admin/dashboard' : '/merchant/dashboard');
+}
+
+function getAvailableMetricHint(summary = {}, scope = 'merchant') {
+    const metrics = summary.metrics || {};
+    if (scope === 'admin') {
+        if (metrics.totalPlatformRevenue != null) return `Paid transaction sales: ${formatSgd(metrics.totalPlatformRevenue)}`;
+        if (metrics.totalBookings != null) return `Platform bookings: ${safeNumber(metrics.totalBookings)}`;
+        if (metrics.activeMerchants != null) return `Active merchants: ${safeNumber(metrics.activeMerchants)}`;
+        if (metrics.activeCustomers != null) return `Active customers: ${safeNumber(metrics.activeCustomers)}`;
+        return 'No related verified admin metric is available in the current summary.';
+    }
+
+    if (metrics.totalRevenue != null) return `Total tracked sales: ${formatSgd(metrics.totalRevenue)}`;
+    if (metrics.totalBookings != null) return `Service bookings: ${safeNumber(metrics.totalBookings)}`;
+    if (metrics.totalOrders != null) return `Product orders: ${safeNumber(metrics.totalOrders)}`;
+    if (metrics.refundCount != null) return `Refund cases: ${safeNumber(metrics.refundCount)}`;
+    return 'No related verified merchant metric is available in the current summary.';
+}
+
+function buildUnavailableDataAnswer({ metric, label, summary = {}, scope = 'merchant', reason }) {
+    const period = summary.period?.label || 'the selected period';
+    const page = getRelevantPageForMetric(metric, scope);
+    const availableMetric = getAvailableMetricHint(summary, scope);
+
+    return {
+        fallback: true,
+        answer: `${label} performance is not available for ${period}. I cannot verify this metric from the current analytics payload, so I will not guess it.`,
+        supportingEvidence: [
+            `Unavailable metric: ${label}`,
+            `Reason: ${reason || 'The required source field is not exposed in the current verified summary.'}`,
+            `Related available metric: ${availableMetric}`
+        ],
+        suggestedNextSteps: [`Open ${page} to review the source records.`],
+        recommendedAdminActions: scope === 'admin' ? [`Open ${page} to review the source records.`] : undefined,
+        limitations: [`${label} cannot be verified from the current AI data source.`]
+    };
 }
 
 function formatSgd(value) {
@@ -319,29 +412,108 @@ function classifyAnalyticsDataQuestion(question = '', scope = 'merchant') {
     const normalized = normalizeAnalyticsQuestionIntent(question);
     if (!normalized) return '';
 
-    const isDataQuestion = /\b(explain|show|summari[sz]e|tell|what|which|who|how|total|highest|top|best|lowest|trend|breakdown|data|metric|kpi|performance)\b/.test(normalized);
+    const hasMetricKeyword = /\b(revenue|sales|earning|earnings|income|turnover|booking|bookings|appointment|appointments|refund|refunds|return|returns|inventory|stock|product|products|service|services|rating|ratings|review|reviews|customer|customers|payment|payments)\b/.test(normalized);
+    const isDataQuestion = hasMetricKeyword || /\b(explain|show|summari[sz]e|tell|what|which|who|how|total|highest|top|best|lowest|trend|breakdown|data|metric|kpi|performance)\b/.test(normalized);
     const isOperationalQuestion = /\b(today|attention|need attention|problem|issue|risk|priority|should i do|what should|action|actions|need action|pending|overdue|poor|weak|worst|underperform|low performing)\b/.test(normalized);
     if (!isDataQuestion && !isOperationalQuestion) return '';
 
-    if (/\b(today|attention|need attention|problem|biggest problem|priority|should i do|what should|action|actions|need action|risk|risks)\b/.test(normalized)) return 'attention';
     if (scope === 'merchant' && /\b(payout|retained|net sales|net revenue|take home|earnings after refund)\b/.test(normalized)) return 'payout';
-    if (/\b(revenue|sales|earning|earnings|income|paid transaction|transaction sales)\b/.test(normalized)) return 'revenue';
+    if (/\b(revenue|sales|earning|earnings|income|paid transaction|transaction sales|turnover|money made)\b/.test(normalized)) return 'revenue';
     if (scope === 'merchant' && /\b(service|services)\b/.test(normalized)) return 'services';
     if (/\b(booking|bookings|appointment|appointments|schedule demand|completed service|service booking)\b/.test(normalized)) return 'bookings';
-    if (/\b(product|products|order|orders|units sold|item|items)\b/.test(normalized)) return 'products';
     if (/\b(refund|refunds|return|returns|cancellation|cancelled|canceled)\b/.test(normalized)) return 'refunds';
     if (/\b(rating|ratings|review|reviews|satisfaction|low rated)\b/.test(normalized)) return 'ratings';
     if (/\b(inventory|stock|restock|low stock|quantity)\b/.test(normalized)) return 'inventory';
+    if (/\b(product|products|order|orders|units sold|item|items)\b/.test(normalized)) return 'products';
     if (/\b(payment|payments|method|provider|transaction)\b/.test(normalized)) return 'payments';
     if (/\b(customer|customers|repeat customer|active customer|new customer)\b/.test(normalized)) return 'customers';
     if (scope === 'admin' && /\b(merchant|merchants|salon|salons|approval|approvals)\b/.test(normalized)) return 'merchants';
     if (scope === 'admin' && /\b(support|ticket|tickets|case|cases|dispute|disputes)\b/.test(normalized)) return 'support';
+    if (/\b(attention|need attention|problem|biggest problem|priority|should i do|what should|action|actions|need action|risk|risks|today'?s?\s+(summary|priorit|brief))\b/.test(normalized)) return 'attention';
     if (/\b(loyalty|points|reward points)\b/.test(normalized)) return 'loyalty';
     if (/\b(cashback)\b/.test(normalized)) return 'cashback';
     if (/\b(spin|wheel|spin discover|redemption|reward popular)\b/.test(normalized)) return 'spin';
     if (/\b(promotion|promotions|campaign|voucher|vouchers)\b/.test(normalized)) return 'promotions';
 
     return '';
+}
+
+function classifyAnalyticsDataTopics(question = '', scope = 'merchant') {
+    const normalized = normalizeAnalyticsQuestionIntent(question);
+    if (!normalized) return [];
+
+    const topics = [];
+    const add = (topic, pattern) => {
+        if (pattern.test(normalized) && !topics.includes(topic)) topics.push(topic);
+    };
+
+    add('revenue', /\b(revenue|sales|earning|earnings|income|paid transaction|transaction sales|turnover|money made)\b/);
+    add('services', /\b(service|services|top service|best service|weak service|worst service)\b/);
+    add('bookings', /\b(booking|bookings|appointment|appointments|reservation|reservations|schedule demand|completed service|service booking|pending booking|pending bookings)\b/);
+    add('products', /\b(product|products|order|orders|units sold|item|items|top product|best product|weak product|worst product)\b/);
+    add('refunds', /\b(refund|refunds|return|returns|repayment|repayments|cancellation|cancelled|canceled)\b/);
+    add('ratings', /\b(rating|ratings|review|reviews|satisfaction|low rated)\b/);
+    add('inventory', /\b(inventory|stock|restock|low stock|quantity)\b/);
+    add('payments', /\b(payment|payments|method|provider|transaction)\b/);
+    add('customers', /\b(customer|customers|repeat customer|active customer|new customer|users)\b/);
+    if (scope === 'admin') add('merchants', /\b(merchant|merchants|salon|salons|business|businesses|approval|approvals)\b/);
+    if (scope === 'admin') add('support', /\b(support|ticket|tickets|case|cases|dispute|disputes)\b/);
+    add('loyalty', /\b(loyalty|points|reward points)\b/);
+    add('cashback', /\b(cashback)\b/);
+    add('spin', /\b(spin|wheel|spin discover|redemption|reward popular)\b/);
+    add('promotions', /\b(promotion|promotions|campaign|voucher|vouchers)\b/);
+    if (scope === 'merchant') add('payout', /\b(payout|retained|net sales|net revenue|take home|earnings after refund)\b/);
+    add('attention', /\b(attention|need attention|problem|biggest problem|priority|should i do|what should|action|actions|need action|risk|risks|health|today'?s?\s+(summary|priorit|brief))\b/);
+
+    return topics;
+}
+
+function buildMultiIntentAnalyticsAnswer(summary = {}, question = '', scope = 'merchant', topics = []) {
+    const requestedTopics = Array.isArray(topics) && topics.length
+        ? topics
+        : classifyAnalyticsDataTopics(question, scope);
+    const uniqueTopics = [...new Set(requestedTopics)].filter(Boolean).slice(0, 4);
+
+    if (uniqueTopics.length <= 1) return null;
+
+    const topicQuestions = {
+        revenue: 'show revenue',
+        refunds: 'show refunds',
+        bookings: 'show bookings',
+        services: 'show service performance',
+        products: 'show product performance',
+        inventory: 'show low stock inventory',
+        ratings: 'show ratings',
+        customers: 'show customers',
+        merchants: 'show merchants',
+        payments: 'show payment methods',
+        attention: 'what needs attention',
+        payout: 'show retained sales after refunds',
+        support: 'show support cases',
+        loyalty: 'show loyalty',
+        cashback: 'show cashback',
+        spin: 'show spin performance',
+        promotions: 'show promotion performance',
+        vouchers: 'show voucher performance'
+    };
+
+    const answers = uniqueTopics
+        .map((topic) => buildAnalyticsDataAnswer(summary, topicQuestions[topic] || `show ${topic}`, scope))
+        .filter(Boolean);
+
+    if (!answers.length) return null;
+
+    return {
+        fallback: true,
+        answer: answers.map((entry) => entry.answer).join(' '),
+        supportingEvidence: answers.flatMap((entry) => entry.supportingEvidence || []).slice(0, 6),
+        suggestedNextSteps: answers.flatMap((entry) => entry.suggestedNextSteps || []).slice(0, 3),
+        recommendedAdminActions: scope === 'admin'
+            ? answers.flatMap((entry) => entry.recommendedAdminActions || entry.suggestedNextSteps || []).slice(0, 3)
+            : undefined,
+        limitations: answers.flatMap((entry) => entry.limitations || []).slice(0, 4),
+        coveredTopics: uniqueTopics
+    };
 }
 
 function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant') {
@@ -372,6 +544,7 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
                 : topMerchant?.merchantName
                     ? `For ${period}, the platform paid transaction sales total is not available in the current admin analytics summary.`
                     : `For ${period}, no paid transaction sales are available in the current admin analytics summary.`;
+            if (metrics.revenueChange?.label) answer += ` Compared with the previous period, this is ${metrics.revenueChange.label}.`;
             if (total <= 0) addEmptyDataGuidance('Revenue');
             addEvidence('Paid transaction sales', formatSgd(total));
             addEvidence('Sales trend', metrics.revenueChange?.label || 'No previous-period comparison');
@@ -390,6 +563,7 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
             answer = total > 0
                 ? `For ${period}, total tracked sales are ${formatSgd(total)} from service bookings and product orders. Refund amounts are tracked separately, so this is not a net-after-refund figure.`
                 : `For ${period}, no total tracked sales are available in the current merchant analytics summary.`;
+            if (metrics.revenueChange?.label) answer += ` Compared with the previous period, this is ${metrics.revenueChange.label}.`;
             if (total <= 0) addEmptyDataGuidance('Revenue');
             addEvidence('Total tracked sales', formatSgd(total));
             addEvidence('Service bookings', safeNumber(metrics.totalBookings));
@@ -543,9 +717,13 @@ function buildAnalyticsDataAnswer(summary = {}, question = '', scope = 'merchant
             spin: 'Spin & Discover',
             promotions: 'promotion'
         };
-        answer = `${labels[intent] || intent} performance is not available in the current analytics summary payload. Use the dedicated ${labels[intent] || intent} page for source records before making decisions.`;
-        limitations.push(`${labels[intent] || intent} metrics are not exposed in this analytics summary.`);
-        nextSteps.push(`Open the dedicated ${labels[intent] || intent} page and use its existing records.`);
+        return buildUnavailableDataAnswer({
+            metric: intent,
+            label: labels[intent] || intent,
+            summary,
+            scope,
+            reason: `${labels[intent] || intent} metrics are not exposed in this analytics summary.`
+        });
     }
 
     return {
@@ -921,7 +1099,7 @@ async function buildMerchantAnalyticsSummary(userId, periodKey = 'last30') {
 }
 
 async function getAdminSummaryRows(startDate, endDate) {
-    const [transactions, bookings, refunds, users, merchants, support] = await Promise.all([
+    const [transactions, bookings, refunds, users, merchants, support, reviews] = await Promise.all([
         query(`
             SELECT
                 COUNT(DISTINCT CASE WHEN payment_status IN ('paid','partially_refunded','refunded') THEN transaction_id END) AS paidTransactions,
@@ -968,6 +1146,14 @@ async function getAdminSummaryRows(startDate, endDate) {
                 SUM(CASE WHEN status NOT IN ('resolved','closed','refund_completed') THEN 1 ELSE 0 END) AS unresolvedSupportCases
             FROM support_requests
             WHERE created_at >= ? AND created_at < ?
+        `, [startDate, endDate]),
+        query(`
+            SELECT
+                COUNT(*) AS totalReviews,
+                AVG(rating) AS averageRating,
+                SUM(CASE WHEN rating <= 2 THEN 1 ELSE 0 END) AS lowRatedReviews
+            FROM reviews
+            WHERE created_at >= ? AND created_at < ?
         `, [startDate, endDate])
     ]);
 
@@ -977,7 +1163,8 @@ async function getAdminSummaryRows(startDate, endDate) {
         refunds: refunds[0] || {},
         users: users[0] || {},
         merchants: merchants[0] || {},
-        support: support[0] || {}
+        support: support[0] || {},
+        reviews: reviews[0] || {}
     };
 }
 
@@ -1127,10 +1314,13 @@ async function buildAdminAnalyticsSummaryForPeriod(period) {
             activeMerchants: safeNumber(current.merchants.activeMerchants),
             pendingMerchantApprovals: safeNumber(current.merchants.pendingMerchantApprovals),
             supportTicketCount: safeNumber(current.support.supportTicketCount),
-            unresolvedSupportCases: safeNumber(current.support.unresolvedSupportCases)
+            unresolvedSupportCases: safeNumber(current.support.unresolvedSupportCases),
+            totalReviews: safeNumber(current.reviews.totalReviews),
+            averageCustomerRating: current.reviews.averageRating === null ? null : roundPercent(current.reviews.averageRating),
+            lowRatedReviews: safeNumber(current.reviews.lowRatedReviews)
         },
         ...breakdowns,
-        insufficientData: !hasUsefulData({ metrics: { totalRevenue, totalBookings, refundCount, totalReviews: 0 } })
+        insufficientData: !hasUsefulData({ metrics: { totalRevenue, totalBookings, refundCount, totalReviews: safeNumber(current.reviews.totalReviews) } })
     };
 }
 
@@ -1330,6 +1520,9 @@ module.exports = {
     buildAdminAnalyticsSummary,
     buildAdminComparisonSummary,
     buildAnalyticsDataAnswer,
+    buildMultiIntentAnalyticsAnswer,
+    classifyAnalyticsDataQuestion,
+    classifyAnalyticsDataTopics,
     buildAdminFallbackInsights,
     buildMerchantAnalyticsSummary,
     buildMerchantComparisonSummary,

@@ -1,0 +1,60 @@
+const MERCHANT_DEMO_PROMPTS = [
+    'How is my revenue this month?',
+    'Explain my sales and refunds this month.',
+    'How are bookings?',
+    'Show top service and low-stock products.',
+    'Which product earns the most?',
+    'Which service is weakest?',
+    'What needs my attention today?',
+    'How are my ratings?',
+    'Show payment methods.',
+    'Compare sales and bookings with last month.',
+    'Open bookings and tell me how many are pending.',
+    'Open products.',
+    'How is Spin performing?',
+    'How are promotions doing?',
+    'How are vouchers doing?',
+    'What should I restock?',
+    'How are customers?',
+    'What is my estimated retained sales after refunds?',
+    'Show refunds and cancellations.',
+    'What should I do today?',
+    'Compare this week with last week.',
+    'Show daily brief.',
+    'Show weekly report.',
+    'Open analytics.',
+    'What can you do?'
+];
+
+const ADMIN_DEMO_PROMPTS = [
+    'How is platform revenue?',
+    'Which merchant has the highest revenue?',
+    'Show merchant approvals.',
+    'Show platform bookings and refunds.',
+    'What needs admin attention?',
+    'How many active customers are there?',
+    'How many users are active?',
+    'How are reviews?',
+    'Show payment methods.',
+    'Compare platform sales and bookings with last month.',
+    'Open users.',
+    'Open merchant management.',
+    'Open reports.',
+    'How is Spin performing?',
+    'How are platform promotions?',
+    'How are vouchers doing?',
+    'Show product performance.',
+    'Show service performance.',
+    'Which merchant has refund concerns?',
+    'Summarise platform performance.',
+    'Compare this week with last week.',
+    'Show daily brief.',
+    'Show weekly report.',
+    'Show platform health.',
+    'What can you do?'
+];
+
+module.exports = {
+    ADMIN_DEMO_PROMPTS,
+    MERCHANT_DEMO_PROMPTS
+};

@@ -1699,9 +1699,11 @@
                     : dataSourcesFor(`${sourcePrompt} ${answer.answer || ''}`),
                 metrics: payload.comparison?.metrics?.map((row) => row.label).slice(0, 10),
                 confidence: payload.comparison?.confidence || ((answer.limitations || []).length ? 'Medium' : confidenceForResponse(answer.answer || '')),
-                reasoning: payload.comparison
-                    ? 'Compared two periods through the existing ask-analytics endpoint and existing analytics summaries. Charts were not changed.'
-                    : 'Answered using the current page context, session memory and existing ask-analytics endpoint.'
+                reasoning: payload.ai?.orchestrated
+                    ? `Answered through the global AI orchestrator using detected intent ${payload.ai.intent || 'unknown'} and verified backend data.`
+                    : payload.comparison
+                        ? 'Compared two periods through the existing ask-analytics endpoint and existing analytics summaries. Charts were not changed.'
+                        : 'Answered using the current page context, session memory and existing ask-analytics endpoint.'
             }
         });
     };
@@ -1829,7 +1831,7 @@
         if (/\b(revenue|sales|bookings? down|booking decline|why are bookings|service earns|top service|products? performing poorly|low inventory|refunds?|ratings?|promotion performance|loyalty|cashback)\b/.test(normalized)) {
             return {
                 intent: 'question',
-                prompt: `${text}. Route this through the most relevant existing analytics module for ${context.page}. ${unifiedFormatInstruction}`,
+                prompt: text,
                 module: 'Analytics'
             };
         }
@@ -2137,7 +2139,16 @@
                 rememberSessionEvent('recommendation', { question: text, title: payload.proposal?.title || 'AI proposal', detail: payload.proposal?.reason || 'Safe proposal prepared.' });
             } else {
                 const url = role === 'admin' ? '/api/ai/admin/ask-analytics' : '/api/ai/merchant/ask-analytics';
-                ({ response, payload } = await fetchAiJson(url, { period: selectedPeriod, question: contextualPrompt }));
+                ({ response, payload } = await fetchAiJson(url, {
+                    period: selectedPeriod,
+                    question: effectivePrompt,
+                    clientContext: {
+                        currentPage: context.page,
+                        currentPath,
+                        sessionSummary: sessionMemorySummary(),
+                        recentConversation: getConversationMemory()
+                    }
+                }));
                 if (!response.ok && !payload.fallback) throw new Error(payload.message || 'AI answer could not be generated.');
                 typing?.remove();
                 renderAnswerToChat(payload.answer || payload.fallback || {}, { sourcePrompt: text }, payload);

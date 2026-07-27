@@ -26,12 +26,6 @@ const SPIN_RESULTS_JOIN = `
     ) spin_stats ON spin_stats.promotion_id = promotions.promotion_id
 `;
 
-ensurePromotionSchema((error) => {
-    if (error) {
-        console.error('Promotion discovery schema could not be prepared:', error.message || error);
-    }
-});
-
 function ensurePromotionSchema(callback) {
     db.query('SHOW COLUMNS FROM promotions', (columnError, columns = []) => {
         if (columnError) {

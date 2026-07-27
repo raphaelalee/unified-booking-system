@@ -402,12 +402,6 @@ function deleteById(userId, callback) {
     db.query(sql, [userId], callback);
 }
 
-ensureCustomerDetailsSchema((error) => {
-    if (error) {
-        console.error('Customer details schema could not be prepared:', error.message || error);
-    }
-});
-
 module.exports = {
     create,
     ensureCustomerDetailsSchema,

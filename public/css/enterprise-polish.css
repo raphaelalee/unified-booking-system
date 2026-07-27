@@ -1,0 +1,625 @@
+/* Enterprise consistency layer. Visual-only rules loaded after legacy page styles. */
+:root {
+    --vd-font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --vd-font-display: "Playfair Display", Georgia, serif;
+    --vd-ink: #243124;
+    --vd-text: #435240;
+    --vd-muted: #687565;
+    --vd-primary: #3f5f3d;
+    --vd-primary-strong: #2f4a32;
+    --vd-primary-soft: #e8efe3;
+    --vd-info: #2f6f73;
+    --vd-info-soft: #e5f0ef;
+    --vd-success: #3f6b3a;
+    --vd-success-soft: #e7f1e2;
+    --vd-warning: #9a6618;
+    --vd-warning-soft: #fbf0d9;
+    --vd-danger: #9d2c30;
+    --vd-danger-soft: #f8e3e0;
+    --vd-surface: #ffffff;
+    --vd-surface-soft: #f8faf5;
+    --vd-page: #f5f1e8;
+    --vd-line: rgba(44, 55, 42, 0.13);
+    --vd-line-strong: rgba(44, 55, 42, 0.22);
+    --vd-shadow-sm: 0 8px 22px rgba(35, 42, 32, 0.06);
+    --vd-shadow-md: 0 16px 44px rgba(35, 42, 32, 0.09);
+    --vd-shadow-lg: 0 24px 70px rgba(35, 42, 32, 0.14);
+    --vd-radius-xs: 6px;
+    --vd-radius-sm: 8px;
+    --vd-radius-md: 12px;
+    --vd-radius-lg: 16px;
+    --vd-space-1: 4px;
+    --vd-space-2: 8px;
+    --vd-space-3: 12px;
+    --vd-space-4: 16px;
+    --vd-space-5: 24px;
+    --vd-space-6: 32px;
+    --vd-space-7: 48px;
+    --vd-focus: 0 0 0 3px rgba(63, 95, 61, 0.2);
+}
+
+body:not(.flappy-page) {
+    color: var(--vd-text);
+    font-family: var(--vd-font-sans);
+    letter-spacing: 0;
+}
+
+body:not(.flappy-page) :where(h1, h2, h3, h4, h5, h6) {
+    color: var(--vd-ink);
+    letter-spacing: 0;
+}
+
+body:not(.flappy-page) :where(p, li, dd, dt, label, input, select, textarea, button, small, span) {
+    letter-spacing: 0;
+}
+
+body:not(.flappy-page) :where(.section, .admin-dashboard-v2, .merchant-analytics-page, .page-shell, .portal-shell) {
+    min-width: 0;
+}
+
+body:not(.flappy-page) :where(.page-title, .portal-hero, .analytics-hero-panel, .merchant-dashboard-hero, .admin-dashboard-header, .merchant-orders-hero, .merchant-appointment-hero) {
+    border: 1px solid var(--vd-line);
+    border-radius: var(--vd-radius-lg);
+    box-shadow: var(--vd-shadow-md);
+}
+
+body:not(.flappy-page) :where(.page-title, .portal-hero, .analytics-hero-panel, .merchant-dashboard-hero, .admin-dashboard-header, .merchant-orders-hero, .merchant-appointment-hero) :where(p, span, small) {
+    color: var(--vd-muted);
+}
+
+body:not(.flappy-page) :where(.eyebrow, .section-kicker, .panel-kicker) {
+    color: var(--vd-muted);
+    font-size: 0.76rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+body:not(.flappy-page) :where(.card, .panel, .admin-panel, .merchant-panel, .account-panel, .checkout-card, .dashboard-card, .analytics-card, .analytics-kpi-card, .merchant-dashboard-card, .support-ticket-card, .support-action-box, .wallet-topup-card, .wallet-support-card, .booking-services-panel, .booking-form-panel, .product-card, .service-card, .promotion-card, .voucher-card, .reward-card, .receipt-card, .ai-card, .ai-insight-card, .ai-explanation-card, .vaniday-ai-message, .vaniday-ai-context-card) {
+    border: 1px solid var(--vd-line);
+    border-radius: var(--vd-radius-sm);
+    background-color: var(--vd-surface);
+    box-shadow: var(--vd-shadow-sm);
+}
+
+body:not(.flappy-page) :where(.card, .panel, .admin-panel, .merchant-panel, .account-panel, .checkout-card, .dashboard-card, .analytics-card, .merchant-dashboard-card, .support-ticket-card, .support-action-box, .wallet-topup-card, .wallet-support-card, .booking-services-panel, .booking-form-panel) {
+    padding: clamp(18px, 2vw, 24px);
+}
+
+body:not(.flappy-page) :where(.admin-panel, .merchant-panel, .account-panel, .checkout-card, .dashboard-card, .analytics-card, .support-ticket-card, .product-card, .service-card, .promotion-card, .voucher-card) > :where(h2, h3, h4):first-child {
+    margin-top: 0;
+}
+
+body:not(.flappy-page) :where(.account-panel-header, .checkout-card-header, .portal-card-header, .merchant-card-heading, .admin-card-heading, .analytics-card-header, .dashboard-card-header) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--vd-space-3);
+    margin-bottom: var(--vd-space-4);
+}
+
+body:not(.flappy-page) :where(.account-panel-header h2, .checkout-card-header h2, .portal-card-header h2, .merchant-card-heading h2, .admin-card-heading h2, .analytics-card-header h2, .dashboard-card-header h2, .account-panel-header h3, .checkout-card-header h3, .portal-card-header h3, .merchant-card-heading h3, .admin-card-heading h3, .analytics-card-header h3, .dashboard-card-header h3) {
+    margin: 0;
+}
+
+body:not(.flappy-page) :where(.account-panel-header p, .checkout-card-header p, .portal-card-header p, .merchant-card-heading p, .admin-card-heading p, .analytics-card-header p, .dashboard-card-header p) {
+    max-width: 68ch;
+    margin: 4px 0 0;
+    color: var(--vd-muted);
+    line-height: 1.55;
+}
+
+body:not(.flappy-page) :where(.button, .btn, button.button, a.button, input[type="submit"], input[type="button"]) {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vd-space-2);
+    padding: 10px 16px;
+    border: 1px solid var(--vd-line-strong);
+    border-radius: var(--vd-radius-sm);
+    color: var(--vd-ink);
+    background: var(--vd-surface);
+    box-shadow: none;
+    font-family: var(--vd-font-sans);
+    font-size: 0.93rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-decoration: none;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+body:not(.flappy-page) :where(.button:hover, .btn:hover, button.button:hover, a.button:hover, input[type="submit"]:hover, input[type="button"]:hover) {
+    transform: translateY(-1px);
+    box-shadow: var(--vd-shadow-sm);
+}
+
+body:not(.flappy-page) :where(.button:focus-visible, .btn:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible) {
+    outline: none;
+    box-shadow: var(--vd-focus);
+}
+
+body:not(.flappy-page) :where(.button.primary, .btn-primary, .primary, button.primary, a.primary) {
+    border-color: var(--vd-primary-strong);
+    background: var(--vd-primary-strong);
+    color: #ffffff;
+}
+
+body:not(.flappy-page) :where(.button.secondary, .btn-secondary, .secondary) {
+    border-color: var(--vd-line-strong);
+    background: var(--vd-primary-soft);
+    color: var(--vd-primary-strong);
+}
+
+body:not(.flappy-page) :where(.button.danger, .btn-danger, .danger, button[name*="delete"], .delete-button) {
+    border-color: rgba(157, 44, 48, 0.32);
+    background: var(--vd-danger-soft);
+    color: var(--vd-danger);
+}
+
+body:not(.flappy-page) :where(.button.ghost, .btn-link, .text-button, .link-button) {
+    min-height: 36px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--vd-primary-strong);
+    box-shadow: none;
+}
+
+body:not(.flappy-page) :where(button:disabled, .button:disabled, .button[aria-disabled="true"], .btn:disabled, input[type="submit"]:disabled) {
+    opacity: 0.56;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+body:not(.flappy-page) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea, .form-control) {
+    min-height: 44px;
+    width: 100%;
+    border: 1px solid var(--vd-line-strong);
+    border-radius: var(--vd-radius-sm);
+    background: var(--vd-surface);
+    color: var(--vd-ink);
+    font-family: var(--vd-font-sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+body:not(.flappy-page) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea, .form-control):focus {
+    border-color: rgba(63, 95, 61, 0.58);
+    outline: none;
+    box-shadow: var(--vd-focus);
+}
+
+body:not(.flappy-page) :where(textarea) {
+    min-height: 108px;
+    resize: vertical;
+}
+
+body:not(.flappy-page) :where(label, .form-label, fieldset legend) {
+    color: var(--vd-ink);
+    font-weight: 800;
+}
+
+body:not(.flappy-page) :where(.form-text, .help-text, .helper-text, .muted, .caption) {
+    color: var(--vd-muted);
+    font-size: 0.9rem;
+}
+
+body:not(.flappy-page) :where(.form-grid, .account-form-grid, .checkout-grid, .filter-grid, .search-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    gap: var(--vd-space-4);
+}
+
+body:not(.flappy-page) :where(input[type="checkbox"], input[type="radio"]) {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--vd-primary-strong);
+}
+
+body:not(.flappy-page) :where(table, .table) {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 1px solid var(--vd-line);
+    border-radius: var(--vd-radius-sm);
+    background: var(--vd-surface);
+}
+
+body:not(.flappy-page) :where(table th, .table th) {
+    height: 44px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--vd-line);
+    background: var(--vd-surface-soft);
+    color: var(--vd-muted);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+body:not(.flappy-page) :where(table td, .table td) {
+    min-height: 48px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(44, 55, 42, 0.08);
+    color: var(--vd-text);
+    vertical-align: middle;
+}
+
+body:not(.flappy-page) :where(table tr:hover td, .table tr:hover td) {
+    background: rgba(232, 239, 227, 0.48);
+}
+
+body:not(.flappy-page) :where(.badge, .status-badge, .status-pill, .merchant-analytics-status-pill, .pill, .tag, .chip) {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--vd-line);
+    border-radius: 999px;
+    background: var(--vd-primary-soft);
+    color: var(--vd-primary-strong);
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+body:not(.flappy-page) :where(.badge, .status-badge, .status-pill, .pill, .tag, .chip) {
+    max-width: 100%;
+}
+
+body:not(.flappy-page) :where(.badge.success, .status-badge.success, .status-pill.success, [data-status="completed"], [data-status="approved"], [data-status="paid"], [data-status="refunded"]) {
+    border-color: rgba(63, 107, 58, 0.22);
+    background: var(--vd-success-soft);
+    color: var(--vd-success);
+}
+
+body:not(.flappy-page) :where(.badge.warning, .status-badge.warning, .status-pill.warning, [data-status="pending"], [data-status="processing"], [data-status="low_stock"]) {
+    border-color: rgba(154, 102, 24, 0.24);
+    background: var(--vd-warning-soft);
+    color: var(--vd-warning);
+}
+
+body:not(.flappy-page) :where(.badge.danger, .status-badge.danger, .status-pill.danger, [data-status="cancelled"], [data-status="rejected"], [data-status="failed"]) {
+    border-color: rgba(157, 44, 48, 0.24);
+    background: var(--vd-danger-soft);
+    color: var(--vd-danger);
+}
+
+body:not(.flappy-page) :where(.notice, .alert, .flash, .message, .merchant-analytics-control-message, .support-reply-feedback) {
+    border: 1px solid var(--vd-line);
+    border-radius: var(--vd-radius-sm);
+    padding: 12px 14px;
+    background: var(--vd-info-soft);
+    color: var(--vd-info);
+    font-weight: 750;
+    line-height: 1.45;
+}
+
+body:not(.flappy-page) :where(.notice.success, .alert-success, [data-tone="success"]) {
+    background: var(--vd-success-soft);
+    color: var(--vd-success);
+}
+
+body:not(.flappy-page) :where(.notice.error, .alert-danger, [data-tone="error"]) {
+    background: var(--vd-danger-soft);
+    color: var(--vd-danger);
+}
+
+body:not(.flappy-page) :where(.notice.warning, .alert-warning, [data-tone="warning"]) {
+    background: var(--vd-warning-soft);
+    color: var(--vd-warning);
+}
+
+body:not(.flappy-page) :where(.modal-content, .offcanvas, dialog, .vaniday-ai-drawer) {
+    border: 1px solid var(--vd-line);
+    border-radius: var(--vd-radius-lg);
+    background: var(--vd-surface);
+    box-shadow: var(--vd-shadow-lg);
+}
+
+body:not(.flappy-page) :where(.modal-header, .modal-footer, .offcanvas-header) {
+    padding: 16px 20px;
+    border-color: var(--vd-line);
+}
+
+body:not(.flappy-page) :where(.modal-body, .offcanvas-body) {
+    padding: 20px;
+}
+
+.vaniday-ai-root {
+    --ai-panel-width: min(440px, calc(100vw - 24px));
+}
+
+.vaniday-ai-launcher {
+    border-radius: 999px !important;
+    box-shadow: var(--vd-shadow-lg) !important;
+}
+
+.vaniday-ai-drawer {
+    width: var(--ai-panel-width) !important;
+    max-height: min(760px, calc(100vh - 32px)) !important;
+    overflow: hidden !important;
+}
+
+.vaniday-ai-messages {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(63, 95, 61, 0.42) transparent;
+}
+
+.vaniday-ai-message {
+    border-radius: var(--vd-radius-sm) !important;
+}
+
+.vaniday-ai-message[data-role="user"] {
+    background: var(--vd-primary-strong) !important;
+    color: #ffffff !important;
+}
+
+.vaniday-ai-message[data-role="assistant"],
+.vaniday-ai-message:not([data-role="user"]) {
+    background: #fbfdf9 !important;
+}
+
+.vaniday-ai-prompts,
+.vaniday-ai-suggestion-row {
+    gap: 8px !important;
+}
+
+.vaniday-ai-prompts button,
+.vaniday-ai-suggestion-row button {
+    min-height: 34px !important;
+    padding: 7px 12px !important;
+    border-radius: 999px !important;
+}
+
+.vaniday-ai-memory-panel,
+.vaniday-ai-context-card,
+.vaniday-ai-recommendation-card,
+.vaniday-ai-timeline-card {
+    border: 1px solid var(--vd-line) !important;
+    border-radius: var(--vd-radius-sm) !important;
+    background: var(--vd-surface-soft) !important;
+}
+
+body:not(.flappy-page) :where(.vaniday-ai-message-header, .vaniday-ai-message-tools, .vaniday-ai-toolbar, .vaniday-ai-panel-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+body:not(.flappy-page) :where(.vaniday-ai-message-tools button, .vaniday-ai-toolbar button, .vaniday-ai-panel-actions button) {
+    min-height: 34px !important;
+    padding: 7px 10px !important;
+}
+
+body:not(.flappy-page) :where(.empty-state, .admin-empty-state, .merchant-empty-state, .no-results, .merchant-analytics-empty, .empty-panel, .blank-state) {
+    min-height: 140px;
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    padding: 28px;
+    border: 1px dashed rgba(63, 95, 61, 0.28);
+    border-radius: var(--vd-radius-sm);
+    background: rgba(248, 250, 245, 0.86);
+    color: var(--vd-muted);
+    text-align: center;
+}
+
+body:not(.flappy-page) :where(.empty-state h2, .admin-empty-state h2, .merchant-empty-state h2, .no-results h2, .merchant-analytics-empty h2, .empty-panel h2, .blank-state h2, .empty-state h3, .admin-empty-state h3, .merchant-empty-state h3, .no-results h3, .merchant-analytics-empty h3, .empty-panel h3, .blank-state h3) {
+    margin: 0;
+    font-size: clamp(1.15rem, 2vw, 1.45rem);
+}
+
+body:not(.flappy-page) :where(.empty-state p, .admin-empty-state p, .merchant-empty-state p, .no-results p, .merchant-analytics-empty p, .empty-panel p, .blank-state p) {
+    max-width: 54ch;
+    margin: 0;
+}
+
+body:not(.flappy-page) :where(.analytics-chart-panel, .admin-chart-box, .merchant-chart-card, .chart-card) {
+    min-width: 0;
+    overflow: hidden;
+}
+
+body:not(.flappy-page) :where(.dashboard-grid, .admin-dashboard-grid, .merchant-dashboard-grid, .merchant-dashboard-lower-grid, .merchant-analytics-grid, .admin-analytics-grid, .profile-layout, .profile-summary-grid, .profile-wallet-grid, .profile-rewards-grid, .spin-discover-layout, .spin-discover-sections, .receipt-layout, .payment-layout, .booking-layout, .cart-layout, .support-layout) {
+    min-width: 0;
+}
+
+body:not(.flappy-page) :where(.dashboard-grid > *, .admin-dashboard-grid > *, .merchant-dashboard-grid > *, .merchant-dashboard-lower-grid > *, .merchant-analytics-grid > *, .admin-analytics-grid > *, .profile-layout > *, .profile-summary-grid > *, .profile-wallet-grid > *, .profile-rewards-grid > *, .spin-discover-layout > *, .spin-discover-sections > *, .receipt-layout > *, .payment-layout > *, .booking-layout > *, .cart-layout > *, .support-layout > *) {
+    min-width: 0;
+}
+
+body:not(.flappy-page) :where(canvas) {
+    max-width: 100%;
+}
+
+body:not(.flappy-page) :where(.table-responsive, .admin-table-wrap, .merchant-table-wrap, .orders-table-wrap) {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+body:not(.flappy-page) :where(.inline-actions, .form-actions, .card-actions, .merchant-actions, .admin-actions, .analytics-toolbar, .filter-actions, .bulk-actions, .profile-booking-actions, .profile-hero-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vd-space-3);
+}
+
+body:not(.flappy-page) :where(.stat-card, .metric-card, .kpi-card, .analytics-kpi-card, .merchant-analytics-kpi, .merchant-payout-summary-card, .admin-overview-actions a, .profile-wallet-stat-card) {
+    min-width: 0;
+}
+
+body:not(.flappy-page) :where(.stat-card strong, .metric-card strong, .kpi-card strong, .analytics-kpi-card strong, .merchant-analytics-kpi strong, .merchant-payout-summary-card strong, .profile-wallet-stat-card strong) {
+    overflow-wrap: anywhere;
+    line-height: 1.08;
+}
+
+body:not(.flappy-page) :where(.stat-card small, .metric-card small, .kpi-card small, .analytics-kpi-card small, .merchant-analytics-kpi small, .merchant-payout-summary-card small, .profile-wallet-stat-card small) {
+    color: var(--vd-muted);
+    line-height: 1.35;
+}
+
+body:not(.flappy-page) :where(.nav, .nav-links, .nav-tools, .merchant-navbar, .admin-navbar, .merchant-nav-links, .admin-nav-links) {
+    min-width: 0;
+}
+
+body:not(.flappy-page) :where(.nav-dropdown-trigger, .nav-account-trigger, .merchant-nav-links a, .admin-nav-links a) {
+    white-space: nowrap;
+}
+
+body:not(.flappy-page) :where(.nav-account-copy strong, .nav-account-copy small) {
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body:not(.flappy-page) :where(.services-filter-row, .services-filter-chips, .services-category-row) {
+    max-width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--vd-space-2);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: var(--vd-space-2);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(63, 95, 61, 0.36) transparent;
+}
+
+body:not(.flappy-page) :where(.services-filter-chip) {
+    flex: 0 0 auto;
+    max-width: min(260px, 82vw);
+    min-height: 36px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+body:not(.flappy-page) :where(.services-filter-chip span) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body:not(.flappy-page) :where(.home-flash-action) {
+    min-height: 36px !important;
+    padding: 8px 12px !important;
+    border-radius: var(--vd-radius-sm) !important;
+}
+
+body:not(.flappy-page) :where(.loading, .is-loading, [aria-busy="true"]) {
+    cursor: progress;
+}
+
+body:not(.flappy-page) :where(.skeleton, .skeleton-card, .skeleton-row) {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--vd-radius-sm);
+    background: linear-gradient(90deg, #eef4e9 0%, #f8faf5 42%, #eef4e9 72%);
+    background-size: 220% 100%;
+    animation: vd-skeleton 1.4s ease-in-out infinite;
+}
+
+body:not(.flappy-page) :where(.skeleton-card) {
+    min-height: 128px;
+    border: 1px solid var(--vd-line);
+}
+
+body:not(.flappy-page) :where(.skeleton-row) {
+    min-height: 18px;
+}
+
+@keyframes vd-skeleton {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:not(.flappy-page) *,
+    body:not(.flappy-page) *::before,
+    body:not(.flappy-page) *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (max-width: 900px) {
+    body:not(.flappy-page) main,
+    .site-header,
+    .site-footer {
+        width: min(100% - 20px, 100%) !important;
+    }
+
+    body:not(.flappy-page) :where(.card, .panel, .admin-panel, .merchant-panel, .dashboard-card, .analytics-card, .merchant-dashboard-card, .support-ticket-card, .support-action-box, .wallet-topup-card, .wallet-support-card, .booking-services-panel, .booking-form-panel) {
+        padding: 16px;
+    }
+
+    body:not(.flappy-page) :where(.button, .btn, button.button, a.button, input[type="submit"], input[type="button"]) {
+        min-height: 44px;
+    }
+
+    body:not(.flappy-page) :where(.dashboard-grid, .admin-dashboard-grid, .merchant-dashboard-grid, .merchant-dashboard-lower-grid, .merchant-analytics-grid, .admin-analytics-grid, .profile-layout, .profile-wallet-grid, .profile-rewards-grid, .spin-discover-layout, .spin-discover-sections, .receipt-layout, .payment-layout, .booking-layout, .cart-layout, .support-layout) {
+        grid-template-columns: 1fr !important;
+    }
+
+    body:not(.flappy-page) :where(.admin-analytics-kpis, .merchant-analytics-kpis, .merchant-analytics-kpi-grid, .merchant-payout-summary-grid, .profile-summary-grid) {
+        grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)) !important;
+    }
+
+    body:not(.flappy-page) :where(.page-title, .portal-hero, .analytics-hero-panel, .merchant-dashboard-hero, .admin-dashboard-header, .merchant-orders-hero, .merchant-appointment-hero) {
+        padding: clamp(18px, 5vw, 28px) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    body:not(.flappy-page) :where(.inline-actions, .form-actions, .card-actions, .merchant-actions, .admin-actions, .analytics-toolbar) {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    body:not(.flappy-page) :where(.inline-actions > *, .form-actions > *, .card-actions > *, .merchant-actions > *, .admin-actions > *, .analytics-toolbar > *) {
+        width: 100%;
+    }
+
+    body:not(.flappy-page) :where(.site-header) {
+        margin-inline: auto;
+    }
+
+    body:not(.flappy-page) :where(.nav) {
+        gap: 12px;
+    }
+
+    body:not(.flappy-page) :where(.nav-account-copy) {
+        display: none;
+    }
+
+    body:not(.flappy-page) :where(.page-title h1, .portal-hero h1, .analytics-hero-panel h1, .merchant-dashboard-hero h1, .admin-dashboard-header h1) {
+        font-size: clamp(2rem, 13vw, 3.1rem) !important;
+        line-height: 0.98 !important;
+    }
+
+    body:not(.flappy-page) :where(.table, table) {
+        font-size: 0.9rem;
+    }
+
+    .vaniday-ai-root {
+        --ai-panel-width: calc(100vw - 16px);
+    }
+
+    .vaniday-ai-drawer {
+        right: 8px !important;
+        bottom: 8px !important;
+        max-height: calc(100vh - 16px) !important;
+    }
+}
