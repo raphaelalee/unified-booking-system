@@ -19900,7 +19900,8 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 }
 
 .spin-wheel {
-    --wheel-label-radius: 31%;
+    --wheel-label-radius: clamp(84px, 17vw, 110px);
+    --wheel-label-width: 128px;
     position: relative;
     aspect-ratio: 1;
     overflow: hidden;
@@ -19920,6 +19921,14 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
     transform: translateZ(0) rotate(0deg);
     transform-origin: 50% 50%;
     will-change: transform;
+}
+
+.spin-wheel.is-balanced-wheel {
+    --wheel-label-radius: clamp(108px, 21vw, 142px);
+}
+
+.spin-wheel.is-dense-wheel {
+    --wheel-label-radius: clamp(122px, 23vw, 158px);
 }
 
 .spin-wheel::before {
@@ -19966,22 +19975,24 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
     left: 50%;
     top: 50%;
     display: grid;
-    grid-template-columns: minmax(22px, 30px) minmax(0, 1fr);
+    grid-template-columns: minmax(20px, 26px) minmax(0, 1fr);
     align-items: center;
-    gap: 0.35rem;
-    width: clamp(104px, 30%, 156px);
-    max-width: 34%;
-    min-height: 42px;
-    padding: 0.34rem 0.45rem;
-    border: 1px solid rgba(255, 255, 255, 0.36);
-    border-radius: 8px;
-    background: rgba(255, 253, 247, 0.46);
+    gap: 0.32rem;
+    width: min(var(--wheel-label-width), 36%);
+    max-width: 36%;
+    min-height: 34px;
+    max-height: 56px;
+    padding: 0.28rem 0.42rem;
+    border: 1px solid rgba(255, 255, 255, 0.56);
+    border-radius: 999px;
+    background: rgba(255, 253, 247, 0.66);
     color: #21301c;
-    box-shadow: 0 8px 18px rgba(39, 50, 31, 0.1);
+    box-shadow: 0 7px 16px rgba(39, 50, 31, 0.11);
     text-align: left;
-    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1));
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1)) rotate(var(--label-counter-rotation, 0deg));
     transform-origin: 50% 50%;
     backdrop-filter: blur(2px);
+    overflow: hidden;
 }
 
 .spin-wheel .spin-segment-content,
@@ -20002,12 +20013,12 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
     position: absolute;
     left: 50%;
     top: 50%;
-    width: clamp(104px, 30%, 156px);
-    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1));
+    width: min(var(--wheel-label-width), 36%);
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1)) rotate(var(--label-counter-rotation, 0deg));
 }
 
 .spin-wheel-segment.is-flipped .spin-segment-content {
-    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1)) rotate(180deg);
+    transform: translate(-50%, -50%) translateY(calc(var(--wheel-label-radius) * -1)) rotate(var(--label-counter-rotation, 0deg));
 }
 
 .spin-wheel-segment.is-winning .spin-segment-content {
@@ -20021,18 +20032,18 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 .spin-wheel-segment b {
     display: grid !important;
     place-items: center;
-    width: 30px !important;
-    min-width: 30px;
+    width: 26px !important;
+    min-width: 26px;
     aspect-ratio: 1;
     border: 1px solid rgba(255, 255, 255, 0.64);
     border-radius: 50%;
-    background: rgba(255, 250, 240, 0.92) !important;
+    background: rgba(255, 250, 240, 0.95) !important;
     color: #24351f !important;
-    font-size: 0.68rem !important;
+    font-size: 0.62rem !important;
     font-style: normal;
     font-weight: 900;
     line-height: 1;
-    box-shadow: 0 4px 11px rgba(47, 74, 43, 0.14);
+    box-shadow: 0 3px 8px rgba(47, 74, 43, 0.12);
 }
 
 .spin-wheel-segment em {
@@ -20052,37 +20063,45 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 100%;
 }
 
 .spin-wheel-segment em span {
-    font-size: clamp(0.62rem, 1.05vw, 0.78rem);
+    display: -webkit-box;
+    font-size: clamp(0.56rem, 0.9vw, 0.7rem);
     font-weight: 900;
+    line-height: 1.06;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .spin-wheel-segment em small {
     color: rgba(35, 50, 29, 0.86);
-    font-size: clamp(0.58rem, 0.95vw, 0.7rem);
+    font-size: clamp(0.54rem, 0.86vw, 0.66rem);
     font-weight: 800;
+    white-space: nowrap;
 }
 
 .spin-wheel-pointer {
     left: 50%;
-    top: -6px !important;
-    border-top: 0 !important;
+    top: -28px !important;
+    border-top: 44px solid #2f4a2b !important;
     border-right-color: transparent !important;
-    border-bottom: 44px solid #2f4a2b !important;
+    border-bottom: 0 !important;
     border-left-color: transparent !important;
-    z-index: 8;
+    z-index: 10;
     transform: translateX(-50%);
-    transform-origin: 50% 7px;
+    transform-origin: 50% 36px;
+    filter: drop-shadow(0 9px 12px rgba(47, 74, 43, 0.24));
 }
 
 .spin-wheel-pointer::after {
     content: "";
     position: absolute;
     left: 50%;
-    top: 13px;
+    top: -36px;
     width: 9px;
     height: 9px;
     border-radius: 50%;
@@ -20122,14 +20141,23 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 
 @media (max-width: 860px) {
     .spin-wheel {
-        --wheel-label-radius: 30%;
+        --wheel-label-radius: clamp(70px, 18vw, 96px);
+    }
+
+    .spin-wheel.is-balanced-wheel {
+        --wheel-label-radius: clamp(84px, 21vw, 118px);
+    }
+
+    .spin-wheel.is-dense-wheel {
+        --wheel-label-radius: clamp(92px, 22vw, 132px);
     }
 
     .spin-wheel .spin-segment-content,
     .spin-segment-content {
-        width: clamp(86px, 29%, 122px);
-        max-width: 32%;
-        min-height: 36px;
+        width: min(var(--wheel-label-width), 108px, 35%);
+        max-width: 35%;
+        min-height: 32px;
+        max-height: 52px;
         padding: 0.25rem 0.32rem;
         gap: 0.24rem;
     }
@@ -20137,37 +20165,48 @@ body:not(.flappy-page) .page-container > .page-title.spin-discover-hero:not(.ser
 
 @media (max-width: 560px) {
     .spin-wheel {
-        --wheel-label-radius: 31%;
+        --wheel-label-radius: clamp(58px, 18vw, 72px);
+        --wheel-label-width: 82px;
+    }
+
+    .spin-wheel.is-balanced-wheel {
+        --wheel-label-radius: clamp(70px, 22vw, 86px);
+    }
+
+    .spin-wheel.is-dense-wheel {
+        --wheel-label-radius: clamp(76px, 23vw, 94px);
     }
 
     .spin-wheel .spin-segment-content,
     .spin-segment-content {
-        grid-template-columns: 20px minmax(0, 1fr);
-        width: clamp(68px, 32%, 92px);
-        max-width: 35%;
-        min-height: 30px;
-        padding: 0.2rem 0.25rem;
-        border-radius: 6px;
+        grid-template-columns: 18px minmax(0, 1fr);
+        width: min(var(--wheel-label-width), 38%);
+        max-width: 38%;
+        min-height: 28px;
+        max-height: 44px;
+        padding: 0.18rem 0.24rem;
     }
 
     .spin-wheel-segment b {
-        width: 20px !important;
-        min-width: 20px;
-        font-size: 0.5rem !important;
+        width: 18px !important;
+        min-width: 18px;
+        font-size: 0.46rem !important;
     }
 
     .spin-wheel-segment em span {
-        font-size: 0.52rem;
+        font-size: 0.5rem;
+        -webkit-line-clamp: 2;
     }
 
     .spin-wheel-segment em small {
-        font-size: 0.48rem;
+        font-size: 0.46rem;
     }
 
     .spin-wheel-pointer {
         border-left-width: 18px !important;
         border-right-width: 18px !important;
-        border-bottom-width: 32px !important;
+        border-top-width: 32px !important;
+        top: -20px !important;
     }
 }
 

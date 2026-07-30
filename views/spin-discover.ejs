@@ -31,14 +31,16 @@
         const text = String(value || '').trim();
         return text.length > max ? `${text.slice(0, max - 1)}...` : text;
     };
-    const wheelTitle = (reward) => {
+    const wheelTitle = (reward, max = 22) => {
+        const title = String(reward.title || '').trim();
+        if (title) return shortTitle(title, max);
+        if (reward.rewardType === 'try_again') return 'Try Again';
         if (reward.rewardType === 'cashback') return 'Cashback';
         if (reward.rewardType === 'loyalty_points') return 'VaniGlints';
         if (reward.rewardType === 'product_discount') return 'Product Deal';
         if (reward.rewardType === 'service_discount') return 'Service Deal';
         if (reward.rewardType === 'voucher') return 'Voucher';
-        if (reward.rewardType === 'try_again') return 'Try Again';
-        return shortTitle(reward.title, 22);
+        return 'Reward';
     };
     const wheelValue = (reward) => {
         const value = Number(reward.value || 0);
@@ -72,6 +74,9 @@
             { rewardType: 'cashback', sourceType: 'fallback', sourceId: 'cashback', title: 'Cashback', description: 'Earn wallet rewards for future purchases.', payload: {} },
             { rewardType: 'loyalty_points', sourceType: 'fallback', sourceId: 'points', title: 'VaniGlints', description: 'Collect loyalty points for rewards.', payload: {} }
         ];
+    const wheelTitleMax = wheelRewards.length >= 9 ? 18 : (wheelRewards.length >= 7 ? 22 : 26);
+    const wheelLabelWidth = wheelRewards.length >= 9 ? 92 : (wheelRewards.length >= 7 ? 112 : 146);
+    const wheelDensityClass = wheelRewards.length >= 9 ? 'is-dense-wheel' : (wheelRewards.length >= 7 ? 'is-balanced-wheel' : 'is-open-wheel');
     const segmentAngle = 360 / wheelRewards.length;
     const gradientStart = -90 - (segmentAngle / 2);
     const wheelGradient = wheelRewards.map((reward, index) => {
@@ -96,7 +101,7 @@
             sourceType: reward.sourceType,
             sourceId: reward.sourceId,
             title: reward.title,
-            wheelTitle: wheelTitle(reward),
+            wheelTitle: wheelTitle(reward, wheelTitleMax),
             wheelValue: wheelValue(reward),
             value: reward.value,
             merchantName: reward.payload?.salonName || reward.payload?.merchantName || '',
@@ -152,24 +157,26 @@
         <div class="spin-wheel-card">
             <div class="spin-wheel-wrap" role="img" aria-label="Spin reward wheel. Prize categories are listed in the reward categories panel.">
                 <div class="spin-wheel-ring" aria-hidden="true"></div>
-                <div class="spin-wheel" data-spin-wheel style="--segment-count:<%= wheelRewards.length %>; --wheel-gradient:<%- wheelGradient %>;">
+                <div class="spin-wheel <%= wheelDensityClass %>" data-spin-wheel style="--segment-count:<%= wheelRewards.length %>; --wheel-gradient:<%- wheelGradient %>; --wheel-label-width:<%= wheelLabelWidth %>px;">
                     <% wheelRewards.forEach((reward, index) => { %>
                         <% const segmentRotation = index * segmentAngle; %>
                         <% const displayRotation = ((segmentRotation % 360) + 360) % 360; %>
+                        <% const segmentTitle = wheelTitle(reward, wheelTitleMax); %>
+                        <% const segmentValue = wheelValue(reward); %>
                         <span
-                            class="spin-wheel-segment <%= rewardCategoryClass(reward.rewardType) %><%= displayRotation > 90 && displayRotation < 270 ? ' is-flipped' : '' %>"
-                            style="--i:<%= index %>; --segment-rotation:<%= segmentRotation.toFixed(3) %>deg;"
+                            class="spin-wheel-segment <%= rewardCategoryClass(reward.rewardType) %>"
+                            style="--i:<%= index %>; --segment-rotation:<%= segmentRotation.toFixed(3) %>deg; --label-counter-rotation:<%= (-segmentRotation).toFixed(3) %>deg;"
                             data-spin-segment
                             data-prize-index="<%= index %>"
-                            data-prize-title="<%= wheelTitle(reward) %>"
-                            data-prize-value="<%= wheelValue(reward) %>"
+                            data-prize-title="<%= segmentTitle %>"
+                            data-prize-value="<%= segmentValue %>"
                             aria-hidden="true"
                         >
-                            <span class="spin-segment-content">
+                            <span class="spin-segment-content" title="<%= reward.title || segmentTitle %>">
                                 <b><%= rewardIcon(reward.rewardType) %></b>
                                 <em>
-                                    <span><%= wheelTitle(reward) %></span>
-                                    <small><%= wheelValue(reward) %></small>
+                                    <span><%= segmentTitle %></span>
+                                    <small><%= segmentValue %></small>
                                 </em>
                             </span>
                         </span>
