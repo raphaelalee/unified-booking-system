@@ -66,18 +66,32 @@ function showFinder(req, res) {
     return renderFinder(req, res);
 }
 
-function showResults(req, res) {
-    const hasGoal = Array.isArray(req.body.goals)
-        ? req.body.goals.length > 0
-        : Boolean(req.body.goals);
-    const hasConcern = Array.isArray(req.body.concerns)
-        ? req.body.concerns.length > 0
-        : Boolean(req.body.concerns);
+function validateRoutineAnswers(body = {}) {
+    const hasGoal = Array.isArray(body.goals)
+        ? body.goals.length > 0
+        : Boolean(body.goals);
+    const hasConcern = Array.isArray(body.concerns)
+        ? body.concerns.length > 0
+        : Boolean(body.concerns);
+    const hasDirection = Boolean(body.category || body.productNeed);
+    const hasComfort = Boolean(body.budget || body.genderTarget);
+    const hasLocation = Boolean(String(body.locationPreference || '').trim());
 
-    if (!hasGoal && !hasConcern && !req.body.category && !req.body.productNeed && !req.body.locationPreference) {
+    if (!hasGoal) return 'Choose at least one beauty goal before finding your routine.';
+    if (!hasConcern) return 'Choose at least one concern before finding your routine.';
+    if (!hasDirection) return 'Choose a service type or aftercare product direction.';
+    if (!hasComfort) return 'Choose a budget or service preference.';
+    if (!hasLocation) return 'Enter a neighbourhood, mall, or area so we can match nearby options.';
+    return null;
+}
+
+function showResults(req, res) {
+    const validationError = validateRoutineAnswers(req.body);
+
+    if (validationError) {
         return renderFinder(req, res, {
             form: req.body,
-            error: 'Choose at least one goal, concern, category, product need, or location preference.'
+            error: validationError
         });
     }
 

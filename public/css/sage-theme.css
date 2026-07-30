@@ -17597,6 +17597,28 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
     gap: 18px;
 }
 
+.routine-step-error {
+    min-height: 0;
+    margin: -6px 0 0;
+    padding: 0;
+    color: #9a3f2c;
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.routine-step-error:empty,
+.routine-step-error[hidden] {
+    display: none;
+}
+
+.routine-step.has-error .routine-card-options,
+.routine-step.has-error .routine-polished-fields,
+.routine-step.has-error .routine-polished-location {
+    outline: 2px solid rgba(154, 63, 44, 0.22);
+    outline-offset: 5px;
+    border-radius: 8px;
+}
+
 .routine-step legend {
     display: grid;
     gap: 6px;
@@ -17723,8 +17745,8 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 
 .routine-results-premium {
     display: grid;
-    gap: 22px;
-    padding: clamp(18px, 3vw, 32px) !important;
+    gap: 16px;
+    padding: clamp(16px, 2.6vw, 26px) !important;
 }
 
 .routine-results-hero,
@@ -17738,15 +17760,16 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 .routine-results-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
-    gap: 18px;
+    gap: 14px;
     align-items: center;
-    padding: 18px;
+    padding: 16px;
 }
 
 .routine-results-hero h2 {
     margin: 0;
     color: #24351f;
-    font-size: clamp(1.75rem, 3vw, 2.8rem);
+    font-size: clamp(1.55rem, 2.5vw, 2.2rem);
+    line-height: 1.05;
 }
 
 .routine-score-card {
@@ -17810,7 +17833,8 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    padding: 12px;
+    padding: 10px;
+    box-shadow: 0 12px 26px rgba(47, 74, 43, 0.08);
 }
 
 .routine-results-toolbar > div {
@@ -17821,6 +17845,9 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 
 .routine-filter {
     min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     padding: 8px 12px;
     border: 1px solid rgba(67, 92, 55, 0.16);
     border-radius: 8px;
@@ -17830,14 +17857,42 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
     cursor: pointer;
 }
 
+.routine-filter span {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+    height: 24px;
+    padding-inline: 7px;
+    border-radius: 999px;
+    background: rgba(63, 107, 58, 0.11);
+    font-size: 0.76rem;
+}
+
 .routine-filter.is-active {
     border-color: #3f6b3a;
     background: #3f6b3a;
     color: #fff;
 }
 
+.routine-filter.is-active span {
+    background: rgba(255, 255, 255, 0.22);
+}
+
 .routine-premium-grid {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    gap: 12px !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px 12px;
+    scroll-padding-inline: 2px;
+    scroll-snap-type: x proximity;
+    scrollbar-color: rgba(63, 107, 58, 0.42) rgba(63, 107, 58, 0.1);
+}
+
+.routine-premium-grid > .routine-result-card {
+    flex: 0 0 clamp(250px, 28vw, 315px);
+    scroll-snap-align: start;
 }
 
 .routine-match-card,
@@ -17845,6 +17900,8 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 .routine-promotion-card {
     border-radius: 8px;
     border-color: rgba(67, 92, 55, 0.14);
+    gap: 0.62rem;
+    padding: 14px;
     box-shadow: 0 12px 26px rgba(47, 74, 43, 0.08);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
@@ -17863,6 +17920,36 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
     align-items: center;
 }
 
+.routine-match-card h3,
+.routine-promotion-card h3,
+.routine-match-row h3 {
+    display: -webkit-box;
+    min-height: 2.35em;
+    margin: 0;
+    overflow: hidden;
+    color: #24351f;
+    font-size: 1.04rem;
+    line-height: 1.16;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.routine-match-card > p,
+.routine-promotion-card > p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.routine-match-card > p.muted,
+.routine-promotion-card > p.muted {
+    min-height: 2.65em;
+    font-size: 0.88rem;
+}
+
 .routine-card-topline strong,
 .routine-match-row .merchant-actions strong {
     color: #3f6b3a;
@@ -17873,6 +17960,8 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    max-height: 62px;
+    overflow: hidden;
 }
 
 .routine-reasons span,
@@ -17889,12 +17978,14 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 .routine-promo-strip {
     display: grid;
     gap: 6px;
+    max-height: 58px;
+    overflow: hidden;
 }
 
 .routine-product-media {
     position: relative;
     overflow: hidden;
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 8.5;
     border-radius: 8px;
     background: #edf3e9;
 }
@@ -17920,6 +18011,49 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 .routine-empty-state {
     border-radius: 8px;
     background: rgba(255, 248, 231, 0.75);
+}
+
+.routine-result-section {
+    min-height: 0;
+    padding-top: 2px;
+}
+
+.routine-result-section .section-heading {
+    margin-bottom: 2px;
+}
+
+.routine-result-section .section-heading h2 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2vw, 1.85rem) !important;
+    line-height: 1.08 !important;
+}
+
+.routine-card-actions {
+    margin-top: auto;
+    gap: 8px;
+}
+
+.routine-card-actions .button {
+    min-height: 38px;
+    padding-block: 8px;
+}
+
+.routine-merchant-list {
+    gap: 12px;
+}
+
+.routine-merchant-row {
+    align-items: center;
+    padding: 14px;
+}
+
+.routine-merchant-row > div:first-child {
+    display: grid;
+    gap: 6px;
+}
+
+.routine-merchant-row p {
+    margin: 0;
 }
 
 [data-routine-result-group][hidden],
@@ -18028,9 +18162,12 @@ body:not(.flappy-page) .page-container > .page-title.routine-finder-premium-hero
 
     .routine-card-options,
     .routine-field-grid,
-    .routine-premium-grid,
     .routine-summary-grid {
         grid-template-columns: 1fr !important;
+    }
+
+    .routine-premium-grid > .routine-result-card {
+        flex-basis: min(82vw, 310px);
     }
 
     .routine-results-premium,

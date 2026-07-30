@@ -84,6 +84,7 @@
                     <strong>What is your beauty goal?</strong>
                     <small>Select one or more goals.</small>
                 </legend>
+                <p class="routine-step-error" data-routine-step-error aria-live="polite"></p>
                 <div class="routine-option-grid routine-card-options">
                     <% options.goals.forEach((option) => { %>
                         <label class="routine-choice premium-choice">
@@ -101,6 +102,7 @@
                     <strong>What should the routine focus on?</strong>
                     <small>Choose the concerns you want addressed.</small>
                 </legend>
+                <p class="routine-step-error" data-routine-step-error aria-live="polite"></p>
                 <div class="routine-option-grid routine-card-options">
                     <% options.concerns.forEach((option) => { %>
                         <label class="routine-choice premium-choice">
@@ -118,6 +120,7 @@
                     <strong>Pick your service and product direction.</strong>
                     <small>These help us balance treatment and aftercare recommendations.</small>
                 </legend>
+                <p class="routine-step-error" data-routine-step-error aria-live="polite"></p>
                 <div class="routine-field-grid routine-polished-fields">
                     <label>
                         <span>Preferred service type</span>
@@ -145,6 +148,7 @@
                     <strong>Set your comfort range.</strong>
                     <small>Budget and service preference help improve relevance.</small>
                 </legend>
+                <p class="routine-step-error" data-routine-step-error aria-live="polite"></p>
                 <div class="routine-field-grid routine-polished-fields">
                     <label>
                         <span>Budget</span>
@@ -172,6 +176,7 @@
                     <strong>Where should we look?</strong>
                     <small>Use a neighbourhood, mall, or area if you have one.</small>
                 </legend>
+                <p class="routine-step-error" data-routine-step-error aria-live="polite"></p>
                 <label class="routine-location-field routine-polished-location">
                     <span>Location preference</span>
                     <input type="search" name="locationPreference" value="<%= form.locationPreference || '' %>" placeholder="Orchard, Tampines, Woodlands...">
@@ -246,11 +251,10 @@
 
             <div class="routine-results-toolbar">
                 <div>
-                    <button class="routine-filter is-active" type="button" data-routine-filter="all">All</button>
-                    <button class="routine-filter" type="button" data-routine-filter="service">Services</button>
-                    <button class="routine-filter" type="button" data-routine-filter="product">Products</button>
-                    <button class="routine-filter" type="button" data-routine-filter="merchant">Merchants</button>
-                    <button class="routine-filter" type="button" data-routine-filter="promotion">Promotions</button>
+                    <button class="routine-filter is-active" type="button" data-routine-filter="service">Services <span><%= serviceResults.length %></span></button>
+                    <button class="routine-filter" type="button" data-routine-filter="product">Products <span><%= productResults.length %></span></button>
+                    <button class="routine-filter" type="button" data-routine-filter="merchant">Merchants <span><%= merchantResults.length %></span></button>
+                    <button class="routine-filter" type="button" data-routine-filter="promotion">Promotions <span><%= promotionResults.length %></span></button>
                 </div>
                 <a class="text-link" href="/routine-finder">Retake quiz</a>
             </div>
@@ -310,7 +314,7 @@
                 <% } %>
             </section>
 
-            <section class="routine-result-section" data-routine-result-group="product">
+            <section class="routine-result-section" data-routine-result-group="product" hidden>
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Recommended Products</p>
@@ -359,7 +363,7 @@
                 <% } %>
             </section>
 
-            <section class="routine-result-section" data-routine-result-group="merchant">
+            <section class="routine-result-section" data-routine-result-group="merchant" hidden>
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Recommended Merchants</p>
@@ -397,7 +401,7 @@
                 <% } %>
             </section>
 
-            <section class="routine-result-section" data-routine-result-group="promotion">
+            <section class="routine-result-section" data-routine-result-group="promotion" hidden>
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Related Promotions</p>
@@ -438,7 +442,7 @@
     <% } %>
 </section>
 
-<script src="/js/routine-finder.js?v=1" defer></script>
+<script src="/js/routine-finder.js?v=2" defer></script>
 
 <%- include('partials/footer') %>
 
