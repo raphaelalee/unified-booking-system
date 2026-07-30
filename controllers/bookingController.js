@@ -34,7 +34,8 @@ const {
 } = require('../utils/checkInWindow');
 const { buildBookingReference } = require('../utils/bookingReference');
 const { sendDemoImmediateReminder } = require('../services/whatsappAutomation');
-const { moderateReviewImage, moderateReviewText } = require('../services/groqService');
+const { moderateReviewText } = require('../services/groqService');
+const { moderateUploadedReviewImage } = require('../services/reviewImageModerationService');
 
 function isValidBookingDate(value) {
     const state = Booking.getBookingDateState(value);
@@ -1684,23 +1685,16 @@ async function moderateReviewBeforeSave({
     }
 
     if (imageUpload) {
-        try {
-            const imageResult = await moderateReviewImage({
-                imageBase64: getReviewImageDataUrl(imageUpload),
-                merchantCategory: '',
-                serviceName,
-                productName,
-                reviewText: comment
-            });
+        const imageModeration = await moderateUploadedReviewImage({
+            imageBase64: getReviewImageDataUrl(imageUpload),
+            merchantCategory: '',
+            serviceName,
+            productName,
+            reviewText: comment
+        });
 
-            if (imageResult.recommendedAction !== 'approve') {
-                return {
-                    allowed: false,
-                    result: imageResult
-                };
-            }
-        } catch (imageError) {
-            console.warn('Review image moderation skipped:', imageError.code || imageError.message);
+        if (!imageModeration.allowed) {
+            return imageModeration;
         }
     }
 
